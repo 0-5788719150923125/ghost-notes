@@ -12,8 +12,10 @@ class_name PuppeteerTools
 ##   act      acts put into the draft - one of the same name is replaced - each answered with what it does:
 ##            how long, how far and how fast each moving thing goes, and ANYTHING PASSING THROUGH ANYTHING
 ##            ([method TableWork.check]), and what of it could not be kept, and why - every act of a call on one
-##            table ([method TablePreview.work_checks]), what is in things baked on from the last call's
-##            ([method TablePhysics.carry])
+##            table ([method TablePreview.work_checks]): THE TABLE STOOD FOR THE FIRST CALL, its acts bound again for
+##            each after ([method TableMedium.rework]), what is in things baked again only from where the draft
+##            changes ([method TablePhysics.replan]) - 841899's 29 first calls, replayed, 810 s to 348 s
+##            (tests/table/act_calls_probe.gd)
 ##   remove   acts taken out, by name
 ##   watch    one act photographed from the camera's place, six times start to end
 ##            ([method TablePreview.work_watch])

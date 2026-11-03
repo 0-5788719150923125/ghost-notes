@@ -606,6 +606,24 @@ static func reader(title: String, brief: String, plan: Dictionary, step: String,
 		vars["heard_card"] = false
 		vars["heard_jumper"] = false
 		vars["after"] = after(plan, work_k, spread_size, true)
+	# THE VIDEO'S CHAPTER this passage begins, as the description calls it unless its reader names it
+	# ([method TableEpisode.upload_notes]) - a card's work passage begins one only when named; an aside, none
+	vars["chapters"] = not bool(vars.get("aside", false))
+	vars["chapter_words"] = roundi(60.0 / SAID_WORD)
+	if step == "intro":
+		vars["chapter_now"] = TableEpisode.INTRO_CHAPTER
+	elif step == "close":
+		vars["chapter_now"] = TableEpisode.CLOSE_CHAPTER
+	elif work_k > 0:
+		vars["chapter_now"] = ""
+	elif bare:
+		var named := String(vars.get("position", "")).strip_edges()
+		vars["chapter_now"] = named if not named.is_empty() else "Part %d" % int(step)
+	elif not drawn.is_empty():
+		var c: Dictionary = drawn[int(step) - 1] if int(step) >= 1 and int(step) - 1 < drawn.size() else drawn[drawn.size() - 1]
+		var pos: Dictionary = positions[int(step) - 1] if int(step) >= 1 and int(step) - 1 < positions.size() and positions[int(step) - 1] is Dictionary else {}
+		vars["chapter_now"] = TableEpisode.card_chapter(String(pos.get("name", "")), String(c.get("name", "")),
+			bool(c.get("reversed", false)), bool(c.get("jumper", false)))
 	vars["lo"] = int(lo_hi[0])
 	vars["hi"] = int(lo_hi[1])
 	return {"system": show_context(title, brief), "prompt": Rules.say("table/reader.prompt", vars)}

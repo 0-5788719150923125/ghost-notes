@@ -56,6 +56,10 @@ const OPENING_AT := 2.0
 ## The episode's table medium, by class name: looked up when it is needed, never compiled in - it
 ## needs ghost's autoloads, and so would anything naming it (see the class note).
 const MEDIUM := "TableMedium"
+## The table the medium standing now was stood with, as written ([method _stand]): "" while none stands with acts.
+var _stood := ""
+## What the last [method work_checks] spent standing the table, baking and checking (ms) - a probe's.
+var timing := {}
 ## The pictures of the episode the table is built on - copied beside the description being tried,
 ## never its card faces: the set dresser knows no card.
 const PICTURES := ["surface.png", "height.png", "height.json", "backdrop.png", "backdrop.json", "back.png"]
@@ -820,7 +824,19 @@ func _stand(raw: Dictionary, acts: Variant = null) -> String:
 	if not can_set():
 		return "this process cannot stand the table (%s)" % ("no renderer" if not can_see() else "no ghost session")
 	_sync_pictures()
-	var err := TextGen.put(_dir.path_join("table.json"), JSON.stringify(raw, "\t"))
+	var spec := JSON.stringify(raw, "\t")
+	# THE TABLE ALREADY STANDING, OTHER ACTS: bound to them again, nothing built again - its bake kept as far as the acts agree
+	# ([method TableMedium.rework]). A puppeteer's every `act` had stood the table afresh: 6.5 s for the room, 10 s more for its
+	# work and physics, then a bake from the first change - from the show's start whenever an act moved something new (the-quiet-
+	# crucible 841899, 2026-10-31: 70 calls, 78 minutes of tools; next/framework_audit.md)
+	if acts != null and spec == _stood and _medium != null and is_instance_valid(_medium) and _medium._work != null \
+			and _medium._work.physics != null:
+		var e := TextGen.put(_dir.path_join("acts.json"), JSON.stringify(acts, "\t"))
+		if not e.is_empty():
+			return e
+		_medium.rework(acts)
+		return ""
+	var err := TextGen.put(_dir.path_join("table.json"), spec)
 	if not err.is_empty():
 		return err
 	if acts != null:
@@ -880,6 +896,8 @@ func _stand(raw: Dictionary, acts: Variant = null) -> String:
 	_table = vp
 	_medium = m
 	_doc = doc
+	# ...the table it stands, so the next acts on it need not stand it again - a table only set keeps none
+	_stood = spec if acts != null else ""
 	return ""
 
 
@@ -965,12 +983,15 @@ func work(raw: Dictionary, acts: Variant) -> Dictionary:
 ## table stood for them all, and what is in things baked once through the last of them: `{texts: {name: text},
 ## notes}` (what of the acts could not be kept), or `{error}`.
 func work_checks(raw: Dictionary, acts: Variant, names: Array) -> Dictionary:
+	var c0 := Time.get_ticks_msec()
 	var err: String = await _stand(raw, acts)
 	if not err.is_empty():
 		return {"error": err}
+	var c1 := Time.get_ticks_msec()
 	var w = _medium._work
 	if not names.is_empty() and not await _bake(w.checks_reach(w.rehearsed(), names)):
 		return {"error": "the work's tools were closed while it was baked"}
+	var c2 := Time.get_ticks_msec()
 	var texts := {}
 	for nm in names:
 		texts[String(nm)] = String((w.check(String(nm)) as Dictionary)["text"])
@@ -978,6 +999,7 @@ func work_checks(raw: Dictionary, acts: Variant, names: Array) -> Dictionary:
 		await _tree().process_frame
 		if _halted:
 			return {"error": "the work's tools were closed while it was checked"}
+	timing = {"stand": c1 - c0, "bake": c2 - c1, "checks": Time.get_ticks_msec() - c2}
 	return {"texts": texts, "notes": Array(w.notes)}
 
 

@@ -70,6 +70,16 @@ const LAWS := {
 			["by", "[x, y, z] centimeters past that"], ["lift", "centimeters it rises on the way (6 is a hand's)"],
 			["turn", "[x, y, z] degrees it ends turned, from as it was built"], ["between", "[u0, u1]: the stretch of the act it travels in"],
 			["down", "true: SET DOWN on what is under it - its lowest point comes to rest on the table or on the thing below, however it is turned (a lid laid aside, a spoon put down on its side, a jar stood on a shelf); `to`'s height is then only roughly where"]]},
+	"pour": {"label": "Pour", "on": ["pose"],
+		"blurb": "a vessel poured into another as a careful hand pours: brought level, its lip held just over the other's mouth and its handle turned away, turned about that lip across the view - so what flows falls where the lip is - slowly until it has emptied, and turned back level; what is in it does the flowing, as much as there is - a jug into a bowl, a ladle into a cup, a flask into a pot, a dish of grains tipped into a jar",
+		"fields": [["into", "what it pours into: a thing's or a part's name (\"vial 1\"), or a point (\"bowl.middle\")"],
+			["over", "centimeters its lip is held above that mouth (left out: as low as the mouth's width allows - 1 to 2, a careful pour; more makes a splash)"],
+			["tip", "degrees it is turned at the most (left out: 120, enough to empty it; less pours only what lies above that)"],
+			["between", "[u0, u1]: the stretch of the act it pours in - the first third brings it there, the last quarter turns it back"]]},
+	"dip": {"label": "Dip", "on": ["pose"],
+		"blurb": "a vessel dipped into a liquid and drawn up full, as a careful hand dips: brought over the other's mouth with its handle out over the rim, lowered in tipped only as far as its handle needs to clear the rim, held under while it fills, drawn up slowly so what it cannot hold falls back in, and brought level once it is out - a ladle into a pot, a cup into a basin, a scoop into a cask",
+		"fields": [["into", "what holds the liquid: a thing's or a part's name (\"pot\" is a thing's; \"jar/water\" a part's)"],
+			["between", "[u0, u1]: the stretch of the act it dips in - the first quarter brings it there, the last eighth levels it"]]},
 	"sprinkle": {"label": "Sprinkle", "on": [],
 		"blurb": "a little of something falls from a point, as grains - a pinch of salt from fingers nobody sees, herbs crumbled off a bundle, seeds shaken from a pod, ash tapped off; they fall, land and heap or sink where they land, as any grains do. (A vessel needs no law to pour: tipped until what is in it reaches its rim, it pours by itself)",
 		"fields": [["at", "where it falls from: a point (\"bundle.flowers\") or [x, y, z] - hold it over what it falls into"],
@@ -253,7 +263,7 @@ static func describe_laws() -> String:
 	lines.append("Any number may be a formula instead, a string of arithmetic in t (seconds into the act), u (0-1 through it), d (its length), T (the video's time) and n (whole periods done): \"30 * sin(tau * t / 2)\". Functions: %s." % ", ".join(PackedStringArray(Formula.FUNCS.keys())))
 	lines.append("Any track may add `jitter` (centimeters or degrees of a hand's unsteadiness) and `rate` (how quickly it wanders, per second) - a held thing already moves as a hand holds it: never quite still, bowed a little as it is carried, leaning with the pull of its moves.")
 	lines.append("")
-	lines.append("WHAT IS IN THINGS IS REAL (there is no law for it): a LIQUID stays level in its vessel, sloshes as it is carried and swirls as it is stirred; tipped until it reaches the rim it POURS BY ITSELF from the lowest point of the rim, faster the further it is tipped, in a stream that falls under gravity into whatever is under it - and nothing pours from a vessel stoppered or not tipped far enough. A vessel under a liquid's surface FILLS from it as far as it is under (a ladle dipped comes up full). GRAINS in a vessel slide and spill out of its mouth when it is tipped. A LOOSE thing slides, rolls and tumbles out of what holds it when that is tipped, falls, and sinks or floats in a liquid; carried by a law, it is held, and falls from where it is let go. A tool `press`ed into loose things and moved over them (a pestle going round in a bowl) CRUSHES them - stones and crystals break into pieces and the pieces into powder; metal, glass and wood never break. To pour or tip something out: bring the vessel over what is to catch it, tip it across the view and hold it there for as long as it should flow, then tip it back.")
+	lines.append("WHAT IS IN THINGS IS REAL (there is no law for it): a LIQUID stays level in its vessel, sloshes as it is carried and swirls as it is stirred; tipped until it reaches the rim it POURS BY ITSELF from the lowest point of the rim, faster the further it is tipped, in a stream that falls under gravity into whatever is under it - and nothing pours from a vessel stoppered or not tipped far enough. A vessel under a liquid's surface FILLS from it as far as it is under: `dip` it `into` what holds the liquid and the hand fills it and draws it up as level as it can. GRAINS in a vessel slide and spill out of its mouth when it is tipped. A LOOSE thing slides, rolls and tumbles out of what holds it when that is tipped, falls, and sinks or floats in a liquid; carried by a law, it is held, and falls from where it is let go. A tool `press`ed into loose things and moved over them (a pestle going round in a bowl) CRUSHES them - stones and crystals break into pieces and the pieces into powder; metal, glass and wood never break. To pour from one vessel into another, `pour` it `into` that one: the hand brings it there, holds its lip just over the mouth and turns it about that lip, so the stream falls in - its place and its tilt are the hand's, never written by hand. To tip something out over no vessel in particular (a dish's stones into a bowl), bring it over what is to catch it, tip it across the view and hold it there for as long as it should flow, then tip it back.")
 	return "\n".join(lines)
 
 
@@ -562,6 +572,23 @@ static func sanitize_law(raw: Variant, notes: PackedStringArray, running := fals
 			out["between"] = _between(d.get("between"))
 			if d.get("down") == true:
 				out["down"] = true
+		"pour":
+			var into := Props._text(d.get("into", ""), 100)
+			if into.is_empty():
+				notes.append("a pour names nothing to pour `into` - left out")
+				return {}
+			out["into"] = into
+			if d.has("over"):
+				out["over"] = Props._num(d.get("over"), 2.0, 0.5, 20.0)
+			out["tip"] = Props._num(d.get("tip"), 120.0, 20.0, 170.0)
+			out["between"] = _between(d.get("between"))
+		"dip":
+			var into_d := Props._text(d.get("into", ""), 100)
+			if into_d.is_empty():
+				notes.append("a dip names nothing to dip `into` - left out")
+				return {}
+			out["into"] = into_d
+			out["between"] = _between(d.get("between"))
 		"sprinkle":
 			var at: Variant = _place(d.get("at"))
 			if at != null:

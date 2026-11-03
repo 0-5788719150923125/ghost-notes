@@ -81,7 +81,7 @@ func _ok(cond: bool, what: String) -> void:
 func _run() -> void:
 	await process_frame
 	for check in [_formula, _clock, _clock_law, _grind, _at_the_spot, _seated, _set_down, _carry, _through_keys, _copies, _cued,
-			_live_words, _safe, _write, _held_up, _loose_size, _put_back]:
+			_live_words, _cue_order, _safe, _write, _held_up, _loose_size, _put_back, _aloft]:
 		var done: Variant = (check as Callable).call()
 		_ok(done == true, "%s stopped part way (a script error - see above)" % (check as Callable).get_method())
 	print("table_work_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
@@ -570,8 +570,9 @@ func _through_keys() -> bool:
 	var apart := float(speed.call(70.0 + 0.35 * 6.0))
 	# ...stopped, though held up in the air: as a hand holds it ([method _held_up]), never as one moves it
 	_ok(apart < 0.006, "the control: carries with a pause between them do not stop in it: %.1f cm a second" % (apart * 100.0))
-	# ...and each still ends where it was taken, and goes nowhere past it
-	m._work.tick(56.0)
+	# ...and each still ends where it was taken, and goes nowhere past it (looked at as it ends: its next act 14 s on, the hand
+	# lets it go there and it is set down, [constant TablePhysics.HOLD_MOST])
+	m._work.tick(55.99)
 	var end := Vector3(Tables.ORIGIN.x - 0.02, 0.04, Tables.ORIGIN.y)
 	_ok(jar.position.distance_to(end) < 0.002, "carries gone on through do not end where the last one takes it: %s, not %s" % [jar.position, end])
 	var widest := -INF
@@ -743,6 +744,28 @@ func _live_words() -> bool:
 		if cues.has(nm):
 			early = maxf(early, float(cues[nm]) - ((played["guessed"]["runs"] as Dictionary)[nm] as Vector2).x)
 	_ok(early > 2.0, "the control: acts begun on the estimate did not begin before their words: at most %.1f s early" % early)
+	return true
+
+
+## Word cues cannot reorder physical steps, even on different channels: opening must finish before taking a pinch.
+## A cue at an unknown word also blocks later cues whose words are already known.
+func _cue_order() -> bool:
+	var m := _medium()
+	_stand(m, _mortar_spec(), "mortar", Vector3(Tables.ORIGIN.x, 0.0, Tables.ORIGIN.y))
+	m._work.build({"acts": [
+		{"name": "open", "beat": 1, "length": 5, "tracks": [{"thing": "mortar", "part": "herbs", "state": "glow", "law": "to", "value": 0.5}]},
+		{"name": "pinch", "beat": 1, "length": 2, "tracks": [{"thing": "mortar", "part": "herbs", "state": "grow", "law": "to", "value": 0.3}]}]}, 1)
+	var action := {"kind": "work", "card": 1, "after": 0, "dur": 0.0}
+	var parse := {"actions": [action], "spoken": PackedStringArray(["open", "pinch", "done"]),
+		"cues": [{"name": "open", "si": 0}, {"name": "pinch", "si": 1}]}
+	var sched := [{"a": action, "t0": 2.0, "s": 1.0}]
+	m._work.schedule(sched, parse, PackedFloat32Array([2.0, 3.0, 14.0]), PackedFloat32Array([2.5, 3.5, 15.0]), PackedFloat32Array(), 0.0)
+	var runs := m._work.runs
+	_ok(runs.size() == 2 and float(runs[1]["t0"]) >= float(runs[0]["t1"]), "a later cue started the pinch before opening finished: %s" % str(runs))
+	m._work.schedule(sched, parse, PackedFloat32Array([ReadingFollower.NO_TIME, 3.0, 14.0]),
+		PackedFloat32Array([ReadingFollower.NO_TIME, 3.5, 15.0]), PackedFloat32Array(), 0.0)
+	_ok(m._work.runs.is_empty(), "a later known cue bypassed an earlier unheard cue")
+	m._root3.free()
 	return true
 
 
@@ -938,7 +961,7 @@ func _write() -> bool:
 
 ## A THING HELD UP BETWEEN MOVES IS NEVER STILL (the-quiet-crucible 119515: "when the actor is holding the pestle in the
 ## air, it is perfectly still: but you would expect it to be gently bobbing/moving, since a hand cannot remain perfectly
-## still"): a jar carried up and left in the air until its next move sways as a hand holds it, a few millimeters from where
+## still"): a jar carried up and left in the air for its next move a moment later sways as a hand holds it, a few millimeters from where
 ## it was sent - in the bake too, now that a whole thing is a body ([method TablePhysics._held_aloft]; after its last move,
 ## it is let go). The control: carried onto the table, it lies still.
 func _held_up() -> bool:
@@ -951,14 +974,17 @@ func _held_up() -> bool:
 		m._work.build({"acts": [{"name": "up", "beat": 1, "length": 3, "tracks": [{"thing": "jar", "law": "carry",
 			"to": [0, 8 if where == "air" else 0, 5], "lift": 6}]},
 			{"name": "down", "beat": 1, "length": 3, "tracks": [{"thing": "jar", "law": "carry", "lift": 2, "down": true}]}]}, 1)
-		m._work.runs = [{"i": 0, "t0": 2.0, "t1": 5.0}, {"i": 1, "t0": 14.0, "t1": 17.0}]
+		# ...its next move a hand's pause on (a hand holds nothing in the air longer: [constant TablePhysics.HOLD_MOST])
+		# ...set on the table, it is looked at long after, at rest
+		var air: bool = where == "air"
+		m._work.runs = [{"i": 0, "t0": 2.0, "t1": 5.0}, {"i": 1, "t0": 5.9 if air else 14.0, "t1": 8.9 if air else 17.0}]
 		m._work._timelines()
 		var sent := Vector3(Tables.ORIGIN.x, 0.08 if where == "air" else 0.0, Tables.ORIGIN.y + 0.05)
 		var most := 0.0
 		var far := 0.0
 		var last := Vector3.INF
-		var t := 7.0
-		while t < 12.0:
+		var t: float = 5.1 if air else 7.0
+		while t < (5.85 if air else 12.0):
 			m._work.tick(t)
 			if last != Vector3.INF:
 				most = maxf(most, node.position.distance_to(last) / 0.05)
@@ -1077,4 +1103,25 @@ func _put_back() -> bool:
 		else:
 			_ok(y < 0.002, "the mortar set down by the tray, its box's corner over it, stands %.1f mm up - on the tray's edge, not its own foot" % (y * 1000.0))
 		q._root3.free()
+	return true
+
+
+## WHAT A MOVE LEAVES IN THE AIR IS SAID (2026-11-01, feedback 0001-0002: the ladle carried "over the cauldron" and the pestle lifted
+## "over the crushed tear", each left in the air for the words before its next act - a rehearsal plays acts back to back and never
+## showed it): a jar carried 8 cm up and left there, `act` says it ENDS IN THE AIR. The control: the same carry set `down` says not.
+func _aloft() -> bool:
+	var said := {}
+	for down in [false, true]:
+		var m := _medium()
+		var spec := {"things": [{"name": "jar", "parts": [{"shape": "lathe", "profile": [[0, 0], [3, 0], [3, 8], [0, 8]], "material": "glass"}]}],
+			"materials": {"glass": {"kind": "ceramic", "color": "#5a7a6a"}}}
+		_stand(m, spec, "jar", Vector3(0.3, 0.0, -0.2))
+		var tr := {"thing": "jar", "law": "carry", "to": [0, 0 if down else 8, 5], "lift": 6}
+		if down:
+			tr["down"] = true
+		m._work.build({"acts": [{"name": "up", "beat": 1, "length": 3, "tracks": [tr]}]}, 1)
+		said[down] = String((m._work.check("up") as Dictionary)["text"])
+		m._root3.free()
+	_ok(not String(said[true]).contains("ENDS IN THE AIR"), "the control: set down on the table, the jar was said to be left in the air:\n%s" % String(said[true]))
+	_ok(String(said[false]).contains("ENDS IN THE AIR"), "carried 8 cm up and left there, `act` did not say the jar ends in the air:\n%s" % String(said[false]))
 	return true

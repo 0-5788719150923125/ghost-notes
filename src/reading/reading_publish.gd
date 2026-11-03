@@ -9,7 +9,7 @@ class_name ReadingPublish
 ## is a note read aloud: named after the note ([method ReadingPanel.export_name]), the note's title on the
 ## upload, and the note as its own episode - its description and tags on the YouTube card ([NoteUpload]).
 ## Cards hands an [EpisodePublish]: an episode's title for a name, the episode pinned through the
-## minutes of a render, upload notes and a chapter per card.
+## minutes of a render, upload notes and their chapters.
 
 
 ## What an export is called, without an extension; "" names it after the note when the note is its own episode

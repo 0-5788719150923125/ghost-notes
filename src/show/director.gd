@@ -729,6 +729,14 @@ func wait_for(who: String, on: bool) -> void:
 	Spectrum.set_waiting(who, on)
 
 
+func paused() -> bool:
+	return Spectrum.paused
+
+
+func ready_ahead(who: String, seconds: float) -> void:
+	Spectrum.set_ready(who, seconds)
+
+
 # The session seed, by priority:
 #   1. an explicit --seed N (the exporter passes it so a render reproduces a session, and
 #      it is the way to roll a *different* show for the same song on purpose) - taken

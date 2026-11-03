@@ -9,8 +9,17 @@ extends SceneTree
 ## - THE CLIENT FILE: a "Desktop app" client is read; a Web client, a file with no secret, one that
 ##   is not JSON and one whose endpoints are not Google's are refused, each saying why. Imported, it
 ##   is kept owner read/write only, and a bad file leaves the kept one alone. A CHANNEL KEEPS THE
-##   CLIENT IT SIGNED IN WITH: another client imported is the one new sign-ins use, and neither it nor
-##   the client forgotten costs a channel its sign-in.
+##   CLIENT IT SIGNED IN WITH: neither another client imported nor the client forgotten costs a channel
+##   its sign-in.
+## - EVERY CLIENT IS KEPT (2026-11-02, the user: "select from a list of previous clients"): imports sit
+##   side by side, each named by its Cloud project, told apart when two are one project's, the one
+##   imported last the default. A SIGN-IN GOES THROUGH THE NOTE'S PICK, ELSE THE CHANNEL'S OWN, ELSE THE
+##   LAST IMPORTED - a lapsed channel back through its own, the report (the control: with no channel, the
+##   last imported); a pick not kept here is passed over. What a machine already held - the old slot, a
+##   channel's copy with no project in it - is listed where it lies, and reading it writes nothing. A
+##   channel removed leaves its client on the list. The card's list shows the channel's own, a pick is
+##   kept in the block by its key and never its id, offers "Sign in again" and leaves the sign-in alone;
+##   ✕ only for one no channel holds.
 ## - THE CHANNELS (2026-10-17, the user: "target different channels for different kinds of
 ##   project"): each sign-in kept under its channel, owner-only, listed in the order signed in to and
 ##   named by its handle, else its title; each may do what it was granted and only that; one signed in
@@ -32,7 +41,16 @@ extends SceneTree
 ##   a missing file refused; one queued with no channel is aimed at the channel its sign-in lands on,
 ##   one that names a channel keeps it.
 ## - THE TAROT EPISODE: its upload notes from the plan, with a chapter per card timed from a take's
-##   word timings (an hour on, `h:mm:ss`), and `upload.md` with the show's tags first.
+##   word timings (an hour on, `h:mm:ss`), the close "The close" (2026-10-31: "The spread" named a brew's
+##   close), and `upload.md` with the show's tags first.
+## - CHAPTERS AS YOUTUBE TAKES THEM (`fit_chapters`): the first at 0 and never dropped, each at least ten
+##   seconds to the next one kept - one shorter gives way to what begins after it, one too soon after the
+##   first goes - and the last ten from the video's end (the control: chapters far enough apart are kept
+##   whole). A take with no outro after its last word loses a close that starts within ten seconds of it.
+## - THE READER'S CHAPTERS (2026-10-31, the-quiet-crucible 841899: a seven-minute brew in one chapter): a
+##   passage opening on `<!-- chapter: name -->` names its own mark's chapter, and makes one of a card's
+##   work, which is none unnamed (the control: the mark-free episode above has no work chapter); a mark
+##   inside a passage starts one at its word's time; one under ten seconds gives way to the next.
 ## - THE EXPORT MENU says nothing of YouTube (2026-10-07: the upload moved to a component's card), and AN
 ##   UPLOAD WHOSE TITLE CANNOT BE MADE is refused at the click, saying why, before anything is asked.
 ## - THE NOTE'S NAMES ARE ITS SCRIPT CARD'S (2026-10-25, the user: "nowhere is an episode title actually an
@@ -174,7 +192,7 @@ func _run() -> void:
 	_wipe(ROOT)
 	_wipe(TAROT)
 	_wipe(ROOT + "_files")
-	for check in [_client, _import, _channels, _pkce, _auth_url, _query, _wire, _fit, _body, _records, _episode_notes,
+	for check in [_client, _import, _clients, _channels, _pkce, _auth_url, _query, _wire, _fit, _body, _records, _episode_notes,
 			_menu, _card, _episode_tags, _thumbnails, _tag_field, _panel_fields, _proof_steps, _note_steps, _doc_file]:
 		if not bool(check.call()):
 			_ok(false, "a check stopped part way (script error?)")
@@ -223,6 +241,12 @@ func _client_json(id := "123-abc.apps.googleusercontent.com", kind := "installed
 	return JSON.stringify({kind: c})
 
 
+## No client kept, wherever it lies: what a fresh machine has.
+func _no_clients() -> void:
+	for c in YouTube.clients():
+		YouTube.forget_client(String((c as Dictionary)["key"]))
+
+
 func _owner_only(path: String) -> bool:
 	return OS.get_name() == "Windows" or FileAccess.get_unix_permissions(path) == YouTube.OWNER_FILE
 
@@ -261,7 +285,7 @@ func _import() -> bool:
 		"a missing file is refused")
 	var good := _file("client_secret_123.json", _client_json())
 	_ok(YouTube.import_client(good) == "", "a good client file imports")
-	var kept := ProjectSettings.globalize_path(ROOT.path_join("client.json"))
+	var kept := YouTube._client_path(YouTube.client_key("123-abc.apps.googleusercontent.com"))
 	_ok(YouTube.has_client() and YouTube.client()["client_id"] == "123-abc.apps.googleusercontent.com",
 		"the imported client is what is read from then on")
 	_ok(_owner_only(kept), "the kept client is owner read/write only (%o)" % FileAccess.get_unix_permissions(kept))
@@ -277,15 +301,95 @@ func _import() -> bool:
 	_ok(YouTube.import_client(_file("other.json", _client_json("456-def.apps.googleusercontent.com"))) == ""
 		and YouTube.client()["client_id"] == "456-def.apps.googleusercontent.com" and YouTube.signed_in("UC-a")
 		and YouTube._token("UC-a")["client"]["client_id"] == "123-abc.apps.googleusercontent.com",
-		"another client is the one new sign-ins use; the channel keeps the client it signed in with")
+		"another client is the one imported last; the channel keeps the client it signed in with")
 	var at := YouTube._channel_path("UC-a")
 	_ok(_owner_only(at) and (OS.get_name() == "Windows"
 		or FileAccess.get_unix_permissions(at.get_base_dir()) == YouTube.OWNER_DIR),
 		"a channel's sign-in is owner read/write only, its folder too")
-	YouTube.forget_client()
-	_ok(not YouTube.has_client() and YouTube.signed_in("UC-a"), "forgetting the client costs no channel its sign-in")
+	var first := YouTube.client_key("123-abc.apps.googleusercontent.com")
+	YouTube.forget_client(YouTube.client_key("456-def.apps.googleusercontent.com"))
+	YouTube.forget_client(first)
+	_ok(YouTube.signed_in("UC-a") and YouTube.client(first)["client_id"] == "123-abc.apps.googleusercontent.com",
+		"forgetting a client costs no channel its sign-in, and the channel's copy keeps it on the list")
 	YouTube.forget_channel("UC-a")
 	_ok(YouTube.channels().is_empty() and not YouTube.signed_in("UC-a"), "a channel forgotten is off the list")
+	_ok(YouTube.client(first)["client_id"] == "123-abc.apps.googleusercontent.com" and _owner_only(YouTube._client_path(first)),
+		"its client is not: that copy may have been the only one, and it is kept owner-only")
+	_no_clients()
+	_ok(not YouTube.has_client() and YouTube.clients().is_empty(), "forgotten with no channel holding it, a client is gone")
+	return true
+
+
+## EVERY CLIENT IS KEPT, and a sign-in goes through the one it should (see the header).
+func _clients() -> bool:
+	var a := "111-aaa111.apps.googleusercontent.com"
+	var b := "222-bbb222.apps.googleusercontent.com"
+	var c := "333-ccc333.apps.googleusercontent.com"
+	var ka := YouTube.client_key(a)
+	var kb := YouTube.client_key(b)
+	var names := func() -> Array: return YouTube.clients().map(func(d: Dictionary) -> String: return d["name"])
+	var id_of := func(d: Dictionary) -> String: return str(d.get("client_id", ""))
+	_ok(YouTube.clients().is_empty() and YouTube.client_for("", "").has("error"), "no client kept: none to go through")
+	var file_a := _file("a.json", _client_json(a, "installed", {"project_id": "project-a"}))
+	_ok(YouTube.import_client(file_a) == "" and YouTube.import_client(_file("b.json", _client_json(b, "installed", {"project_id": "project-b"}))) == "",
+		"two clients import")
+	_ok(names.call() == ["project-a", "project-b"], "both are kept, named by their projects, the one imported last at the end (%s)" % str(names.call()))
+	_ok(id_of.call(YouTube.client()) == b and id_of.call(YouTube.client(ka)) == a and YouTube.client("gone").has("error"),
+		"with nothing to go on the last imported is read, and a key reads its own")
+	_ok(ka != a and YouTube.client_key("") == "" and FileAccess.file_exists(YouTube._client_path(ka)),
+		"a client is kept and named by a key, not its id")
+	_ok((MiniYaml.parse(MiniYaml.emit({"client": "123e45678901"}))["data"] as Dictionary).get("client") == "123e45678901",
+		"a key that reads as a number comes back from a note's YAML as it went in")
+	# THE REPORT: @the-ink signed in through one project, a client imported since for @the-arc, and @the-ink lapsed
+	YouTube._keep({"id": "UC-ink", "handle": "@the-ink", "title": "Ink"}, YouTube.client(ka), {"refresh_token": "rt"}, YouTube.SCOPE)
+	YouTube._keep({"id": "UC-arc", "handle": "@the-arc", "title": "Arc"}, YouTube.client(kb), {"refresh_token": "rt2"}, YouTube.SCOPE)
+	_ok(YouTube.signed_in("UC-ink") and YouTube.signed_in("UC-arc") and YouTube.channel_client("UC-ink") == ka and YouTube.channel_client("UC-arc") == kb,
+		"two channels signed in at once, each through its own client")
+	YouTube._drop_sign_in("UC-ink")
+	_ok(id_of.call(YouTube.client()) == b and id_of.call(YouTube.client_for("", "UC-ink")) == a,
+		"THE REPORT: a lapsed channel goes back through its own client, whatever was imported since")
+	_ok(id_of.call(YouTube.client_for(kb, "UC-ink")) == b, "a note's pick goes first")
+	_ok(id_of.call(YouTube.client_for("not-here", "UC-ink")) == a, "a pick not kept here is passed over")
+	_ok(id_of.call(YouTube.client_for("", "UC-new")) == b and id_of.call(YouTube.client_for("", "")) == b,
+		"the control: with no channel's own to go by, the last imported")
+	var listed: Array = YouTube.clients().map(func(d: Dictionary) -> Array: return d["channels"])
+	_ok(listed == [["@the-ink"], ["@the-arc"]], "each lists the channels that signed in through it, a lapsed one too (%s)" % str(listed))
+	_ok(YouTube.import_client(file_a) == "" and YouTube.clients().size() == 2 and id_of.call(YouTube.client()) == a,
+		"a file imported again replaces its own, and is the last imported")
+	YouTube.import_client(_file("c.json", _client_json(c, "installed", {"project_id": "project-a"})))
+	var told: Array = names.call()
+	_ok(told.size() == 3 and told.count("project-a") == 0 and told[1] != told[2] and String(told[2]).begins_with("project-a"),
+		"two clients of one project are told apart (%s)" % str(told))
+	YouTube.forget_channel("UC-ink")
+	YouTube.forget_channel("UC-arc")
+	_no_clients()
+	_ok(YouTube.clients().is_empty(), "nothing left")
+	# WHAT THIS MACHINE ALREADY HELD: the one slot, and a channel's copy of a client that slot since lost
+	var old := "1048-gu0.apps.googleusercontent.com"
+	_wipe(ROOT)
+	YouTube._write(YouTube._path(YouTube.OLD_CLIENT), _client_json(b, "installed", {"project_id": "annular"}), true)
+	YouTube._write(YouTube._channel_path("UC-ink"), JSON.stringify({"channel": {"id": "UC-ink", "handle": "@the-ink", "title": "Ink"}, "added": 5.0,
+		"client": {"client_id": old, "client_secret": "s", "token_uri": YouTube.TOKEN_URI}}), true)
+	var files := func() -> Array:
+		var out: Array = []
+		for dir in ["", YouTube.CHANNELS, YouTube.CLIENTS]:
+			if DirAccess.dir_exists_absolute(YouTube._path(dir)):
+				for f in DirAccess.get_files_at(YouTube._path(dir)):
+					out.append("%s/%s@%d" % [dir, f, FileAccess.get_modified_time(YouTube._path(dir).path_join(f))])
+		return out
+	var before: Array = files.call()
+	_ok(names.call() == ["project 1048", "annular"], "they are listed where they lie, a copy with no project by its number (%s)" % str(names.call()))
+	_ok(id_of.call(YouTube.client()) == b and id_of.call(YouTube.client_for("", "UC-ink")) == old
+		and YouTube.client_for("", "UC-ink")["auth_uri"] == YouTube.AUTH_URI,
+		"the old slot is the last imported, the channel's copy takes it to Google's own consent page")
+	_ok(files.call() == before and not DirAccess.dir_exists_absolute(YouTube._path(YouTube.CLIENTS)), "reading them writes nothing")
+	_ok(YouTube.import_client(_file("old.json", _client_json(old, "installed", {"project_id": "ghost-notes"}))) == ""
+		and names.call().has("ghost-notes") and not names.call().has("project 1048"),
+		"its file imported names the project")
+	YouTube.forget_client(kb)
+	_ok(not FileAccess.file_exists(YouTube._path(YouTube.OLD_CLIENT)) and YouTube.client(kb).has("error"), "the old slot can be forgotten")
+	YouTube.forget_channel("UC-ink")
+	_no_clients()
 	return true
 
 
@@ -381,6 +485,20 @@ func _wire() -> bool:
 
 
 func _fit() -> bool:
+	var chaptered := func(c: Array, end := -1.0) -> String:
+		return ", ".join(PackedStringArray(YouTube.fit_chapters(c, end).map(func(d: Dictionary) -> String:
+			return "%s@%d" % [String(d["label"]), int(d["t"])])))
+	_ok(chaptered.call([{"t": 0.0, "label": "A"}, {"t": 30.0, "label": "B"}, {"t": 60.0, "label": "C"}], 100.0) == "A@0, B@30, C@60",
+		"the control: chapters ten seconds apart and from the end are kept whole")
+	_ok(chaptered.call([{"t": 0.0, "label": "A"}, {"t": 50.0, "label": "B"}, {"t": 55.0, "label": "C"}, {"t": 100.0, "label": "D"}], 200.0)
+		== "A@0, C@55, D@100", "a chapter under ten seconds gives way to the one after it")
+	_ok(chaptered.call([{"t": 0.0, "label": "A"}, {"t": 5.0, "label": "B"}, {"t": 30.0, "label": "C"}]) == "A@0, C@30",
+		"the first is never dropped: what begins too soon after it goes")
+	_ok(chaptered.call([{"t": 3.0, "label": "A"}, {"t": 40.0, "label": "B"}]) == "A@0, B@40", "the first chapter starts at 0")
+	_ok(chaptered.call([{"t": 0.0, "label": "A"}, {"t": 50.0, "label": "B"}, {"t": 95.0, "label": "C"}], 100.0) == "A@0, B@50",
+		"a last chapter under ten seconds from the end goes")
+	_ok(chaptered.call([{"t": 40.0, "label": "B"}, {"t": 0.0, "label": "A\nsplit"}, {"t": 20.0, "label": " "}]) == "A split@0, B@40",
+		"in time order, a label one line, an empty one dropped")
 	_ok(YouTube.clean("a <b> c\u0007\r\n\td") == "a ‹b› c\n\td", "< and > are made safe; control characters but breaks and tabs go")
 	_ok(YouTube.fit_title("  Why <you> keep\nwaking   up  ") == "Why ‹you› keep waking up", "a title is one clean line")
 	var words := "word ".repeat(30)
@@ -469,6 +587,38 @@ func _records() -> bool:
 	return true
 
 
+## THE READER'S CHAPTERS, on an episode of its own (a script is read again only once its file's time
+## moves on, in whole seconds): one card out of a box, its work, the close - the passages naming theirs.
+func _named_chapters() -> bool:
+	var ep := TableEpisode.open("youtube-check", 8)
+	DirAccess.make_dir_recursive_absolute(ep.dir)
+	ep.write_json("plan", {"episode_title": "A Brew", "description": "", "spread": {"name": "One", "positions": [{"name": "The Card", "asks": ""}]}})
+	ep.write_json("draw", {"cards": [{"name": "The Tower", "reversed": false}]})
+	ep.write_text("script", "<!-- table: open -->\n\nHello my loves welcome back.\n\n<!-- table: draw 1 -->\n\n"
+		+ "<!-- chapter: The recipe -->\nThe Tower is here.\n\n<!-- table: work 1 -->\n\n<!-- chapter: First the resin -->\n"
+		+ "One two three. <!-- chapter: A moment --> Four five six. <!-- chapter: Then the stir --> seven eight.\n\n"
+		+ "<!-- table: spread -->\n\n<!-- chapter: Bottling it -->\nThat is the end.\n")
+	var words: Array = []
+	var at := {0: 1.0, 5: 60.0, 9: 120.0, 12: 200.0, 15: 204.0, 17: 300.0}
+	var t := 1.0
+	var i := 0
+	for w in "Hello my loves welcome back The Tower is here One two three Four five six seven eight That is the end".split(" "):
+		t = float(at.get(i, t))
+		words.append({"text": w, "t0": t, "t1": t + 0.4})
+		t += 0.5
+		i += 1
+	var take := ProjectSettings.globalize_path(ROOT + "_files/take_named.wav")
+	var side := FileAccess.open(take.get_basename() + ".json", FileAccess.WRITE)
+	side.store_string(JSON.stringify({"words": words, "bookend": {"in": 0.0, "out": 9.0}}))
+	side.close()
+	var ch: PackedStringArray = ep.upload_notes(take)["chapters"]
+	var labels := Array(ch).map(func(c: String) -> String: return c.substr(c.find(" ") + 1))
+	_ok(labels == ["Intro", "The recipe", "First the resin", "Then the stir", "Bottling it"],
+		"each passage's opening mark names its chapter, a card's work one, a mark inside one at its word; one too short gives way (%s)" % str(ch))
+	_ok(ch.size() == 5 and ch[3] == "3:24 Then the stir" and ch[2].begins_with("1:5"), "a chapter starts where its words do (%s)" % str(ch))
+	return true
+
+
 ## An episode on disk: a plan, a draw of two cards, a script with their marks, and a take whose
 ## words put the spread past the hour.
 func _episode_notes() -> bool:
@@ -492,6 +642,11 @@ func _episode_notes() -> bool:
 		i += 1
 	var take := ProjectSettings.globalize_path(ROOT + "_files/take_1.wav")
 	var side := FileAccess.open(take.get_basename() + ".json", FileAccess.WRITE)
+	side.store_string(JSON.stringify({"words": words, "bookend": {"in": 0.0, "out": 9.0}}))
+	side.close()
+	# ...and one with no outro after its last word: the close starts under ten seconds from its end
+	var cut := ProjectSettings.globalize_path(ROOT + "_files/take_cut.wav")
+	side = FileAccess.open(cut.get_basename() + ".json", FileAccess.WRITE)
 	side.store_string(JSON.stringify({"words": words}))
 	side.close()
 
@@ -505,7 +660,10 @@ func _episode_notes() -> bool:
 	if ch.size() == 4:
 		_ok(ch[1].ends_with(" Past - The Tower (reversed)") and ch[1].begins_with("1:0"), "a card's chapter names its position and how it fell (%s)" % ch[1])
 		_ok(ch[2].ends_with(" Future - The Star") and ch[2].begins_with("2:0"), "in the order drawn (%s)" % ch[2])
-		_ok(RegEx.create_from_string("^1:0\\d:\\d\\d The spread$").search(ch[3]) != null, "an hour on it reads h:mm:ss (%s)" % ch[3])
+		_ok(RegEx.create_from_string("^1:0\\d:\\d\\d The close$").search(ch[3]) != null, "an hour on it reads h:mm:ss, the close by no card word (%s)" % ch[3])
+	_ok((ep.upload_notes(cut)["chapters"] as PackedStringArray).size() == 3, "a close under ten seconds from the take's end goes (%s)"
+		% str(ep.upload_notes(cut)["chapters"]))
+	_ok(_named_chapters(), "the reader's chapters")
 	_ok(TableEpisode.chapter_clock(0) == "0:00" and TableEpisode.chapter_clock(65) == "1:05"
 		and TableEpisode.chapter_clock(3725) == "1:02:05", "chapter clocks read as YouTube reads them")
 	ep.write_json("plan", {"episode_title": "T", "description": "", "premise": "The premise."})
@@ -552,7 +710,7 @@ func _card() -> bool:
 	card.exporter = ex
 	var cap: Dictionary = card.capture()
 	_ok(cap == {"upload": false, "title": "%title%: %episode%", "privacy": "private", "category": "22", "playlist": "",
-		"playlist_title": "", "channel": "", "channel_name": "", "write_tags": false, "description": "",
+		"playlist_title": "", "channel": "", "channel_name": "", "client": "", "write_tags": false, "description": "",
 		"thumbnail": "youtube", "thumbnail_writer": "claude", "thumbnail_writer_model": "", "thumbnail_writer_effort": "",
 		"thumbnail_painter": "codex", "thumbnail_painter_model": "", "thumbnail_painter_effort": "", "thumbnail_match": true},
 		"a new card uploads nothing, privately, as People & Blogs, titled by the template, to no channel yet, with YouTube's thumbnail - matched to the video's pictures once painted (%s)" % str(cap))
@@ -565,7 +723,7 @@ func _card() -> bool:
 		"bound, the card shows all four on it and reads the note's names from there (%s)" % str(card.values_now()))
 	_ok(card.meta({"tags": ["a"]}).is_empty(), "unticked, it describes no upload whatever the panel has")
 	var block := {"upload": true, "title": "%title% - %episode% (%date%)", "privacy": "unlisted", "category": "27",
-		"playlist": "PL1", "playlist_title": "Readings", "channel": "UC-x", "channel_name": "@x", "write_tags": true,
+		"playlist": "PL1", "playlist_title": "Readings", "channel": "UC-x", "channel_name": "@x", "client": "a1b2c3d4e5f6", "write_tags": true,
 		"description": "Line one.\n\nLine two.", "thumbnail": "painted", "thumbnail_writer": "claude",
 		"thumbnail_writer_model": "m1", "thumbnail_writer_effort": "high", "thumbnail_painter": "grok",
 		"thumbnail_painter_model": "", "thumbnail_painter_effort": "", "thumbnail_match": false}
@@ -660,13 +818,14 @@ func _card() -> bool:
 	_ok(YouTube.title_shape("%title%: %episode%", {}, "[x]") == "" and YouTube.title_shape("%title% #%seed%", {"title": "T", "seed": "7"}, "[x]") == "",
 		"control: no line when the episode's title stands alone, or is left out")
 	# THE CHANNEL AND THE ACCOUNT ROWS
-	YouTube.forget_client()
+	_no_clients()
 	card.apply({})
 	card._seen = []
 	card._refresh_account()
 	_ok(card._client.text == "Import client…" and not card._sign.visible and not card._remove.visible
 		and card.capture()["channel"] == "" and _chips(card).is_empty() and card._add.get_parent() == card._chips,
 		"with no client and no channel, it offers to import a client, and + alone")
+	_ok(card._clients.disabled and card._clients.get_item_text(0) == "None yet" and not card._client_del.visible, "the list has nothing to pick")
 	YouTube.import_client(_file("card_client.json", _client_json()))
 	YouTube._keep({"id": "UC-arc", "handle": "@the-arc", "title": "The Arc"}, YouTube.client(), {"refresh_token": "rt"},
 		YouTube.SCOPE + " " + YouTube.READ_SCOPE)
@@ -680,7 +839,7 @@ func _card() -> bool:
 	_ok(_chips(card).map(func(b: Button) -> String: return b.text) == ["@the-arc", "@the-ink"] and _pressed(card) == "@the-arc"
 		and card._chips.get_child(card._chips.get_child_count() - 1) == card._add,
 		"a toggle per channel, named as YouTube names it, the note's pressed, + last")
-	_ok(card._client.text == "Replace client…" and card._account.text.contains("@the-arc") and card._account.text.contains("uploads only")
+	_ok(card._client.text == "Import another…" and card._account.text.contains("through ghost-check") and card._account.text.contains("@the-arc") and card._account.text.contains("uploads only")
 		and card._remove.visible and not card._sign.visible, "signed in, it says where uploads go and what the sign-in may do (%s)" % card._account.text)
 	var ink: Button = _chips(card)[1]
 	ink.pressed.emit()
@@ -694,6 +853,52 @@ func _card() -> bool:
 		"one channel may see playlists while the other may only upload")
 	_ok(ex.scopes_for({"playlist": "PL1"}) == [YouTube.SCOPE, YouTube.PLAYLIST_SCOPE] and ex.scopes_for({}) == [YouTube.SCOPE],
 		"an upload joining a playlist asks for the playlists' scope, one without asks for uploads alone")
+	# THE CLIENT IS PICKED FROM THOSE KEPT
+	var own_key := YouTube.client_key("123-abc.apps.googleusercontent.com")
+	var other_id := "456-def.apps.googleusercontent.com"
+	var other_key := YouTube.client_key(other_id)
+	YouTube.import_client(_file("card_other.json", _client_json(other_id, "installed", {"project_id": "other-project"})))
+	card.apply({"upload": true, "channel": "UC-ink", "channel_name": "@the-ink"})
+	card._seen = []
+	card._refresh_account()
+	_ok(card._clients.item_count == 2 and card._clients.get_item_text(0) == "ghost-check (@the-arc, @the-ink)"
+		and card._clients.get_item_text(1) == "other-project" and not card._clients.disabled,
+		"the list holds each client by its project and channels (%s)" % card._clients.get_item_text(0))
+	_ok(card._clients.selected == 0 and card.capture()["client"] == "" and card.meta({"tags": []}).get("client") == own_key
+		and not card._client_del.visible and not card._sign.visible,
+		"it shows the channel's own, though another was imported since; the block picks nothing, and one a channel holds cannot be forgotten")
+	card._clients.select(1)
+	card._on_client_picked(1)
+	_ok(card.capture()["client"] == other_key and not str(card.capture()).contains(other_id) and card.meta({"tags": []}).get("client") == other_key,
+		"another picked is kept in the block by its key, never its id, and an upload's sign-in would go through it")
+	_ok(YouTube.signed_in("UC-ink") and YouTube.channel_client("UC-ink") == own_key and card._sign.visible and card._sign.text == "Sign in again"
+		and card._account.text.contains("through ghost-check") and card._account.text.contains("moves it to other-project") and card._client_del.visible,
+		"the channel stays signed in as it was, and the card offers to sign in again (%s)" % card._account.text)
+	card.apply(card.capture())
+	card._seen = []
+	card._refresh_account()
+	_ok(card._clients.selected == 1, "the pick comes back with the block")
+	card._clients.select(0)
+	card._on_client_picked(0)
+	_ok(card.capture()["client"] == "" and not card._sign.visible, "the channel's own picked again is no pick at all")
+	card._clients.select(1)
+	card._on_client_picked(1)
+	(_chips(card)[0] as Button).pressed.emit()
+	card._seen = []
+	card._refresh_account()
+	_ok(card.capture()["client"] == "" and card.capture()["channel"] == "UC-arc" and card._clients.selected == 0,
+		"another channel's toggle clears the pick: the row follows that channel's own")
+	card.apply({"upload": true, "channel": "UC-ink", "client": "not-here"})
+	card._seen = []
+	card._refresh_account()
+	_ok(card._clients.selected == 0 and card.capture()["client"] == "not-here" and card.meta({"tags": []}).get("client") == own_key and not card._sign.visible,
+		"a pick not kept here shows the channel's own, and the block keeps it for the machine that has it")
+	card.apply({"channel": "UC-ink", "client": other_key})
+	card._seen = []
+	card._refresh_account()
+	card._forget_client()
+	_ok(YouTube.client(other_key).has("error") and card.capture()["client"] == "" and card._clients.item_count == 1 and card._clients.selected == 0,
+		"✕ forgets the client shown, and the row goes back to the channel's own")
 	# A CHANNEL NOT SIGNED IN HERE: a note from another machine, or one whose channel was removed
 	card.apply({"channel": "UC-gone", "channel_name": "@gone"})
 	card._seen = []
@@ -722,7 +927,7 @@ func _card() -> bool:
 	YouTube.forget_pending()
 	YouTube.forget_channel("UC-arc")
 	YouTube.forget_channel("UC-ink")
-	YouTube.forget_client()
+	_no_clients()
 	card.free()
 	names.free()
 	ex.free()

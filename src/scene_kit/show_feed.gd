@@ -136,6 +136,19 @@ func wait_for(_who: String, _on: bool) -> void:
 	pass
 
 
+## WHETHER THE SHOW IS PAUSED by whoever watches it - not waiting ([method wait_for]), not stopped: a part that makes what it draws
+## ahead of time (a table's physics) makes more of it while nobody is watching, so what was made plays smoothly. A feed with no
+## clock to pause never is.
+func paused() -> bool:
+	return false
+
+
+## HOW FAR AHEAD [param who] IS READY: [param seconds] past the moment it is at, what it draws is made (a table's physics, baked) -
+## so the transport can show what is buffered, as a video player does. A feed with no transport ignores it.
+func ready_ahead(_who: String, _seconds: float) -> void:
+	pass
+
+
 ## The music's harmonic signature now (12 chroma bins and a coarse shape - [HarmonicSignature]),
 ## empty when nothing is heard: the continuous half of harmonic seeding, a scene's palette pulled
 ## toward the music's key.

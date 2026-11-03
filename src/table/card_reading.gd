@@ -25,6 +25,13 @@ class_name CardReading
 ## `grind` as the word after it is said - what is done is said as it is done. [method parse] lists each
 ## (`cues`, `{name, si}`: the spoken word it starts at); the voice never hears the mark.
 ##
+## A CHAPTER AT A WORD (2026-10-31, the user of the-quiet-crucible 841899's description: "0:00 Intro, 1:58
+## The Card from the Tin - Lighting a New Furnace, 9:14 The spread" - a seven-minute brew in one chapter, and
+## a card-reading word for a show that brews): `<!-- chapter: its name -->`, written by the reader where the
+## video turns to a part a viewer would look for, starts one at the word after it; before a passage's first
+## word it names the chapter the passage's own mark begins ([method chapters]). No agent writes a time: the
+## take's word timings place every chapter. The voice never hears the mark.
+##
 ## THE READING IS WRITTEN FOR THE TABLE, by [TableProducer], one passage per mark - the intro
 ## after `shuffle`, one passage per card after its `draw`, the close after `spread` - and a
 ## hand-written one works the same way.
@@ -55,6 +62,8 @@ const SETTLE := TableActions.SETTLE
 
 ## An act cued at a word, inside speech: group 1 the act's name.
 const ACT_MARK := "<!--\\s*act\\s*:\\s*([\\w-]+)\\s*-->"
+## A CHAPTER OF THE VIDEO, named by the reader where its words begin one: group 1 its name.
+const CHAPTER_MARK := "<!--\\s*chapter\\s*:\\s*([\\s\\S]*?)\\s*-->"
 
 
 static func _rx(pattern: String) -> RegEx:
@@ -96,6 +105,9 @@ static func speakable(body: String) -> String:
 ##   spoken    - PackedStringArray: every spoken word, normalized ([method TabletScript.norm])
 ##   speakable - the text the voice reads
 ##   cards     - how many cards the reading draws
+##   cues      - [{name, si}]: each act cued at a word, `si` the spoken word it starts at
+##   chapters  - [{name, si, opens, action}]: each chapter mark; `opens` when no word of its passage is
+##               before it, `action` the index of its passage's own action (-1: none)
 static func parse(body: String) -> Dictionary:
 	var src := Manuscript.strip_frontmatter(body)
 	var mark := _rx(mark_pattern())
@@ -117,7 +129,9 @@ static func parse(body: String) -> Dictionary:
 	var out_passages: Array = []
 	var actions: Array = []
 	var cues: Array = []
+	var chapters: Array = []
 	var act_rx := _rx(ACT_MARK)
+	var chapter_rx := _rx(CHAPTER_MARK)
 	var spoken := PackedStringArray()
 	var speak := PackedStringArray()
 	var showing := false
@@ -133,13 +147,16 @@ static func parse(body: String) -> Dictionary:
 		var voiced := _voice_marks(text)
 		# AN ACT AT A WORD: the spoken words before its mark, counted as the table counts them
 		for m in act_rx.search_all(text):
-			var before := Manuscript._rx(Manuscript.COMMENT).sub(text.substr(0, m.get_start()), "", true)
-			var n_before := 0
-			for w in before.split(" ", false):
-				for piece in String(w).split("\n", false):
-					if not TabletScript.norm(piece).is_empty():
-						n_before += 1
-			cues.append({"name": m.get_string(1).strip_edges().to_lower(), "si": spoken.size() + n_before})
+			cues.append({"name": m.get_string(1).strip_edges().to_lower(), "si": spoken.size() + _words_before(text, m.get_start())})
+		# A CHAPTER AT A WORD, and whether it opens its passage - then it names the chapter of the passage's
+		# own mark (`action`, the index that mark's action is about to take; -1 for words before any mark)
+		for m in chapter_rx.search_all(text):
+			var named := " ".join(m.get_string(1).split("\n", false)).strip_edges()
+			if named.is_empty():
+				continue
+			var n_before := _words_before(text, m.get_start())
+			chapters.append({"name": named, "si": spoken.size() + n_before, "opens": n_before == 0,
+				"action": actions.size() if not kind.is_empty() else -1})
 		text = Manuscript._rx(Manuscript.COMMENT).sub(text, "", true).strip_edges()
 		if not kind.is_empty():
 			if not TableActions.source_of(kind).is_empty():
@@ -178,7 +195,17 @@ static func parse(body: String) -> Dictionary:
 				if not cued.is_empty():
 					who = cued
 	return {"passages": out_passages, "actions": actions, "spoken": spoken,
-		"speakable": "\n\n".join(speak), "cards": cards, "source": source, "cues": cues}
+		"speakable": "\n\n".join(speak), "cards": cards, "source": source, "cues": cues, "chapters": chapters}
+
+
+## How many spoken words of [param text] come before [param at], counted as the table counts them.
+static func _words_before(text: String, at: int) -> int:
+	var n := 0
+	for w in Manuscript._rx(Manuscript.COMMENT).sub(text.substr(0, at), "", true).split(" ", false):
+		for piece in String(w).split("\n", false):
+			if not TabletScript.norm(piece).is_empty():
+				n += 1
+	return n
 
 
 ## [param text] with every comment taken out but the ones the voice acts on: a delivery, a
@@ -200,25 +227,50 @@ static func _voice_marks(text: String) -> String:
 	return (out + text.substr(at)).strip_edges()
 
 
-## THE VIDEO'S CHAPTERS, from a rendered take: when the intro, each card and the spread begin,
-## found by following the take's own word timings ([param words], a sidecar's) through the reading
-## exactly as the table does - so a chapter starts where the cards move. `[{t, kind, card}]`,
-## the first at 0. A reading with no cards ([constant TableActions.SOURCES] `none`) has a chapter at
-## each beat: its `work` marks.
+## THE VIDEO'S CHAPTERS, from a rendered take: when the intro, each card and the close begin, and each
+## chapter the reader named, found by following the take's own word timings ([param words], a sidecar's)
+## through the reading exactly as the table does - so a chapter starts where the cards move, or at the
+## word its mark is before. `[{t, kind, card, name}]` in time order, the first the intro at 0; `name` is
+## the reader's (a passage's opening mark names its own action's chapter, the opening verb's the intro's,
+## and makes a chapter of an action that is none of itself - a card's work), "" where it named none, for
+## the caller to label. A reading with no cards ([constant TableActions.SOURCES] `none`) has a chapter at
+## each beat: its `work` marks. A mark inside a passage is `kind` "named".
 static func chapters(body: String, words: Array) -> Array:
 	var p := parse(body)
 	var f := ReadingFollower.new()
 	f.reset(p["spoken"])
 	f.extend(words)
-	var out: Array = [{"t": 0.0, "kind": "intro", "card": 0}]
-	var beats := String(p["source"]) == "none"
-	for e in f.place(p["actions"], 0.0, 0.25, 0.2):
-		var a: Dictionary = (e as Dictionary)["a"]
-		if not TableActions.chapter(String(a["kind"])) and not (beats and String(a["kind"]) == "work"):
+	var actions: Array = p["actions"]
+	var names := {}           # an action's index (-1, the intro) -> the name its passage opens with
+	var inside: Array = []
+	for c in p["chapters"]:
+		var d: Dictionary = c
+		var i := int(d["action"])
+		if not bool(d["opens"]):
+			inside.append(d)
 			continue
-		out.append({"t": maxf(0.0, float((e as Dictionary)["t0"])), "kind": String(a["kind"]),
-			"card": int(a["card"])})
-	return out
+		if i < 0 or i >= actions.size() or not TableActions.source_of(String((actions[i] as Dictionary)["kind"])).is_empty():
+			i = -1
+		if not names.has(i):
+			names[i] = String(d["name"])
+	var out: Array = [{"t": 0.0, "kind": "intro", "card": 0, "name": String(names.get(-1, ""))}]
+	var beats := String(p["source"]) == "none"
+	var placed := f.place(actions, 0.0, 0.25, 0.2)
+	for k in placed.size():
+		var a: Dictionary = (placed[k] as Dictionary)["a"]
+		var kind := String(a["kind"])
+		if not names.has(k) and not TableActions.chapter(kind) and not (beats and kind == "work"):
+			continue
+		out.append({"t": maxf(0.0, float((placed[k] as Dictionary)["t0"])), "kind": kind,
+			"card": int(a["card"]), "name": String(names.get(k, ""))})
+	for d in inside:
+		var si := int(d["si"])
+		if si < f.said0.size() and f.said0[si] != ReadingFollower.NO_TIME:
+			out.append({"t": maxf(0.0, f.said0[si]), "kind": "named", "card": 0, "name": String(d["name"])})
+	# (the intro stays first: a sort is not stable, and an action may start at 0 too)
+	var rest := out.slice(1)
+	rest.sort_custom(func(x: Dictionary, y: Dictionary) -> bool: return float(x["t"]) < float(y["t"]))
+	return [out[0]] + rest
 
 
 ## A reading, written out: [param passages] are `{kind, card, text}` in order (the shape

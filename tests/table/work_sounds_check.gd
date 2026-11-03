@@ -25,6 +25,12 @@ extends SceneTree
 ## - A PAUSED SHOW HOLDS ITS SOUND ("I clicked "pause" in the real-time viewer, and the environmental cauldron boiling
 ##   sounds continue to play"): the show's time standing still, the player is held where it is; going on, it plays. The
 ##   control: one tick at the same time (a frame the clock did not tick over) does not hold it.
+## - A SIMMER IS A QUIET FIZZ, A ROLLING BOIL BUBBLES (2026-10-31, a pot only steaming at `boil` 0.2: "there is a "bloop" sound
+##   playing constantly in the background, maybe 1 or 2 times per second ... a boil would have more rapid bubbling"): at 0.2 its
+##   bubbles ([Boil]) come ten or more a second, every one ringing above 2 kHz (a millimeter's), and none louder than a third of a
+##   rolling boil's biggest; at a rolling boil, over 150 a second, some under 800 Hz. The control: the rolling boil's do ring under
+##   2 kHz, so the simmer's test can fail. AND THE BUBBLES HEARD ARE THE BUBBLES DRAWN: each the sound hears breaking is among those
+##   the table shows on the surface just before it breaks ([method Boil.showing]).
 ## - SUBDUED ("they need to be subdued and quieter than the voice"): nothing peaks past [constant WorkSounds.PEAK_MOST],
 ##   and no 0.4 s of it is louder than a third of the voice's speaking level ([constant VoiceFX.PAD_VOICE_REF]).
 
@@ -45,6 +51,8 @@ func _run() -> void:
 	await process_frame
 	var done: Variant = _bench()
 	_ok(done == true, "the bench stopped part way (a script error - see above)")
+	done = _simmer()
+	_ok(done == true, "the simmer stopped part way (a script error - see above)")
 	print("work_sounds_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
 	quit(1 if _fails > 0 else 0)
 
@@ -229,4 +237,38 @@ func _bench() -> bool:
 	host.free()
 	m._root3.free()
 	m.free()
+	return true
+
+
+func _simmer() -> bool:
+	var at := func(b: float) -> Callable: return func(_t: float) -> float: return b
+	var simmer := Boil.bubbles(3, 0.0, 10.0, at.call(0.2), Boil.ACROSS)
+	var rolling := Boil.bubbles(3, 0.0, 10.0, at.call(2.0), Boil.ACROSS)
+	var lowest := func(list: Array) -> float:
+		var f := INF
+		for bb in list:
+			f = minf(f, Boil.pitch(float((bb as Dictionary)["r"])))
+		return f
+	var biggest := func(list: Array) -> float:
+		var r := 0.0
+		for bb in list:
+			r = maxf(r, float((bb as Dictionary)["r"]))
+		return r
+	_ok(float(lowest.call(rolling)) < 2000.0, "the control: a rolling boil's bubbles ring no lower than %.0f Hz" % float(lowest.call(rolling)))
+	_ok(simmer.size() >= 100 and float(lowest.call(simmer)) > 2000.0, "a simmer (boil 0.2): %d bubbles in 10 s, the lowest ringing at %.0f Hz" % [
+		simmer.size(), float(lowest.call(simmer))])
+	_ok(rolling.size() >= 1500 and float(lowest.call(rolling)) < 800.0, "a rolling boil: %d bubbles in 10 s, the lowest at %.0f Hz" % [
+		rolling.size(), float(lowest.call(rolling))])
+	_ok(sqrt(float(biggest.call(simmer)) / Boil.R_ROLLING) < sqrt(float(biggest.call(rolling)) / Boil.R_ROLLING) / 1.5,
+		"a simmer's biggest bubble is as loud as a rolling boil's")
+	# ...the same bubbles drawn and heard
+	var seen := 0
+	var heard := Boil.bubbles(3, 5.0, 6.0, at.call(1.0), Boil.ACROSS)
+	for bb in heard:
+		var tb := float((bb as Dictionary)["t"])
+		for sb in Boil.showing(3, tb - 0.01, at.call(1.0), Boil.ACROSS, 64):
+			if is_equal_approx(float((sb as Dictionary)["r"]), float((bb as Dictionary)["r"])) and ((sb as Dictionary)["at"] as Vector2).is_equal_approx((bb as Dictionary)["at"]):
+				seen += 1
+				break
+	_ok(not heard.is_empty() and seen == heard.size(), "of %d bubbles heard breaking, only %d were drawn on the surface just before" % [heard.size(), seen])
 	return true

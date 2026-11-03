@@ -53,6 +53,8 @@ const STAGE := {"msaa_3d": Viewport.MSAA_4X, "use_debanding": true, "positional_
 	"positional_shadow_atlas_quad_3": Viewport.SHADOW_ATLAS_QUADRANT_SUBDIV_4}
 
 ## A card is 70 x 120 mm. World units are meters: the table is a table.
+## HOW FAR AHEAD A PAUSED SHOW'S PHYSICS IS BAKED, at the most (seconds): to its end, for any show a note makes.
+const BUFFER := 1800.0
 ## What the show's time waits for while the work's physics is behind a live show ([method ShowFeed.wait_for]).
 const WAIT_FOR := "table physics"
 const CARD := TablePositions.CARD
@@ -260,6 +262,8 @@ var _source := ""                   # the reading's script
 var _follow := ReadingFollower.new()
 var _sched: Array = []
 var _built_n := -1
+var _built_key := ""             # the episode the table standing was built for ([method _seek_to])
+var _released := false           # let go by the session that had it ([method release]) - what makes the next reading of it a seek
 var _key := ""
 var _now := 0.0
 var _backs := {}                      # printing name ("" the deck's own) -> {vp, canvas, mat}: each printing's back
@@ -371,6 +375,7 @@ var _box_part := TableBox.new()
 var _work := TableWork.new()
 var _sounds: WorkSounds = null        # the work heard ([method advance])
 var _acts_mt := -2                    # the acts file's time when the work was last built (-1: none)
+var _ready_said := false               # this table has told its feed how far ahead it is baked ([method ShowFeed.ready_ahead])
 var _est := PackedFloat32Array()      # each spoken word's estimated time ([method TablePlan.estimated_times])
 
 
@@ -608,6 +613,9 @@ func begin_session() -> void:
 func release() -> void:
 	_subs = null
 	_key = ""
+	_released = true
+	# ...the show's waiting let go with the session (Spectrum.stop clears it): kept, a table baking on was never waited for again
+	_waiting = false
 
 
 func _exit_tree() -> void:
@@ -617,6 +625,8 @@ func _exit_tree() -> void:
 	if _waiting and feed != null:
 		_waiting = false
 		feed.wait_for(WAIT_FOR, false)
+	if _ready_said and feed != null:
+		feed.ready_ahead(WAIT_FOR, -1.0)
 	# the physics' own thread stopped with it (what is asked after bakes on the caller's thread: [method TablePhysics.clear])
 	if _work != null and _work.physics != null:
 		_work.physics.clear()
@@ -639,7 +649,9 @@ func work_report() -> Array:
 
 func advance(_features, delta: float, _bookend: float) -> void:
 	var t := maxf(feed.show_time(), 0.0)
-	_now = _subs.now() if _subs != null and is_instance_valid(_subs) else t
+	# THE EPISODE'S CLOCK: the reading's, and a reading started again in it (a scrub, [method _seek_to]) on the clock of the one
+	# the table was made for ([member ReadingFollower.offset])
+	_now = (_subs.now() if _subs != null and is_instance_valid(_subs) else t) + _follow.offset
 	_ensure_doc()
 	_poll_t -= delta
 	if _poll_t <= 0.0:
@@ -647,6 +659,7 @@ func advance(_features, delta: float, _bookend: float) -> void:
 		_poll_pictures()
 	if not _plan.parse.is_empty() and _subs != null and is_instance_valid(_subs):
 		_follow.extend(_subs.words)
+		_now = _subs.now() + _follow.offset
 		var n := _follow.map.size()
 		if n != _built_n:
 			_built_n = n
@@ -666,6 +679,14 @@ func advance(_features, delta: float, _bookend: float) -> void:
 	if behind != _waiting:
 		_waiting = behind
 		feed.wait_for(WAIT_FOR, behind)
+	# ...AND BAKES ON WHILE IT IS PAUSED, to the show's end ([constant BUFFER]), saying how far it is ready: what was baked while
+	# nobody watched plays with nothing baking beside it, and the transport shows it as a video player shows what it has buffered
+	# (the user, 2026-11-01: "if we pause, the computations are able to continue rolling-ahead ... like a buffered YouTube video")
+	if _work.physics != null and feed != null:
+		var left := feed.show_length() + _follow.offset - _now + 2.0 if feed.show_length() > 0.0 else BUFFER
+		_work.physics.reach = clampf(left, TablePhysics.HORIZON, BUFFER) if feed.paused() else TablePhysics.HORIZON
+		feed.ready_ahead(WAIT_FOR, maxf(_work.physics.baked_to() - _now, 0.0))
+		_ready_said = true
 	# THE WORK, HEARD ([WorkSounds]): the table on the stage only - a preview stands one and never advances it
 	if _sounds == null or _sounds.work != _work:
 		if _sounds != null:
@@ -690,7 +711,17 @@ func _ensure_doc() -> void:
 	var key := "%s|%d|%d" % [String(pay.get("dir", "")), int(pay.get("seed", 0)), hash(src)]
 	if key == _key:
 		return
+	# THE SAME EPISODE READ AGAIN FROM ANOTHER WORD (a scrub) IS A SEEK: the table standing, its acts and what was baked of them stand -
+	# while its table and its acts are as they were built from (blocked again, it is a new table). Only as a session let it go: whoever
+	# empties the key itself means a table built again
+	var again := _released and key == _built_key and _work != null and not _plan.parse.is_empty() and _as_built(pay)
+	_released = false
+	if again:
+		_key = key
+		_seek_to(d)
+		return
 	_key = key
+	_built_key = key
 	# A NEW EPISODE IS A NEW PLAN ([method TablePlan.make]): a function of the document, the set
 	# dresser's table as its file says now and the show's intro hold, and nothing of the last one's
 	# survives into it. The medium builds from it and decides nothing of its own.
@@ -699,6 +730,8 @@ func _ensure_doc() -> void:
 	var spoken: PackedStringArray = _plan.parse.get("spoken", PackedStringArray()) if not _plan.parse.is_empty() \
 		else PackedStringArray()
 	_est = _plan.estimated_times(spoken.size())
+	# ...A MID-WAY START'S PAST JUST BEFORE 0 ([member ReadingFollower.near_past]): what its acts did is baked before the first frame
+	_follow.near_past = true
 	_follow.reset(spoken, _plan.start_si, _est)
 	_built_n = -1
 	_sched = []
@@ -707,6 +740,49 @@ func _ensure_doc() -> void:
 	print("ghost: card table - %s #%d, %d cards, %d actions, %d things (built in %d ms)" % [String(pay.get("show", "?")), _plan.seed_value,
 		(pay.get("cards", []) as Array).size(), (_plan.parse.get("actions", []) as Array).size(), _things_part.on_table.size(),
 		Time.get_ticks_msec() - t0])
+
+
+## Whether episode [param pay]'s `table.json` and `acts.json` are as the table standing was built from.
+func _as_built(pay: Dictionary) -> bool:
+	var dir := String(pay.get("dir", ""))
+	var mt := func(f: String) -> int: return FileAccess.get_modified_time(dir.path_join(f)) if FileAccess.file_exists(dir.path_join(f)) else -1
+	return int(mt.call("table.json")) == _table_mt and int(mt.call("acts.json")) == _acts_mt
+
+
+## A SCRUB IN THE EPISODE STANDING, [param d] the reading started again ([ReadingFollower.seek]; the user, 2026-11-01: scrubbed back
+## to look again, "it's just stuck on 'catching up' ... It might be best if we just saved the buffer... so that returning to a
+## position is fast"). It had been a new table: built again (10 s) and its physics baked again from the show's first act - the
+## past spaced on guesses, so nothing of what was baked could be taken up - 153 s of 841899 before a frame. Now nothing is built
+## or baked again: the table keeps the clock of the reading it was made for, the new reading's words come on it where they were
+## heard before, and every act planned from them stands - so returning to a moment baked is looking its frames up, and a moment
+## never reached is baked on from where the bake had got to.
+func _seek_to(d: Dictionary) -> void:
+	var spoken: PackedStringArray = _plan.parse.get("spoken", PackedStringArray())
+	var si := 0
+	var sw: Variant = d.get("start_words", PackedStringArray())
+	if sw is PackedStringArray and not (sw as PackedStringArray).is_empty() and not spoken.is_empty():
+		si = maxi(TabletScript.find_run(spoken, sw, int(d.get("start_index", -1))), 0)
+	# ...where its first word was heard - or, never heard, guessed on from the last word that was, at the plan's own pace
+	var at := 0.0
+	if si < _follow.st0.size() and _follow.st0[si] != ReadingFollower.NO_TIME:
+		at = _follow.st0[si]
+	else:
+		var last := _follow.known_last()
+		if last >= 0 and si < _est.size() and last < _est.size():
+			at = _follow.said1[last] + maxf(_est[si] - _est[last], 0.0)
+		elif si < _est.size():
+			at = _est[si]
+	_follow.seek(si, at, _est)
+	_built_n = -1
+	_work._last_now = -INF
+	# ...and WHAT LIES AHEAD OF IT HAS NOT BEGUN, in this reading: each is placed again by its words as they come - the same place, where the
+	# voice says them as it did; and a stretch only guessed at before, now heard, moves them where it should ([method TableWork.schedule])
+	for nm in _work._begun.keys():
+		if float((_work._begun[nm] as Array)[0]) >= at:
+			_work._begun.erase(nm)
+	_work._full = true
+	print("ghost: card table - the same episode again from word %d, at %.1f s of it: the table and its bake stand (baked to %.1f s)" % [
+		si, at, _work.physics.baked_to() if _work.physics != null else 0.0])
 
 
 ## THE EPISODE BUILT from what its plan decided ([member _plan]): the camera, the light, the cards and
@@ -1458,6 +1534,20 @@ func _build_work(spec: Dictionary) -> void:
 	_work.build(raw, beats, spec.get("sound", {}) if spec.get("sound") is Dictionary else {})
 	for n in _work.notes:
 		print("ghost: card table - work: %s" % n)
+	if not _sched.is_empty():
+		_work.schedule(_sched, _plan.parse, _follow.said0, _follow.said1, _est, _now)
+
+
+## THE SAME TABLE, OTHER ACTS ([param raw], as `acts.json` holds them): the work bound to them again and planned again on the
+## schedule, nothing of the table built again ([method TableWork.rebind]) - what a puppeteer's next `act` asks of the table it
+## stood for the last ([TablePreview]). The acts' file, if it says the same, is not read again.
+func rework(raw: Variant) -> void:
+	if _work == null or _work.things.is_empty():
+		return
+	var path := String(_plan.pay.get("dir", "")).path_join("acts.json")
+	_acts_mt = FileAccess.get_modified_time(path) if FileAccess.file_exists(path) else -1
+	var beats := maxi(CardTable.beats(_plan.pay.get("plan", {}) if _plan.pay.get("plan") is Dictionary else {}), (_plan.pay.get("cards", []) as Array).size())
+	_work.rebind(raw, beats)
 	if not _sched.is_empty():
 		_work.schedule(_sched, _plan.parse, _follow.said0, _follow.said1, _est, _now)
 

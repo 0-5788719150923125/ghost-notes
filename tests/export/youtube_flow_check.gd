@@ -29,7 +29,15 @@ extends SceneTree
 ##   project"): a second channel signs in beside the first, each upload goes up as its own channel,
 ##   and each sign-in is renewed through the client it was made with - another client imported since
 ##   costs neither its sign-in; the control: a channel whose client Google does not know is signed out,
-##   kept on the list, and that client forgotten.
+##   kept on the list, and that client forgotten - unless what is kept under its id has another secret.
+## - TWO CLIENTS, TWO PROJECTS (2026-11-02, the user: "simultaneously logged-in to two different clients,
+##   for two different projects"; Google's 403 access_denied, for an account that was a test user - of the
+##   other project). The stand-in has each project's own test users, and a refresh token is its client's
+##   alone. Channels signed in through each stay signed in, renew and upload side by side; a lapsed one signs
+##   in again through its own client; the control, sent through the last imported as it had been, meets
+##   Google's dead end. ON THE CARD: the sign-in goes through the client shown, the dialog names that project;
+##   another picked moves a signed-in channel only on Sign in again, and a cancel leaves it as it was; "+"
+##   goes through the pick; an export's check never opens a browser for a channel still signed in.
 ## - THE THUMBNAIL (2026-10-06, the user: "submit a screenshot from the 'intro' section of the
 ##   video"): ffmpeg takes a 1280x720 frame of a real video at the moment asked; queued with an
 ##   upload, it is set once the video is up; a channel YouTube will not let set one (403) still has
@@ -67,6 +75,7 @@ var _saw := {}                  # the consent URL's query, as the browser read i
 var _turned_away: Array = []    # statuses of the knocks that were not the answer
 var _page := 0                  # status of the page the answer got
 var _client_path := ""          # the stand-in's client file, to import again
+var _second_path := ""          # a second project's
 
 
 func _init() -> void:
@@ -110,7 +119,7 @@ func _run() -> void:
 	_yt = YouTube.new()
 	root.add_child(_yt)
 	for check in [_sign_in, _upload, _resume, _lapsed_session, _thumbnail, _frame, _lapsed_sign_in, _declined,
-			_sign_out, _playlists, _two_channels, _card_sign_in]:
+			_sign_out, _playlists, _two_channels, _two_clients, _card_clients, _card_sign_in]:
 		if not bool(await check.call()):
 			_ok(false, "a check stopped part way (script error?)")
 	_wipe(ROOT)
@@ -138,6 +147,12 @@ func _wipe(path: String) -> void:
 	for f in DirAccess.get_files_at(dir):
 		DirAccess.remove_absolute(dir.path_join(f))
 	DirAccess.remove_absolute(dir)
+
+
+## No client kept, wherever it lies: what a fresh machine has.
+func _no_clients() -> void:
+	for c in YouTube.clients():
+		YouTube.forget_client(String((c as Dictionary)["key"]))
 
 
 func _file(name: String, text: String) -> String:
@@ -175,7 +190,8 @@ func _browser(url: String) -> void:
 	var state := str(_saw.get("state", ""))
 	await process_frame
 	var r: Dictionary
-	if _mode == "block":
+	var testers: Variant = _fake.testers.get(str(_saw.get("client_id", "")))
+	if _mode == "block" or (testers is Array and not (testers as Array).has(_fake.account)):
 		return                       # "Access blocked": Google's page never sends the browser back
 	if _mode == "deny":
 		r = await _fetch(back + "/?state=%s&error=access_denied" % state)
@@ -433,14 +449,149 @@ func _two_channels() -> bool:
 	# the control: a channel whose client Google does not know
 	var t: Dictionary = YouTube._token("UC-ink")
 	(t["client"] as Dictionary)["client_id"] = "stranger.apps.googleusercontent.com"
+	(t["client"] as Dictionary)["client_secret"] = "other"
 	t["expires_at"] = 0.0
 	YouTube._write(YouTube._channel_path("UC-ink"), JSON.stringify(t), true)
 	tok = await _yt.access_token("UC-ink")
 	_ok(tok.has("bad_client") and tok.has("signed_out") and not YouTube.signed_in("UC-ink")
-		and YouTube.channel("UC-ink").get("name") == "@the-ink" and not YouTube.has_client() and YouTube.signed_in("UC-arc"),
-		"control: a client Google does not know signs that channel out, keeps it listed, and is forgotten as the client for new sign-ins (%s)"
-		% tok.get("error", ""))
+		and YouTube.channel("UC-ink").get("name") == "@the-ink" and YouTube.signed_in("UC-arc"),
+		"control: a client Google does not know signs that channel out and keeps it listed (%s)" % tok.get("error", ""))
+	_ok(YouTube.client(YouTube.client_key("stranger.apps.googleusercontent.com")).has("error") and YouTube.channel_client("UC-ink") == ""
+		and YouTube.client_for("", "UC-ink").get("client_id") == _fake.client_id,
+		"that client comes off the list, and the channel's next sign-in goes through another")
+	# A SECRET CHANGED: what is kept under the id is not what Google refused
+	var kept_key := YouTube.client_key(_fake.client_id)
+	t = YouTube._token("UC-arc")
+	(t["client"] as Dictionary)["client_secret"] = "the-old-secret"
+	t["expires_at"] = 0.0
+	YouTube._write(YouTube._channel_path("UC-arc"), JSON.stringify(t), true)
+	tok = await _yt.access_token("UC-arc")
+	_ok(tok.has("bad_client") and YouTube.client(kept_key).get("client_secret") == _fake.client_secret,
+		"control: refused on an old secret, the client imported since with the new one stays")
 	_ok(YouTube.import_client(_client_path) == "", "the stand-in's client imports again")
+	return true
+
+
+## TWO CLIENTS, TWO PROJECTS, SIGNED IN AT ONCE: see the header.
+func _two_clients() -> bool:
+	for ch in YouTube.channels():
+		YouTube.forget_channel(String(ch["id"]))
+	_no_clients()
+	var first: String = _fake.client_id
+	var second := "second.apps.googleusercontent.com"
+	var base := "http://127.0.0.1:%d" % _fake.port
+	_fake.others = {second: "second-secret"}
+	_fake.testers = {first: ["UC-ink"], second: ["UC-arc"]}
+	_second_path = _file("second.json", JSON.stringify({"installed": {"client_id": second, "project_id": "second-project",
+		"auth_uri": base + "/auth", "token_uri": base + "/token", "client_secret": "second-secret"}}))
+	_mode = "accept"
+	YouTube.import_client(_client_path)
+	_fake.account = "UC-ink"
+	var got: Dictionary = await _yt.sign_in()
+	_ok((got.get("channel", {}) as Dictionary).get("id") == "UC-ink" and _saw.get("client_id") == first, "@the-ink signs in through the first project (%s)" % got.get("error", ""))
+	YouTube.import_client(_second_path)
+	_fake.account = "UC-arc"
+	got = await _yt.sign_in()
+	_ok((got.get("channel", {}) as Dictionary).get("id") == "UC-arc" and _saw.get("client_id") == second, "@the-arc through the second, imported since (%s)" % got.get("error", ""))
+	_ok(YouTube.signed_in("UC-ink") and YouTube.signed_in("UC-arc") and YouTube.channel_client("UC-ink") == YouTube.client_key(first)
+		and YouTube.channel_client("UC-arc") == YouTube.client_key(second), "signed in at once, each through its own client")
+	YouTube._expire("UC-ink")
+	YouTube._expire("UC-arc")
+	var refreshes := _fake.refreshes
+	var ink: Dictionary = await _yt.access_token("UC-ink")
+	var arc: Dictionary = await _yt.access_token("UC-arc")
+	_ok(ink.has("token") and arc.has("token") and _fake.refreshes == refreshes + 2, "each renews through its own, where a token is its client's alone")
+	var res: Dictionary = await _yt.upload(_video("ink2.mp4", CHUNK + 3), YouTube.video_body({"title": "To The Ink"}), "UC-ink", "")
+	_ok(not res.has("error") and _fake.last().get("account") == "UC-ink", "an upload goes up as @the-ink (%s)" % res.get("error", ""))
+	res = await _yt.upload(_video("arc2.mp4", CHUNK + 4), YouTube.video_body({"title": "To The Arc"}), "UC-arc", "")
+	_ok(not res.has("error") and _fake.last().get("account") == "UC-arc", "and one as @the-arc, with no sign-in between (%s)" % res.get("error", ""))
+	# THE REPORT
+	YouTube._drop_sign_in("UC-ink")
+	_fake.account = "UC-ink"
+	got = await _yt.sign_in([YouTube.SCOPE], "", "UC-ink")
+	_ok((got.get("channel", {}) as Dictionary).get("id") == "UC-ink" and _saw.get("client_id") == first and YouTube.channel_client("UC-ink") == YouTube.client_key(first),
+		"THE REPORT: a lapsed channel signs in again through its own project, whatever was imported since (%s)" % got.get("error", ""))
+	_page = 0
+	_yt.sign_in()
+	await _frames(5)
+	_ok(_saw.get("client_id") == second and _page == 0 and _yt.phase == "signing_in",
+		"the control: sent through the last imported, as it had been, its account meets Google's dead end")
+	_yt.stop_sign_in()
+	await _frames(5)
+	return true
+
+
+## The card's list, through the exporter's dialog: built by hand, as [method _card_sign_in] says why.
+func _card_clients() -> bool:
+	var first: String = _fake.client_id
+	var second := "second.apps.googleusercontent.com"
+	var ex = load("res://src/export/exporter.gd").new()
+	ex._build_ui()
+	var holder := Node.new()
+	root.add_child(holder)
+	for c in ex.get_children():
+		ex.remove_child(c)
+		holder.add_child(c)
+	var card = load("res://src/export/youtube_card.gd").new()
+	card.exporter = ex
+	holder.add_child(card)
+	var pick := func(key: String) -> void:
+		for i in card._clients.item_count:
+			if String(card._clients.get_item_metadata(i)) == key:
+				card._clients.select(i)
+				card._on_client_picked(i)
+	_mode = "accept"
+	YouTube._drop_sign_in("UC-ink")
+	card.apply({"channel": "UC-ink", "channel_name": "@the-ink"})
+	card._seen = []
+	card._refresh_account()
+	_ok(String(card._clients.get_item_metadata(card._clients.selected)) == YouTube.client_key(first) and card._account.text.contains("flow-check"),
+		"a lapsed channel's card shows the client it signed in with (%s)" % card._account.text)
+	_fake.account = "UC-ink"
+	card._on_sign()
+	_ok(await _until(func() -> bool: return ex._sign == "ok") and _saw.get("client_id") == first and YouTube.signed_in("UC-ink"),
+		"its Sign in goes through it, not the one imported since (%s)" % ex._sign_why)
+	# ANOTHER PICKED MOVES IT ONLY ON THE PERSON'S PRESS, AND ONLY ONCE IT LANDS
+	pick.call(YouTube.client_key(second))
+	var opens := _opens
+	await _frames(5)
+	_ok(_opens == opens and YouTube.channel_client("UC-ink") == YouTube.client_key(first) and card._sign.text == "Sign in again",
+		"picked, nothing opens and nothing changes")
+	card._on_sign()
+	await _frames(5)
+	_ok(ex._sign == "signing_in" and _saw.get("client_id") == second and _opens == opens + 1, "Sign in again goes through the pick, though the channel is signed in")
+	_ok(ex._sign_dialog.dialog_text.contains("@the-ink through second-project") and ex._sign_dialog.dialog_text.contains("project second-project")
+		and ex._sign_dialog.dialog_text.contains("test user"),
+		"at Google's dead end the dialog names the project whose test users are asked after (%s)" % ex._sign_dialog.dialog_text.left(60))
+	ex._sign_dialog.hide()
+	ex._on_sign_close()
+	await _frames(5)
+	_ok(YouTube.signed_in("UC-ink") and YouTube.channel_client("UC-ink") == YouTube.client_key(first), "cancelled, its sign-in stands as it was")
+	(_fake.testers[second] as Array).append("UC-ink")
+	card._on_sign()
+	_ok(await _until(func() -> bool: return ex._sign == "ok") and YouTube.channel_client("UC-ink") == YouTube.client_key(second),
+		"a test user there, it lands, and the channel is that client's (%s)" % ex._sign_why)
+	card._seen = []
+	card._refresh_account()
+	_ok(card.capture()["client"] == "" and not card._sign.visible, "the pick is spent: the channel's own is the one shown")
+	# "+" GOES THROUGH THE PICK
+	YouTube.forget_channel("UC-arc")
+	(_fake.testers[first] as Array).append("UC-arc")
+	pick.call(YouTube.client_key(first))
+	_fake.account = "UC-arc"
+	card._on_add()
+	_ok(await _until(func() -> bool: return card.capture()["channel"] == "UC-arc") and _saw.get("client_id") == first
+		and YouTube.channel_client("UC-arc") == YouTube.client_key(first) and card.capture()["client"] == "",
+		"+ signs in through the client picked, with no file asked for (%s)" % ex._sign_why)
+	# AN EXPORT'S CHECK NEVER OPENS A BROWSER FOR A CHANNEL STILL SIGNED IN
+	opens = _opens
+	ex._check_sign_in(Callable(), [YouTube.SCOPE], "UC-arc", "@the-arc", YouTube.client_key(second))
+	_ok(await _until(func() -> bool: return ex._sign == "ok") and _opens == opens and YouTube.channel_client("UC-arc") == YouTube.client_key(first),
+		"an export whose note picked another uploads as the channel stands, with no browser")
+	holder.queue_free()
+	ex.free()
+	_fake.others = {}
+	_fake.testers = {}
 	return true
 
 
@@ -468,7 +619,7 @@ func _card_sign_in() -> bool:
 	card.name_from(names)
 
 	# no client yet: its file is asked for first
-	YouTube.forget_client()
+	_no_clients()
 	card._upload.button_pressed = true
 	_ok(ex._sign == "client" and not card.ticked(), "ticking with no client asks for its file, the box not ticked yet")
 	ex._on_client_cancel()
@@ -654,6 +805,8 @@ class FakeGoogle extends Node:
 	var thumb_forbidden := false
 	var asked := ""            # the scopes the last consent URL asked for: what a sign-in is granted
 	var account := "UC-arc"    # the channel the person picks on the next consent page
+	var others := {}           # another project's clients: id -> secret
+	var testers := {}          # client id -> the accounts its project lets in: anyone, when it is not named
 	const CHANNELS := {"UC-arc": {"handle": "@the-arc", "title": "The Arc"}, "UC-ink": {"handle": "@the-ink", "title": "The Ink"}}
 	var named := 0             # times a sign-in's channel was asked
 	var listed := 0            # pages of playlists asked for
@@ -767,7 +920,9 @@ class FakeGoogle extends Node:
 		return _json(404, {"error": {"code": 404, "message": "no such thing"}})
 
 	func _token(f: Dictionary) -> Dictionary:
-		if f.get("client_id") != client_id or f.get("client_secret") != client_secret:
+		var known: bool = (f.get("client_id") == client_id and f.get("client_secret") == client_secret) \
+			or (others.has(f.get("client_id")) and others[f.get("client_id")] == f.get("client_secret"))
+		if not known:
 			return _json(401, {"error": "invalid_client", "error_description": "The OAuth client was not found."})
 		match str(f.get("grant_type", "")):
 			"authorization_code":
@@ -777,12 +932,12 @@ class FakeGoogle extends Node:
 				exchanged += 1
 				var granted := asked if not asked.is_empty() else YouTube.SCOPE
 				var rt := "rt-" + account
-				_refresh[rt] = {"account": account, "scope": granted}
+				_refresh[rt] = {"account": account, "scope": granted, "client": f.get("client_id")}
 				return _json(200, {"access_token": _issue(_refresh[rt]), "expires_in": 3599, "refresh_token": rt,
 					"scope": granted, "token_type": "Bearer"})
 			"refresh_token":
 				var held: Dictionary = _refresh.get(str(f.get("refresh_token", "")), {})
-				if held.is_empty() or not refresh_ok:
+				if held.is_empty() or not refresh_ok or held.get("client") != f.get("client_id"):
 					return _json(400, {"error": "invalid_grant", "error_description": "Token has been expired or revoked."})
 				refreshes += 1
 				return _json(200, {"access_token": _issue(held), "expires_in": 3599, "scope": held["scope"], "token_type": "Bearer"})

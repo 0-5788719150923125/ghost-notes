@@ -11,7 +11,9 @@ class_name Vessel
 ## level for any tilt and any share of the inside is a QUANTILE of a few thousand equal-volume points filling it
 ## ([member points]), taken along the up the vessel sees ([method level]) - made once, as a table by tilt (a lathe
 ## is the same all round) or by tilt and bearing (an outline). And it answers an OVERFLOW: how much leaves over the
-## rim where the liquid stands above it, as a weir's flow ([method overflow]).
+## rim where the liquid stands above it, as a weir's flow ([method overflow]). EACH POINT STANDS FOR ITS WHOLE CELL ([method _table]): the bare middles of a grid
+## lie in layers, and a quantile of them stays on a layer while the share runs through it, then jumps (841899, feedback 0009: the cauldron's cells 1 cm tall, its
+## surface at 9.54 cm from 668 ml down to 546, then at 8.59 - "the liquid level decreases" as the ladle took a few ml).
 
 ## The heights a lathe's inside is measured at, the points it is filled with (about), its rim's points round, and the
 ## level table's tilts, bearings (an outline's) and shares.
@@ -21,6 +23,7 @@ const RIM := 48
 const TILTS := 37
 const BEARINGS := 16
 const SHARES := 41
+const GOLDEN := 0.6180339887
 ## A WEIR's coefficient of discharge (a sharp crest, Q = 2/3 Cd sqrt(2g) b H^3/2) and gravity.
 const CD := 0.62
 const GRAVITY := 9.81
@@ -34,6 +37,7 @@ var heights := PackedFloat32Array()
 var radius := PackedFloat32Array()   # a lathe's inside radius at each height
 var points := PackedVector3Array()   # equal volumes filling it (warped)
 var volume := 0.0             # cubic meters
+var _cell := Vector3.ONE      # the size each of the points stands for, warped (meters)
 var rim := PackedVector3Array()      # its crest, the inside's top edge, round (warped)
 var lip := PackedVector3Array()      # ...and where what flows over it leaves, the rim's outer edge there
 var _arc := 0.0               # the crest's length a rim point stands for
@@ -155,6 +159,7 @@ func _fill() -> void:
 					points.append(_warped(Vector3(x, y, z)))
 	var sc := field.scale
 	volume = float(points.size()) * cx * cy * cz * sc.x * sc.y * sc.z
+	_cell = Vector3(cx * sc.x, cy * sc.y, cz * sc.z)
 
 
 ## [param q] (unwarped, the part's own space) as the warp lays it.
@@ -221,8 +226,10 @@ func _table() -> void:
 		for bi in bearings:
 			var ph := TAU * float(bi) / float(bearings)
 			var up := Vector3(sin(th) * cos(ph), cos(th), sin(th) * sin(ph))
+			# ...each anywhere across how wide its cell is along up, spread evenly by the golden ratio: the same table every time
+			var wide := absf(up.x) * _cell.x + absf(up.y) * _cell.y + absf(up.z) * _cell.z
 			for i in n:
-				proj[i] = points[i].dot(up)
+				proj[i] = points[i].dot(up) + wide * (fmod(float(i) * GOLDEN, 1.0) - 0.5)
 			proj.sort()
 			var s := PackedFloat32Array()
 			s.resize(SHARES)

@@ -10,6 +10,10 @@ class_name ShapeField
 ##     its lobes and flat sides aside;
 ##   - an EXTRUDE exactly: its outline's 2D field raised to its height - and, with a `wall`, hollowed as [method
 ##     Props._extrude] hollows it, its inside the outline drawn smaller about its middle above its floor;
+##   - a SHEET (a leaf, a feather, a page) exactly: its outline's 2D field, and across it the slab its thickness makes, bent
+##     and folded as [method Props._sheet] bends it - never its box, which a bent feather fills five millimeters deep, and
+##     which had held it that far over the table (the-quiet-crucible 841899, 2026-10-31: "This phoenix feather appears to
+##     be floating above the table ... it seems to be casting too much of a shadow");
 ##   - a BOX, a BALL, a RING, a crystal POINT and a TUBE's segments in closed forms, inside the box the built
 ##     geometry measured;
 ##   - anything else as that box, its corners rounded.
@@ -48,6 +52,13 @@ var height := 0.0
 var floor_y := 0.0
 var k_in := 0.0
 var mid2 := Vector2.ZERO
+# a sheet: how thick it is, how it bends and folds, its width and length, and where its length starts and its width's middle
+var thick := 0.0
+var bend := 0.0
+var fold := 0.0
+var sheet_w := 0.0
+var sheet_l := 0.0
+var sheet_o := Vector2.ZERO
 # a box's half sizes and its corners' radius; a ball's radii; a ring's radius and thickness; capsules' ends and radii
 var half := Vector3.ONE
 var round_r := 0.0
@@ -58,6 +69,7 @@ var caps_a := PackedVector3Array()
 var caps_b := PackedVector3Array()
 var caps_r := PackedFloat32Array()
 var _surface := PackedVector3Array()   # [method surface_points], once made
+var _surface_made := false
 static var _making := Mutex.new()
 
 
@@ -98,6 +110,11 @@ static func of(part: Dictionary, built: AABB) -> ShapeField:
 				if wall > 0.0:
 					f.k_in = clampf(1.0 - wall / reach, 0.15, 0.95)
 					f.floor_y = minf(wall, f.height * 0.5)
+		"sheet":
+			f.kind = "sheet"
+			f._sheet_of(part)
+			if f.prof.size() < 3:
+				f.kind = "box"
 		"ball":
 			f.kind = "ball"
 			f.radii = built.size * 0.5
@@ -135,8 +152,65 @@ static func of(part: Dictionary, built: AABB) -> ShapeField:
 		f.half = built.size * 0.5
 		f.round_r = minf(float(part.get("round", 0.0)) * 0.01, minf(f.half.x, minf(f.half.y, f.half.z))) \
 			if shape == "box" else minf(f.half.x, minf(f.half.y, f.half.z)) * 0.3
-	f.ready = not (f.kind in ["lathe", "extrude"])
+	f.ready = not (f.kind in ["lathe", "extrude", "sheet"])
 	return f
+
+
+## A SHEET'S OUTLINE AND SLAB, as [method Props._sheet] builds it from [param part] (made safe): its outline across its own
+## space (x, z, meters) - a named one's sides down its length as a feather's narrower vane and sweep are drawn, or its points - and
+## what bends it.
+func _sheet_of(part: Dictionary) -> void:
+	var sz: Vector2 = (part.get("size", Vector2(4.0, 6.0)) as Vector2) * 0.01
+	thick = float(part.get("thickness", 0.08)) * 0.01
+	bend = float(part.get("bend", 0.0))
+	fold = float(part.get("fold", 0.0))
+	prof = []
+	var pts: Array = part.get("points", [])
+	if pts.size() >= 3:
+		var lo := Vector2(INF, INF)
+		var hi := Vector2(-INF, -INF)
+		for q in pts:
+			var v := (q as Vector2) * 0.01
+			prof.append(v)
+			lo = lo.min(v)
+			hi = hi.max(v)
+		sheet_w = hi.x - lo.x
+		sheet_l = hi.y - lo.y
+		sheet_o = Vector2((lo.x + hi.x) * 0.5, lo.y)
+		return
+	# ...placed by its middle ([method Props._shape]): its length from -l/2 to l/2
+	var outline := String(part.get("outline", "leaf"))
+	var narrow := 0.5 if outline == "feather" else 1.0
+	var sweep := 0.06 if outline == "feather" else 0.0
+	sheet_w = sz.x
+	sheet_l = sz.y
+	sheet_o = Vector2(0.0, -sz.y * 0.5)
+	var n := 28
+	var left: Array = []
+	var right: Array = []
+	for j in n + 1:
+		var t := float(j) / float(n)
+		var hw := sz.x * 0.5 * Props._outline_w(outline, t)
+		var x0 := -sweep * sz.y * sin(PI * t)
+		left.append(Vector2(x0 - hw * narrow, t * sz.y + sheet_o.y))
+		right.append(Vector2(x0 + hw, t * sz.y + sheet_o.y))
+	prof = left
+	for j in range(n, -1, -1):
+		prof.append(right[j])
+
+
+## How high the middle of a sheet's slab stands over [param x], [param z] (its own space, meters): its bend and fold, and half
+## its thickness - where a sphere filling it lies ([method Particles.fill_shape]).
+func sheet_mid(x: float, z: float) -> float:
+	return Props.sheet_lift(x - sheet_o.x, z - sheet_o.y, sheet_w, sheet_l, bend, fold) + thick * 0.5
+
+
+func _sheet_d(q: Vector3) -> float:
+	var d2 := _at2(Vector2(q.x, q.z)).x
+	var dy := absf(q.y - sheet_mid(q.x, q.z)) - thick * 0.5
+	var ox := maxf(d2, 0.0)
+	var oy := maxf(dy, 0.0)
+	return sqrt(ox * ox + oy * oy) + minf(maxf(d2, dy), 0.0)
 
 
 ## Whether this solid has a hollow a thing can be put in: a lathe whose profile comes back down inside it, or a walled
@@ -156,7 +230,14 @@ func hollow() -> bool:
 ## grid over its box, each point near the surface brought onto it along the way out - what another solid is measured
 ## against, a shape's own (a round lid's box corners stand out past a crock's rim: [method TableWork._aloft]). Made once.
 func surface_points(most := 400) -> PackedVector3Array:
-	if not _surface.is_empty():
+	if _surface_made:
+		return _surface
+	# ...ONE THREAD MAKES THEM, as [method prepare] makes the field (its lock; a [Mutex] is taken again by the thread holding it):
+	# the bake's thread asks as a body meets this, the picture's as a plan finds a carry room - and a member given on two threads at
+	# once is let go twice (2026-11-01: a live show's `double free or corruption`, each time near a carry of the ladle's)
+	_making.lock()
+	if _surface_made:
+		_making.unlock()
 		return _surface
 	prepare()
 	var b := box.grow(0.001)
@@ -176,6 +257,8 @@ func surface_points(most := 400) -> PackedVector3Array:
 	if pts.is_empty():
 		pts.append(box.get_center())
 	_surface = pts
+	_surface_made = true
+	_making.unlock()
 	return pts
 
 
@@ -312,6 +395,13 @@ func _local(q: Vector3) -> Vector4:
 			var n := Vector3(_extrude_d(q + Vector3(e, 0, 0)) - _extrude_d(q - Vector3(e, 0, 0)),
 				_extrude_d(q + Vector3(0, e, 0)) - _extrude_d(q - Vector3(0, e, 0)),
 				_extrude_d(q + Vector3(0, 0, e)) - _extrude_d(q - Vector3(0, 0, e)))
+			return _with(d, n)
+		"sheet":
+			var d := _sheet_d(q)
+			var e := minf(cell * 0.5, thick * 0.25)
+			var n := Vector3(_sheet_d(q + Vector3(e, 0, 0)) - _sheet_d(q - Vector3(e, 0, 0)),
+				_sheet_d(q + Vector3(0, e, 0)) - _sheet_d(q - Vector3(0, e, 0)),
+				_sheet_d(q + Vector3(0, 0, e)) - _sheet_d(q - Vector3(0, 0, e)))
 			return _with(d, n)
 		"ball":
 			var c := box.get_center()

@@ -5,7 +5,7 @@ extends SceneTree
 ## particles ... With physics and collision"; the shell's crystals "do not move and tumble, and they do not fall into
 ## the cauldron"; and "I would have expected the grinding to destroy those things".
 ##
-##   godot --headless --path . --script res://tests/table/physics_check.gd
+##   godot --headless --path . --script res://tests/table/physics_check.gd [-- --only=_jars_apart,_sheet_lies]
 ##
 ## - A SOLID'S FIELD IS ITS SHAPE: a cup's lathe is less inside its wall, more in its hollow and beyond it, and as far
 ##   from its wall as a point is; its way out points out. The control: a solid lathe (a pestle) has no hollow.
@@ -111,6 +111,22 @@ extends SceneTree
 ##   the solver held no more - and its dragon's blood "didn't crush ... they don't rest on the bottom of the mortar"): set,
 ##   a dish's heap of forty beads nothing touches costs no particle, before the work comes to it and after. The control:
 ##   what the work carries is a body.
+## - THE HAND PLANS, THE PHYSICS SETTLES (the-quiet-crucible 841899 exported, 2026-10-31; next/table_physics.md "A step back"):
+##   A PART IN ITS SEAT GOES WITH IT - a stopper fetched with its jar on keys of its own, half a centimeter off, keeps to its
+##   seat within half a millimeter, and set down is still; the jar goes where it was sent (the control: drawn up out of the
+##   neck by its own move, it leaves it); A HAND LETS GO OF WHAT STANDS IN A VESSEL - a ladle left tipped in a pot until its
+##   next move leans there, in nothing, still (the control: left over the rim, it is held); TOUCHING IS NOT RESTING - a rod
+##   with only its end on a block is held (the control: its middle over the block, let go); WHAT STANDS IN A LIQUID IS UNDER
+##   ITS SURFACE - a ladle filling in a pot leaves the water no lower, lifted out with its fill it is lower, and under the
+##   water its own surface is not drawn (the controls: the water's own volume alone falls; lifted out, the ladle's surface is
+##   drawn); WHAT FLOATS STAYS IN, AND IS MET ACROSS ITS FACE - a leaf swept by a paddle into the pot's wall never goes
+##   through it (the control: the paddle moved it); A CARRY CLEARS WHAT IS IN ITS WAY - a crate carried over a 9 cm block
+##   with a 2 cm lift is never held back (the control: with nothing in the way, no lift is added); A POUR IS A HAND'S - a jug
+##   `pour`ed into a cup empties into it, its lip a few centimeters up (the control: tipped by hand about its middle, 10 cm
+##   up, it spills); WHAT STRIKES A VESSEL'S INSIDE RUNS DOWN INTO IT - a parcel thrown at a pot's inner wall ends in its water
+##   (the control: thrown out over the rim, spilled); A DIP IS A HAND'S - 841899's straight-handled ladle `dip`ped into a deep pot
+##   comes up half full or more, nothing outside the pot, never held back (the control: lowered level by hand, its handle meets
+##   the rim and it comes up empty).
 
 var _fails := 0
 
@@ -129,7 +145,17 @@ func _run() -> void:
 	await process_frame
 	for check in [_field, _vessel, _pour, _grains, _tumble, _grind, _same_twice, _sprinkle, _threaded, _let_go, _carried,
 			_heap_sleeps, _splash, _dip, _sunk, _let_fall, _cut, _held_meets, _waves, _rolls_off, _rides_in, _weighs, _tool_meets, _tool_falls,
-			_moved_on, _let_go_in, _held_between, _thing_meets, _held_up_from_below, _carried_with, _put_back_in, _thin_walls, _plan_drops_stale, _held_till_placed, _waits_for_bake, _replan_from_change]:
+			_moved_on, _let_go_in, _held_between, _thing_meets, _held_up_from_below, _carried_with, _put_back_in, _thin_walls, _plan_drops_stale, _held_till_placed, _unbrought_not_there, _waits_for_bake, _replan_from_change,
+			_seat_rides, _leans_in, _held_unless_resting, _level_counts, _floats_in, _clears_way, _pours_into, _runs_down, _dips_full,
+			_jars_apart, _tool_entry, _rests_let_go, _sheet_lies, _past_baked, _rests_on_rim, _pours_loose, _world_from_table,
+			_kept_across_plans, _warmed_first, _frame_names_bodies, _part_stays_when_thing_goes, _not_dropped_on_a_rim, _sheet_tip_in_pot, _brew_kept, _stands_held_for_a_moment, _sheet_bends_round, _floater_lives, _sheet_stays_whole]:
+		# ...or only those named after `--only=` (by hand: `-- --only=_jars_apart,_sheet_lies`)
+		var only := ""
+		for a in OS.get_cmdline_user_args():
+			if a.begins_with("--only="):
+				only = a.substr(7)
+		if not only.is_empty() and not (only.split(",") as PackedStringArray).has((check as Callable).get_method()):
+			continue
 		var t0 := Time.get_ticks_msec()
 		var done: Variant = (check as Callable).call()
 		print("  %s: %.1f s" % [(check as Callable).get_method(), float(Time.get_ticks_msec() - t0) / 1000.0])
@@ -1372,12 +1398,17 @@ const TOOL_SPEC := {"things": [
 	"materials": {"oak": {"kind": "wood", "color": "#6b4a2b"}, "brass": {"kind": "metal", "color": "#b8924c"}}}
 
 
-## A bench of the rod on its stand and a block beside it, the rod moved by [param keys] (a path) from 2 s for [param length].
-func _tool_bench(keys: Array, length: float) -> TableMedium:
+## A bench of the rod on its stand and a block beside it, the rod moved by [param keys] (a path - or, [param aimed], an aim whose
+## two ends both go by them: a law the hand never plans round) from 2 s for [param length].
+func _tool_bench(keys: Array, length: float, aimed := false) -> TableMedium:
 	var m := _medium()
 	_stand(m, TOOL_SPEC, "tools", _at(Vector3(-15, 0, -8)))
 	_stand(m, TOOL_SPEC, "block", _at(Vector3(0, 0, -8)))
-	m._work.build({"acts": [{"name": "move", "beat": 1, "length": length, "tracks": [{"thing": "tools", "part": "rod", "law": "path", "jitter": 0.0, "keys": keys}]}]}, 1)
+	var tr := {"thing": "tools", "part": "rod", "law": "path", "jitter": 0.0, "keys": keys}
+	if aimed:
+		var ends := keys.map(func(k: Dictionary) -> Dictionary: return {"at": k["at"], "by": k.get("by", [0, 0, 0])})
+		tr = {"thing": "tools", "part": "rod", "law": "aim", "tip": {"point": "tip", "keys": ends}, "grip": {"point": "grip", "keys": ends}}
+	m._work.build({"acts": [{"name": "move", "beat": 1, "length": length, "tracks": [tr]}]}, 1)
 	m._work.runs = [{"i": 0, "t0": 2.0, "t1": 2.0 + length}]
 	m._work._timelines()
 	return m
@@ -1414,7 +1445,8 @@ func _rod(m: TableMedium) -> int:
 
 
 func _tool_meets() -> bool:
-	var m := _tool_bench([{"at": 0.0}, {"at": 0.2, "by": [0, 2, 0]}, {"at": 1.0, "by": [17, 2, 0]}], 3.0)
+	var keys := [{"at": 0.0}, {"at": 0.2, "by": [0, 2, 0]}, {"at": 1.0, "by": [17, 2, 0]}]
+	var m := _tool_bench(keys, 3.0, true)
 	var t := 2.0 + 3.0 * 0.97
 	m._work.tick(t)
 	var rod := _rod(m)
@@ -1422,9 +1454,21 @@ func _tool_meets() -> bool:
 	var kin := m._work._work_world(rod, t)
 	var deep := _rod_in_block(m, held) if held != null else -INF
 	var kdeep := _rod_in_block(m, kin)
-	_ok(kdeep < -0.015, "the control: the path drives the rod only %.1f mm into the block" % (-kdeep * 1000.0))
+	_ok(kdeep < -0.015, "the control: the aim drives the rod only %.1f mm into the block" % (-kdeep * 1000.0))
 	_ok(held != null and deep > -0.001, "the rod driven into the block goes %.1f mm into it - it does not stop at its face" % (-deep * 1000.0))
 	m._root3.free()
+	# ...AND A PATH THERE IS THE HAND'S: lifted over the block and set beside it where there is room ([method TableWork._path_clearance],
+	# [method TableWork._room]) - its own way is in nothing, and nothing holds it back
+	var pm := _tool_bench(keys, 3.0)
+	var said := ""
+	var most := INF
+	for k in 13:
+		var tk := 2.0 + 3.0 * float(k) / 12.0
+		most = minf(most, _rod_in_block(pm, pm._work._work_world(_rod(pm), tk)))
+	pm._work.tick(6.0)
+	said = "\n".join(pm._work.physics.report(2.0, 5.0))
+	_ok(most > -0.002 and not said.contains("HELD BACK"), "a path into the block was not taken over it and beside it: its way %.2f mm into it; %s" % [-most * 1000.0, said])
+	pm._root3.free()
 	return true
 
 
@@ -1562,18 +1606,23 @@ func _held_between() -> bool:
 	var down := [{"at": 0.0}, {"at": 0.3, "by": [0, 4, 0]}, {"at": 0.8, "by": [0, 4, 9]}, {"at": 1.0, "by": [0, -1, 9]}]
 	var again := [{"at": 0.0}, {"at": 1.0, "by": [0, 0, -9]}]
 	var res: Array = []
-	for keys in [up, down]:
-		var m := _rod_bench([[keys, 2.0, 4.0], [again, 7.0, 9.0]], 45.0)
+	# [its first move, when the next begins, when it is looked at]: held across a pause; set down across a gap; and set down on the table
+	for c in [[up, 4.5, 4.25], [up, 8.0, 7.5], [down, 7.0, 5.5]]:
+		var m := _rod_bench([[c[0], 2.0, 4.0], [again, float(c[1]), float(c[1]) + 2.0]], 45.0)
 		var rod := _rod(m)
-		m._work.tick(5.5)
+		m._work.tick(float(c[2]))
 		var ph: TablePhysics = m._work.physics
-		var pose: Variant = ph.pose_of(rod, 5.5)
+		var pose: Variant = ph.pose_of(rod, float(c[2]))
 		var b: Dictionary = ph.rigid.bodies[int(ph._rigid_of[rod])]
-		res.append([b["held"] != null, (pose as Transform3D).origin.distance_to(m._work._work_world(rod, 3.99).origin) if pose != null else INF])
+		var left := m._work._work_world(rod, 3.99)
+		res.append([b["held"] != null, (pose as Transform3D).origin.distance_to(left.origin) if pose != null else INF,
+			left.origin.y - (pose as Transform3D).origin.y if pose != null else 0.0])
 		m._root3.free()
-	_ok(not bool(res[1][0]), "the control: set down on the table, the rod is still held between its moves")
-	_ok(bool(res[0][0]) and float(res[0][1]) < 0.008, "the rod lifted 6 cm and taken up again 3 s later is %s between its moves, %.1f mm from where its move left it" % [
+	_ok(not bool(res[2][0]), "the control: set down on the table, the rod is still held between its moves")
+	_ok(bool(res[0][0]) and float(res[0][1]) < 0.008, "the rod lifted 6 cm and taken up again half a second later is %s across the pause, %.1f mm from where its move left it" % [
 		"held" if bool(res[0][0]) else "let go", float(res[0][1]) * 1000.0])
+	_ok(not bool(res[1][0]) and float(res[1][2]) > 0.04, "the rod lifted 6 cm and taken up again 4 s later is %s in the air between its moves, %.1f cm under where its move left it - a hand nobody sees holding it still is a thing floating" % [
+		"held" if bool(res[1][0]) else "not held", float(res[1][2]) * 100.0])
 	return true
 
 
@@ -1589,9 +1638,10 @@ const STOPPERED_SPEC := {"things": [
 
 ## WHAT ONE ACT MOVES TOGETHER, ONE HAND CARRIES (841899: the frankincense jar and its cork fetched by one path, each swayed
 ## its own way, the cork wandered through the jar's neck - two held bodies passed through each other - and let go it fell in,
-## and let go seated it still fell through, its cap's lip finer than the solver's points, [method TablePhysics._seat]):
+## and let go seated it still fell through, its cap's lip finer than the solver's points):
 ## a jar and its stopper carried 30 cm by the same path keep the stopper where it sits in the jar within half a millimeter all
-## the way, and set down, the stopper is still in the neck. The control: the stopper given a hand of its own wanders from it.
+## the way, and set down, the stopper is still in the neck. The control: without its physical seat, identical paths alone
+## do not bind the two objects together.
 func _carried_with() -> bool:
 	var keys := [{"at": 0.0}, {"at": 0.25, "by": [0, 8, 0]}, {"at": 0.75, "by": [30, 8, 0]}, {"at": 1.0, "by": [30, 0, 0]}]
 	var res: Array = []
@@ -1600,9 +1650,6 @@ func _carried_with() -> bool:
 		_stand(m, STOPPERED_SPEC, "jar", _at(Vector3(-15, 0, -8)))
 		m._work.build({"acts": [{"name": "fetch", "beat": 1, "length": 4.0, "tracks": [
 			{"thing": "jar", "part": "jar", "law": "path", "keys": keys}, {"thing": "jar", "part": "stopper", "law": "path", "keys": keys}]}]}, 1)
-		if own_hand:
-			((m._work.acts[0] as Dictionary)["tracks"] as Array)[1].erase("_with")
-			((m._work.acts[0] as Dictionary)["tracks"] as Array)[1]["_hand"] = 12345
 		m._work.runs = [{"i": 0, "t0": 2.0, "t1": 6.0}]
 		m._work._timelines()
 		var jar := -1
@@ -1611,16 +1658,18 @@ func _carried_with() -> bool:
 			match String((m._work.works[wi] as Dictionary)["name"]):
 				"jar": jar = wi
 				"stopper": stopper = wi
+		var ph: TablePhysics = m._work.physics
+		if own_hand:
+			(ph.rigid.bodies[int(ph._rigid_of[stopper])] as Dictionary)["seat"] = PackedInt32Array()
 		var sat := m._work._work_world(jar, 1.0).affine_inverse() * m._work._work_world(stopper, 1.0)
+		m._work.tick(8.0)
 		var wander := 0.0
 		for k in 40:
 			var t := 2.0 + 4.0 * float(k) / 39.0
-			var rel := m._work._work_world(jar, t).affine_inverse() * m._work._work_world(stopper, t)
+			var rel := _baked(m, jar, t).affine_inverse() * _baked(m, stopper, t)
 			wander = maxf(wander, rel.origin.distance_to(sat.origin))
 		var in_neck := INF
 		if not own_hand:
-			m._work.tick(8.0)
-			var ph: TablePhysics = m._work.physics
 			var jp: Variant = ph.pose_of(jar, 8.0)
 			var sp: Variant = ph.pose_of(stopper, 8.0)
 			if jp != null and sp != null:
@@ -1685,14 +1734,16 @@ const CRATE_SPEC := {"things": [
 
 
 ## A WHOLE THING MEETS WHAT IT IS MOVED INTO (841899's mortar, carried over the cauldron and tipped, went through its rim - a
-## whole thing had gone where its act said, and the act's check never saw the rim): a crate a path drives 5 cm into a block
+## whole thing had gone where its act said, and the act's check never saw the rim): a crate an aim drives 5 cm into a block
 ## stops at the block's face, and the act's report says what held it back. The control: the work's own crate is in the block.
 func _thing_meets() -> bool:
 	var m := _medium()
 	_stand(m, CRATE_SPEC, "crate", _at(Vector3(-15, 0, -8)))
 	_stand(m, CRATE_SPEC, "block", _at(Vector3(0, 0, -8)))
-	m._work.build({"acts": [{"name": "push", "beat": 1, "length": 3.0, "tracks": [{"thing": "crate", "law": "path", "jitter": 0.0,
-		"keys": [{"at": 0.0}, {"at": 0.2, "by": [0, 2, 0]}, {"at": 1.0, "by": [17, 2, 0]}]}]}]}, 1)
+	# ...AIMED there, both its ends: a law the hand never plans round (a path is lifted over the block, [method _tool_meets])
+	var ends := [{"at": 0.0, "by": [0, 0, 0]}, {"at": 0.2, "by": [0, 2, 0]}, {"at": 1.0, "by": [17, 2, 0]}]
+	m._work.build({"acts": [{"name": "push", "beat": 1, "length": 3.0, "tracks": [{"thing": "crate", "law": "aim",
+		"tip": {"point": "tip", "keys": ends}, "grip": {"point": "grip", "keys": ends}}]}]}, 1)
 	m._work.runs = [{"i": 0, "t0": 2.0, "t1": 5.0}]
 	m._work._timelines()
 	var t := 2.0 + 3.0 * 0.97
@@ -1720,7 +1771,7 @@ func _thing_meets() -> bool:
 					var p := (baked as Transform3D) * n0.affine_inverse() * p0
 					deep = minf(deep, ((bs as Dictionary)["field"] as ShapeField).sample(((bs as Dictionary)["inv"] as Transform3D) * p).x)
 	var said := "\n".join(ph.report(2.0, 5.0))
-	_ok(kdeep < -0.015, "the control: the path drives the work's own crate only %.1f mm into the block" % (-kdeep * 1000.0))
+	_ok(kdeep < -0.015, "the control: the aim drives the work's own crate only %.1f mm into the block" % (-kdeep * 1000.0))
 	_ok(baked != null and deep > -0.0015, "the crate driven into the block goes %.1f mm into it - it does not stop at its face" % (-deep * 1000.0))
 	_ok(said.contains("HELD BACK by block"), "the act's report does not say the block held the crate back:\n" + said)
 	m._root3.free()
@@ -1854,24 +1905,242 @@ func _plan_drops_stale() -> bool:
 	return true
 
 
-## HELD FOR AN ACT NOT YET PLACED: the rod lifted 6 cm (2 s to 4 s), its next act written but not yet placed - a live reading
-## places one only once its word is heard - is held where its move left it at 6 s, as an export with every act placed holds it
-## (841899 played live: the ladle let go in its pot before the stir's words came). The control: with no later act, it is let go.
+const POT_RIM_SPEC := {"things": [
+	{"name": "pot", "parts": [{"shape": "lathe", "profile": [[0, 0], [10, 0], [12, 10], [12.4, 12], [11.6, 12], [10, 1.5], [0, 1.5]], "material": "iron"}]},
+	{"name": "mortar", "parts": [{"shape": "lathe", "profile": [[0, 0], [4, 0], [5, 8], [5.5, 8.3], [4.6, 8], [3.6, 1.2], [0, 1.2]], "material": "stone"}]}],
+	"materials": {"iron": {"kind": "metal", "color": "#2c2a28"}, "stone": {"kind": "stone", "color": "#8a8580"}}}
+
+
+## A HAND NEVER LETS GO WHERE WHAT IT HOLDS WOULD COME DOWN BADLY ([method TablePhysics._lands_ill]; 2026-11-01, feedback 0004-0007: the
+## mortar, level over the cauldron after its pour, its next act past the pause, let go: over the rim and onto the table, tipped 112
+## degrees, trembling until its way home hauled it up): a mortar brought level over a pot's rim. Its next act 5 s on, it is held there.
+## Its next act 20 s on, or none, or one written but not placed, it is put back where it last rested, upright and at rest. The control:
+## the same move over the bare table is let go, and lands where it is.
+func _not_dropped_on_a_rim() -> bool:
+	var over := [{"at": 0.0}, {"at": 0.5, "by": [0, 20, 0]}, {"at": 0.9, "by": [BY_RIM, 20, 0]}, {"at": 1.0, "by": [BY_RIM, 13, 0]}]
+	var clear := [{"at": 0.0}, {"at": 0.5, "by": [0, 20, 0]}, {"at": 0.9, "by": [-14, 20, 0]}, {"at": 1.0, "by": [-14, 13, 0]}]
+	var home := [{"at": 0.0}, {"at": 1.0, "by": [0, 0, 6]}]
+	var cases := [
+		{"name": "its next act 5 s on", "keys": over, "next": 10.0, "at": 9.0, "held": true},
+		{"name": "its next act 20 s on", "keys": over, "next": 25.0, "at": 11.5, "back": true},
+		{"name": "no later act", "keys": over, "next": -1.0, "at": 11.5, "back": true},
+		{"name": "a later act not yet placed, 7 s on", "keys": over, "next": 10.0, "unplaced": true, "at": 12.0, "held": true},
+		{"name": "a later act not yet placed, 11 s on", "keys": over, "next": 10.0, "unplaced": true, "at": 16.0, "back": true},
+		{"name": "the control: over the bare table", "keys": clear, "next": -1.0, "at": 9.0, "landed": true}]
+	for c in cases:
+		var cd: Dictionary = c
+		var m := _medium()
+		_stand(m, POT_RIM_SPEC, "pot", _at(Vector3(0, 0, -8)))
+		_stand(m, POT_RIM_SPEC, "mortar", _at(Vector3(-30, 0, -8)))
+		var acts: Array = [{"name": "over", "beat": 1, "length": 3.0, "tracks": [{"thing": "mortar", "law": "path", "jitter": 0.0, "keys": cd["keys"]}]}]
+		var runs: Array = [{"i": 0, "t0": 2.0, "t1": 5.0}]
+		if float(cd["next"]) >= 0.0:
+			acts.append({"name": "home", "beat": 1, "length": 2.0, "tracks": [{"thing": "mortar", "law": "path", "jitter": 0.0, "keys": home}]})
+			if not bool(cd.get("unplaced", false)):
+				runs.append({"i": 1, "t0": float(cd["next"]), "t1": float(cd["next"]) + 2.0})
+		m._work.build({"acts": acts}, 1)
+		m._work.runs = runs
+		m._work._timelines()
+		var ph: TablePhysics = m._work.physics
+		var ti: int = m._work._thing_named("mortar")
+		var built: Transform3D = m._work._rest["t%d:pose" % ti]
+		var at := float(cd["at"])
+		ph.bake_until(at)
+		var pose: Transform3D = ph.thing_pose_of(ti, at)
+		var tilt := rad_to_deg((pose.basis * Vector3.UP).angle_to(Vector3.UP))
+		var left_at: Transform3D = built
+		left_at.origin += Vector3(float((cd["keys"] as Array)[3]["by"][0]), float((cd["keys"] as Array)[3]["by"][1]), 0.0) * 0.01
+		var b: Dictionary = ph.rigid.bodies[int(ph._rigid_of[-1 - ti])]
+		m._root3.free()
+		var say := "at (%.1f, %.1f, %.1f) cm, tilted %.0f" % [pose.origin.x * 100.0, pose.origin.y * 100.0, pose.origin.z * 100.0, tilt]
+		if bool(cd.get("held", false)):
+			_ok(tilt < 8.0 and pose.origin.distance_to(left_at.origin) < 0.02 and b["held"] != null, "%s, the mortar over the rim at %.1f s is still held where its move left it: %s" % [cd["name"], at, say])
+		elif bool(cd.get("back", false)):
+			_ok(tilt < 4.0 and pose.origin.distance_to(built.origin) < 0.02 and b["held"] == null, "%s, the mortar is put back where it rested by %.1f s, upright, let go: %s" % [cd["name"], at, say])
+		else:
+			_ok(tilt < 4.0 and absf(pose.origin.y - built.origin.y) < 0.01 and Vector2(pose.origin.x - left_at.origin.x, pose.origin.z - left_at.origin.z).length() < 0.02,
+				"%s, it is let go and lands where it is: %s" % [cd["name"], say])
+	return true
+
+
+## How far along the bench the mortar is brought to stand over the pot's near rim (cm; [method _not_dropped_on_a_rim]): from 30 cm away, to
+## 12 from the pot's middle.
+const BY_RIM := 18.0
+
+
+## A PART SET ASIDE STAYS WHERE IT IS DRAWN WHEN ITS THING GOES (2026-11-01, feedback 0004-0007: "the pestle disappeared, and then
+## reappeared", "moving in-sync, as if they are stuck together", "clipped through the table"): a free part's node hangs from its
+## thing's, and a frame poses it again only where it can have changed ([method TableWork._settled]) - which asked of the moves written
+## on the thing, while its body also moves outside them. The rod laid aside and its stand lifted, then let go to fall, played frame by
+## frame as a live show draws it: the rod is drawn where the bake has it at every frame, through the lift and the fall. The
+## control: the stand does fall, outside any move written on it.
+func _part_stays_when_thing_goes() -> bool:
+	var m := _medium()
+	_stand(m, TOOL_SPEC, "tools", _at(Vector3(-15, 0, -8)))
+	m._work.build({"acts": [
+		{"name": "aside", "beat": 1, "length": 2.0, "tracks": [{"thing": "tools", "part": "rod", "law": "path", "jitter": 0.0,
+			"keys": [{"at": 0.0}, {"at": 0.4, "by": [0, 8, 0]}, {"at": 1.0, "by": [-25, 0, 0]}]}]},
+		{"name": "lift", "beat": 1, "length": 1.0, "tracks": [{"thing": "tools", "law": "path", "jitter": 0.0,
+			"keys": [{"at": 0.0}, {"at": 1.0, "by": [20, 15, 0]}]}]}]}, 1)
+	m._work.runs = [{"i": 0, "t0": 1.0, "t1": 3.0}, {"i": 1, "t0": 5.0, "t1": 6.0}]
+	m._work._timelines()
+	var w := m._work
+	var ph: TablePhysics = w.physics
+	var rod := _rod(m)
+	var node: Node3D = (w.works[rod] as Dictionary)["node"]
+	var tools := w._thing_named("tools")
+	var worst := 0.0
+	var worst_at := 0.0
+	var fell := 0.0
+	var top := -INF
+	var t := 4.0
+	while t < 8.0:
+		w.tick(t)
+		var baked: Variant = ph.pose_of(rod, t)
+		var off := w._world_of(node).origin.distance_to((baked as Transform3D).origin) if baked != null else 0.0
+		if off > worst:
+			worst = off
+			worst_at = t
+		var thing_y := ((w.things[tools] as Dictionary)["node"] as Node3D).position.y
+		top = maxf(top, thing_y)
+		if t > 6.2:
+			fell = maxf(fell, top - thing_y)
+		t += 1.0 / 60.0
+	m._root3.free()
+	_ok(fell > 0.05, "the control: let go after its lift, the stand fell %.1f cm, outside any move written on it" % (fell * 100.0))
+	_ok(worst < 0.001, "the rod laid aside is drawn %.1f cm from where the bake has it, at %.2f s, as its stand goes" % [worst * 100.0, worst_at])
+	return true
+
+
+## WHAT A PLAN FOUND IS KEPT FOR THE NEXT (2026-11-01, played live: every plan a live reading made - one a sentence - worked out
+## again, twice and on the app's thread, where every move so far comes to rest; by 841899's second stir 2.8-3.5 s of every sentence,
+## the picture frozen while the voice went on): the rod's two moves planned again with nothing changed find no room again, and the
+## second ends where it did. The control: the first move written a second later, both are found again.
+func _kept_across_plans() -> bool:
+	var up := [{"at": 0.0}, {"at": 0.3, "by": [0, 6, 0]}, {"at": 1.0, "by": [0, 6, 9]}]
+	var again := [{"at": 0.0}, {"at": 1.0, "by": [0, 0, -9]}]
+	var m := _rod_bench([[up, 2.0, 4.0], [again, 8.0, 10.0]], 45.0)
+	var w := m._work
+	var end_of := func() -> Transform3D:
+		for ch in w._chan:
+			for e in w._chan[ch]:
+				if String((e as Dictionary)["act"]) == "move 1":
+					return (e as Dictionary)["end"]
+		return Transform3D()
+	var end0: Transform3D = end_of.call()
+	w.profiling = true
+	w.profile = {}
+	w._timelines()
+	var same := int(w.profile.get("rooms found", 0))
+	var end1: Transform3D = end_of.call()
+	w.profile = {}
+	w.runs = [{"i": 0, "t0": 3.0, "t1": 5.0}, {"i": 1, "t0": 8.0, "t1": 10.0}]
+	w._timelines()
+	var moved := int(w.profile.get("rooms found", 0))
+	m._root3.free()
+	_ok(moved >= 2, "the control: the first move written a second later found %d rooms again (2 moves)" % moved)
+	_ok(same == 0, "a plan made again with nothing changed found %d rooms again" % same)
+	_ok(end1.origin.distance_to(end0.origin) < 1e-6, "...and the second move ends %.3f mm from where it did" % (end1.origin.distance_to(end0.origin) * 1000.0))
+	return true
+
+
+## WHAT A DRIP IS DRAWN WITH IS MADE AS THE TABLE STANDS (2026-11-01: as the ladle first came out of the brew the picture froze 3.4 s,
+## the GPU building the shaders of the stream and the drops, made only then): before anything has poured, the drops and a stream's
+## node stand, and a copy of each IN THE SAME MATERIAL is drawn at nothing's size for the table's first frames, then let go - what
+## the GPU builds for the copies is what the real ones need. The control: nothing drawn yet, the copies are there.
+func _warmed_first() -> bool:
+	var m := _rod_bench([[[{"at": 0.0}, {"at": 1.0, "by": [0, 6, 0]}], 2.0, 4.0]], 45.0)
+	var ph: TablePhysics = m._work.physics
+	var made := ph._drops != null and ph._streams.size() >= 1
+	var warm := ph._warm.size() == 2
+	var same := warm and (ph._warm[0] as MeshInstance3D).material_override == (ph._streams[0] as MeshInstance3D).material_override \
+		and (ph._warm[1] as MultiMeshInstance3D).material_override == ph._drops.material_override \
+		and (ph._warm[1] as MultiMeshInstance3D).multimesh.mesh == ph._drops.multimesh.mesh
+	for k in TablePhysics.WARM_TICKS + 1:
+		ph.tick(0.0)
+	var gone := ph._warm.is_empty()
+	m._root3.free()
+	_ok(warm, "the control: before the table's first frame, the copies drawn for the GPU stand (%d of 2)" % (2 if warm else 0))
+	_ok(made, "a stream's node and the drops are made with the table, before anything pours")
+	_ok(same, "each copy is drawn in its real node's own material and mesh")
+	_ok(gone, "the copies are let go after the table's first %d frames" % TablePhysics.WARM_TICKS)
+	return true
+
+
+## A FRAME NAMES ITS OWN BODIES (2026-11-01): the rod woken by its move (2-4 s) and its frame at 5 s kept as a new plan takes the bake
+## back to its first checkpoint - which puts every body woken since back to sleep ([method TablePhysics._restore]) - the frame still
+## poses the rod where it was baked, never where it was built: the picture's thread reads a frame, never what the bake keeps changing.
+## The control: its frame at 1 s, before it woke, poses it where it was built.
+func _frame_names_bodies() -> bool:
+	var m := _rod_bench([[[{"at": 0.0}, {"at": 0.3, "by": [0, 6, 0]}, {"at": 1.0, "by": [0, 6, 9]}], 2.0, 4.0]], 45.0)
+	var ph: TablePhysics = m._work.physics
+	var rod := _rod(m)
+	ph.bake_until(6.0)
+	var rest := ph._rest_of(rod)
+	var baked: Transform3D = ph.pose_of(rod, 5.0)
+	ph._restore(ph._ck[0])
+	var after: Transform3D = ph.pose_of(rod, 5.0)
+	var early: Transform3D = ph.pose_of(rod, 1.0)
+	m._root3.free()
+	_ok(early.origin.distance_to(rest.origin) < 1e-5, "the control: at 1 s, before it woke, the rod is where it was built (%.1f mm off)" % (early.origin.distance_to(rest.origin) * 1000.0))
+	_ok(baked.origin.distance_to(rest.origin) > 0.05, "the rod was moved by 5 s (%.1f cm from where it was built)" % (baked.origin.distance_to(rest.origin) * 100.0))
+	_ok(after.origin.distance_to(baked.origin) < 1e-5, "after the bake went back, its frame at 5 s still has it where it was baked (%.1f cm off)" % (after.origin.distance_to(baked.origin) * 100.0))
+	return true
+
+
+## LIVE AS EXPORTED, NOTHING HANGS IN THE AIR FOR A LATER ACT (2026-11-01, feedback 0001-0002: the ladle over the cauldron and the
+## pestle over its mortar, held for the words before their next acts) - AND NOTHING IS DROPPED FOR ONE NOT YET HEARD (feedback 0004:
+## the mortar, its pour ended a second before the word its way home is cued at, let go tipped over the cauldron): the rod lifted 6 cm
+## (2 s to 4 s) with no later act is set down where it is; with its next act written but not yet placed - a live reading places one
+## only once its word is heard - it is held across a pause, as an export holding it for an act that soon would, and set down after
+## one; with its next act 5 s on it is set down at once. Placed later within the pause, nothing before that act is baked again (the
+## hold already stood in for it); an act placed 5 s on afterwards leaves the bake as it was (what it held a moment is a moment's
+## hover - going back for it had the show wait); and AN ACT MOVED INTO THE PAUSE after the bake let the rod go takes the bake back
+## to the move's end, and it is held there, as an export holds it. The control: its next act placed half a second on, it is held
+## across the pause.
 func _held_till_placed() -> bool:
 	var up := [{"at": 0.0}, {"at": 0.3, "by": [0, 6, 0]}, {"at": 1.0, "by": [0, 6, 9]}]
 	var again := [{"at": 0.0}, {"at": 1.0, "by": [0, 0, -9]}]
 	var held := {}
-	for later in [false, true]:
-		var m := _rod_bench([[up, 2.0, 4.0], [again, 9.0, 11.0]] if later else [[up, 2.0, 4.0]], 45.0)
-		m._work.runs = [{"i": 0, "t0": 2.0, "t1": 4.0}]
-		m._work._timelines()
-		m._work.tick(6.0)
+	var resumed := {}
+	for case in ["none", "unplaced", "unplaced, later", "placed", "soon", "placed 5 s on, later", "placed 1.5 s on, later", "moved in, later"]:
+		var later: bool = case != "none"
+		var start: float = 4.5 if case == "soon" else 9.0
+		var m := _rod_bench([[up, 2.0, 4.0], [again, start, start + 2.0]] if later else [[up, 2.0, 4.0]], 45.0)
 		var ph: TablePhysics = m._work.physics
+		if case.begins_with("unplaced") or case.begins_with("placed") and case.ends_with("later"):
+			m._work.runs = [{"i": 0, "t0": 2.0, "t1": 4.0}]
+			m._work._timelines()
+		var at: float = 4.25 if case == "soon" else (7.5 if case == "unplaced, later" else 6.0)
+		if case.ends_with(", later") and not case.begins_with("unplaced"):
+			# ...baked on first with the act not yet placed, then its word heard
+			ph.bake_until(8.0)
+			var t1: float = 9.0 if case.begins_with("placed 5") else 5.5
+			m._work.runs = [{"i": 0, "t0": 2.0, "t1": 4.0}, {"i": 1, "t0": t1, "t1": t1 + 2.0}]
+			m._work._timelines()
+			ph._take_plan()
+			# ...how far the bake kept what it had (a bake goes back to its last checkpoint before the change, and keeps its frames up to it)
+			resumed[case] = ph.baked_to()
+			at = 6.0 if case.begins_with("placed 5") else 5.0
+		m._work.tick(at)
 		var rod := _rod(m)
-		held[later] = (ph.rigid.bodies[int(ph._rigid_of[rod])] as Dictionary)["held"] != null
+		var pose: Variant = ph.pose_of(rod, at)
+		held[case] = [(ph.rigid.bodies[int(ph._rigid_of[rod])] as Dictionary)["held"] != null,
+			m._work._work_world(rod, 3.99).origin.y - (pose as Transform3D).origin.y if pose != null else 0.0]
 		m._root3.free()
-	_ok(not bool(held[false]), "the control: with no later act, the rod is still held in the air at 6 s")
-	_ok(bool(held[true]), "with a later act not yet placed, the rod lifted 6 cm is let go at 6 s")
+	_ok(bool(held["soon"][0]), "the control: its next act half a second on, the rod was let go across the pause")
+	for case in ["none", "placed", "unplaced, later"]:
+		_ok(not bool(held[case][0]) and float(held[case][1]) > 0.04, "the rod lifted 6 cm (%s) is %s, %.1f cm under where its move left it" % [
+			{"none": "no later act, at 6 s", "placed": "its next act 5 s on, at 6 s", "unplaced, later": "a later act not yet placed, at 7.5 s"}[case],
+			"held in the air" if bool(held[case][0]) else "let go", float(held[case][1]) * 100.0])
+	for case in ["unplaced", "placed 1.5 s on, later", "moved in, later"]:
+		_ok(bool(held[case][0]) and absf(float(held[case][1])) < 0.02, "the rod (%s) was %s, %.1f cm from where its move left it" % [
+			{"unplaced": "a later act not yet placed, 2 s after its move", "placed 1.5 s on, later": "its next act placed 1.5 s on after the bake, 1 s after its move",
+				"moved in, later": "its next act moved from 5 s on to 1.5 s on after the bake, 1 s after its move"}[case],
+			"held" if bool(held[case][0]) else "LET GO", float(held[case][1]) * 100.0])
+	_ok(float(resumed["placed 1.5 s on, later"]) >= 5.4, "its act placed within the pause, the bake kept what it had only to %.2f s - not to the act at 5.5 s, where the hold already stood" % float(resumed["placed 1.5 s on, later"]))
+	_ok(float(resumed["placed 5 s on, later"]) >= 7.9, "its act placed 5 s on after a bake that held it, the bake kept what it had only to %.2f s - not all it had baked, to 8 s" % float(resumed["placed 5 s on, later"]))
+	_ok(float(resumed["moved in, later"]) <= 4.0 + 1e-3, "its act moved into the pause after a bake that let it go, the bake kept what it had to %.2f s - past the move's end at 4 s, where it lets go" % float(resumed["moved in, later"]))
 	return true
 
 
@@ -1926,4 +2195,1360 @@ func _replan_from_change() -> bool:
 		m._root3.free()
 	_ok(float(to["path"]) < 2.1, "the control: a path ending later kept its bake to %.2f s - baked from its start, it should be gone" % float(to["path"]))
 	_ok(float(to["circle"]) >= 9.0, "a rod going round whose act ends later was baked again from %.2f s, not from where it differs (10 s)" % float(to["circle"]))
+	return true
+
+
+## Body [param wi]'s pose as the bake has it at [param t], or the work's where it is no body.
+func _baked(m: TableMedium, wi: int, t: float) -> Transform3D:
+	var p: Variant = m._work.physics.pose_of(wi, t)
+	return p if p != null else m._work._work_world(wi, t)
+
+
+func _work_of_name(m: TableMedium, name: String) -> int:
+	for wi in m._work.works.size():
+		if String((m._work.works[wi] as Dictionary)["name"]) == name:
+			return wi
+	return -1
+
+
+## A PART IN ITS SEAT GOES WITH ITS SEAT (the-quiet-crucible 841899: the sulfur cork's keys ended half a centimeter above its
+## jar's, so it had a hand of its own and wandered through the neck; and let go seated, each cork was woken by its jar settling
+## and trembled 3 mm about the neck for seconds): a jar fetched 70 cm with its stopper, the stopper's keys a hand of its own and
+## half a centimeter off at the end (841899's sulfur-fetch's, each hand bowing its own way), keeps the stopper within half a
+## millimeter of its seat all the way and after it is set
+## down, still - and the jar goes where it was sent (seated on each other, a jar and its cork had been welded where they stood).
+## The control: the stopper's own move drawing it 5 cm up out of the neck takes it out.
+func _seat_rides() -> bool:
+	var keys := [{"at": 0.0}, {"at": 0.2, "by": [0, 9, 3]}, {"at": 0.55, "by": [-38, 10, 22]}, {"at": 0.85, "by": [-62, 6, 27]}, {"at": 1.0, "by": [-64.8, 0, 27]}]
+	var off := [{"at": 0.0}, {"at": 0.2, "by": [0, 9, 3]}, {"at": 0.55, "by": [-38, 10, 22]}, {"at": 0.85, "by": [-62, 6, 27]}, {"at": 1.0, "by": [-64.8, 0.5, 27]}]
+	var res: Array = []
+	for out in [false, true]:
+		var m := _medium()
+		# ...each hand seeded as that episode's were: its seed and the act's name
+		m._plan.seed_value = 841899
+		_stand(m, STOPPERED_SPEC, "jar", _at(Vector3(45, 0, -8)))
+		var tracks: Array = [{"thing": "jar", "part": "jar", "law": "path", "keys": keys}, {"thing": "jar", "part": "stopper", "law": "path", "keys": off}]
+		if out:
+			tracks = [{"thing": "jar", "part": "stopper", "law": "path", "keys": [{"at": 0.0}, {"at": 1.0, "by": [0, 5, 0]}]}]
+		m._work.build({"acts": [{"name": "sulfur-fetch", "beat": 1, "length": 4.0, "tracks": tracks}]}, 1)
+		m._work.runs = [{"i": 0, "t0": 2.0, "t1": 6.0}]
+		m._work._timelines()
+		var jar := _work_of_name(m, "jar")
+		var stopper := _work_of_name(m, "stopper")
+		var ph: TablePhysics = m._work.physics
+		m._work.tick(11.0)
+		var sat := ph._rest_of(jar).affine_inverse() * ph._rest_of(stopper)
+		var most := 0.0
+		var after := 0.0
+		var last := Transform3D()
+		for k in 60:
+			var t := 2.0 + 9.0 * float(k) / 59.0
+			var rel := _baked(m, jar, t).affine_inverse() * _baked(m, stopper, t)
+			most = maxf(most, rel.origin.distance_to(sat.origin))
+			if t > 7.0:
+				var sp := _baked(m, stopper, t)
+				if k > 0 and last != Transform3D():
+					after = maxf(after, sp.origin.distance_to(last.origin))
+				last = sp
+		var went := _baked(m, jar, 11.0).origin.distance_to(ph._rest_of(jar).origin)
+		res.append([most, after, went])
+		m._root3.free()
+	_ok(float(res[1][0]) > 0.03, "the control: drawn 5 cm up out of its neck by its own move, the stopper stayed %.1f mm from its seat" % (float(res[1][0]) * 1000.0))
+	_ok(float(res[0][2]) > 0.6, "the jar sent 70 cm went %.1f cm - held where it stood by its own stopper" % (float(res[0][2]) * 100.0))
+	_ok(float(res[0][0]) < 0.0005, "fetched with its jar on keys of its own, the stopper went %.2f mm from its seat" % (float(res[0][0]) * 1000.0))
+	_ok(float(res[0][1]) < 0.0001, "set down seated, the stopper still moved %.3f mm in a sixth of a second" % (float(res[0][1]) * 1000.0))
+	return true
+
+
+## A HAND LETS GO OF WHAT RESTS OR STANDS IN A VESSEL, AND HOLDS WHAT WOULD FALL (841899: the ladle brought upright into the brew
+## was held there 14 s, swaying, "wiggling unstably", where a person leans it on the rim; and held over the pot after its dip it
+## was let go because it grazed the rim, and fell in): a ladle brought into a pot of water, tipped 30 degrees, and taken up again
+## 6 s later is let go between the moves, leans in the pot - none of it in the pot's wall - and lies still. The control: left
+## 3 cm over the pot's rim, it is held.
+func _leans_in() -> bool:
+	var res: Array = []
+	for over in [false, true]:
+		var m := _medium()
+		_stand(m, LADLE_SPEC, "pot", _at(Vector3(0, 0, -8)))
+		var end_y := 13.0 if over else 2.0
+		m._work.build({"acts": [{"name": "in", "beat": 1, "length": 3.0, "tracks": [{"thing": "pot", "part": "ladle", "law": "path", "jitter": 0.0, "keys": [
+			{"at": 0.0}, {"at": 0.3, "by": [0, 14, 0]}, {"at": 0.7, "by": [-15, 14, 0], "turn": [0, 0, 30]}, {"at": 1.0, "by": [-15, end_y, 0], "turn": [0, 0, 30]}]}]},
+			{"name": "again", "beat": 1, "length": 2.0, "tracks": [{"thing": "pot", "part": "ladle", "law": "path", "jitter": 0.0, "keys": [{"at": 0.0}, {"at": 1.0, "by": [0, 8, 0]}]}]}]}, 1)
+		# ...over the rim, its next move half a second on - held across the pause, looked at in it; in the pot, 6 s on
+		m._work.runs = [{"i": 0, "t0": 2.0, "t1": 5.0}, {"i": 1, "t0": 5.5 if over else 11.0, "t1": 7.5 if over else 13.0}]
+		m._work._timelines()
+		var ladle := _work_of_name(m, "ladle")
+		var ph: TablePhysics = m._work.physics
+		m._work.tick(5.25 if over else 10.0)
+		var b: Dictionary = ph.rigid.bodies[int(ph._rigid_of[ladle])]
+		var still := _baked(m, ladle, 9.0).origin.distance_to(_baked(m, ladle, 10.0).origin) if not over else 0.0
+		var deep := INF
+		var pose := _baked(m, ladle, 5.25 if over else 10.0)
+		for sd in ph.solids:
+			if int((sd as Dictionary)["wi"]) == ladle or String((m._work.things[int((sd as Dictionary)["thing"])] as Dictionary)["name"]) != "pot" \
+					or (sd as Dictionary).has("body"):
+				continue
+			for sl in ph.solids:
+				if int((sl as Dictionary)["wi"]) != ladle and not (int((sl as Dictionary)["wi"]) >= 0 and m._work._within(int((sl as Dictionary)["wi"]), ladle) == 1):
+					continue
+				for q in ((sl as Dictionary)["field"] as ShapeField).surface_points():
+					var p := pose * ph._rest_of(ladle).affine_inverse() * ((sl as Dictionary)["rest"] as Transform3D) * q
+					deep = minf(deep, ((sd as Dictionary)["field"] as ShapeField).sample(((sd as Dictionary)["inv"] as Transform3D) * p).x)
+		res.append([b["held"] != null, still, deep, rad_to_deg(pose.basis.y.normalized().angle_to(Vector3.UP))])
+		m._root3.free()
+	_ok(bool(res[1][0]), "the control: left 3 cm over the pot's rim, its next move half a second on, the ladle was let go across the pause")
+	_ok(not bool(res[0][0]), "left standing in the pot until its next move, the ladle is still held there")
+	_ok(float(res[0][1]) < 0.0005 and float(res[0][2]) > -0.002, "let go in the pot, the ladle moved %.2f mm in its last second and is %.1f mm into the pot's wall" % [
+		float(res[0][1]) * 1000.0, -float(res[0][2]) * 1000.0])
+	return true
+
+
+## ...AND IT IS NOT DROPPED IN FOR A MOMENT (841899, ladle-in-1 and its stir 1.6 s apart: let go 15 cm up, it fell against the wall, lay down, and was hauled upright again):
+## a ladle brought into a pot of water, its next move 1.5 s on, stays as it was brought. The control: its next move 8 s on, it is let go and leans.
+func _stands_held_for_a_moment() -> bool:
+	var res := {}
+	for gap in [1.5, 8.0]:
+		var m := _medium()
+		_stand(m, LADLE_SPEC, "pot", _at(Vector3(0, 0, -8)))
+		m._work.build({"acts": [{"name": "in", "beat": 1, "length": 3.0, "tracks": [{"thing": "pot", "part": "ladle", "law": "path", "jitter": 0.0, "keys": [
+			{"at": 0.0}, {"at": 0.3, "by": [0, 14, 0]}, {"at": 0.7, "by": [-15, 14, 0], "turn": [0, 0, 30]}, {"at": 1.0, "by": [-15, 4, 0], "turn": [0, 0, 30]}]}]},
+			{"name": "again", "beat": 1, "length": 2.0, "tracks": [{"thing": "pot", "part": "ladle", "law": "path", "jitter": 0.0, "keys": [{"at": 0.0}, {"at": 1.0, "by": [0, 8, 0]}]}]}]}, 1)
+		m._work.runs = [{"i": 0, "t0": 2.0, "t1": 5.0}, {"i": 1, "t0": 5.0 + float(gap), "t1": 7.0 + float(gap)}]
+		m._work._timelines()
+		var ladle := _work_of_name(m, "ladle")
+		var ph: TablePhysics = m._work.physics
+		var look := 5.0 + minf(float(gap) - 0.1, 3.0)
+		m._work.tick(look + 1.0)
+		var a := _baked(m, ladle, 5.0)
+		var b := _baked(m, ladle, look)
+		res[gap] = [a.origin.distance_to(b.origin), rad_to_deg(Quaternion(a.basis.orthonormalized()).angle_to(Quaternion(b.basis.orthonormalized())))]
+		m._root3.free()
+	_ok(float(res[1.5][0]) < 0.006 and float(res[1.5][1]) < 3.0, "its next move 1.5 s on, the ladle standing in the pot moved %.1f cm and turned %.0f degrees" % [float(res[1.5][0]) * 100.0, float(res[1.5][1])])
+	_ok(float(res[8.0][0]) > 0.006 or float(res[8.0][1]) > 3.0, "the control: its next move 8 s on, the ladle stayed held as it was brought")
+	return true
+
+
+## TOUCHING IS NOT RESTING (841899: the ladle held over the vial after its pour grazed it, was let go and fell to the table): a rod
+## lowered with one end on a block's top and its middle past the block's edge, taken up again half a second later, is held across
+## the pause. The control: lowered with its middle over the block, it rests there and is let go.
+func _held_unless_resting() -> bool:
+	var res: Array = []
+	for over_middle in [false, true]:
+		var m := _medium()
+		_stand(m, TOOL_SPEC, "tools", _at(Vector3(-15, 0, -8)))
+		_stand(m, TOOL_SPEC, "block", _at(Vector3(0, 0, -8)))
+		# where the block's top is and the rod's underside, as built (each move is from there)
+		m._work.build({"acts": []}, 1)
+		var top := -INF
+		var low := INF
+		var rod := _rod(m)
+		for sd in m._work.physics.solids:
+			if String((m._work.things[int((sd as Dictionary)["thing"])] as Dictionary)["name"]) == "block":
+				top = maxf(top, ((sd as Dictionary)["wbox"] as AABB).end.y)
+			elif int((sd as Dictionary)["wi"]) == rod:
+				low = minf(low, ((sd as Dictionary)["wbox"] as AABB).position.y)
+		m._root3.free()
+		m = _medium()
+		_stand(m, TOOL_SPEC, "tools", _at(Vector3(-15, 0, -8)))
+		_stand(m, TOOL_SPEC, "block", _at(Vector3(0, 0, -8)))
+		# the rod 10 cm long: its middle 1 cm over the block's middle, or its end 1.5 cm over the block's edge
+		# (the rod built from -20 to -10 cm, the block from -3 to 3: its right end 1.5 cm over the block's edge is 8.5 cm along)
+		var x := 15.0 if over_middle else 8.5
+		var up := (top - low - 0.002) * 100.0 + 0.05
+		m._work.build({"acts": [{"name": "set", "beat": 1, "length": 3.0, "tracks": [{"thing": "tools", "part": "rod", "law": "path", "jitter": 0.0, "keys": [
+			{"at": 0.0}, {"at": 0.3, "by": [0, up + 6.0, 0]}, {"at": 0.8, "by": [x, up + 6.0, 0]}, {"at": 1.0, "by": [x, up, 0]}]}]},
+			{"name": "again", "beat": 1, "length": 2.0, "tracks": [{"thing": "tools", "part": "rod", "law": "path", "jitter": 0.0, "keys": [{"at": 0.0}, {"at": 1.0, "by": [0, 5, 0]}]}]}]}, 1)
+		m._work.runs = [{"i": 0, "t0": 2.0, "t1": 5.0}, {"i": 1, "t0": 5.5, "t1": 7.5}]
+		m._work._timelines()
+		rod = _rod(m)
+		var ph: TablePhysics = m._work.physics
+		m._work.tick(5.25)
+		res.append((ph.rigid.bodies[int(ph._rigid_of[rod])] as Dictionary)["held"] != null)
+		m._root3.free()
+	_ok(not bool(res[1]), "the control: lowered with its middle over the block, the rod resting there is still held")
+	_ok(bool(res[0]), "lowered with only its end on the block, its middle over nothing, the rod was let go - it would fall")
+	return true
+
+
+## WHAT STANDS IN A LIQUID IS UNDER ITS SURFACE (841899, the user: "the ladle is placed into the liquid - and this causes the amount
+## of liquid to DECREASE. That is backwards"): a ladle stood in a pot of water fills, and the water stands no lower for it; lifted
+## out with what it holds, the water is lower; under the water the ladle's own surface is not drawn, and lifted out it is. The
+## control: the water's level reckoned from its own volume alone falls as the ladle fills.
+func _level_counts() -> bool:
+	var m := _medium()
+	_stand(m, LADLE_SPEC, "pot", _at(Vector3(0, 0, -8)))
+	m._work.build({"acts": [{"name": "in", "beat": 1, "length": 3.0, "tracks": [{"thing": "pot", "part": "ladle", "law": "path", "jitter": 0.0, "keys": [
+		{"at": 0.0}, {"at": 0.3, "by": [0, 14, 0]}, {"at": 0.7, "by": [-15, 14, 0]}, {"at": 1.0, "by": [-15, 1.0, 0]}]}]},
+		{"name": "out", "beat": 1, "length": 3.0, "tracks": [{"thing": "pot", "part": "ladle", "law": "path", "jitter": 0.0, "keys": [{"at": 0.0}, {"at": 1.0, "by": [0, 13, 0]}]}]},
+		{"name": "later", "beat": 1, "length": 1.0, "tracks": [{"thing": "pot", "part": "ladle", "law": "path", "jitter": 0.0, "keys": [{"at": 0.0}, {"at": 1.0, "by": [3, 0, 0]}]}]}]}, 1)
+	# ...lifted out and held over the pot for its next move a pause later (a hand holds nothing in the air longer - left there, it
+	# is set down in the pot again: [constant TablePhysics.HOLD_MOST])
+	m._work.runs = [{"i": 0, "t0": 2.0, "t1": 5.0}, {"i": 1, "t0": 5.2, "t1": 8.2}, {"i": 2, "t0": 8.9, "t1": 9.9}]
+	m._work._timelines()
+	var ph: TablePhysics = m._work.physics
+	var water := _liquid(m, "pot")
+	var ladle := _work_of_name(m, "ladle")
+	var inside := -1
+	for li in ph.liquids.size():
+		if int((ph.solids[int((ph.liquids[li] as Dictionary)["solid"])] as Dictionary)["wi"]) == ladle:
+			inside = li
+	_ok(water >= 0 and inside >= 0 and inside != water, "the pot has no water, or the ladle no inside")
+	if water < 0 or inside < 0 or inside == water:
+		m._root3.free()
+		return true
+	m._work.tick(10.0)
+	var at := func(t: float) -> float: return float((ph.frame_at(t) as Dictionary)["liq"][water * 16 + 5])
+	var sunk := func(t: float) -> bool:
+		var s: PackedByteArray = (ph.frame_at(t) as Dictionary).get("sunk", PackedByteArray())
+		return inside < s.size() and s[inside] == 1
+	var before: float = at.call(1.0)
+	var held := _volume(m, inside, 5.1)
+	var dipped: float = at.call(5.1)
+	var after: float = at.call(8.6)
+	# the control: the water's own level, its volume alone
+	var L: Dictionary = ph.liquids[water]
+	var sd: Dictionary = ph.solids[int(L["solid"])]
+	var vs: Vessel = L["vessel"]
+	var up := ((sd["xf"] as Transform3D).basis.inverse() * Vector3.UP).normalized()
+	var alone := ((sd["xf"] as Transform3D) * vs.surface_middle(up, vs.level(up, _volume(m, water, 5.1) / float(L["full_v"])))).y
+	_ok(held > 1e-6, "stood in the water, the ladle holds %.2f ml" % (held * 1e6))
+	_ok(before - alone > 0.0003, "the control: from its own volume alone, the water stood only %.2f mm lower as the ladle filled" % ((before - alone) * 1000.0))
+	_ok(dipped >= before - 0.0001, "the ladle stood in it and filled, the water stands %.2f mm lower than before" % ((before - dipped) * 1000.0))
+	_ok(after < before - 0.0002 and _volume(m, inside, 8.6) > 1e-6, "lifted out holding %.2f ml, the water stands %.2f mm lower than before it went in" % [
+		_volume(m, inside, 8.6) * 1e6, (before - after) * 1000.0])
+	_ok(bool(sunk.call(5.1)), "under the water, the ladle's own surface is drawn as well as the water's")
+	_ok(not bool(sunk.call(8.6)), "the control: lifted out, the ladle's own surface is not drawn")
+	m._root3.free()
+	return true
+
+
+const LEAF_SPEC := {"things": [
+	{"name": "pot", "parts": [
+		{"shape": "lathe", "profile": [[0, 0], [7, 0], [7.6, 9], [8, 9.2], [7.3, 9], [6.6, 0.6], [0, 0.6]], "material": "clay",
+			"points": {"floor": [0, 0.6, 0]}},
+		{"name": "water", "shape": "lathe", "profile": [[0, 0.6], [6.6, 0.6], [7.0, 6], [0, 6]], "material": "water"},
+		{"name": "leaf", "shape": "sheet", "size": [3, 12], "at": [0, 6.2, 0], "loose": true, "material": "leaf"},
+		{"name": "paddle", "shape": "box", "size": [0.8, 7, 8], "material": "wood", "at": [12, 0, 0], "joint": {"kind": "free"}}]}],
+	"materials": {"clay": {"kind": "ceramic", "color": "#8a6a4a"}, "water": {"kind": "liquid", "color": "#6a8aa0"},
+		"wood": {"kind": "wood", "color": "#5a3a22"}, "leaf": {"kind": "fabric", "color": "#c8401a"}}}
+
+
+## WHAT FLOATS STAYS IN WHAT IT FLOATS IN, AND IS MET ACROSS ITS FACE (841899: the phoenix feather, afloat and pushed about by the
+## stirring ladle, stood on edge against the cauldron's wall and went through it, and lay outside in the coals - a sheet had been a
+## line of spheres down its middle, its width met by nothing): a leaf 12 cm by 3 afloat in a pot 13 cm across, swept by a paddle
+## into the pot's wall and pressed there, is never out of the pot's inside, and is made of spheres across its width. The control:
+## the paddle moved it.
+func _floats_in() -> bool:
+	var m := _medium()
+	_stand(m, LEAF_SPEC, "pot", _at(Vector3(0, 0, -8)))
+	m._work.build({"acts": [{"name": "sweep", "beat": 1, "length": 8, "tracks": [{"thing": "pot", "part": "paddle", "law": "path", "jitter": 0.0,
+		"keys": [{"at": 0.0}, {"at": 0.25, "by": [0, 10, 0]}, {"at": 0.45, "by": [-16, 10, 0]}, {"at": 0.6, "by": [-16, 2.6, 0]},
+			{"at": 0.9, "by": [-6.1, 2.6, 0]}, {"at": 1.0, "by": [-6.1, 2.6, 0]}]}]}]}, 1)
+	m._work.runs = [{"i": 0, "t0": 2.0, "t1": 10.0}]
+	m._work._timelines()
+	var ph: TablePhysics = m._work.physics
+	var leaf := _work_of_name(m, "leaf")
+	var water := _liquid(m, "pot")
+	var vs: Vessel = (ph.liquids[water] as Dictionary)["vessel"]
+	var pot: Dictionary = ph.solids[int((ph.liquids[water] as Dictionary)["solid"])]
+	var inv: Transform3D = pot["inv"]
+	var rim := (pot["wbox"] as AABB).end.y
+	m._work.tick(11.0)
+	var out := 0
+	var moved := 0.0
+	var first: Variant = null
+	for k in 120:
+		var t := 1.0 + 10.0 * float(k) / 119.0
+		var f: Dictionary = ph.frame_at(t)
+		var li := int(ph._loose_of.get(leaf, -1))
+		var bi := li >= 0 and int((ph.loose[li] as Dictionary)["body"]) >= 0
+		if not bi:
+			continue
+		var b := int((ph.loose[li] as Dictionary)["body"])
+		var x: PackedVector3Array = f["x"]
+		var owner: PackedInt32Array = f["body"]
+		for i in x.size():
+			# ...THROUGH ITS WALL: out of the clay and out of the inside, under the rim (pressed into the wall, a sphere's middle may
+			# reach it; squeezed up, it may go over the rim)
+			if i < owner.size() and owner[i] == b and x[i].y < rim and not vs.contains(inv * x[i]) \
+					and (pot["field"] as ShapeField).sample(inv * x[i]).x > 0.001:
+				out += 1
+		var pose: Variant = ph.pose_of(leaf, t)
+		if pose != null:
+			if first == null:
+				first = pose
+			moved = maxf(moved, (pose as Transform3D).origin.distance_to((first as Transform3D).origin))
+	var across := 0.0
+	var L: Dictionary = ph.loose[int(ph._loose_of.get(leaf, -1))]
+	var sph: PackedVector3Array = L["spheres"]
+	var mid := Vector3.ZERO
+	for p in sph:
+		mid += p / float(maxi(sph.size(), 1))
+	for p in sph:
+		across = maxf(across, absf(p.x - mid.x))
+	_ok(across > 0.008, "the leaf 3 cm wide is met by spheres only %.1f mm either side of its middle" % (across * 1000.0))
+	_ok(moved > 0.01, "the control: the paddle moved the leaf only %.1f mm" % (moved * 1000.0))
+	_ok(out == 0, "pressed into the pot's wall, the leaf afloat had a sphere through it, outside the pot, %d times" % out)
+	m._root3.free()
+	return true
+
+
+const WAY_SPEC := {"things": [
+	{"name": "crate", "parts": [{"shape": "box", "size": [4, 4, 4], "material": "oak"}]},
+	{"name": "tall block", "parts": [{"shape": "box", "size": [6, 9, 30], "material": "oak"}]}],
+	"materials": {"oak": {"kind": "wood", "color": "#6b4a2b"}}}
+
+
+## A CARRY CLEARS WHAT STANDS IN ITS WAY (841899: the ladle carried home with a 6 cm lift went into the 8.5 cm recipe tin between it
+## and its rest, was held back on it and lay on it to the end of the show): a crate carried 30 cm with a lift of 2 cm over a block
+## 9 cm tall goes over it, never held back, and is set down where it was sent. The control: the same carry with the block out of
+## its way is lifted only as written.
+func _clears_way() -> bool:
+	var res: Array = []
+	for in_way in [true, false]:
+		var m := _medium()
+		_stand(m, WAY_SPEC, "crate", _at(Vector3(-15, 0, -8)))
+		_stand(m, WAY_SPEC, "tall block", _at(Vector3(0, 0, -8 if in_way else -60)))
+		m._work.build({"acts": [{"name": "over", "beat": 1, "length": 4.0, "tracks": [{"thing": "crate", "law": "carry", "to": [15, 0, -8], "lift": 2.0, "down": true}]}]}, 1)
+		m._work.runs = [{"i": 0, "t0": 2.0, "t1": 6.0}]
+		m._work._timelines()
+		var ph: TablePhysics = m._work.physics
+		m._work.tick(8.0)
+		var ti := -1
+		for i in m._work.things.size():
+			if String((m._work.things[i] as Dictionary)["name"]) == "crate":
+				ti = i
+		var back := 0.0
+		for k in 50:
+			var f: Dictionary = ph.frame_at(2.0 + 4.0 * float(k) / 49.0)
+			back = maxf(back, ph.held_off(f, int(ph._rigid_of[-1 - ti])))
+		var end: Variant = ph.thing_pose_of(ti, 8.0)
+		m._work.value("t%d:pose" % ti, 4.0)
+		var e: Dictionary = (m._work._chan["t%d:pose" % ti] as Array)[0]
+		res.append([back, (end as Transform3D).origin.distance_to(_at(Vector3(15, 0, -8))) if end != null else INF, float(e.get("_clear", 0.0))])
+		m._root3.free()
+	_ok(float(res[1][2]) < 0.001, "the control: with nothing in its way, the carry was lifted %.1f cm more than written" % (float(res[1][2]) * 100.0))
+	_ok(float(res[0][0]) < 0.01 and float(res[0][1]) < 0.01, "carried over a 9 cm block with a 2 cm lift, the crate was held back %.1f cm and ended %.1f cm from where it was sent" % [
+		float(res[0][0]) * 100.0, float(res[0][1]) * 100.0])
+	return true
+
+
+const JUG_SPEC := {"things": [
+	{"name": "jug", "parts": [
+		{"name": "jug", "joint": {"kind": "free"}, "parts": [
+			{"shape": "lathe", "material": "clay", "profile": [[0, 0], [3.2, 0], [3.2, 7], [2.8, 7], [2.8, 0.4], [0, 0.4]]},
+			{"name": "milk", "shape": "lathe", "profile": [[0, 0.4], [2.8, 0.4], [2.8, 2.6], [0, 2.6]], "material": "water"}]}]},
+	{"name": "cup", "parts": [
+		{"shape": "lathe", "profile": [[0, 0], [2.2, 0], [2.4, 8], [2.0, 8], [1.85, 0.4], [0, 0.4]], "material": "clay"}]}],
+	"materials": {"clay": {"kind": "ceramic", "color": "#8a6a4a"}, "water": {"kind": "liquid", "color": "#e8e4d8"}}}
+
+
+## A POUR IS A HAND'S (841899, the user: the ladle "dumps liquid into a vial in a strange way, both missing the vial AND pouring from
+## much too high in the air. Not carefully"): a jug poured `into` a cup 4 cm across, 25 cm away, empties into it - most of what
+## left the jug in the cup, its lip held a couple of centimeters over the cup's rim while it flows. The control: the same jug
+## tipped by hand about its middle, held 10 cm over the cup, spills much of it.
+func _pours_into() -> bool:
+	var res: Array = []
+	for by_hand in [false, true]:
+		var m := _medium()
+		_stand(m, JUG_SPEC, "jug", _at(Vector3(20, 0, -8)))
+		_stand(m, JUG_SPEC, "cup", _at(Vector3(-5, 0, -8)))
+		var tracks: Array = [{"thing": "jug", "part": "jug", "law": "pour", "into": "cup"}]
+		if by_hand:
+			tracks = [{"thing": "jug", "part": "jug", "law": "path", "jitter": 0.0, "keys": [{"at": 0.0}, {"at": 0.3, "by": [-25, 10, 0]},
+				{"at": 0.6, "by": [-25, 10, 0], "turn": [0, 0, 120]}, {"at": 0.8, "by": [-25, 10, 0], "turn": [0, 0, 120]}, {"at": 1.0, "by": [-25, 10, 0]}]}]
+		m._work.build({"acts": [{"name": "pour-it", "beat": 1, "length": 8.0, "tracks": tracks}]}, 1)
+		m._work.runs = [{"i": 0, "t0": 2.0, "t1": 10.0}]
+		m._work._timelines()
+		var ph: TablePhysics = m._work.physics
+		var milk := -1
+		var cup := _liquid(m, "cup")
+		for li in ph.liquids.size():
+			if bool((ph.liquids[li] as Dictionary)["made"]):
+				milk = li
+		m._work.tick(13.0)
+		var gave := _volume(m, milk, 1.0) - _volume(m, milk, 13.0)
+		var got := _volume(m, cup, 13.0) - _volume(m, cup, 1.0)
+		# the lowest any stream stood while it flowed, against the cup's rim
+		var rim := -INF
+		for sd in ph.solids:
+			if String((m._work.things[int((sd as Dictionary)["thing"])] as Dictionary)["name"]) == "cup":
+				rim = maxf(rim, ((sd as Dictionary)["wbox"] as AABB).end.y)
+		var high := -INF
+		for k in 160:
+			for st in ((ph.frame_at(2.0 + 8.0 * float(k) / 159.0) as Dictionary).get("streams", []) as Array):
+				for p in ((st as Dictionary)["pts"] as PackedVector3Array):
+					high = maxf(high, p.y - rim)
+		res.append([gave, got, high])
+		m._root3.free()
+	_ok(float(res[0][0]) > 5e-6, "poured, the jug gave only %.1f ml" % (float(res[0][0]) * 1e6))
+	_ok(float(res[0][1]) > float(res[0][0]) * 0.85, "poured into the cup, %.1f ml of the jug's %.1f reached it" % [float(res[0][1]) * 1e6, float(res[0][0]) * 1e6])
+	_ok(float(res[0][2]) < 0.04, "poured, its stream left the lip %.1f cm over the cup's rim" % (float(res[0][2]) * 100.0))
+	_ok(float(res[1][1]) < float(res[1][0]) * 0.7, "the control: tipped by hand about its middle 10 cm up, %.1f ml of the jug's %.1f reached the cup" % [
+		float(res[1][1]) * 1e6, float(res[1][0]) * 1e6])
+	return true
+
+
+const CORKED_SPEC := {"things": [
+	{"name": "jug", "parts": [
+		{"name": "jug", "joint": {"kind": "free"}, "parts": [
+			{"shape": "lathe", "material": "clay", "profile": [[0, 0], [3.2, 0], [3.2, 7], [2.8, 7], [2.8, 0.4], [0, 0.4]]},
+			{"name": "milk", "shape": "lathe", "profile": [[0, 0.4], [2.8, 0.4], [2.8, 2.6], [0, 2.6]], "material": "water"}]}]},
+	{"name": "cup", "parts": [
+		{"shape": "lathe", "profile": [[0, 0], [2.2, 0], [2.4, 8], [2.0, 8], [1.85, 0.4], [0, 0.4]], "material": "clay"},
+		{"name": "cup cork", "at": [0, 6.8, 0], "shape": "lathe", "profile": [[0, 0], [1.9, 0], [2.0, 1.2], [0, 1.2]], "material": "cork", "start": {"shown": 0.0}}]}],
+	"materials": {"clay": {"kind": "ceramic", "color": "#8a6a4a"}, "water": {"kind": "liquid", "color": "#e8e4d8"}, "cork": {"kind": "wood", "color": "#b08a5a"}}}
+
+
+## WHAT NO ACT HAS BROUGHT YET IS NOT THERE, HEARD OF OR NOT (841899, feedback 0013: "When the ladle poured into the vial here, nothing happened"; a
+## vial's cork, `shown` 0 until the act after the pour, stood unseen in its neck whenever that act's words had not reached a live plan, and the 27 ml
+## stopped on it; a bake of the whole plan had always filled the vial, so no gate saw it): a jug poured into a cup whose cork comes later fills the cup
+## alike with that act placed and with it not yet heard - and the words that place it, heard after the bake, change nothing before it. The control:
+## the cork brought before the pour stops the stream.
+func _unbrought_not_there() -> bool:
+	var got := {}
+	for case in ["placed", "unheard", "heard after", "brought first"]:
+		var m := _medium()
+		_stand(m, CORKED_SPEC, "jug", _at(Vector3(20, 0, -8)))
+		_stand(m, CORKED_SPEC, "cup", _at(Vector3(-5, 0, -8)))
+		m._work.build({"acts": [{"name": "pour-it", "beat": 1, "length": 8.0, "tracks": [{"thing": "jug", "part": "jug", "law": "pour", "into": "cup"}]},
+			{"name": "cork-it", "beat": 1, "length": 1.0, "tracks": [{"thing": "cup", "part": "cup cork", "law": "to", "state": "shown", "value": 1.0}]}]}, 1)
+		var runs: Array = [{"i": 0, "t0": 2.0, "t1": 10.0}]
+		if case == "placed":
+			runs.append({"i": 1, "t0": 14.0, "t1": 15.0})
+		if case == "brought first":
+			runs.append({"i": 1, "t0": 0.2, "t1": 1.2})
+		m._work.runs = runs
+		m._work._timelines()
+		var ph: TablePhysics = m._work.physics
+		var cup := _liquid(m, "cup")
+		if case == "heard after":
+			ph.bake_until(13.0)
+			m._work.runs = [{"i": 0, "t0": 2.0, "t1": 10.0}, {"i": 1, "t0": 14.0, "t1": 15.0}]
+			m._work._timelines()
+			ph._take_plan()
+		m._work.tick(13.0)
+		got[case] = _volume(m, cup, 13.0)
+		m._root3.free()
+	_ok(float(got["placed"]) > 5e-6, "with the cork's act placed for after the pour, the cup holds only %.1f ml" % (float(got["placed"]) * 1e6))
+	_ok(absf(float(got["unheard"]) - float(got["placed"])) < 5e-7, "the cork's act not yet heard, the cup holds %.1f ml - %.1f with it placed: something not there stopped the pour" % [float(got["unheard"]) * 1e6, float(got["placed"]) * 1e6])
+	_ok(absf(float(got["heard after"]) - float(got["placed"])) < 5e-7, "the cork's act heard after the bake, the cup holds %.1f ml - %.1f with it placed all along" % [float(got["heard after"]) * 1e6, float(got["placed"]) * 1e6])
+	_ok(float(got["brought first"]) < float(got["placed"]) * 0.3, "the control: the cork brought before the pour, the cup still took %.1f ml of the stream" % (float(got["brought first"]) * 1e6))
+	return true
+
+
+## WHAT STRIKES A VESSEL'S INSIDE RUNS DOWN INTO IT (841899's dip: the ladle drawn up tilted out of its pot spilled over the pot's
+## inner wall, and that was counted gone - 8.5 ml "SPILLED" of a pot it never left): a milliliter thrown from the ladle at the
+## pot's inner wall from above its water ends in the water, and the water holds a milliliter more. The control: thrown outward over the rim, it is
+## spilled.
+func _runs_down() -> bool:
+	var res: Array = []
+	for out in [false, true]:
+		var m := _medium()
+		_stand(m, LADLE_SPEC, "pot", _at(Vector3(0, 0, -8)))
+		m._work.build({"acts": []}, 1)
+		var ph: TablePhysics = m._work.physics
+		var water := _liquid(m, "pot")
+		var ladle := -1
+		for li in ph.liquids.size():
+			if li != water:
+				ladle = li
+		# ...the pot's own axis (its thing stands centered with the ladle beside it)
+		var c: Vector3 = (ph.solids[int((ph.liquids[water] as Dictionary)["solid"])] as Dictionary)["xf"].origin
+		var v0 := float((ph._liq[water] as Dictionary)["v"])
+		# a parcel 8 cm out from the pot's middle, 8 cm up (the water stands at 6, the rim at 9.2), going out at 1 m/s
+		var from := c + Vector3(0.08 if not out else 0.105, 0.08 if not out else 0.1, 0.0)
+		ph.parcels.append({"t0": 0.2, "p": from, "v": Vector3(1.0 if not out else 0.6, 0.0, 0.0), "vol": 1e-6, "from": ladle, "t1": INF,
+			"into": -2, "color": Color.WHITE})
+		for k in 60:
+			ph._parcels_step(float(k + 1) / 60.0 + 0.2, 1.0 / 60.0)
+		res.append([int((ph.parcels.back() as Dictionary)["into"]), float((ph._liq[water] as Dictionary)["v"]) - v0, water])
+		m._root3.free()
+	_ok(int(res[1][0]) == -1, "the control: thrown outward over the rim, the parcel went into liquid %d" % int(res[1][0]))
+	_ok(int(res[0][0]) == int(res[0][2]) and absf(float(res[0][1]) - 1e-6) < 1e-8, "thrown at the pot's inner wall, the parcel went into %d (the water is %d), the water %.2f ml more" % [
+		int(res[0][0]), int(res[0][2]), float(res[0][1]) * 1e6])
+	return true
+
+
+## 841899's own ladle - a bowl with a straight handle at its rim's height - on its rest, and a deep pot of water.
+const DIP_SPEC := {"things": [
+	{"name": "ladle rest", "parts": [{"material": "oak", "round": 0.4, "shape": "box", "size": [24.0, 1.2, 7.0]},
+		{"joint": {"kind": "free"}, "name": "ladle", "parts": [
+			{"at": [-6.0, 1.2, 0.0], "material": "brass", "smooth": true, "shape": "lathe",
+				"profile": [[0.0, 0.0], [1.5, 0.0], [2.8, 0.8], [3.2, 2.0], [3.3, 2.8, 0.0], [3.0, 2.8, 0.0], [2.9, 2.0], [2.5, 0.95], [1.3, 0.35], [0.0, 0.35]]},
+			{"material": "brass", "path": [[-2.9, 3.85, 0.0], [2.0, 4.0, 0.0], [9.5, 4.05, 0.0], [12.6, 4.2, 0.0], [13.4, 3.3, 0.0]], "radius": 0.35, "shape": "tube"}]}]},
+	{"name": "pot", "parts": [
+		{"shape": "lathe", "profile": [[0, 0], [8, 0], [9, 13], [9.4, 13.2], [8.6, 13], [7.6, 0.6], [0, 0.6]], "material": "clay"},
+		{"name": "water", "shape": "lathe", "profile": [[0, 0.6], [7.6, 0.6], [8.1, 7.5], [0, 7.5]], "material": "water"}]}],
+	"materials": {"brass": {"kind": "metal", "color": "#b8924c"}, "oak": {"kind": "wood", "color": "#6b4a2b"},
+		"clay": {"kind": "ceramic", "color": "#8a6a4a"}, "water": {"kind": "liquid", "color": "#6a8aa0"}}}
+
+
+## A DIP IS A HAND'S (841899: its ladle, dipped by an aim's keys, came up full and tipped beside the rim, and 10 ml went over the
+## rim - "the spoon spills liquid in a strange way when lifting from the cauldron"): the episode's ladle `dip`ped into a deep pot of
+## water comes up holding at least half its bowl, nothing it spilled lands outside the pot, and nothing holds it back on the way.
+## The control: lowered level into the pot by hand, its straight handle meets the rim, it is held back, and it comes up empty.
+func _dips_full() -> bool:
+	var res: Array = []
+	for by_hand in [false, true]:
+		var m := _medium()
+		_stand(m, DIP_SPEC, "ladle rest", _at(Vector3(30, 0, -14)))
+		_stand(m, DIP_SPEC, "pot", _at(Vector3(-5, 0, -8)))
+		var tracks: Array = [{"thing": "ladle rest", "part": "ladle", "law": "dip", "into": "pot"}]
+		if by_hand:
+			tracks = [{"thing": "ladle rest", "part": "ladle", "law": "path", "jitter": 0.0, "keys": [{"at": 0.0}, {"at": 0.25, "by": [0, 16, 0]},
+				{"at": 0.5, "by": [-29, 16, 6], "turn": [0, 180, 0]}, {"at": 0.75, "by": [-29, 4, 6], "turn": [0, 180, 0]}, {"at": 1.0, "by": [-29, 16, 6], "turn": [0, 180, 0]}]}]
+		m._work.build({"acts": [{"name": "dip-it", "beat": 1, "length": 6.0, "tracks": tracks},
+			{"name": "later", "beat": 1, "length": 1.0, "tracks": [{"thing": "ladle rest", "part": "ladle", "law": "path", "jitter": 0.0, "keys": [{"at": 0.0}, {"at": 1.0, "by": [0, 2, 0]}]}]}]}, 1)
+		# ...its next move a pause on: drawn up, it is held over the pot for it (left there longer, it is set down in the pot again)
+		m._work.runs = [{"i": 0, "t0": 2.0, "t1": 8.0}, {"i": 1, "t0": 8.6, "t1": 9.6}]
+		m._work._timelines()
+		var ph: TablePhysics = m._work.physics
+		var ladle := _work_of_name(m, "ladle")
+		var bowl := -1
+		for li in ph.liquids.size():
+			if m._work._within(int((ph.solids[int((ph.liquids[li] as Dictionary)["solid"])] as Dictionary)["wi"]), ladle) == 1:
+				bowl = li
+		m._work.tick(11.0)
+		var back := 0.0
+		for k in 120:
+			back = maxf(back, ph.held_off(ph.frame_at(2.0 + 6.0 * float(k) / 119.0) as Dictionary, int(ph._rigid_of[ladle])))
+		var spilled := 0.0
+		for pd in ph.parcels:
+			if int((pd as Dictionary)["into"]) == -1:
+				spilled += float((pd as Dictionary)["vol"])
+		res.append([_volume(m, bowl, 8.4) / float((ph.liquids[bowl] as Dictionary)["full_v"]) if bowl >= 0 else 0.0, spilled, back])
+		m._root3.free()
+	_ok(float(res[1][2]) > 0.01 and float(res[1][0]) < 0.2, "the control: lowered level by hand, the ladle was held back %.1f cm and came up %.0f%% full" % [
+		float(res[1][2]) * 100.0, float(res[1][0]) * 100.0])
+	_ok(float(res[0][0]) > 0.5, "dipped, the ladle came up only %.0f%% full" % (float(res[0][0]) * 100.0))
+	_ok(float(res[0][1]) < 5e-7, "dipped, %.2f ml landed outside the pot" % (float(res[0][1]) * 1e6))
+	_ok(float(res[0][2]) < 0.01, "dipped, the ladle was held back %.1f cm on its way" % (float(res[0][2]) * 100.0))
+	return true
+
+
+const JARS_SPEC := {"things": [
+	{"name": "jars", "parts": [
+		{"name": "left jar", "joint": {"kind": "free"}, "at": [-4, 0, 0], "parts": [
+			{"shape": "lathe", "profile": [[0, 0], [2.4, 0], [2.4, 6], [2.0, 6], [2.0, 0.4], [0, 0.4]], "material": "glass"}]},
+		{"name": "middle jar", "joint": {"kind": "free"}, "at": [0, 0, 6], "parts": [
+			{"shape": "lathe", "profile": [[0, 0], [2.4, 0], [2.4, 6], [2.0, 6], [2.0, 0.4], [0, 0.4]], "material": "glass"}]},
+		{"name": "right jar", "joint": {"kind": "free"}, "at": [4, 0, 0], "parts": [
+			{"shape": "lathe", "profile": [[0, 0], [2.4, 0], [2.4, 6], [2.0, 6], [2.0, 0.4], [0, 0.4]], "material": "glass"}]}]},
+	{"name": "tray", "parts": [
+		{"shape": "box", "size": [16, 1, 8], "material": "oak"},
+		{"name": "left jar", "joint": {"kind": "free"}, "at": [-4, 1, 0], "parts": [
+			{"shape": "lathe", "profile": [[0, 0], [2.4, 0], [2.4, 6], [2.0, 6], [2.0, 0.4], [0, 0.4]], "material": "glass"}]},
+		{"name": "right jar", "joint": {"kind": "free"}, "at": [4, 1, 0], "parts": [
+			{"shape": "lathe", "profile": [[0, 0], [2.4, 0], [2.4, 6], [2.0, 6], [2.0, 0.4], [0, 0.4]], "material": "glass"}]}]}],
+	"materials": {"glass": {"kind": "glass", "color": "#a0c0b0"}, "oak": {"kind": "wood", "color": "#6b4a2b"}}}
+
+
+## A THING IS ONE ONLY AS FAR AS SOMETHING HOLDS IT TOGETHER (the-quiet-crucible 841899, 2026-10-31: "All 4 jars of ingredients are
+## stuck together, and moved together here"): three jars side by side with nothing under them, carried 25 cm whole, are carried
+## one at a time, in the order they were built, keeping the original duration per jar - each to its own place, upright and as far apart as they
+## stood, each a body of its own. The control: two jars on a tray carried whole ride it together, both on their way at once.
+func _jars_apart() -> bool:
+	var res := {}
+	for name in ["jars", "tray"]:
+		var m := _medium()
+		_stand(m, JARS_SPEC, name, _at(Vector3(0, 0, -8)))
+		m._work.build({"acts": [{"name": "fetch", "beat": 1, "length": 4.0, "tracks": [{"thing": name, "law": "carry", "by": [25, 0, 0],
+			"lift": 6, "down": true}]}]}, 1)
+		var length := float((m._work.acts[0] as Dictionary)["length"])
+		m._work.runs = [{"i": 0, "t0": 2.0, "t1": 2.0 + length}]
+		m._work._timelines()
+		var ph: TablePhysics = m._work.physics
+		var lj := -1
+		var rj := -1
+		for wi in m._work.works.size():
+			if int((m._work.works[wi] as Dictionary)["thing"]) == 0:
+				if String((m._work.works[wi] as Dictionary)["name"]) == "left jar":
+					lj = wi
+				elif String((m._work.works[wi] as Dictionary)["name"]) == "right jar":
+					rj = wi
+		var end := 4.0 + length
+		m._work.tick(end)
+		# ...each jar's middle where the bake has it (both nodes stand at their thing's origin)
+		var mid := func(wi: int, t: float) -> Vector3:
+			return _baked(m, wi, t) * (((m._work.works[wi] as Dictionary)["w"] as Dictionary).get("middle", Vector3.ZERO) as Vector3)
+		var l0: Vector3 = mid.call(lj, 1.0)
+		var r0: Vector3 = mid.call(rj, 1.0)
+		var mid_t := 3.5
+		var middle := _work_of_name(m, "middle jar") if name == "jars" else -1
+		res[name] = {"bodies": ph._rigid_of.has(lj) and ph._rigid_of.has(rj) and not ph._rigid_of.has(-1),
+			"l_mid": (mid.call(lj, mid_t) as Vector3).distance_to(l0), "r_mid": (mid.call(rj, mid_t) as Vector3).distance_to(r0),
+			"middle_mid": (mid.call(middle, mid_t) as Vector3).distance_to(mid.call(middle, 1.0)) if middle >= 0 else 0.0,
+			"length": length,
+			"l_end": (mid.call(lj, end) as Vector3) - l0, "r_end": (mid.call(rj, end) as Vector3) - r0,
+			"apart": (mid.call(lj, end) as Vector3).distance_to(mid.call(rj, end)), "apart0": l0.distance_to(r0),
+			"tilt": maxf(rad_to_deg(_baked(m, lj, end).basis.y.normalized().angle_to(Vector3.UP)), rad_to_deg(_baked(m, rj, end).basis.y.normalized().angle_to(Vector3.UP)))}
+		# A short passage cannot squeeze the trips back into one group move's duration.
+		var action := {"kind": "work", "card": 1, "after": 0, "dur": 0.0}
+		m._work.schedule([{"a": action, "t0": 2.0, "s": 1.0}], {"actions": [action], "spoken": PackedStringArray(["fetch"])},
+			PackedFloat32Array([2.0]), PackedFloat32Array([4.0]), PackedFloat32Array([2.0]), 0.0)
+		var run: Dictionary = m._work.runs[0]
+		res[name]["scheduled_length"] = float(run["t1"]) - float(run["t0"])
+		res[name]["report"] = m._work.parts_report()
+		m._root3.free()
+	var j: Dictionary = res["jars"]
+	var t: Dictionary = res["tray"]
+	_ok(float(t["l_mid"]) > 0.01 and float(t["r_mid"]) > 0.01, "the control: on a tray carried whole, the jars were not both on their way at once (%.1f, %.1f cm)" % [
+		float(t["l_mid"]) * 100.0, float(t["r_mid"]) * 100.0])
+	_ok(bool(j["bodies"]), "two jars with nothing under them are not each a body of their own")
+	_ok(float(j["middle_mid"]) < 0.003, "the second jar moved with the first: %.1f cm" % (float(j["middle_mid"]) * 100.0))
+	_ok(is_equal_approx(float(j["length"]), 12.0), "three separate trips did not keep four seconds each")
+	_ok(is_equal_approx(float(j["scheduled_length"]), 12.0), "a short reading squeezed the trips into %.1f seconds" % float(j["scheduled_length"]))
+	_ok(String(j["report"]).contains("COLLECTION") and not String(t["report"]).contains("COLLECTION"), "the planner cannot distinguish a collection from jars on a carrier")
+	_ok(float(j["l_mid"]) > 0.01 and float(j["r_mid"]) < 0.003, "carried whole with nothing to hold them together, the third jar went with the first (%.1f and %.1f cm a third of the way)" % [
+		float(j["l_mid"]) * 100.0, float(j["r_mid"]) * 100.0])
+	for k in ["l_end", "r_end"]:
+		var d: Vector3 = j[k]
+		_ok(absf(d.x - 0.25) < 0.015 and absf(d.z) < 0.015 and absf(d.y) < 0.005, "a jar carried in its turn went %s cm, not 25 along" % str(d * 100.0))
+	_ok(absf(float(j["apart"]) - float(j["apart0"])) < 0.01 and float(j["tilt"]) < 5.0, "the jars ended %.1f cm apart (as built %.1f), tipped %.0f degrees" % [
+		float(j["apart"]) * 100.0, float(j["apart0"]) * 100.0, float(j["tilt"])])
+	return true
+
+
+## A tool already inside a vessel resumes without an entry hop. The control: reaching in from outside still lifts.
+## Test the contact point, not the tool's node origin (a handle or an arbitrarily placed group origin can be outside).
+func _tool_entry() -> bool:
+	var m := _medium()
+	_stand(m, LADLE_SPEC, "pot", _at(Vector3(0, 0, -8)))
+	m._work.build({"acts": [{"name": "stir", "beat": 1, "length": 4.0, "tracks": [{"thing": "pot", "part": "ladle", "law": "aim",
+		"tip": {"point": "bowl", "at": [2, 4, -10]}, "grip": {"point": "grip", "at": [4.3, 20.7, -10]}}]}]}, 1)
+	m._work.runs = [{"i": 0, "t0": 2.0, "t1": 6.0}]
+	m._work._timelines()
+	var wi := _work_of_name(m, "ladle")
+	var entry: Dictionary = (m._work._chan["w%d:pose" % wi] as Array)[0]
+	var tip := m._work._point_local(wi, "bowl")
+	var res: Array = []
+	for inside in [true, false]:
+		var e := entry.duplicate()
+		var from: Transform3D = m._work._rest["w%d:pose" % wi]
+		if inside:
+			from.origin += Vector3(-0.15, 0.03, 0.0)
+		e["from"] = from
+		var high := -INF
+		for k in 25:
+			var tau := TableWork.BLEND_IN * float(k) / 24.0
+			var pose: Transform3D = m._work._eval(e, tau, 2.0 + tau)
+			high = maxf(high, (pose * tip).y)
+		res.append(high)
+	_ok(float(res[0]) <= 0.045, "resuming inside the pot lifted the bowl to %.1f cm" % (float(res[0]) * 100.0))
+	_ok(float(res[1]) > 0.07, "the control: reaching into the pot from outside never lifted over its rim")
+	m._root3.free()
+	return true
+
+
+const REST_SPEC := {"things": [
+	{"name": "the ladle on its rest", "parts": [
+		{"material": "oak", "round": 0.4, "shape": "box", "size": [24.0, 1.2, 7.0]},
+		{"at": [9.5, 1.2, 0.0], "material": "oak", "round": 0.5, "shape": "box", "size": [3.0, 2.5, 6.0]},
+		{"joint": {"kind": "free"}, "name": "ladle", "points": {"bowl": [-6.0, 2.2, 0.0], "grip": [11.0, 4.1, 0.0]}, "parts": [
+			{"at": [-6.0, 1.2, 0.0], "material": "brass", "shape": "lathe", "smooth": true, "profile": [[0.0, 0.0], [1.5, 0.0], [2.8, 0.8],
+				[3.2, 2.0], [3.3, 2.8, 0.0], [3.0, 2.8, 0.0], [2.9, 2.0], [2.5, 0.95], [1.3, 0.35], [0.0, 0.35]]},
+			{"material": "brass", "radius": 0.35, "shape": "tube", "path": [[-2.9, 3.85, 0.0], [2.0, 4.0, 0.0], [9.5, 4.05, 0.0], [12.6, 4.2, 0.0],
+				[13.4, 3.3, 0.0]]}]}]}],
+	"materials": {"oak": {"kind": "wood", "color": "#6b4a2b"}, "brass": {"kind": "metal", "color": "#b8924c"}}}
+
+
+## A HAND LETS GO OF WHAT, LET GO, COMES TO REST WHERE IT IS (the-quiet-crucible 841899, 2026-10-31: "this ladle will not settle,
+## it's moving around on its block" - put back on its rest, it was read as not held up, and held there swaying for two and a half
+## minutes): 841899's own ladle, lifted 6 cm off its rest by its two ends and put back as it was built, taken up again 6 s later,
+## is let go between its moves and lies still on its rest. The control: put back only to 8 cm over its rest, it is held there.
+func _rests_let_go() -> bool:
+	var res: Array = []
+	for end_y in [0.0, 8.0]:
+		var m := _medium()
+		_stand(m, REST_SPEC, "the ladle on its rest", _at(Vector3(-10, 0, -8)))
+		var keys := [{"at": 0.0, "by": [0.0, 0.0, 0.0]}, {"at": 0.4, "by": [0.0, 6.0, 0.0]}, {"at": 1.0, "by": [0.0, end_y, 0.0]}]
+		m._work.build({"acts": [{"name": "back", "beat": 1, "length": 3.0, "tracks": [{"thing": "the ladle on its rest", "part": "ladle", "law": "aim",
+				"grip": {"point": "grip", "keys": keys}, "tip": {"point": "bowl", "keys": keys}}]},
+			{"name": "again", "beat": 1, "length": 2.0, "tracks": [{"thing": "the ladle on its rest", "part": "ladle", "law": "path", "jitter": 0.0,
+				"keys": [{"at": 0.0}, {"at": 1.0, "by": [0, 5, 0]}]}]}]}, 1)
+		var over: bool = end_y > 0.0
+		m._work.runs = [{"i": 0, "t0": 2.0, "t1": 5.0}, {"i": 1, "t0": 5.5 if over else 11.0, "t1": 7.5 if over else 13.0}]
+		m._work._timelines()
+		var ladle := _work_of_name(m, "ladle")
+		var ph: TablePhysics = m._work.physics
+		m._work.tick(5.25 if over else 10.0)
+		var b: Dictionary = ph.rigid.bodies[int(ph._rigid_of[ladle])]
+		var p9 := _baked(m, ladle, 9.0)
+		var p10 := _baked(m, ladle, 10.0)
+		res.append([b["held"] != null, p9.origin.distance_to(p10.origin), rad_to_deg(Quaternion(p9.basis.orthonormalized()).angle_to(Quaternion(p10.basis.orthonormalized())))])
+		m._root3.free()
+	_ok(bool(res[1][0]), "the control: put back 8 cm over its rest, its next move half a second on, the ladle was let go across the pause")
+	_ok(not bool(res[0][0]), "put back on its rest as built, the ladle is still held there")
+	_ok(float(res[0][1]) < 0.0003 and float(res[0][2]) < 0.3, "on its rest, the ladle moved %.2f mm and turned %.2f degrees in its last second" % [
+		float(res[0][1]) * 1000.0, float(res[0][2])])
+	return true
+
+
+const FEATHER_SPEC := {"things": [
+	{"name": "gifts", "parts": [
+		{"shape": "box", "size": [20, 1, 16], "material": "oak"},
+		{"name": "feather", "shape": "sheet", "outline": "feather", "size": [3, 12], "bend": 0.2, "at": [0, 1, 0], "loose": true, "material": "plume"}]}],
+	"materials": {"oak": {"kind": "wood", "color": "#6b4a2b"}, "plume": {"kind": "fabric", "color": "#e0501a"}}}
+
+
+## The lowest of loose work [param wi]'s drawn surface at show time [param t], as the table draws it (meters): its own mesh, posed.
+func _drawn_low(m: TableMedium, wi: int, t: float) -> float:
+	m._work.tick(t)
+	var low := INF
+	var node: Node3D = (m._work.works[wi] as Dictionary)["node"]
+	var stack: Array = [node]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		stack.append_array(n.get_children())
+		var mi := n as MeshInstance3D
+		if mi == null or mi.mesh == null:
+			continue
+		var xf := m._work._world_of(mi)
+		for q in mi.mesh.get_faces():
+			low = minf(low, (xf * q).y)
+	return low
+
+
+## A SHEET RESTS AT ITS OWN THICKNESS, AND IS HELD UP AS ANYTHING IS (the-quiet-crucible 841899, 2026-10-31: the phoenix feather
+## "appears to be floating above the table ... casting too much of a shadow" - its spheres, 3.3 mm, held a feather 0.8 mm thick that
+## far up; and, fetched to be held up, it had been dropped on the table as its fetch ended): a feather lifted 6 cm off its board and
+## let go comes to rest with its drawn underside within a millimeter of the board; lifted 10 cm and taken up again half a second
+## later, it is held up across the pause. The controls: resting on its spheres' own radius it lies more than 2 mm up; with no later move it is let fall.
+func _sheet_lies() -> bool:
+	var res := {}
+	for kind in ["lies", "spheres", "held", "dropped"]:
+		var m := _medium()
+		_stand(m, FEATHER_SPEC, "gifts", _at(Vector3(0, 0, -8)))
+		var up := 10.0 if kind in ["held", "dropped"] else 6.0
+		var acts: Array = [{"name": "lift", "beat": 1, "length": 2.0, "tracks": [{"thing": "gifts", "part": "feather", "law": "carry", "by": [0, up, 0], "lift": 0}]}]
+		var runs: Array = [{"i": 0, "t0": 2.0, "t1": 4.0}]
+		if kind == "held":
+			acts.append({"name": "again", "beat": 1, "length": 2.0, "tracks": [{"thing": "gifts", "part": "feather", "law": "carry", "by": [4, 0, 0], "lift": 2}]})
+			runs.append({"i": 1, "t0": 4.5, "t1": 6.5})
+		m._work.build({"acts": acts}, 1)
+		m._work.runs = runs
+		m._work._timelines()
+		var ph: TablePhysics = m._work.physics
+		var fw := _work_of_name(m, "feather")
+		if kind == "spheres":
+			(ph.loose[int(ph._loose_of[fw])] as Dictionary)["contact"] = 0.0
+		var top := 0.01
+		res[kind] = _drawn_low(m, fw, 4.25 if kind == "held" else 7.0) - top
+		m._root3.free()
+	_ok(float(res["spheres"]) > 0.002, "the control: resting on its spheres' radius, the feather lay only %.2f mm over its board" % (float(res["spheres"]) * 1000.0))
+	_ok(float(res["lies"]) > -0.0004 and float(res["lies"]) < 0.001, "let fall on its board, the feather's underside lies %.2f mm over it" % (float(res["lies"]) * 1000.0))
+	_ok(float(res["dropped"]) < 0.01, "the control: lifted with no later move, the feather was not let fall (%.1f cm up)" % (float(res["dropped"]) * 100.0))
+	_ok(float(res["held"]) > 0.07, "lifted 10 cm and taken up again half a second later, the feather fell to %.1f cm across the pause" % (float(res["held"]) * 100.0))
+	return true
+
+
+const SHEET_POT_SPEC := {"things": [
+	{"name": "pot", "parts": [{"shape": "lathe", "smooth": true, "material": "iron", "profile": [[0, 0], [3.5, 0], [6.5, 1.5], [8.8, 4.5], [9, 6.5], [8.3, 9.5], [7.8, 10.4],
+		[8.4, 10.8, 0], [8.4, 11.2, 0], [7.9, 11.2, 0], [7.5, 10.6], [8, 9.5], [8.6, 6.5], [8.4, 4.5], [6.2, 1.8], [3.3, 0.4], [0, 0.4]]}]},
+	{"name": "gifts", "parts": [
+		{"name": "feather", "shape": "sheet", "outline": "feather", "size": [3, 12], "bend": 0.2, "at": [0, 0.2, 0], "loose": true, "material": "plume"}]}],
+	"materials": {"iron": {"kind": "metal", "color": "#2c2a28"}, "plume": {"kind": "fabric", "color": "#e0501a"}}}
+
+
+## A SHEET'S WHOLE OUTLINE MEETS THE WORLD ([method Particles.fill_shape], feedback 0010: the feather's tip "clipping through the pot ... a little red
+## triangle poking out"): what meets the world is a point at the sheet's own thickness, and past its last point it meets nothing. Its points reach within
+## a centimeter of all of it, and let fall into a round pot nothing of it as drawn stands out of the far side of the pot's wall. The control: its grid alone.
+func _sheet_tip_in_pot() -> bool:
+	var res := {}
+	var gap := {}
+	for kind in ["outline", "grid"]:
+		var m := _medium()
+		_stand(m, SHEET_POT_SPEC, "pot", _at(Vector3(0, 0, -8)))
+		_stand(m, SHEET_POT_SPEC, "gifts", _at(Vector3(-30, 0, -8)))
+		m._work.build({"acts": [{"name": "in", "beat": 1, "length": 2.0, "tracks": [{"thing": "gifts", "part": "feather", "law": "carry", "by": [30, 13, 0], "lift": 6}]}]}, 1)
+		m._work.runs = [{"i": 0, "t0": 1.0, "t1": 3.0}]
+		m._work._timelines()
+		var ph: TablePhysics = m._work.physics
+		var fw := _work_of_name(m, "feather")
+		var pot := -1
+		for li in ph.liquids.size():
+			if String((m._work.things[int((ph.solids[int((ph.liquids[li] as Dictionary)["solid"])] as Dictionary)["thing"])] as Dictionary)["name"]) == "pot":
+				pot = li
+		var L: Dictionary = ph.loose[int(ph._loose_of[fw])]
+		var spheres: PackedVector3Array = L["spheres"]
+		_ok(spheres.size() <= Particles.SOFT_MOST, "%s: a sheet is made of %d points, at most %d" % [kind, spheres.size(), Particles.SOFT_MOST])
+		if kind == "grid":
+			spheres = spheres.slice(0, spheres.size() - Particles.SHEET_REACHES)
+			L["spheres"] = spheres
+		gap[kind] = _farthest_from(m, fw, spheres)
+		var worst := 0.0
+		for t in [5.0, 6.0, 7.0, 8.0]:
+			worst = maxf(worst, _past_wall(m, fw, ph, pot, t))
+		res[kind] = worst
+		m._root3.free()
+	_ok(float(gap["grid"]) > 0.011, "the control: on its grid alone, part of the feather lies %.1f cm from anything that meets the world" % (float(gap["grid"]) * 100.0))
+	_ok(float(gap["outline"]) < 0.0105, "with its outline, no part of the feather lies over %.1f cm from a point that meets the world" % (float(gap["outline"]) * 100.0))
+	_ok(float(res["grid"]) > 0.003, "the control: on its grid alone the feather stands only %.1f mm out of the far side of the pot's wall" % (float(res["grid"]) * 1000.0))
+	_ok(float(res["outline"]) < 0.0005, "let fall in a round pot, the feather stands %.1f mm out of the far side of its wall" % (float(res["outline"]) * 1000.0))
+	return true
+
+
+## The farthest any of work [param wi]'s drawn surface lies from the nearest of [param spheres], all as built (meters).
+func _farthest_from(m: TableMedium, wi: int, spheres: PackedVector3Array) -> float:
+	var far := 0.0
+	var stack: Array = [(m._work.works[wi] as Dictionary)["node"]]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		stack.append_array(n.get_children())
+		var mi := n as MeshInstance3D
+		if mi == null or mi.mesh == null:
+			continue
+		var xf := m._work._world_of(mi)
+		for q in mi.mesh.get_faces():
+			var p := xf * q
+			var near := INF
+			for c in spheres:
+				near = minf(near, p.distance_to(c))
+			far = maxf(far, near)
+	return far
+
+
+## How far out of the far side of liquid [param li]'s vessel's wall loose work [param wi]'s drawn surface stands at show time [param t] (meters): what is seen from outside - under its
+## rim, out of its inside and out of the wall too. In the wall itself it is hidden.
+func _past_wall(m: TableMedium, wi: int, ph: TablePhysics, li: int, t: float) -> float:
+	m._work.tick(t)
+	var sd: Dictionary = ph.solids[int((ph.liquids[li] as Dictionary)["solid"])]
+	var vs: Vessel = (ph.liquids[li] as Dictionary)["vessel"]
+	var field: ShapeField = sd["field"]
+	var inv: Transform3D = (sd["xf"] as Transform3D).affine_inverse()
+	var worst := 0.0
+	var stack: Array = [(m._work.works[wi] as Dictionary)["node"]]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		stack.append_array(n.get_children())
+		var mi := n as MeshInstance3D
+		if mi == null or mi.mesh == null:
+			continue
+		var xf := m._work._world_of(mi)
+		for q in mi.mesh.get_faces():
+			var p := inv * (xf * q)
+			if p.y < vs.top_y and not vs.contains(p):
+				worst = maxf(worst, field.sample(p).x)
+	return worst
+
+
+const BREW_SPEC := {"things": [
+	{"name": "pot", "parts": [
+		{"name": "cauldron", "shape": "lathe", "smooth": true, "material": "iron", "at": [0, 4.5, 0], "points": {"mouth": [0, 12.9, 0]}, "profile": [[0, 0], [3.5, 0], [6.5, 1.5], [8.8, 4.5], [9, 6.5], [8.3, 9.5],
+			[7.8, 10.4], [8.4, 10.8, 0], [8.4, 11.2, 0], [7.9, 11.2, 0], [7.5, 10.6], [8, 9.5], [8.6, 6.5], [8.4, 4.5], [6.2, 1.8], [3.3, 0.4], [0, 0.4]]},
+		{"name": "brew", "shape": "lathe", "smooth": true, "material": "brew", "at": [0, 4.9, 0], "profile": [[0, 0], [3.3, 0], [6.2, 1.4], [8.4, 4.1], [8.6, 6.1], [8.15, 8, 0], [0, 8]]}]},
+	{"name": "the ladle on its rest", "parts": [
+		{"material": "oak", "round": 0.4, "shape": "box", "size": [24.0, 1.2, 7.0]},
+		{"at": [9.5, 1.2, 0.0], "material": "oak", "round": 0.5, "shape": "box", "size": [3.0, 2.5, 6.0]},
+		{"joint": {"kind": "free"}, "name": "ladle", "points": {"bowl": [-6.0, 2.2, 0.0], "grip": [11.0, 4.1, 0.0]}, "parts": [
+			{"at": [-6.0, 1.2, 0.0], "material": "iron", "shape": "lathe", "smooth": true, "profile": [[0.0, 0.0], [1.5, 0.0], [2.8, 0.8],
+				[3.2, 2.0], [3.3, 2.8, 0.0], [3.0, 2.8, 0.0], [2.9, 2.0], [2.5, 0.95], [1.3, 0.35], [0.0, 0.35]]},
+			{"material": "iron", "radius": 0.35, "shape": "tube", "path": [[-2.9, 3.85, 0.0], [2.0, 4.0, 0.0], [9.5, 4.05, 0.0], [12.6, 4.2, 0.0], [13.4, 3.3, 0.0]]}]}]}],
+	"materials": {"oak": {"kind": "wood", "color": "#6b4a2b"}, "iron": {"kind": "metal", "color": "#6a4a30"}, "brew": {"kind": "liquid", "color": "#b8964a"}}}
+
+
+## LIQUID IS NEVER LOST ([method TablePhysics._dips], feedback 0009, 0011: "Every time I've seen the ladle go into the pot, the liquid level decreases ... The
+## amount of liquid never recovers"): 841899's own ladle and cauldron, with the show's own act - lowered in, tipped, let go to lean on the wall, drawn out and laid
+## back on its rest. A vessel partly under a liquid has that liquid's surface: it stands as high inside as out, and neither sloshes nor pours. Through all of it the
+## brew and the ladle together hold what the brew began with, the surface never falls for what goes in, nothing is spilled, and the ladle gone, the brew is back
+## where it began.
+func _brew_kept() -> bool:
+	var m := _medium()
+	_stand(m, BREW_SPEC, "the ladle on its rest", _at(Vector3(-25, 0, -8)))
+	_stand(m, BREW_SPEC, "pot", _at(Vector3(15, 0, -8)))
+	m._work.build({"acts": [{"name": "in", "beat": 1, "length": 3.0, "tracks": [{"thing": "the ladle on its rest", "part": "ladle", "law": "carry", "to": "pot.mouth", "by": [0, 7, 0], "lift": 12, "turn": [0, 0, 75]}]},
+		{"name": "back", "beat": 1, "length": 3.0, "tracks": [{"thing": "the ladle on its rest", "part": "ladle", "law": "carry", "lift": 6, "down": true}]}]}, 1)
+	m._work.runs = [{"i": 0, "t0": 1.0, "t1": 4.0}, {"i": 1, "t0": 12.0, "t1": 15.0}]
+	m._work._timelines()
+	var ph: TablePhysics = m._work.physics
+	var ladle := _work_of_name(m, "ladle")
+	var brew := _liquid(m, "pot")
+	var bowl := -1
+	for li in ph.liquids.size():
+		if m._work._within(int((ph.solids[int((ph.liquids[li] as Dictionary)["solid"])] as Dictionary)["wi"]), ladle) == 1:
+			bowl = li
+	_ok(brew >= 0 and bowl >= 0, "the pot has no brew, or the ladle no bowl")
+	if brew < 0 or bowl < 0:
+		m._root3.free()
+		return true
+	m._work.tick(19.0)
+	var start := _volume(m, brew, 0.5)
+	var surface0 := float((ph.frame_at(0.5) as Dictionary)["liq"][brew * 16 + 5])
+	var lost := 0.0
+	var fell := 0.0
+	var surface_out := 0.0
+	var worst_at := 0.0
+	for k in 56:
+		var t := 0.5 + float(k) * 1.0 / 3.0
+		var flown := 0.0
+		for pd in ph.parcels:
+			var pp: Dictionary = pd
+			if float(pp["t0"]) <= t and (float(pp["t1"]) > t or int(pp["into"]) == -1):
+				flown += float(pp["vol"])
+		var whole := _volume(m, brew, t) + _volume(m, bowl, t) + flown
+		if absf(whole - start) > lost:
+			lost = absf(whole - start)
+			worst_at = t
+		if t < 12.0:
+			fell = maxf(fell, surface0 - float((ph.frame_at(t) as Dictionary)["liq"][brew * 16 + 5]))
+		elif t > 16.0:
+			surface_out = maxf(surface_out, surface0 - float((ph.frame_at(t) as Dictionary)["liq"][brew * 16 + 5]))
+	var spilled := 0.0
+	for pd in ph.parcels:
+		if int((pd as Dictionary)["into"]) == -1:
+			spilled += float((pd as Dictionary)["vol"])
+	var end := _volume(m, brew, 18.9)
+	var bowl_end := _volume(m, bowl, 18.9)
+	print("  the brew began at %.1f ml, ended at %.1f; the ladle ended with %.1f; %.1f ml spilled; its surface fell %.1f mm at most with the ladle in, %.1f mm with it out" % [start * 1e6, end * 1e6, bowl_end * 1e6, spilled * 1e6, fell * 1000.0, surface_out * 1000.0])
+	_ok(lost < 1e-6, "the brew, the ladle and what is in the air differ by %.1f ml from what the brew began with (at %.1f s)" % [lost * 1e6, worst_at])
+	_ok(spilled < 0.01 * start, "%.1f ml of %.1f was spilled from a ladle lifted out of its pot" % [spilled * 1e6, start * 1e6])
+	_ok(fell < 0.0005, "as the ladle went in and leaned there, the brew's surface fell %.1f mm" % (fell * 1000.0))
+	_ok(surface_out < 0.003, "the ladle out with what it held, the brew's surface fell %.1f mm for the %.1f ml gone" % [surface_out * 1000.0, (start - end) * 1e6])
+	# THE LEVEL HAS NO STAIRS: the cauldron's cells are about a centimeter tall, and no percent of it moves the surface more than a percent should
+	var vs: Vessel = (ph.liquids[brew] as Dictionary)["vessel"]
+	var stair := 0.0
+	var bare := 0.0
+	var heights := PackedFloat32Array()
+	for q in vs.points:
+		heights.append(q.y)
+	heights.sort()
+	for k in range(10, 90):
+		stair = maxf(stair, vs.level(Vector3.UP, float(k + 1) * 0.01) - vs.level(Vector3.UP, float(k) * 0.01))
+		var at0 := int(float(k) * 0.01 * float(heights.size() - 1))
+		var at1 := int(float(k + 1) * 0.01 * float(heights.size() - 1))
+		bare = maxf(bare, heights[at1] - heights[at0])
+	_ok(bare > 0.005, "the control: the bare grid's level moves %.1f mm in a percent" % (bare * 1000.0))
+	_ok(stair < 0.0025, "a percent of the brew moves its surface %.1f mm at most (no stairs)" % (stair * 1000.0))
+	m._root3.free()
+	# ...AND WHAT TRULY MISSES IS COUNTED, the sum still holding: the control - the pot itself turned over above the bare table
+	var c := _medium()
+	_stand(c, BREW_SPEC, "pot", _at(Vector3(15, 0, -8)))
+	c._work.build({"acts": [{"name": "over", "beat": 1, "length": 3.0, "tracks": [{"thing": "pot", "law": "path", "jitter": 0.0, "keys": [{"at": 0.0}, {"at": 0.4, "by": [0, 20, 0]}, {"at": 1.0, "by": [0, 20, 0], "turn": [0, 0, 110]}]}]}]}, 1)
+	c._work.runs = [{"i": 0, "t0": 1.0, "t1": 4.0}]
+	c._work._timelines()
+	var cp: TablePhysics = c._work.physics
+	c._work.tick(5.0)
+	var off := 0.0
+	var in_air := 0.0
+	for pd in cp.parcels:
+		var pp: Dictionary = pd
+		if float(pp["t0"]) <= 5.0 and (int(pp["into"]) == -1 or float(pp["t1"]) > 5.0):
+			if int(pp["into"]) == -1:
+				off += float(pp["vol"])
+			else:
+				in_air += float(pp["vol"])
+	var left := _volume(c, _liquid(c, "pot"), 4.99)
+	_ok(off > 100e-6, "the control: the pot turned over spilled only %.1f ml" % (off * 1e6))
+	_ok(absf(left + off + in_air - _volume(c, _liquid(c, "pot"), 0.5)) < 30e-6, "the pot turned over: %.1f ml left, %.1f spilled, %.1f in the air, of %.1f" % [left * 1e6, off * 1e6, in_air * 1e6, _volume(c, _liquid(c, "pot"), 0.5) * 1e6])
+	c._root3.free()
+	return true
+
+
+const FLOAT_SPEC := {"things": [
+	{"name": "pot", "parts": [
+		{"shape": "lathe", "smooth": true, "material": "iron", "points": {"mouth": [0, 9, 0]}, "profile": [[0, 0], [11, 0], [13, 3], [13.4, 8], [12, 12], [12.6, 12.4, 0], [12.2, 12.6, 0], [11.4, 12], [12.8, 8], [12.4, 3], [10.6, 0.5], [0, 0.5]]},
+		{"name": "brew", "shape": "lathe", "smooth": true, "material": "brew", "start": {"boil": 0.2}, "profile": [[0, 0.5], [10.6, 0.5], [12.4, 3], [12.8, 8], [12.5, 9], [0, 9]]}]},
+	{"name": "gifts", "parts": [
+		{"name": "feather", "shape": "sheet", "outline": "feather", "size": [3, 12], "bend": 0.2, "at": [0, 0.2, 0], "loose": true, "material": "plume"},
+		{"name": "stone", "shape": "ball", "size": [3, 2.4, 3], "at": [0, 0, 12], "loose": true, "material": "rock"},
+		{"name": "plate", "shape": "sheet", "outline": "feather", "size": [3, 12], "at": [12, 0.2, 0], "loose": true, "material": "tin"}]},
+	{"name": "rod", "parts": [{"material": "iron", "shape": "tube", "radius": 0.35, "path": [[0, 0, 0], [0, 20, 0]]}]},
+	{"name": "the ladle on its rest", "parts": [
+		{"material": "oak", "round": 0.4, "shape": "box", "size": [24.0, 1.2, 7.0]},
+		{"at": [9.5, 1.2, 0.0], "material": "oak", "round": 0.5, "shape": "box", "size": [3.0, 2.5, 6.0]},
+		{"joint": {"kind": "free"}, "name": "ladle", "points": {"bowl": [-6.0, 2.2, 0.0], "grip": [11.0, 4.1, 0.0]}, "parts": [
+			{"at": [-6.0, 1.2, 0.0], "material": "iron", "shape": "lathe", "smooth": true, "profile": [[0.0, 0.0], [1.5, 0.0], [2.8, 0.8], [3.2, 2.0], [3.3, 2.8, 0.0], [3.0, 2.8, 0.0], [2.9, 2.0], [2.5, 0.95], [1.3, 0.35], [0.0, 0.35]]},
+			{"material": "iron", "radius": 0.35, "shape": "tube", "path": [[-2.9, 3.85, 0.0], [2.0, 4.0, 0.0], [9.5, 4.05, 0.0], [12.6, 4.2, 0.0], [13.4, 3.3, 0.0]]}]}]}],
+	"materials": {"iron": {"kind": "metal", "color": "#6a4a30"}, "brew": {"kind": "liquid", "color": "#b8964a"}, "plume": {"kind": "fabric", "color": "#e0501a"}, "oak": {"kind": "wood", "color": "#6b4a2b"},
+		"rock": {"kind": "stone", "color": "#555555"}, "tin": {"kind": "metal", "color": "#999999", "density": 0.4}}}
+
+
+## How many of [param frames] moments the rod's axis (from its foot, 20 cm up) passes through loose work [param wi]'s drawn surface, as the table draws both.
+func _rod_through(m: TableMedium, wi: int, ph: TablePhysics, rod_key: int, moments: Array) -> int:
+	var count := 0
+	for t in moments:
+		m._work.tick(float(t))
+		var pose: Variant = ph.pose_of(rod_key, float(t))
+		if pose == null:
+			continue
+		var foot: Vector3 = (pose as Transform3D).origin
+		var head: Vector3 = (pose as Transform3D) * Vector3(0, 0.2, 0)
+		var stack: Array = [(m._work.works[wi] as Dictionary)["node"]]
+		var hit := false
+		while not stack.is_empty() and not hit:
+			var n: Node = stack.pop_back()
+			stack.append_array(n.get_children())
+			var mi := n as MeshInstance3D
+			if mi == null or mi.mesh == null:
+				continue
+			var xf := m._work._world_of(mi)
+			var faces := mi.mesh.get_faces()
+			for k in range(0, faces.size() - 2, 3):
+				if Geometry3D.segment_intersects_triangle(foot, head, xf * faces[k], xf * faces[k + 1], xf * faces[k + 2]) != null:
+					hit = true
+					break
+		if hit:
+			count += 1
+	return count
+
+
+## A SHEET BENDS ROUND WHAT MEETS IT, GENTLY ([method Particles.make_soft], [SheetBend]; 841899, feedback 0012: "The phoenix feather is clipping through the ladle ... The feather should
+## probably be more deformable, so that it's able to wrap and contort around the ladle ... gently enough that it doesn't create a whiplash effect and spring the feather out of the liquid"):
+## a feather afloat, a 7 mm rod brought down across its middle and swept through it: the rod hardly ever stands through what is drawn; what is drawn bends, the points about the
+## rod off their own shape by millimeters and the mesh with them; nothing is thrown out of the liquid; and left alone again, it lies back. The controls: met only at its points' own
+## thickness, as it had been, a rod fits between them; and the rod did move it.
+func _sheet_bends_round() -> bool:
+	var m := _medium()
+	_stand(m, FLOAT_SPEC, "pot", _at(Vector3(0, 0, -8)))
+	_stand(m, FLOAT_SPEC, "gifts", _at(Vector3(-40, 0, -8)))
+	_stand(m, FLOAT_SPEC, "rod", _at(Vector3(40, 0, -8)))
+	m._work.build({"acts": [
+		{"name": "in", "beat": 1, "length": 3.0, "tracks": [{"thing": "gifts", "part": "feather", "law": "path", "jitter": 0.0, "keys": [{"at": 0.0}, {"at": 0.3, "by": [0, 22, 0]}, {"at": 0.75, "by": [40, 22, 0]}, {"at": 1.0, "by": [40, 13, 0]}]}]},
+		{"name": "over", "beat": 1, "length": 2.0, "tracks": [{"thing": "rod", "law": "path", "jitter": 0.0, "keys": [{"at": 0.0}, {"at": 0.3, "by": [0, 16, 0]}, {"at": 1.0, "by": [-49, 16, 0]}]}]},
+		{"name": "sweep", "beat": 1, "length": 6.0, "tracks": [{"thing": "rod", "law": "path", "jitter": 0.0, "keys": [{"at": 0.0}, {"at": 0.25, "by": [0, -13, 0]}, {"at": 1.0, "by": [18, -13, 0]}]}]},
+		{"name": "out", "beat": 1, "length": 2.0, "tracks": [{"thing": "rod", "law": "path", "jitter": 0.0, "keys": [{"at": 0.0}, {"at": 1.0, "by": [0, 16, 0]}]}]}]}, 1)
+	m._work.runs = [{"i": 0, "t0": 1.0, "t1": 4.0}, {"i": 1, "t0": 8.0, "t1": 10.0}, {"i": 2, "t0": 10.0, "t1": 16.0}, {"i": 3, "t0": 16.0, "t1": 18.0}]
+	m._work._timelines()
+	var ph: TablePhysics = m._work.physics
+	var wi := _work_of_name(m, "feather")
+	var plate := _work_of_name(m, "plate")
+	var rod_key := -1 - int(m._work._thing_named("rod"))
+	_ok(ph.bends(wi) and not ph.bends(plate), "a feather bends, and a plate of tin of its shape does not")
+	var rod_thin := false
+	for sd in ph.solids:
+		if int((sd as Dictionary)["thing"]) == int(m._work._thing_named("rod")):
+			rod_thin = rod_thin or bool((sd as Dictionary)["thin"])
+		_ok(not (bool((sd as Dictionary)["thin"]) and String((m._work.things[int((sd as Dictionary)["thing"])] as Dictionary)["name"]) == "pot"), "a pot is no thin tool")
+	_ok(rod_thin, "a rod is a thin tool")
+	# ...THE ROD CANNOT STAND BETWEEN ITS POINTS: every part of it nearer a point than the rod's radius and the point's whole. The control: at the point's own thickness, as it had been, it can.
+	var pts: PackedVector3Array = ph.sheet_points(wi)
+	var far := _farthest_from(m, wi, pts)
+	var L: Dictionary = ph.loose[int(ph._loose_of[wi])]
+	var rod_r := 0.0035
+	_ok(far < float(L["rad"]) + rod_r, "part of the feather lies %.1f mm from any point: a %.0f mm rod goes between them, met at %.1f mm" % [far * 1000.0, rod_r * 2000.0, float(L["rad"]) * 1000.0])
+	_ok(far > float(L["contact"]) + rod_r, "the control: met at its own thickness, a rod would not go between the feather's points (%.1f mm from one at most)" % (far * 1000.0))
+	var moments: Array = []
+	for k in 45:
+		moments.append(11.5 + float(k) * 0.1)
+	m._work.tick(30.0)
+	var through := _rod_through(m, wi, ph, rod_key, moments)
+	var most := 0.0
+	var fastest := 0.0
+	var highest := 0.0
+	var was := PackedVector3Array()
+	var level := float((ph.frame_at(9.0) as Dictionary)["liq"][_liquid(m, "pot") * 16 + 5])
+	var t := 10.0
+	while t < 19.0:
+		var off: PackedVector3Array = ph.bend_of(wi, t)
+		for q in off:
+			most = maxf(most, q.length())
+		var motion: Transform3D = (ph.pose_of(wi, t) as Transform3D) * ph.loose_built(wi).affine_inverse()
+		var now := PackedVector3Array()
+		for k in pts.size():
+			now.append(motion * (pts[k] + off[k]))
+			highest = maxf(highest, now[k].y - level)
+			if not was.is_empty():
+				fastest = maxf(fastest, now[k].distance_to(was[k]) * 30.0)
+		was = now
+		t += 1.0 / 30.0
+	var after := 0.0
+	for q in (ph.bend_of(wi, 29.0) as PackedVector3Array):
+		after = maxf(after, q.length())
+	print("  the rod through the feather at %d of %d moments, bent %.1f mm at most, %.1f mm left after, fastest point %.1f cm/s, %.1f cm over the surface at most" % [through, moments.size(), most * 1000.0, after * 1000.0, fastest * 100.0, highest * 100.0])
+	_ok(through <= 2, "the rod stood through the feather as drawn at %d of %d moments" % [through, moments.size()])
+	_ok(most > 0.004, "met by the rod, the feather bent only %.1f mm" % (most * 1000.0))
+	_ok(fastest > 0.02, "the control: the feather was hardly moved, %.1f cm a second at most" % (fastest * 100.0))
+	_ok(fastest < 0.16, "the feather's fastest point went %.1f cm a second, the rod 8: a whip" % (fastest * 100.0))
+	_ok(highest < 0.012, "the feather was thrown %.1f cm over the surface" % (highest * 100.0))
+	_ok(after < maxf(most * 0.5, 0.004), "left alone 11 s, the feather is still bent %.1f mm of its %.1f" % [after * 1000.0, most * 1000.0])
+	m._root3.free()
+	return true
+
+
+## A FLOATING THING IS NEVER STILL ([method Particles.current], [method Particles.swell]; 841899, feedback 0012: "it floats perfectly stable on top of the liquid ... it should be gently moving,
+## according to the movement of the liquid and the weight of the object ... sometimes bob ... maybe spin a bit"): a feather afloat in a simmering pot, nothing near it, for half a minute:
+## it drifts, turns and bobs, never fast, never out of the pot, never asleep - and the same moment of the same bake is the same pose. The control: a stone on the same pot's floor lies still.
+func _floater_lives() -> bool:
+	var m := _medium()
+	_stand(m, FLOAT_SPEC, "pot", _at(Vector3(0, 0, -8)))
+	_stand(m, FLOAT_SPEC, "gifts", _at(Vector3(-40, 0, -8)))
+	m._work.build({"acts": [
+		{"name": "in", "beat": 1, "length": 3.0, "tracks": [{"thing": "gifts", "part": "feather", "law": "path", "jitter": 0.0, "keys": [{"at": 0.0}, {"at": 0.3, "by": [0, 22, 0]}, {"at": 0.75, "by": [40, 22, 0]}, {"at": 1.0, "by": [40, 13, 0]}]}]},
+		{"name": "drop", "beat": 1, "length": 3.0, "tracks": [{"thing": "gifts", "part": "stone", "law": "path", "jitter": 0.0, "keys": [{"at": 0.0}, {"at": 0.3, "by": [0, 22, 0]}, {"at": 0.75, "by": [40, 22, -12]}, {"at": 1.0, "by": [46, 13, -12]}]}]}]}, 1)
+	m._work.runs = [{"i": 0, "t0": 1.0, "t1": 4.0}, {"i": 1, "t0": 4.0, "t1": 7.0}]
+	m._work._timelines()
+	var ph: TablePhysics = m._work.physics
+	var wi := _work_of_name(m, "feather")
+	var stone := _work_of_name(m, "stone")
+	var water := _liquid(m, "pot")
+	var vs: Vessel = (ph.liquids[water] as Dictionary)["vessel"]
+	var inv: Transform3D = (ph.solids[int((ph.liquids[water] as Dictionary)["solid"])] as Dictionary)["inv"]
+	m._work.tick(45.0)
+	var t := 15.0
+	var a: Transform3D = ph.pose_of(wi, t)
+	var far := 0.0
+	var turned := 0.0
+	var low := INF
+	var high := -INF
+	var fastest := 0.0
+	var out := 0
+	var was := a
+	while t < 45.0:
+		var x: Transform3D = ph.pose_of(wi, t)
+		far = maxf(far, x.origin.distance_to(a.origin))
+		turned = maxf(turned, rad_to_deg(Quaternion(a.basis.orthonormalized()).angle_to(Quaternion(x.basis.orthonormalized()))))
+		low = minf(low, x.origin.y)
+		high = maxf(high, x.origin.y)
+		fastest = maxf(fastest, x.origin.distance_to(was.origin) * 30.0)
+		var mid := x * (ph.loose_built(wi).affine_inverse() * _sheet_middle(ph, wi))
+		if not vs.contains(inv * mid):
+			out += 1
+		was = x
+		t += 1.0 / 30.0
+	var s0: Variant = ph.pose_of(stone, 20.0)
+	var s1: Variant = ph.pose_of(stone, 44.0)
+	var stone_moved := (s0 as Transform3D).origin.distance_to((s1 as Transform3D).origin) if s0 != null and s1 != null else 0.0
+	var again: Transform3D = ph.pose_of(wi, 30.0)
+	var bi := int((ph.loose[int(ph._loose_of[wi])] as Dictionary)["body"])
+	print("  over 30 s afloat: drifted %.1f cm, turned %.0f degrees, bobbed %.1f mm, %.1f cm/s at most; the stone moved %.2f mm" % [far * 100.0, turned, (high - low) * 1000.0, fastest * 100.0, stone_moved * 1000.0])
+	_ok(far > 0.01, "afloat 30 s, the feather drifted only %.1f cm" % (far * 100.0))
+	_ok(turned > 5.0, "afloat 30 s, the feather turned only %.0f degrees" % turned)
+	_ok(high - low > 0.0004, "afloat 30 s, the feather bobbed only %.2f mm" % ((high - low) * 1000.0))
+	_ok(fastest < 0.06, "left alone, the feather went %.1f cm a second" % (fastest * 100.0))
+	_ok(out == 0, "the feather's middle left the pot at %d frames" % out)
+	_ok(bi >= 0 and not ph.sim.body_asleep(bi), "the feather fell asleep afloat")
+	_ok(stone_moved < 0.002, "the control: the stone on the floor moved %.1f mm" % (stone_moved * 1000.0))
+	_ok(again.is_equal_approx(ph.pose_of(wi, 30.0)), "the same moment asked twice is another pose")
+	m._root3.free()
+	return true
+
+
+## A VESSEL DOES NOT TAKE PART OF A SHEET WITH IT (841899: part of the feather in the ladle's bowl rode off with the ladle, the rest left in the pot, stretched 23 cm): a feather afloat, the
+## ladle lowered through where it is, tipped, and drawn away over the rim: it stays one sheet, and in the pot. The control: the ladle met it.
+func _sheet_stays_whole() -> bool:
+	# ...where the feather has drifted to by the time the ladle comes, the same bake without it
+	var feather_in := {"name": "in", "beat": 1, "length": 3.0, "tracks": [{"thing": "gifts", "part": "feather", "law": "path", "jitter": 0.0, "keys": [{"at": 0.0}, {"at": 0.3, "by": [0, 22, 0]}, {"at": 0.75, "by": [40, 22, 0]}, {"at": 1.0, "by": [40, 13, 0]}]}]}
+	var a := _medium()
+	_stand(a, FLOAT_SPEC, "pot", _at(Vector3(0, 0, -8)))
+	_stand(a, FLOAT_SPEC, "gifts", _at(Vector3(-40, 0, -8)))
+	a._work.build({"acts": [feather_in]}, 1)
+	a._work.runs = [{"i": 0, "t0": 1.0, "t1": 4.0}]
+	a._work._timelines()
+	a._work.tick(9.0)
+	var ap: TablePhysics = a._work.physics
+	var aw := _work_of_name(a, "feather")
+	var there: Vector3 = (ap.pose_of(aw, 8.5) as Transform3D) * (ap.loose_built(aw).affine_inverse() * _sheet_middle(ap, aw))
+	a._root3.free()
+	var m := _medium()
+	_stand(m, FLOAT_SPEC, "pot", _at(Vector3(0, 0, -8)))
+	_stand(m, FLOAT_SPEC, "gifts", _at(Vector3(-40, 0, -8)))
+	_stand(m, FLOAT_SPEC, "the ladle on its rest", _at(Vector3(40, 0, -8)))
+	# ...as the show's own acts have it: lowered in under it, tipped, drawn out and laid back on its rest
+	m._work.build({"acts": [feather_in,
+		{"name": "under", "beat": 1, "length": 3.0, "tracks": [{"thing": "the ladle on its rest", "part": "ladle", "law": "carry", "to": [there.x * 100.0, 16.0, there.z * 100.0], "lift": 12, "turn": [0, 0, 75]}]},
+		{"name": "away", "beat": 1, "length": 3.0, "tracks": [{"thing": "the ladle on its rest", "part": "ladle", "law": "carry", "lift": 6, "down": true}]}]}, 1)
+	m._work.runs = [{"i": 0, "t0": 1.0, "t1": 4.0}, {"i": 1, "t0": 6.0, "t1": 9.0}, {"i": 2, "t0": 10.0, "t1": 13.0}]
+	m._work._timelines()
+	var ph: TablePhysics = m._work.physics
+	var wi := _work_of_name(m, "feather")
+	m._work.tick(18.0)
+	_ok(ph.bends(wi), "the feather is no sheet that bends")
+	var most := 0.0
+	var t := 6.0
+	while t < 18.0:
+		for q in (ph.bend_of(wi, t) as PackedVector3Array):
+			most = maxf(most, q.length())
+		t += 0.1
+	var water := _liquid(m, "pot")
+	var vs: Vessel = (ph.liquids[water] as Dictionary)["vessel"]
+	var inv: Transform3D = (ph.solids[int((ph.liquids[water] as Dictionary)["solid"])] as Dictionary)["inv"]
+	var end: Transform3D = ph.pose_of(wi, 17.9)
+	var mid := end * (ph.loose_built(wi).affine_inverse() * _sheet_middle(ph, wi))
+	print("  the ladle lowered through it and drawn away, the feather stood %.1f cm from its shape at most, its middle %s" % [most * 100.0, str(mid * 100.0)])
+	_ok(most > 0.004, "the control: the ladle never met the feather (%.1f mm)" % (most * 1000.0))
+	_ok(most < 0.06, "the ladle drawn away pulled part of the feather %.1f cm out of shape" % (most * 100.0))
+	_ok(vs.contains(inv * mid), "the ladle took the feather with it, to %s" % str(mid * 100.0))
+	m._root3.free()
+	return true
+
+
+## Sheet [param wi]'s middle as it was built (the table's space).
+func _sheet_middle(ph: TablePhysics, wi: int) -> Vector3:
+	var c := Vector3.ZERO
+	var pts: PackedVector3Array = ph.sheet_points(wi)
+	for p in pts:
+		c += p
+	return c / float(pts.size())
+
+
+## THE PAST IS BAKED (the-quiet-crucible 841899, 2026-10-31, scrubbed to the feather: "it totally breaks physics, every time ...
+## there is a piece of some ingredient sitting on top of the recipe card"): a reading started mid-way places its earlier words
+## just before 0, spaced as estimated ([member ReadingFollower.near_past]), and a stone an act carried into a bowl before then
+## lies in the bowl on the first frame - the bake begun before the act ([member TablePhysics._t0]). The controls: a follower that
+## keeps its past long ago places it 100000 s back; and the same act after 0 has not yet moved the stone.
+func _past_baked() -> bool:
+	var f := ReadingFollower.new()
+	f.near_past = true
+	f.reset(PackedStringArray(["one", "two", "three", "four", "five"]), 3, PackedFloat32Array([0.0, 0.5, 1.0, 1.5, 2.0]))
+	_ok(absf(f.st1[2] + ReadingFollower.PAST_GAP) < 1e-4 and absf(f.st0[0] - (f.st0[2] - 1.0)) < 1e-4,
+		"a mid-way start's past near 0 ends at %.2f s (not -%.1f), its first word %.2f s before its last" % [f.st1[2], ReadingFollower.PAST_GAP, f.st0[2] - f.st0[0]])
+	var g := ReadingFollower.new()
+	g.reset(PackedStringArray(["one", "two", "three", "four", "five"]), 3, PackedFloat32Array([0.0, 0.5, 1.0, 1.5, 2.0]))
+	_ok(g.st0[0] < -1000.0, "the control: a follower keeping its past long ago placed it at %.1f s" % g.st0[0])
+	var res: Array = []
+	for t0 in [-8.0, 4.0]:
+		var m := _medium()
+		_stand(m, FILINGS_SPEC, "bowl", _at(Vector3(-5, 0, -10)))
+		var dish: Node3D = _stand(m, FILINGS_SPEC, "dish", _at(Vector3(-30, 0, -10)))["node"]
+		m._work.build({"acts": [{"name": "drop-stone", "beat": 1, "length": 3, "tracks": [
+			{"thing": "dish", "part": "stone", "law": "carry", "to": [-5, 6.0, -10], "lift": 4, "between": [0.0, 0.6]}]}]}, 1)
+		m._work.runs = [{"i": 0, "t0": t0, "t1": t0 + 3.0}]
+		m._work._timelines()
+		var ph: TablePhysics = m._work.physics
+		var stone := _work_of_name(m, "stone")
+		m._work.tick(0.5)
+		var node: Node3D = (m._work.works[stone] as Dictionary)["node"]
+		var at := m._work._world_of(node) * (((m._work.works[stone] as Dictionary)["w"] as Dictionary).get("middle", Vector3.ZERO) as Vector3)
+		res.append([at, ph._t0, dish])
+		m._root3.free()
+	var bowl := _at(Vector3(-5, 0, -10))
+	var past: Vector3 = res[0][0]
+	_ok(float(res[0][1]) <= -8.0, "the bake of a past act at -8 s began at %.1f s" % float(res[0][1]))
+	_ok(Vector2(past.x - bowl.x, past.z - bowl.z).length() < 0.06 and past.y < 0.04,
+		"carried into the bowl before the show began, the stone lies at %s cm on the first frame, not in the bowl at %s" % [str(past * 100.0), str(bowl * 100.0)])
+	var later: Vector3 = res[1][0]
+	_ok(Vector2(later.x - bowl.x, later.z - bowl.z).length() > 0.15, "the control: the stone an act takes at 4 s was already in the bowl at 0.5 s")
+	return true
+
+
+const RIM_SPEC := {"things": [
+	{"name": "cauldron", "parts": [
+		{"at": [0.0, 4.5, 0.0], "material": "copper", "shape": "lathe", "smooth": true, "profile": [[0.0, 0.0], [3.5, 0.0], [6.5, 1.5], [8.8, 4.5],
+			[9.0, 6.5], [8.3, 9.5], [7.8, 10.4], [8.4, 10.8, 0.0], [8.4, 11.2, 0.0], [7.9, 11.2, 0.0], [7.5, 10.6], [8.0, 9.5], [8.6, 6.5], [8.4, 4.5],
+			[6.2, 1.8], [3.3, 0.4], [0.0, 0.4]]},
+		{"shape": "box", "size": [4, 4.5, 4], "material": "copper"}]}],
+	"materials": {"copper": {"kind": "metal", "color": "#b06a3a"}}}
+
+
+## WHAT RESTS TOUCHES WHAT IT RESTS ON, AS DRAWN (the user, 2026-10-31: the ladle "doesn't seem to rest upon the cauldron's lip
+## correctly. It floats above the lip, and you can tell because it casts a shadow" - met at 120 points of its own and 200 of the
+## pot's, a handle crossing the rim between them stood 2.2 mm into it as drawn while its points said 0.4, [method RigidParts._refined]):
+## 841899's own ladle, brought into 841899's own cauldron by its two ends and left there till a later act, leans on the rim with
+## its drawn surface within 0.8 mm of the pot's, neither floating nor sunk. The control: the same ladle drawn 3 mm lower reads
+## sunk - the measure can tell.
+func _rests_on_rim() -> bool:
+	var m := _medium()
+	_stand(m, RIM_SPEC, "cauldron", _at(Vector3(20, 0, -8)))
+	_stand(m, REST_SPEC, "the ladle on its rest", _at(Vector3(-15, 0, -8)))
+	var grip := [{"at": 0.0, "by": [0.0, 0.0, 0.0]}, {"at": 0.15, "by": [0.0, 6.0, 0.0]}, {"at": 0.65, "by": [27.0, 24.0, 0.0]}, {"at": 1.0, "by": [27.0, 16.0, 0.0]}]
+	var tip := [{"at": 0.0, "by": [0.0, 0.0, 0.0]}, {"at": 0.15, "by": [0.0, 6.0, 0.0]}, {"at": 0.65, "by": [43.0, 16.0, 0.0]}, {"at": 1.0, "by": [43.0, 6.5, 0.0]}]
+	m._work.build({"acts": [{"name": "in", "beat": 1, "length": 4.0, "tracks": [{"thing": "the ladle on its rest", "part": "ladle", "law": "aim",
+			"grip": {"point": "grip", "keys": grip}, "tip": {"point": "bowl", "keys": tip}}]},
+		{"name": "again", "beat": 1, "length": 2.0, "tracks": [{"thing": "the ladle on its rest", "part": "ladle", "law": "path", "jitter": 0.0,
+			"keys": [{"at": 0.0}, {"at": 1.0, "by": [0, 8, 0]}]}]}]}, 1)
+	m._work.runs = [{"i": 0, "t0": 2.0, "t1": 6.0}, {"i": 1, "t0": 16.0, "t1": 18.0}]
+	m._work._timelines()
+	var ph: TablePhysics = m._work.physics
+	var ladle := _work_of_name(m, "ladle")
+	var pot: Dictionary = {}
+	for sd in ph.solids:
+		if String((m._work.things[int((sd as Dictionary)["thing"])] as Dictionary)["name"]) == "cauldron" and ((sd as Dictionary)["field"] as ShapeField).hollow():
+			pot = sd
+	m._work.tick(12.0)
+	var b: Dictionary = ph.rigid.bodies[int(ph._rigid_of[ladle])]
+	# ...its drawn surface, every vertex, against the pot's - as drawn, and the control 3 mm lower
+	var least := func(drop: float) -> float:
+		var out := INF
+		var stack: Array = [(m._work.works[ladle] as Dictionary)["node"]]
+		while not stack.is_empty():
+			var n: Node = stack.pop_back()
+			stack.append_array(n.get_children())
+			var mi := n as MeshInstance3D
+			if mi == null or mi.mesh == null:
+				continue
+			var xf := m._work._world_of(mi)
+			for q in mi.mesh.get_faces():
+				var v := xf * q - Vector3(0.0, drop, 0.0)
+				out = minf(out, (pot["field"] as ShapeField).sample((pot["xf"] as Transform3D).affine_inverse() * v).x)
+		return out
+	var drawn: float = least.call(0.0)
+	var lower: float = least.call(0.003)
+	_ok(not pot.is_empty() and b["held"] == null, "the ladle left in the pot was not let go there")
+	_ok(lower < -0.002, "the control: drawn 3 mm lower, the ladle reads only %.2f mm into the pot" % (-lower * 1000.0))
+	_ok(drawn > -0.0008 and drawn < 0.0008, "let go leaning in the pot, the drawn ladle is %.2f mm from the pot's surface (under 0: in it)" % (drawn * 1000.0))
+	m._root3.free()
+	return true
+
+
+## A POUR POURS WHAT DOES NOT FLOW (2026-11-01, 841899: a mortar of ground frankincense `pour`ed into the brew stopped at the tip an
+## empty liquid's brink ends at, 62 degrees, and poured nothing - its puppeteer then tipped it by hand and threw it into the brazier's
+## pan, and `act` said it went "in the copper cauldron on its brazier"): a dish with a stone in it, `pour`ed into a bowl, turns on past
+## its brink to its `tip` and the stone falls into the bowl - and `act` says so, by what it went into. The controls: held to a 30 degree
+## tip, nothing leaves it and `act` says so; the same pour judged as meant for the cup, `act` says it MISSED, and where it went.
+func _pours_loose() -> bool:
+	var res := {}
+	for case in ["bowl", "short"]:
+		var m := _medium()
+		_stand(m, FILINGS_SPEC, "bowl", _at(Vector3(-5, 0, -10)))
+		_stand(m, FILINGS_SPEC, "dish", _at(Vector3(-30, 0, -10)))
+		_stand(m, FILINGS_SPEC, "cup", _at(Vector3(-5, 0, 12)))
+		var tr := {"thing": "dish", "law": "pour", "into": "bowl"}
+		if case == "short":
+			tr["tip"] = 30.0
+		m._work.build({"acts": [{"name": "tip-out", "beat": 1, "length": 6.0, "tracks": [tr]}]}, 1)
+		var said := String((m._work.check("tip-out") as Dictionary)["text"])
+		m._work.runs = [{"i": 0, "t0": 2.0, "t1": 8.0}]
+		m._work._timelines()
+		var ph: TablePhysics = m._work.physics
+		m._work.tick(11.0)
+		var stone := _work_of_name(m, "stone")
+		var bowl := _liquid(m, "bowl")
+		var pose: Variant = ph.pose_of(stone, 11.0)
+		var mid: Vector3 = (((m._work.works[stone] as Dictionary)["w"] as Dictionary).get("box", AABB()) as AABB).get_center()
+		var at := (pose as Transform3D) * mid if pose != null else Vector3.INF
+		res[case] = [ph._inside_liquid(at) == bowl and bowl >= 0, said]
+		if case == "bowl":
+			# ...the same pour, judged as meant for the cup
+			var ti := m._work._thing_named("dish")
+			res["cup"] = [false, "\n".join(ph.report(2.0, 8.0, [{"label": "the dish", "from": ph.solids_of_mover(ti, -1), "into": "cup"}]))]
+		m._root3.free()
+	_ok(not bool(res["short"][0]) and String(res["short"][1]).contains("NOTHING LEFT IT"), "the control: tipped only 30 degrees, the stone left the dish, or `act` did not say nothing did:\n%s" % String(res["short"][1]))
+	_ok(bool(res["bowl"][0]), "poured into the bowl, the stone is not in it:\n%s" % String(res["bowl"][1]))
+	_ok(String(res["bowl"][1]).contains("POUR of dish into \"bowl\"") and not String(res["bowl"][1]).contains("MISSED"), "poured into the bowl, `act` said:\n%s" % String(res["bowl"][1]))
+	_ok(String(res["cup"][1]).contains("MISSED"), "the control: poured into a cup too small for it, `act` did not say the stone missed:\n%s" % String(res["cup"][1]))
+	return true
+
+
+## THE WORLD IS THE TABLE'S (next/framework_audit.md): every free part and every thing that may be moved is a body as built, whatever
+## the acts are - DORMANT until a hand takes it up or what holds it moves, exactly the solid it was before it was a body - so a new act
+## that moves something new is baked from where it begins, never from the show's start (841899's puppeteer: each `act` that fetched a
+## jar or a feather nothing had moved baked the whole show again, 95 and 126 s a call). The control: the first act moved bakes again
+## from its own start.
+func _world_from_table() -> bool:
+	var up := [{"at": 0.0}, {"at": 0.3, "by": [0, 4, 0]}, {"at": 1.0, "by": [0, 0, 6]}]
+	var m := _rod_bench([[up, 2.0, 4.0]], 45.0)
+	var ph: TablePhysics = m._work.physics
+	var rod := _rod(m)
+	# ...every free part a body, and every thing that holds no flame (the cup on its stand, never moved, among them)
+	var cup_ti := m._work._thing_named("cup on a stand")
+	_ok(ph._rigid_of.has(-1 - cup_ti), "the cup on its stand, moved by no act, is no body")
+	_ok(bool((ph.rigid.bodies[int(ph._rigid_of[-1 - cup_ti])] as Dictionary)["dormant"]) if ph._rigid_of.has(-1 - cup_ti) else false, "the cup on its stand is not dormant as built")
+	ph.bake_until(12.0)
+	var cup_at: Variant = ph.thing_pose_of(cup_ti, 12.0)
+	_ok(cup_at is Transform3D and (cup_at as Transform3D).is_equal_approx(ph._rest_of(-1 - cup_ti)), "the cup on its stand, untouched, is not where it was built: %s" % str(cup_at))
+	var resumed := {}
+	for case in ["new", "first"]:
+		var acts: Array = [{"name": "move 0", "beat": 1, "length": 2.0, "tracks": [{"thing": "tools", "part": "rod", "law": "path", "jitter": 0.0,
+			"keys": up if case == "new" else [{"at": 0.0}, {"at": 0.3, "by": [0, 5, 0]}, {"at": 1.0, "by": [0, 0, 7]}]}]}]
+		if case == "new":
+			acts.append({"name": "move cup", "beat": 1, "length": 1.0, "tracks": [{"thing": "cup on a stand", "law": "carry", "by": [0, 0, 6], "lift": 3}]})
+		m._work.rebind({"acts": acts}, 1)
+		m._work.runs = [{"i": 0, "t0": 2.0, "t1": 4.0}] + ([{"i": 1, "t0": 8.0, "t1": 9.0}] if case == "new" else [])
+		m._work._timelines()
+		ph.bake_until(12.0)
+		resumed[case] = ph.resumed_at
+	m._root3.free()
+	_ok(float(resumed["first"]) <= 2.0, "the control: its first act moved, the bake went back only to %.1f s" % float(resumed["first"]))
+	_ok(float(resumed["new"]) >= 7.0, "an act moving a thing nothing had moved, at 8 s, baked again from %.1f s" % float(resumed["new"]))
 	return true

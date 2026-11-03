@@ -92,10 +92,49 @@ static func share(seed: int, salt: int) -> float:
 ## meters on the way: minimum jerk along the way, or - [param ma], [param mb] not both zero (a move going on through its
 ## places, [method TableWork._chains]) - the cubic through them with those slopes (meters, per the whole move); bowed
 ## to the side [param seed] draws; lifted early, lowered late.
-static func carried(a: Vector3, b: Vector3, ma: Vector3, mb: Vector3, lift: float, lin: float, seed: int) -> Vector3:
+## UP CLEAR FIRST, DOWN AMONG THEM LAST ([param rise], meters): it goes across only once it has risen [code]rise.x[/code], and is
+## across before it comes down past [code]rise.y[/code] - a jar taken from among others comes up straight before it goes, and is
+## let down straight among those where it goes (the-quiet-crucible 841899: lifted from a row 8 mm apart and moving off as it rose,
+## the first of four resin jars knocked the next, was held back 22 cm behind its hand, and ended on its side).
+static func carried(a: Vector3, b: Vector3, ma: Vector3, mb: Vector3, lift: float, lin: float, seed: int, rise := Vector2.ZERO) -> Vector3:
 	var x := clampf(lin, 0.0, 1.0)
-	var p := a.lerp(b, timing(x)) if ma == Vector3.ZERO and mb == Vector3.ZERO else Motions.hermite(a, b, ma, mb, x)
-	return p + bow(a, b, x, seed) + Vector3(0.0, lift * lift_at(x), 0.0)
+	var span := across(lift, rise)
+	var h := clampf((x - span.x) / maxf(span.y - span.x, 1e-6), 0.0, 1.0)
+	var p := a.lerp(b, timing(h)) if ma == Vector3.ZERO and mb == Vector3.ZERO else Motions.hermite(a, b, ma, mb, h)
+	return p + bow(a, b, h, seed) + Vector3(0.0, lift * lift_at(x), 0.0)
+
+
+## The stretch of a move ([param lift] meters at its highest) it goes across in: from when it has risen [code]rise.x[/code] to when
+## it comes back down to [code]rise.y[/code] - shares of the move ([method carried]).
+static func across(lift: float, rise: Vector2) -> Vector2:
+	var top := LIFT_SHAPE.x / (LIFT_SHAPE.x + LIFT_SHAPE.y)
+	var out := Vector2(0.0, 1.0)
+	if lift <= 0.0:
+		return out
+	if rise.x > 0.0:
+		var lo := 0.0
+		var hi := top
+		for _k in 24:
+			var mid := (lo + hi) * 0.5
+			if lift * lift_at(mid) < rise.x:
+				lo = mid
+			else:
+				hi = mid
+		out.x = hi
+	if rise.y > 0.0:
+		var lo := top
+		var hi := 1.0
+		for _k in 24:
+			var mid := (lo + hi) * 0.5
+			if lift * lift_at(mid) >= rise.y:
+				lo = mid
+			else:
+				hi = mid
+		out.y = lo
+	if out.y - out.x < 0.2:
+		var mid := (out.x + out.y) * 0.5
+		out = Vector2(maxf(mid - 0.1, 0.0), minf(mid + 0.1, 1.0))
+	return out
 
 
 ## THE BOW of a move from [param a] to [param b] at [param lin]: across the way, level, to the side [param seed] draws -

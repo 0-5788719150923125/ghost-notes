@@ -23,6 +23,10 @@ class_name Transport
 ## SCENE, `--scene <name>` pins one. A live reading seeks by SENTENCE through its conductor's
 ## `seek` (reading_panel.gd); a synthesis take cannot seek, and its rail does not take clicks.
 ##
+## WHAT IS BUFFERED IS SHOWN (2026-11-01, the user: "I would want to be able to SEE the buffered region available to me in the
+## timeline, like a buffered YouTube video would do it"): lighter than what is played, from the playhead as far as the show is made
+## ahead ([method Spectrum.ready_ahead]) - a reading's voice made, and a table's physics baked, while it plays and while it is paused.
+##
 ## IT NEVER APPEARS IN AN EXPORT, and not by a check: the render process returns out of main
 ## before Chrome is built. HOVERING THE RAIL SHOWS THE TIME under the pointer, so a click can be
 ## aimed.
@@ -43,6 +47,7 @@ const BTN := 28.0                   # the play and stop buttons, square
 const GAP := 8.0
 const HIT := 10.0                   # how far past the rail a pointer still counts as on it, px
 const CLEARANCE := 8.0              # kept between that zone and anything above it, px
+const BUFFERED := 0.32              # how strong the stretch made ahead of the playhead is drawn (the played: 0.85)
 const CLAIM := &"transport"         # the key of its claim on the bottom of the frame
 const PLAY_TIP := "Play / pause (Space)"
 const STALE_TIP := ("\n\nThe script changed after this reading began. ■ then ▶ reads it again "
@@ -286,6 +291,13 @@ class Painter:
 		# white tidepool and a black void alike. Dimmer where it cannot be seeked (a take).
 		var fill := 0.85 if seekable else 0.4
 		draw_rect(r.grow(1.0), Color(0.02, 0.02, 0.03, 0.55 * a), true)
+		# WHAT IS BUFFERED ([method Spectrum.ready_ahead]): from the playhead as far as the show is made ahead - the voice, and what
+		# a table bakes while it is paused - lighter than what is played, as a video player shows what it has loaded
+		var ahead: float = Spectrum.ready_ahead() if total > 0.0 else -1.0
+		if ahead > 0.0:
+			var fb := clampf((Spectrum.scrub_position() + ahead) / total, f, 1.0)
+			draw_rect(Rect2(Vector2(r.position.x + r.size.x * f, r.position.y), Vector2(r.size.x * (fb - f), r.size.y)),
+				Color(0.86, 0.90, 0.96, Transport.BUFFERED * a), true)
 		draw_rect(Rect2(r.position, Vector2(r.size.x * f, r.size.y)),
 			Color(0.86, 0.90, 0.96, fill * a), true)
 		if not seekable:

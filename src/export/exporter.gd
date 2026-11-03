@@ -83,13 +83,14 @@ const STATUS_W := 588.0
 ## What the sign-in dialog says. Google's "Access blocked" page is a dead end that never comes back
 ## to Ghost Notes, so the dialog names it rather than waiting the whole timeout out in silence.
 const SIGN_BLOCKED := ("\"Access blocked\" or \"has not completed the Google verification process\"? "
-	+ "While your Google Cloud project is in Testing, only its test users can sign in: add your Google "
-	+ "account as a test user (Google Cloud, Google Auth Platform, Audience), then open the page again.")
+	+ "While the Google Cloud project %s is in Testing, only its own test users can sign in - another "
+	+ "project's list does not count. Add your Google account as a test user of that project (Google "
+	+ "Cloud, Google Auth Platform, Audience) and open the page again, or pick another Client on the YouTube card.")
 const SIGN_WAIT := ("Your browser should be showing Google's sign-in. Choose the Google account that "
 	+ "owns the channel - and the channel, when Google asks which - and allow Ghost Notes to upload "
 	+ "videos. This window closes by itself.\n\n"
 	+ "No page? It may have opened behind another window: open it again, or copy the link into the "
-	+ "browser you use.\n\n" + SIGN_BLOCKED)
+	+ "browser you use.")
 
 ## Set by a mode that owns its OWN export path, so the shared button steps aside
 ## instead of sitting dead on top of it. Masking is the one such mode: its export
@@ -165,6 +166,8 @@ var _sign_then := Callable()   # what the sign-in leads on to, kept for "Try aga
 var _sign_scopes: Array = []   # ...and what it asks Google for
 var _sign_channel := ""        # ...and the channel it is for: "" for whichever the person picks
 var _sign_named := ""          # ...called this, when the card knows
+var _sign_through := ""        # ...the client the card picked, "" for the channel's own (YouTube.client_for)
+var _sign_move := false        # ...and whether the person asked to sign a channel still signed in in again
 var _sign_landed := ""         # the channel the last sign-in that settled is for
 var _sign_dialog: AcceptDialog # what Ghost Notes is waiting for while the browser signs in
 var _sign_again: Button
@@ -690,7 +693,8 @@ func _on_path(out_path: String) -> void:
 	_upload_this = not peek.is_empty() and not peek.has("refused")
 	_upload_meta = {}
 	if _upload_this:
-		_check_sign_in(Callable(), scopes_for(peek), str(peek.get("channel", "")), str(peek.get("channel_name", "")))
+		_check_sign_in(Callable(), scopes_for(peek), str(peek.get("channel", "")), str(peek.get("channel_name", "")),
+			str(peek.get("client", "")))
 	# _song was resolved at click time (_on_export) - the live audio path. A
 	# synthesis session without a finished take renders one NOW, after the
 	# quality and path are committed: the provider is a coroutine that runs
@@ -1423,10 +1427,12 @@ func youtube() -> Node:
 ## SET UPLOADS UP, as far as they need, visibly: the sign-in of channel [param channel] (called
 ## [param named]) - "" for a new one, whichever the person picks - asking for [param scopes], when
 ## none is kept or it may not do all of them; and the Google client file first when a sign-in is
-## needed and none is kept. [param then] runs once signed in, handed the channel's id; nothing runs on
-## a cancel or a failure (the dialog says why).
-func youtube_sign_in(then := Callable(), scopes: Array = [YouTube.SCOPE], channel := "", named := "") -> void:
-	_check_sign_in(then, scopes, channel, named)
+## needed and none is kept. A browser goes through the client [param through] names, "" for the channel's
+## own ([method YouTube.client_for]); [param move] opens it even for a channel still signed in, which
+## keeps that sign-in unless this one lands. [param then] runs once signed in, handed the channel's id;
+## nothing runs on a cancel or a failure (the dialog says why).
+func youtube_sign_in(then := Callable(), scopes: Array = [YouTube.SCOPE], channel := "", named := "", through := "", move := false) -> void:
+	_check_sign_in(then, scopes, channel, named, through, move)
 
 
 ## Ask for a Google client file (another one, when one is kept); [param then] runs once it is imported.
@@ -1458,17 +1464,20 @@ func youtube_busy() -> bool:
 ## on another channel than [param channel] (called [param named]) is kept for that one, and fails
 ## this, saying so. A newer check replaces one still waiting. [param then] runs once signed in, handed
 ## the channel (a card's tick, its playlists, its "+"); the export's own check runs nothing - its
-## upload waits on [member _sign].
-func _check_sign_in(then := Callable(), scopes: Array = [YouTube.SCOPE], channel := "", named := "") -> void:
+## upload waits on [member _sign]. [param through] and [param move]: see [method youtube_sign_in]. Only the
+## person's own press moves a channel: an export never opens a browser for one still signed in.
+func _check_sign_in(then := Callable(), scopes: Array = [YouTube.SCOPE], channel := "", named := "", through := "", move := false) -> void:
 	_sign_attempt += 1
 	var mine := _sign_attempt
 	_sign_then = then
 	_sign_scopes = scopes
 	_sign_channel = channel
 	_sign_named = named
+	_sign_through = through
+	_sign_move = move
 	_sign_why = ""
 	_sign = "checking"
-	if YouTube.signed_in(channel):
+	if YouTube.signed_in(channel) and not move:
 		var tok: Dictionary = await _yt.access_token(channel)
 		if mine != _sign_attempt:
 			return
@@ -1484,7 +1493,7 @@ func _check_sign_in(then := Callable(), scopes: Array = [YouTube.SCOPE], channel
 			return
 	if not YouTube.has_client():
 		_sign = "client"
-		_client_then = func() -> void: _check_sign_in(then, scopes, channel, named)
+		_client_then = func() -> void: _check_sign_in(then, scopes, channel, named, through, move)
 		_client_dialog.popup_centered()
 		return
 	# A SIGN-IN REPLACES THE ONE KEPT, so it asks again for what that one could already do: a
@@ -1495,7 +1504,7 @@ func _check_sign_in(then := Callable(), scopes: Array = [YouTube.SCOPE], channel
 			ask.append(sc)
 	_sign = "signing_in"
 	_show_sign_wait()
-	var got: Dictionary = await _yt.sign_in(ask)
+	var got: Dictionary = await _yt.sign_in(ask, through, channel)
 	if mine != _sign_attempt:
 		return
 	var err := str(got.get("error", ""))
@@ -1528,7 +1537,8 @@ func _signed_in(then: Callable, channel: String) -> void:
 
 func _show_sign_wait() -> void:
 	var meant := _sign_named if not _sign_named.is_empty() else YouTube.name_of(YouTube.channel(_sign_channel))
-	_sign_dialog.dialog_text = ("Signing in to %s.\n\n" % meant if not meant.is_empty() else "") + SIGN_WAIT
+	_sign_dialog.dialog_text = ("Signing in%s through %s.\n\n" % [" to " + meant if not meant.is_empty() else "", _sign_project()]
+		+ SIGN_WAIT + "\n\n" + SIGN_BLOCKED % _sign_project())
 	_sign_dialog.ok_button_text = "Cancel"
 	_sign_again.text = "Open the page again"
 	_sign_copy.text = "Copy the link"
@@ -1538,7 +1548,7 @@ func _show_sign_wait() -> void:
 
 
 func _show_sign_failed(why: String) -> void:
-	var hint := SIGN_BLOCKED if why.contains("timed out") or why.contains("access_denied") else ""
+	var hint := SIGN_BLOCKED % _sign_project() if why.contains("timed out") or why.contains("access_denied") else ""
 	_sign_dialog.dialog_text = "The YouTube sign-in did not finish: %s.%s" % [why, ("\n\n" + hint) if not hint.is_empty() else ""]
 	_sign_dialog.ok_button_text = "Close"
 	_sign_again.text = "Try again"
@@ -1547,13 +1557,18 @@ func _show_sign_failed(why: String) -> void:
 		_sign_dialog.popup_centered(Vector2i(560, 0))
 
 
+## The Cloud project the sign-in at hand goes through, which is whose test users Google asks after.
+func _sign_project() -> String:
+	return YouTube.client_name(YouTube.client_for(_sign_through, _sign_channel))
+
+
 func _on_sign_action(action: StringName) -> void:
 	match String(action):
 		"again":
 			if _yt.phase == "signing_in":
 				_yt.reopen_sign_in()
 			else:
-				_check_sign_in(_sign_then, _sign_scopes, _sign_channel, _sign_named)
+				_check_sign_in(_sign_then, _sign_scopes, _sign_channel, _sign_named, _sign_through, _sign_move)
 		"copy":
 			DisplayServer.clipboard_set(_yt.sign_in_url)
 			_sign_copy.text = "Link copied"
@@ -1585,7 +1600,7 @@ func _on_client_file(path: String) -> void:
 		_client_failed(err)
 		return
 	_note_t = 6.0
-	_set_status("✓  Google client imported - Ghost Notes keeps it for every sign-in", Color(0.82, 0.95, 0.86))
+	_set_status("✓  Google client imported - it stays on the Client list of every YouTube card", Color(0.82, 0.95, 0.86))
 	if then.is_valid():
 		then.call()
 

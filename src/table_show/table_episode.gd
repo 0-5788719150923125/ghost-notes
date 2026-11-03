@@ -19,6 +19,10 @@ class_name TableEpisode
 
 const ROOT := "user://table"
 const YouTube := preload("res://src/export/youtube.gd")
+## The chapters the video opens and closes on when their readers name none ([method upload_notes]): no
+## card word in the close's, for a show that brews draws a card too.
+const INTRO_CHAPTER := "Intro"
+const CLOSE_CHAPTER := "The close"
 
 ## Where shows live. Moved aside under test, so a gate never touches the author's episodes.
 static var root := ROOT
@@ -640,8 +644,11 @@ func complete() -> bool:
 
 
 ## WHAT AN UPLOAD OF THE EPISODE SAYS: the title, the description (else the premise) and the tags
-## of the plan - as the panel left them - and, given the take at [param take], a chapter per card
-## timed from its sidecar's word timings. `{title, description, chapters, tags}`; no chapters
+## of the plan - as the panel left them - and, given the take at [param take], its chapters timed from
+## its sidecar's word timings ([method CardReading.chapters]): each the name the reader gave it, else
+## the intro's ([constant INTRO_CHAPTER]), the card by its place and name ([method card_chapter]), the
+## beat by its name, the close's ([constant CLOSE_CHAPTER]) - and as YouTube takes them
+## ([method YouTube.fit_chapters], the video ending its outro after the last word). `{title, description, chapters, tags}`; no chapters
 ## without a readable take.
 func upload_notes(take := "") -> Dictionary:
 	var plan: Variant = read_json("plan")
@@ -659,31 +666,44 @@ func upload_notes(take := "") -> Dictionary:
 	var words: Array = (j.data as Dictionary).get("words", [])
 	var cards: Array = document().get("cards", [])
 	# A SHOW WITH NO CARDS: a chapter a beat, by its name
-	var bare := cardless()
-	var beat_pos: Array = (((p.get("spread", {}) as Dictionary).get("positions", [])) as Array) if bare and p.get("spread") is Dictionary else []
-	var chapters := PackedStringArray()
+	var beat_pos: Array = (((p.get("spread", {}) as Dictionary).get("positions", [])) as Array) if cardless() and p.get("spread") is Dictionary else []
+	var timed: Array = []
 	for c in CardReading.chapters(script(), words):
 		var d: Dictionary = c
-		var label := "Intro"
-		match String(d["kind"]):
-			"work":
-				var b := int(d["card"])
-				var bp: Variant = beat_pos[b - 1] if b >= 1 and b <= beat_pos.size() else {}
-				label = String((bp as Dictionary).get("name", "")) if bp is Dictionary else ""
-				if label.is_empty():
-					label = "Part %d" % b
-			"draw", "jumper", "deal", "show":
-				var k := int(d["card"])
-				var card: Dictionary = cards[k - 1] if k >= 1 and k <= cards.size() else {}
-				var pos := String((card.get("position", {}) as Dictionary).get("name", ""))
-				label = "%s%s%s%s" % [(pos + " - ") if not pos.is_empty() else "", String(card.get("name", "Card %d" % k)),
-					" (reversed)" if bool(card.get("reversed", false)) else "",
-					" - a jumper" if String(d["kind"]) == "jumper" else ""]
-			"spread":
-				label = "The close" if bare else "The spread"
-		chapters.append("%s %s" % [chapter_clock(int(d["t"])), label])
+		var label := String(d.get("name", ""))
+		if label.is_empty():
+			match String(d["kind"]):
+				"intro":
+					label = INTRO_CHAPTER
+				"work":
+					var b := int(d["card"])
+					var bp: Variant = beat_pos[b - 1] if b >= 1 and b <= beat_pos.size() else {}
+					label = String((bp as Dictionary).get("name", "")) if bp is Dictionary else ""
+					if label.is_empty():
+						label = "Part %d" % b
+				"draw", "jumper", "deal", "show":
+					var k := int(d["card"])
+					var card: Dictionary = cards[k - 1] if k >= 1 and k <= cards.size() else {}
+					label = card_chapter(String((card.get("position", {}) as Dictionary).get("name", "")),
+						String(card.get("name", "Card %d" % k)), bool(card.get("reversed", false)), String(d["kind"]) == "jumper")
+				"spread":
+					label = CLOSE_CHAPTER
+		timed.append({"t": float(d["t"]), "label": label})
+	var end := -1.0
+	if not words.is_empty() and words.back() is Dictionary:
+		var bookend: Variant = (j.data as Dictionary).get("bookend", {})
+		end = float((words.back() as Dictionary).get("t1", -1.0)) + (float((bookend as Dictionary).get("out", 0.0)) if bookend is Dictionary else 0.0)
+	var chapters := PackedStringArray()
+	for c in YouTube.fit_chapters(timed, end):
+		chapters.append("%s %s" % [chapter_clock(int((c as Dictionary)["t"])), String((c as Dictionary)["label"])])
 	out["chapters"] = chapters
 	return out
+
+
+## A CARD'S CHAPTER when its reader names none: its place in the spread, its name, how it fell.
+static func card_chapter(position: String, name: String, reversed: bool, jumper := false) -> String:
+	return "%s%s%s%s" % [(position + " - ") if not position.is_empty() else "", name,
+		" (reversed)" if reversed else "", " - a jumper" if jumper else ""]
 
 
 ## [param t] seconds as a chapter's timestamp, as YouTube reads one: `m:ss`, `h:mm:ss` from an hour.

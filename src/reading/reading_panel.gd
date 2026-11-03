@@ -251,6 +251,8 @@ func transport_hooks() -> Dictionary:
 		"length": func() -> float: return _stream.length() if not _stream.chunks.is_empty() else 0.0,
 		"seek": _transport_seek,
 		"stale": func() -> bool: return _stream.stale and not _stream.chunks.is_empty(),
+		# ...and how far ahead of the playhead the voice is made ([method ReadingStream.ahead]): the transport's buffered stretch
+		"ahead": func() -> float: return _stream.ahead() if _stream.live() else -1.0,
 	}
 
 

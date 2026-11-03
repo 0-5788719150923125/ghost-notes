@@ -16,8 +16,8 @@ class_name EpisodeCard
 ## [NoteCards] from the `table` row as the Look's is, and it HANDS the reading what a show of cards
 ## changes: what is read ([EpisodeWalk]: the episode's script, never the brief), where it is heard
 ## ([EpisodeCard.Bed]: the episode's table, its sound and wind) and how it goes out
-## ([EpisodeCard.Publish]: the episode's title, the episode held through a render, upload notes and a
-## chapter per card). The panel is the one a chapter is read in, and knows nothing of cards.
+## ([EpisodeCard.Publish]: the episode's title, the episode held through a render, upload notes and its
+## chapters). The panel is the one a chapter is read in, and knows nothing of cards.
 ##
 ## GENERATION IS EXPLICIT, as with every picture in ghost: Generate makes what the episode is
 ## missing, New episode makes a new seed, and a step's redo deletes it (and what was made from
@@ -402,8 +402,8 @@ func export_name() -> String:
 
 
 ## THE EXPORT: the take is rendered as any reading's is, then the episode's folder gets `upload.md`
-## - the title, the description and tags the producer wrote, and a chapter per card timed from the
-## take itself. One show makes many videos; each should arrive ready to post.
+## - the title, the description and tags the producer wrote, and the chapters its readers named timed
+## from the take itself ([method TableEpisode.upload_notes]). One show makes many videos; each should arrive ready to post.
 ##
 ## THE EPISODE IS PINNED BEFORE THE FIRST AWAIT: the take is minutes of synthesis, and the panel
 ## stays live through it. False with no episode: nothing renders.
@@ -435,7 +435,7 @@ func after_take(path: String) -> String:
 
 
 ## WHAT AN UPLOAD SAYS, under the YouTube card's title, visibility, playlist and thumbnail (see
-## [member Exporter.upload_provider]): the episode's description and a chapter per card timed from
+## [member Exporter.upload_provider]): the episode's description and its chapters timed from
 ## [param take] (apart, so the playlist goes between them - [method YouTube.description_of]), the
 ## SHOW'S tags (its document's `tags:` line, the one list - a step that writes an episode's writes over
 ## it), the episode's folder (where the steps other cards add keep what they made of it), the file its
@@ -1313,8 +1313,8 @@ func youtube_built(card: YouTubeCard) -> void:
 func _build_upload_fields(box: VBoxContainer) -> void:
 	_yt_desc = TextEdit.new()
 	_yt_desc.placeholder_text = "Description"
-	_yt_desc.tooltip_text = ("The video's description. A chapter per card, timed from the export itself, "
-		+ "is added under it as the video goes up.")
+	_yt_desc.tooltip_text = ("The video's description. The chapters its readers named, timed from the export "
+		+ "itself, are added under it as the video goes up.")
 	_yt_desc.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
 	_yt_desc.custom_minimum_size = Vector2(0, 120)
 	_yt_desc.text_changed.connect(_upload_edited)

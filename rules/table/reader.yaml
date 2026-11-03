@@ -14,8 +14,10 @@
 # others stay out; {{handled}}, what is done after it to this card or one on the table (laid sideways, laid on
 # another, turned where it lies); {{after}}, what the table
 # does after the last word; `misses`, what the card's painting gets wrong (the art director could not
-# have it put right); `voices`, the show's other voices; and the passage's length ({{lo}} to
-# {{hi}} words).
+# have it put right); `voices`, the show's other voices; the passage's length ({{lo}} to
+# {{hi}} words); and `chapters` (every passage but an aside), {{chapter_now}} the video chapter it begins as
+# the description names it unless the reader does ("" for a card's work, which begins one only when named)
+# and {{chapter_words}}, a minute's words.
 #
 # A SHOW THAT DRAWS NO CARDS (`cardless`; the user, 2026-10-26) reads in BEATS: the step `beat` (its place
 # {{k}}, its name {{position}}, what it does {{asks}}), said while its work is done (`work_list`), with no
@@ -110,6 +112,10 @@ prompt:
           for a card's name). The audience has heard these: say what a close says some other way.
   - when: heard
     insert: heard
+  - when: chapters
+    say: ""
+  - when: chapters
+    include: chapters
   - ""
   - when: "!cardless"
     include: moves
@@ -370,6 +376,36 @@ beat:
           alike or ended alike, this one opens and ends otherwise.
   - "AFTER YOUR LAST WORD: {{after}}"
 
+# THE VIDEO'S CHAPTERS (the user, 2026-10-31, of the-quiet-crucible 841899's description - "0:00 Intro, 1:58
+# The Card from the Tin - Lighting a New Furnace, 9:14 The spread": a seven-minute brew in one chapter, and a
+# card word for a show that brews): the reader knows where its words turn, and the take's word timings place
+# each mark (CardReading.chapters), so no agent writes a time. A chapter under YouTube's ten seconds is
+# dropped (YouTube.fit_chapters). No sample name is given: it would be written in every episode.
+chapters:
+  - >-
+      THE VIDEO'S CHAPTERS: its description lists them, each a line a viewer can click to jump to,
+      timed from the video itself - you never write a time.
+  - when: intro
+    say: >-
+          Your passage is the video's first chapter, "{{chapter_now}}".
+  - when: ["chapter_now", "!intro"]
+    say: >-
+          Your passage begins the chapter "{{chapter_now}}". To call it something that tells a viewer
+          better what this part of the video holds, put <!-- chapter: its name --> on a line of its own
+          before your first word.
+  - when: "!chapter_now"
+    say: >-
+          Your passage begins a new part of the video: name its chapter with <!-- chapter: its name -->
+          on a line of its own before your first word.
+  - >-
+      Where your passage turns to a new part a viewer might want to find again - a new step, a story
+      of its own - put <!-- chapter: its name --> just before the word it begins at. A
+      chapter runs at least a minute (about {{chapter_words}} words), so a short passage has none but
+      its own, and a long one a chapter for each part of it. A name is a few plain words saying what is
+      done or told there, as someone scanning the list would want it: never a pun, a teaser or a
+      number, and never a name a chapter in what you have said so far already has. The marks are
+      never read aloud.
+
 # BETWEEN THE PASSAGES of a show that draws no cards: nothing is drawn, and nobody announces a beat
 moves_beats: >-
   NOTHING IS DRAWN IN THIS SHOW. Your passage is spoken whole; the next begins after your last word, and
@@ -487,7 +523,7 @@ work_list:
       the work brings to mind - and come back to the work where it does something worth a word. Words
       a step writes are said as they are written. Start each step at the word it belongs to: put
       <!-- act: its name --> just before that word, on the same line, and the work waits for it (a
-      step with no mark starts where the one before it ends). No other mark. The work takes about
+      step with no mark starts where the one before it ends). No other mark starts a step. The work takes about
       {{work_seconds}} seconds in all: say at least enough to cover it, and more where you have a
       story to tell.
   # A SHOW WHOSE WORDS ARE ABOUT SOMETHING ELSE while the work is seen (the brief says so): the work answers the

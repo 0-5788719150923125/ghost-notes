@@ -21,11 +21,29 @@ class_name TablePhysics
 ## its own recursion, nothing that touches a node - handed each new plan, never sharing one while it changes; a render
 ## and a preview wait for it (a picture is never ahead of the bake), a live picture never does.
 ##
+## TWO THREADS SHARE NOTHING THAT EITHER WRITES (2026-11-01, a live show's crash: signal 11 in [method _draw_liquids], reading
+## the twin's channels as the bake took a new plan and freed the old - and, played live by a probe, `double free or corruption`
+## a minute in). A Godot Dictionary or Array written on one thread while another reads it can be moved under the read, a key
+## added for the first time is such a write, a member given on two threads at once lets its old value go twice, and a PACKED ARRAY
+## HELD IN A DICTIONARY IS THE SAME ARRAY, never a copy. So the app's thread reads only the FRAMES, under the lock (made whole and
+## never written again, every array in one its own - its woken bodies too, `wk`), what was made before the bake's thread began and
+## is never written after (every key the bake finds later is there from the build, empty; a field's surface points made then), and
+## its own: the work's channels and copies of the solids ([member TableWork._solids_ref]), the picture's lumps and textures
+## ([member _drawn_mm], [member _wave_tex]), the sprinkles as it knows them ([member _sprinkles_drawn], [member _sprinkles_seen]),
+## its timings ([member drawn_profile]). The twin is handed copies of the plan's entries ([method _entries_of]), on which posing
+## keeps what it finds. Probe it played as the app plays it: tests/table/episode_bake_probe.gd `--live`.
+##
 ## A BAKE GOES ON TO THE NEXT TABLE (2026-10-28, the-quiet-crucible 707668: the puppeteer's Work ran 90 minutes and
 ## took 3 of its 30 looks - each `act` stood a table of its own and baked it from its first frame, ~16 ms a frame, the
 ## draft 105 s long, on the app's own thread; it would not close for two minutes): a table stood again over the same
 ## table with other acts takes what the last one baked ([method carry], [method adopt]) as far as the two plans agree,
 ## channel by channel, and bakes on from there. A preview bakes on a worker ([method bake_until], [method halt]).
+##
+## THE WORLD IS THE TABLE'S, NEVER THE ACTS' (2026-11-01, next/framework_audit.md: 841899's puppeteer spent 78 of its 105 minutes
+## in our tools, a whole-show bake for every act that moved something nothing had moved): every free part and every movable thing
+## is a body, dormant until taken up ([RigidParts]); nothing a frame does looks at a later act further than a hand's pause
+## ([method _held_aloft]); so a new draft - a puppeteer's next `act`, bound to the table it stood for the last ([method rebind]) -
+## is baked again only from the first moment it changes ([method replan]), by an act's name, its time and what it does.
 
 ## The bake's frames a second, how far ahead of the picture a live bake runs (seconds), and how often it keeps a
 ## checkpoint (frames) - with how many it keeps beside the first: the latest [constant CHECKS_NEAR] one after another
@@ -44,6 +62,8 @@ const HELD_BACK := 0.01
 ## A bake carried to another table is taken up to this long before the first moment the plans differ (seconds): a
 ## solid may move a frame or two either side of its stretch ([method _may_move], [method _moves_at]).
 const CARRY_MARGIN := 0.25
+## How long before its first act a past is baked from (seconds, [member _t0]).
+const PAST_LEAD := 1.0
 ## How far past the last frame baked a live show may run before the log says what is in things is behind (seconds).
 const OUTRUN := 0.5
 ## A LIVE SHOW WAITS FOR THE BAKE ([method behind]): from when the bake is less than WAIT_UNDER ahead of it until it is
@@ -56,9 +76,47 @@ const SEAT_REACH := 0.03
 const SEAT_TURN := 0.6
 const SEAT_NEAR := 0.015
 const SEAT_TILT := 0.35
+## ...and one that comes to rest this near its seat by itself (meters, radians) is in it, and welded there.
+const SEAT_SNUG := 0.002
+const SEAT_SNUG_TILT := 0.05
+## ...and a move carries it WITH its seat that begins and ends with it seated and never takes it further from it on the way than
+## this (meters, radians): two hands' bows and sways apart, never a cork drawn out and put back.
+const SEAT_RIDE := Vector2(0.03, 0.5)
 const WAIT_AHEAD := 3.0
 ## Two holds of a thing less than this apart (seconds) are one: a hand never lets go between one move and the next.
 const HOLD_GAP := 0.25
+## How far down from a place a report looks for what it lies on (meters): a thing's middle stands a few centimeters over it - and how
+## far over a vessel what lies on it or in it may stand (meters, [method _mover_box]).
+const LOOK_DOWN := 0.04
+const ON_IT := 0.04
+## THE LONGEST A HAND HOLDS A THING IN THE AIR between its moves (seconds), when let go there it would fall: a pause - a mortar held
+## over the pot while the other hand puts the pestle back, never the 15 s of words before a stir - past it, it is set down where it
+## is ([method _held_aloft]). (At 1 s, 841899's mortar, held over the cauldron after its pour for the 2.5 s the pestle took, was set
+## down on the cauldron's rim and tumbled into the brazier's pan.)
+const HOLD_MOST := 3.0
+## A HAND NEVER LETS GO WHERE WHAT IT HOLDS WOULD COME DOWN BADLY ([method _lands_ill]; 2026-11-01, feedback 0004-0007: the mortar, level over
+## the cauldron after its pour, its next act 4.6 s on, let go and set down on the rim - it tipped over the rim onto the table and trembled
+## there. 3 s had been this constant's answer to the same fall at 1 s: the rule was wrong, not the number). Past a pause, let go, it must
+## not tumble: turned past [constant LAND_TILT] and come down past [constant LAND_DROP], tried for [constant LAND_TRIAL] seconds, and not
+## standing in a vessel at the end (a ladle turns as far coming to lean on a pot's rim, and comes down a centimeter). Otherwise the hand
+## goes on holding it - for its next move if that comes within [constant HOLD_ILL] seconds, and while one is still to come - or puts it
+## back where it last rested, over [constant BACK_TIME] seconds.
+const LAND_TILT := 0.44
+const LAND_DROP := 0.03
+const LAND_TRIAL := 3.0
+const HOLD_ILL := 8.0
+const BACK_TIME := 1.6
+## How far a hand putting a thing back lifts it on the way (meters).
+const BACK_LIFT := 0.03
+## A hand done with a thing whose lowest point is this far under a vessel's rim (meters) lets it lean in that vessel
+## ([method _stands_in]).
+const STANDS_IN := 0.025
+## LET GO, WOULD IT FALL ([method _would_fall])? Tried for [constant LAND_TRIAL] seconds; it falls when its lowest point goes further down than
+## FALL_LEAST (meters) - a ladle put back on its rest settles a millimeter; a jar a carry left 4 cm over the table, or a feather
+## held up to be shown, falls.
+const FALL_LEAST := 0.02
+## The least a thin thing's spheres rest at over the table and the solids (meters, [member Particles.rc]).
+const CONTACT_LEAST := 0.0004
 ## A frame's word for a loose thing yet to be a body ([method _wake_loose]), where 1 is one whole and 0 one broken - and for
 ## one LYING AGAIN where it came to rest ([method _rest_loose]).
 const LYING := 2
@@ -68,6 +126,8 @@ const RELEASE_AFTER := 2.0
 ## WHAT A BLADE CUTS: loose things of these kinds of material ([constant Props.MATERIALS]) - a root, a candle, a sheet of
 ## paper, cloth, leather ([method Particles._cut_through]).
 const CUTS := ["plant", "wax", "paper", "leather", "fabric"]
+## WHAT A SHEET OF GIVES AS IT IS MET ([method Particles.make_soft]): a feather, a leaf, a page, a rag - never a scale of bone or a leaf of beaten metal.
+const BENDS := ["plant", "paper", "fabric"]
 ## ...and a soft thing shorter than this (meters) is too small to slice: a seed, a petal.
 const SLICE_LEAST := 0.03
 ## The most grains one grains part is laid as, and how full a cubic packing of spheres is.
@@ -82,6 +142,8 @@ const SLOSH_DAMP := 0.05
 const SWIRL_LIFE := 3.0
 const SWIRL_PULL := 3.0
 const PARCEL_LIFE := 2.5
+## ...looked along its way a frame at a time in steps of this (meters): half a thin wall ([method _solid_on_way]).
+const PARCEL_STEP := 0.0015
 ## A STREAM drawn: its thinnest and thickest (meters).
 const STREAM_R := Vector2(0.0004, 0.004)
 ## RIPPLES and SPLASHES: how high a ring rises for what struck it (meters a kilogram-meter-a-second, and its least and
@@ -97,6 +159,9 @@ const SPLASH_UP := 0.35
 const DROPS_EACH := 8
 const DROP_LIFE := 0.7
 const DROPS := 64
+## How many of the table's first frames draw the copies that have the GPU build what a stream and the drops need ([method
+## _drawn_nodes]) before they are freed: a frame or two can pass before a table's first is drawn.
+const WARM_TICKS := 4
 ## A SOLID'S SURFACE, by its kind of material ([constant Props.MATERIALS]): its friction, static and kinetic, against
 ## what rests on it - met with that thing's own as their geometric mean. Polished metal and glass are slick: a resin tear
 ## dropped on a bronze pestle lying across its mortar slides off it into the bowl (the-quiet-crucible 841899: it "lands
@@ -109,6 +174,15 @@ const SURFACE_ELSE := Vector2(0.5, 0.4)
 ## How deep what falls into a liquid dents its surface for the ring it makes ([member ripples]' `size`) - the dent's
 ## depth, a share of it.
 const DENT := 0.8
+## A bubble this big (meters, its radius) breaking rings a liquid's surface ([Boil]): a simmer's are smaller, and only drawn.
+const BUBBLE_RINGS := 0.002
+## HOW A LIQUID STIRS ([method _agitation]): the least of any, and how much a radian a second of its swirl adds.
+const AGITATION_LEAST := 0.2
+const AGITATION_SWIRL := 0.25
+## A TOOL'S VORTEX ([method _liquids_step]): as a share of the surface's radius, the least its core is.
+const SWIRL_CORE := 0.25
+## The most bubbles a liquid's surface is drawn with at once ([method _draw_liquids]): the biggest.
+const BUBBLES_DRAWN := 16
 ## A grain drawn: how much larger than its sphere its lump is, so a heap reads whole.
 const LUMP := 1.25
 const GRAVITY := 9.81
@@ -123,6 +197,10 @@ const SWING_STEPS := 4
 const SWING_STILL := Vector2(0.004, 0.02)
 const SWING_REST := 0.5
 const MASS_CELLS := 24
+## WHAT STANDS IN A LIQUID RAISES IT ([method _level_of]): a body's matter met by at most this many points, and a moving
+## vessel's inside by every this many of its own.
+const MATTER_POINTS := 300
+const INSIDE_STEP := 4
 
 const _LIQUID := preload("res://shaders/prop_liquid.gdshader")
 
@@ -135,6 +213,9 @@ var work: TableWork:
 	set(w):
 		_work_ref = null if w == null else weakref(w)
 var twin: TableWork
+## A PROBE THAT PLAYS AS THE APP PLAYS (tests/table/episode_bake_probe.gd `--live`): the bake on a thread of its own, as a live
+## show's is, though a test's process waits on the caller's ([method render_waits]).
+static var threaded := false
 var _work_ref: WeakRef = null
 var sim := Particles.new()
 ## THE PARTS THE WORK PICKS UP, as rigid bodies ([method _make_rigid]), and each one's work -> its body.
@@ -148,9 +229,11 @@ var loose: Array = []         # [{wi, thing, body, n0, name, mm}]
 var _matter := {}             # a table material's name -> its matter row in [member sim]
 var _vessel_of := {}          # solid -> its liquid
 var _loose_of := {}           # work -> its loose entry
+var _bo_n := 0                # how many points the sheets that bend have, all told: what a frame keeps of each ([method bend_of])
 var _lying_at := {}           # a cell of Particles.AWAKE_CELL -> the loose entries that lie near it, as built
 var _hold_spans := {}         # loose work -> the stretches the work holds it, this plan ([method _held_at])
-var _moves_after := {}        # "channel|act" -> whether a later act moves that channel ([method _moved_after])
+var _with_seat_of := {}       # a part's move and its seat -> whether the move carries it with its seat ([method _with_seat])
+var _wet_ids: Variant = null  # this frame's spheres in each liquid ([method _wet_now]); null as built
 
 var frames: Array = []        # {x, r, alive, bp, bi, liq, hit} a frame
 var parcels: Array = []       # [{t0, p, v, vol, from, t1, into}]
@@ -171,7 +254,7 @@ var _chan_seen := {}          # ...its channels ([method replan])
 var _owner_pose := {}         # "t3"/"w7" -> [last t, its pose]
 var _intervals := {}          # "t3"/"w7" -> [[s0, s1], ...] when it may move
 var _spans: Variant = null    # every stretch anything on the table may move in, in order (Vector2s), once a plan
-var _sprinkles: Array = []    # [{act, track, t0, t1, done}]
+var _sprinkles: Array = []    # [{act, track, grains, owner, key, done}] - the bake's: every key made with it, only written after
 var _sync := true
 var _thread: Thread = null
 var _lock := Mutex.new()
@@ -184,12 +267,50 @@ var _drawn: Variant = null    # the frame last drawn
 var _streams: Array = []      # [ImmediateMesh nodes]
 var _drops: MultiMeshInstance3D = null
 var _clear_at := 0.0          # where the bake was restarted from
+## WHERE THE BAKE BEGINS in show time (seconds, never after 0): its first frame's moment. A reading started mid-way (a scrub)
+## places what was done before its first words at times before 0 ([method TableWork.schedule]), and the bake begins there, so
+## what is in things on the first frame shown is what those acts left - never as it was built (the-quiet-crucible 841899,
+## 2026-10-31, scrubbed to the feather: "it totally breaks physics, every time ... there is a piece of some ingredient sitting
+## on top of the recipe card" - the tear carried to the mortar at -70 s was never baked, and lay where its carry left it).
+var _t0 := 0.0
 var _layout := 0              # what this table's physics is made of, as a number ([method _layout_of])
 var _carried: Variant = null  # a bake from a table stood before, until the first plan is taken ([method adopt])
-var _halt := false
+var _halt := false              # a bake given up ([method halt])
 var _outrun := false            # a live show past the last frame baked, as last said
-var _behind := false            # a live show waiting for the bake ([method behind])            # a bake given up ([method halt])
+var _behind := false            # a live show waiting for the bake ([method behind])
 var notes := PackedStringArray()
+## A probe's: whether each stepped frame's cost is kept by section ([method _spent]), and what it came to.
+var profiling := false
+var profile := {}
+## ...and the picture's own, drawn on the app's thread ([method tick]): kept apart, since the bake's thread writes [member profile]
+## as it steps while the picture draws.
+var profiling_drawn := false
+var drawn_profile := {}
+var _liquid_of_work := {}     # work -> the liquid it is ([method liquid_volume])
+var _woke := PackedInt32Array()     # the bodies woken so far, in the order they woke: what a frame keeps ([method _record])
+var _rank_of := PackedInt32Array()  # body -> its place in [member _woke], or -1 - the bake's own: anyone else reads a frame's `wk`
+var _drawn_parts: Array = []  # the frame's particles as last drawn: [alive, owner, broken, cut, body, places, radii]
+## WHAT THE PICTURE DRAWS WITH, ITS OWN ([method _drawn_tables]): a lump owner (a grain set, or 1000 + a loose thing) -> its
+## MultiMesh, and each loose thing's work. The bake's thread writes into the grains' and loose things' own Dictionaries as it goes
+## (a loose thing woken takes keys it never had), and a Dictionary given a key while another thread reads it may be moved under
+## the read - so the app's thread reads none of them, and none of the twin's ([member twin]): only the frames, under the lock.
+var _drawn_mm := {}
+var _loose_wi := PackedInt32Array()
+## THE SPRINKLES AS THE APP'S THREAD KNOWS THEM ([method _drawn_tables]): each one's key, act and track, copied as the acts are
+## taken up - what [method replan] reads, never the bake's own.
+var _sprinkles_drawn: Array = []
+## When each sprinkle fell in the plan last handed over (its key -> its stretch, [method replan]): the app's thread's own - the
+## sprinkle's Dictionary is the bake's, which writes how much of it has fallen as it goes
+var _sprinkles_seen := {}
+var _wave_tex := {}           # liquid -> [its ripples' texture, the frame's bytes it was last written from] ([method _wave_texture])
+var _warm: Array = []         # a stream and the drops drawn at nothing's size as the table stands, then freed ([method _drawn_nodes])
+var _warm_ticks := 0
+var _turn_of: Array = []      # each particle's own turn, drawn ([method _draw_particles])
+## Where the last plan taken up began to be baked again (seconds of show): what a new plan cost.
+var resumed_at := 0.0
+## HOW FAR AHEAD OF THE PICTURE A LIVE BAKE RUNS (seconds): [constant HORIZON] while the show plays - and, while it is paused, as
+## far as its medium asks ([member TableMedium.BUFFER]): baked while nobody watches, it plays without the bake beside it.
+var reach := HORIZON
 
 
 # --- what is on the table -------------------------------------------------------------------------------
@@ -275,8 +396,16 @@ func build() -> void:
 			(loose_parts[int(sd["loose"])] as Array).append(sd)
 			continue
 		sd["field"] = ShapeField.of(sd["part"], sd["box"])
+		# ...its surface's points made now, before any bake runs beside the picture: both ask them ([RigidParts] as a body meets it,
+		# the work as a plan sets a thing down by it), and the first asking was a race ([method ShapeField.surface_points])
+		(sd["field"] as ShapeField).surface_points()
 		sd["mu"] = _surface_friction(String((sd["part"] as Dictionary).get("material", "")))
 		sd["rest"] = _pose_owner(sd, 0.0) * (sd["local"] as Transform3D)
+		# ...and whether it is a thin tool ([constant Particles.THIN_TOOL]): thin two ways, not one - a handle, not a board
+		var sz: Vector3 = (sd["box"] as AABB).size * (sd["rest"] as Transform3D).basis.get_scale()
+		var sides := [sz.x, sz.y, sz.z]
+		sides.sort()
+		sd["thin"] = float(sides[1]) < Particles.THIN_TOOL
 		sd["shown_ch"] = "w%d:shown" % int(sd["wi"]) if int(sd["wi"]) >= 0 else ""
 		kept.append(sd)
 	solids = kept
@@ -294,19 +423,68 @@ func build() -> void:
 		sd["jolt"] = 0.0
 		sd["dt"] = 1.0 / float(FPS)
 		sd["on"] = true
+		# ...and EVERY KEY THE BAKE FINDS LATER, empty: its points where it stands ([RigidParts]), its matter and its mass - a key
+		# first given on the bake's thread moves the Dictionary under any read on the app's, so none is given after now
+		sd["wpts"] = null
+		sd["wpts_xf"] = Transform3D()
+		sd["matter_pts"] = null
+		sd["mass"] = null
 	_make_liquids(liquid_parts)
+	# ...and the vessels a pour finds its lip and its mouth by ([method TableWork._pour_plan])
+	work._liquids_ref = liquids
+	twin._liquids_ref = liquids
 	_make_grains()
 	_make_loose(loose_parts)
 	_find_swings()
 	_make_rigid()
+	_built_displaced()
 	_find_sprinkles()
 	_frames_reset()
 	_layout = _layout_of()
-	_sync = work.medium == null or bool(work.medium.aside) or not work.medium.is_inside_tree() or render_waits()
+	_drawn_tables()
+	_drawn_nodes()
+	# ...and THE WORK'S OWN SOLIDS, each a copy: what it sets things down by and lifts them over is how each was built (its field,
+	# where it stood), while the bake writes into its own as it goes - the points it meets a body by, its mass - keys a solid never
+	# had, given while the app's thread read it
+	var own: Array = []
+	for sd in solids:
+		own.append((sd as Dictionary).duplicate())
+	work._solids_ref = own
+	_sync = work.medium == null or bool(work.medium.aside) or not work.medium.is_inside_tree() or (render_waits() and not threaded)
 	if not _sync:
 		_sem = Semaphore.new()
 		_thread = Thread.new()
 		_thread.start(_run)
+
+
+## THE SAME TABLE, OTHER ACTS ([method TableWork.rebind]): nothing of the world is built again - it is the table's - only what the
+## acts decide is taken up again: the twin's view of the acts, the sprinkles (kept by name), and every answer kept for the last
+## plan. What was baked stays; the plan the work hands next ([method replan]) is baked again from the first moment it changes.
+func rebind() -> void:
+	twin.acts = work.acts
+	twin._moved = work._moved
+	twin._soft = work._soft
+	_find_sprinkles()
+	_drawn_tables()
+	_intervals = {}
+	_owner_pose = {}
+	_hold_spans = {}
+	_with_seat_of = {}
+	_spans = null
+
+
+## The picture's own tables ([member _drawn_mm]), made as the grains and loose things are, before any bake runs beside it.
+func _drawn_tables() -> void:
+	_drawn_mm = {}
+	for gi in grains.size():
+		_drawn_mm[gi] = ((grains[gi] as Dictionary)["mm"] as MultiMeshInstance3D).multimesh
+	_loose_wi = PackedInt32Array()
+	for li in loose.size():
+		_drawn_mm[1000 + li] = ((loose[li] as Dictionary)["mm"] as MultiMeshInstance3D).multimesh
+		_loose_wi.append(int((loose[li] as Dictionary)["wi"]))
+	_sprinkles_drawn = []
+	for sp in _sprinkles:
+		_sprinkles_drawn.append({"key": (sp as Dictionary)["key"], "act": (sp as Dictionary)["act"], "track": (sp as Dictionary)["track"]})
 
 
 ## Whether this process's pictures wait for the physics, never ahead of the bake: a render (an export's Movie Maker, its
@@ -339,7 +517,7 @@ func _make_twin() -> void:
 	twin._soft = work._soft
 	twin.since = work.since
 	twin._spot = work._spot
-	twin._chan = work._chan
+	twin._chan = _entries_of(work._chan)
 	twin.runs = work.runs
 	twin.materials = work.materials
 	twin._parent_work = work._parent_work
@@ -381,10 +559,16 @@ func _make_liquids(parts: Array) -> void:
 				if int(work._parent_work.get(c, -1)) == int(sd["wi"]) and bool(((work.works[c] as Dictionary)["w"] as Dictionary).get("loose", false)):
 					holds = 2
 					break
-		if String(sd["owner"]) == "w" or work._moved.has("t%d:pose" % int(sd["thing"])):
+		# ...then A THING'S PARTS (a mortar, a vial, a jar), then the hollows of whole things - the table's alone, never what an act
+		# moves: every whole thing ranked with the parts once it was a body, and 841899's mortar lost its inside to a recipe tin's
+		if String(sd["owner"]) == "w":
 			holds = maxi(holds, 1)
 		return holds
-	order.sort_custom(func(a: int, b: int) -> bool: return int(rank.call(a)) > int(rank.call(b)))
+	# ...ties by where each stands in the list: the same table reckons the same insides
+	var key := {}
+	for si in order:
+		key[si] = int(rank.call(si)) * 100000 - int(si)
+	order.sort_custom(func(a: int, b: int) -> bool: return int(key[a]) > int(key[b]))
 	for si in order.slice(0, LIQUID_MOST):
 		var v := Vessel.of((solids[si] as Dictionary)["field"])
 		if v != null:
@@ -428,7 +612,7 @@ func _add_liquid(si: int, vs: Vessel, ld: Dictionary, mats: Dictionary) -> void:
 	var sd: Dictionary = solids[si]
 	var scale := absf((sd["rest"] as Transform3D).basis.determinant())
 	var full := vs.volume * scale
-	var entry := {"solid": si, "vessel": vs, "wi": -1, "nodes": [], "mats": [], "thing": int(sd["thing"]), "name": "", "full_v": full,
+	var entry := {"flow": _flow_of(si, vs, scale), "solid": si, "vessel": vs, "wi": -1, "nodes": [], "mats": [], "thing": int(sd["thing"]), "name": "", "full_v": full,
 		"built_v": 0.0, "color": Color(0.5, 0.5, 0.6), "plugs": [], "made": not ld.is_empty()}
 	var v0 := 0.0
 	if not ld.is_empty():
@@ -481,7 +665,7 @@ func _add_liquid(si: int, vs: Vessel, ld: Dictionary, mats: Dictionary) -> void:
 	_vessel_of[si] = liquids.size()
 	liquids.append(entry)
 	_liq.append({"v": v0, "d": Vector2.ZERO, "dd": Vector2.ZERO, "swirl": 0.0, "angle": 0.0, "c1": Vector3.INF, "c2": Vector3.INF,
-		"color": entry["color"], "f": -1.0, "hit": Vector4.ZERO, "w": (entry["waves"] as SurfaceWaves).fresh()})
+		"color": entry["color"], "f": -1.0, "hit": Vector4.ZERO, "w": (entry["waves"] as SurfaceWaves).fresh(), "dipped": -1, "core": 0.0, "was": Vector2(-1.0, 0.0)})
 
 
 ## THE INSIDE HANDED TO A LIQUID'S SHADER ([method Vessel.shader_tables]): [param mesh]'s space carried into vessel
@@ -663,12 +847,25 @@ func _make_loose(parts: Dictionary) -> void:
 		var m0: Variant = mats.get(mat_name)
 		var soft := String((m0 as Dictionary).get("kind", "") if m0 is Dictionary else "") in CUTS
 		var spread := 1.0 if soft and longest >= SLICE_LEAST else Particles.BODY_SPREAD
+		# A SHEET RESTS AT ITS OWN THICKNESS ([member Particles.rc]), its spheres a layer close enough that what it lies across
+		# meets it
+		var contact := 0.0
+		var bends := false
+		for sd in list:
+			var box: AABB = (sd as Dictionary)["box"]
+			var xf := n0 * ((sd as Dictionary)["local"] as Transform3D)
+			var f := ShapeField.of((sd as Dictionary)["part"], box)
+			if f.kind == "sheet":
+				contact = maxf(contact, maxf(f.thick * 0.5 * xf.basis.get_scale().y, CONTACT_LEAST))
+				spread = 1.0
+				# ...AND ONE OF WHAT GIVES BENDS ([method Particles.make_soft]): a body of one part, as a heap's copies are not
+				bends = list.size() == 1 and String((m0 as Dictionary).get("kind", "") if m0 is Dictionary else "") in BENDS
 		for sd in list:
 			var box: AABB = (sd as Dictionary)["box"]
 			var xf := n0 * ((sd as Dictionary)["local"] as Transform3D)
 			var f := ShapeField.of((sd as Dictionary)["part"], box)
 			var local_rad := rad / maxf(xf.basis.get_scale().x, 1e-4)
-			spheres.append_array(Particles.fill_shape(f, box, local_rad, xf, Particles.BODY_MOST, spread))
+			spheres.append_array(Particles.fill_shape(f, box, local_rad, xf, Particles.SOFT_MOST if bends else Particles.BODY_MOST, spread))
 		if spheres.is_empty():
 			continue
 		var mi := _matter_of(mat_name, mats)
@@ -680,7 +877,12 @@ func _make_loose(parts: Dictionary) -> void:
 		loose.append({"wi": int(wi), "thing": int((work.works[int(wi)] as Dictionary)["thing"]), "body": -1, "n0": n0, "built": n0,
 			"spheres": spheres, "box": box.grow(rad), "mi": mi, "full": false,
 			"name": work._part_label(int(wi)), "mm": _lumps(Particles.BODY_MOST * 6, m if m is Dictionary else {}, 500 + li, true),
-			"rad": rad})
+			"rad": rad, "contact": contact,
+			# ...every key the bake gives it as it wakes and comes to rest, as it is before then: none given after now
+			"calm": 0.0, "rest": null, "rest_host": -1, "rest_hxf": null, "rest_hrel": null, "rest_up": null, "mass": 0.0,
+			"soft": bends, "rest_off": null, "bo_at": _bo_n})
+		if bends:
+			_bo_n += spheres.size()
 		_loose_of[int(wi)] = li
 	_lying_cells()
 
@@ -734,7 +936,7 @@ func _wake_loose(li: int, t: float) -> bool:
 	mid /= float(spheres.size())
 	var host := _host_at(mid, int(L["thing"]))
 	var host_xf: Transform3D = (solids[host] as Dictionary)["xf"] if host >= 0 else Transform3D.IDENTITY
-	var bi := sim.add_body(at, float(L["rad"]), int(L["mi"]), 1000 + li, host, host_xf)
+	var bi := sim.add_body(at, float(L["rad"]), int(L["mi"]), 1000 + li, host, host_xf, float(L.get("contact", 0.0)))
 	if bi < 0:
 		L["full"] = true
 		return false
@@ -742,6 +944,18 @@ func _wake_loose(li: int, t: float) -> bool:
 	L["n0"] = now
 	L["rest"] = null
 	L["calm"] = 0.0
+	# ...A SHEET THAT BENDS, bent as it lay
+	if bool(L["soft"]):
+		sim.make_soft(bi)
+		if L["rest_off"] != null:
+			var bd: Dictionary = sim.bodies[bi]
+			var ids: PackedInt32Array = bd["ids"]
+			var off: PackedVector3Array = bd["off"]
+			var lay: PackedVector3Array = L["rest_off"]
+			for k in mini(ids.size(), lay.size()):
+				off[k] = moved.basis * lay[k]
+				sim.x[ids[k]] = moved * (spheres[k] + lay[k])
+			bd["off"] = off
 	return true
 
 
@@ -821,6 +1035,8 @@ func _rest_loose(dt: float) -> void:
 			if (hd["field"] as ShapeField).sample((hd["inv"] as Transform3D) * (sim.bodies[bi] as Dictionary)["c"]).x > float(L["rad"]) * 2.0 + 0.01:
 				hs = -1
 		var hxf: Transform3D = (solids[hs] as Dictionary)["xf"] if hs >= 0 and hs < solids.size() else Transform3D.IDENTITY
+		if bool(L["soft"]):
+			L["rest_off"] = _bent_built(L, b)
 		L["rest"] = pose
 		L["rest_host"] = hs if hs < solids.size() else -1
 		L["rest_hxf"] = hxf
@@ -843,11 +1059,21 @@ func _rest_loose(dt: float) -> void:
 		# over its mortar flew off the table at the solver's fastest, and a lump laid on a balance's pan leapt 33 cm
 		b["ids"] = PackedInt32Array()
 		b["rest"] = PackedVector3Array()
+		b.erase("links")
 		L["body"] = -1
 		L["calm"] = 0.0
 		moved = true
 	if moved:
 		_lying_cells()
+
+
+## How sheet [param L], body [param b], is bent, from as it was built: what a frame keeps ([method bend_of]).
+func _bent_built(L: Dictionary, b: Dictionary) -> PackedVector3Array:
+	var back := ((L["n0"] as Transform3D) * (L["built"] as Transform3D).affine_inverse()).basis.inverse()
+	var out := PackedVector3Array()
+	for q in (b["off"] as PackedVector3Array):
+		out.append(back * q)
+	return out
 
 
 ## The solid a thing at [param p] (the table's space) rests on or in, where the solids are now: a vessel's inside that
@@ -916,18 +1142,32 @@ func _lumps(n: int, m: Dictionary, salt: int, faceted := false) -> MultiMeshInst
 ## THE SPRINKLES of the acts: grains let fall from a point ([constant Motions.LAWS] `sprinkle`) - each a grains part of its
 ## own, made here on the table's thread, so what falls is drawn as its material.
 func _find_sprinkles() -> void:
-	_sprinkles = []
 	var mats: Dictionary = work.materials
+	# ...EACH KEPT BY ITS ACT'S NAME AND TRACK, never by where it is in the list: acts written again (a puppeteer's next `act`) find
+	# their own, a new one is added at the end, and one taken out is let fall no more - the grains and checkpoints already made
+	# keep their places ([method rebind])
+	var by_key := {}
+	for si in _sprinkles.size():
+		by_key[String((_sprinkles[si] as Dictionary)["key"])] = si
+		(_sprinkles[si] as Dictionary)["act"] = -1
 	for ai in work.acts.size():
-		for tr in (work.acts[ai] as Dictionary)["tracks"]:
-			if String((tr as Dictionary)["law"]) != "sprinkle":
+		var tracks: Array = (work.acts[ai] as Dictionary)["tracks"]
+		for k in tracks.size():
+			var tr: Dictionary = tracks[k]
+			if String(tr["law"]) != "sprinkle":
 				continue
-			var mname := String((tr as Dictionary).get("material", ""))
+			var key := "%s#%d" % [String((work.acts[ai] as Dictionary)["name"]), k]
+			if by_key.has(key) and _same_value(JSON.stringify((_sprinkles[int(by_key[key])] as Dictionary)["track"]), JSON.stringify(tr)):
+				(_sprinkles[int(by_key[key])] as Dictionary)["act"] = ai
+				continue
+			if by_key.has(key):
+				key += "@%d" % _sprinkles.size()
+			var mname := String(tr.get("material", ""))
 			var m: Variant = mats.get(mname)
 			var gi := grains.size()
 			grains.append({"name": "%s let fall" % (mname if not mname.is_empty() else "grains"), "thing": -1, "wi": -1, "ids": PackedInt32Array(),
-				"solid": -1, "mm": _lumps(int((tr as Dictionary).get("amount", 24)), m if m is Dictionary else {}, 900 + gi)})
-			_sprinkles.append({"act": ai, "track": tr, "grains": gi, "owner": gi})
+				"solid": -1, "mm": _lumps(int(tr.get("amount", 24)), m if m is Dictionary else {}, 900 + gi)})
+			_sprinkles.append({"act": ai, "track": tr, "grains": gi, "owner": gi, "key": key, "done": 0})
 			# its matter made now, never as its first grain falls: a checkpoint restored on another table names it
 			_matter_of(mname, mats)
 
@@ -951,9 +1191,10 @@ func _changed_from(a: Array, b: Array) -> float:
 		var ea: Dictionary = a[k]
 		var eb: Dictionary = b[k]
 		var s0 := minf(float(ea["s0"]), float(eb["s0"]))
-		if int(ea["i"]) != int(eb["i"]) or int(ea.get("order", -1)) != int(eb.get("order", -1)) \
+		# ...and WHAT IT DOES: an act written again (a puppeteer's next `act`) keeps its name and its time and moves otherwise
+		if String(ea.get("act", ea["i"])) != String(eb.get("act", eb["i"])) or int(ea.get("order", -1)) != int(eb.get("order", -1)) \
 				or not is_equal_approx(float(ea["s0"]), float(eb["s0"])) or not is_equal_approx(float(ea["t0"]), float(eb["t0"])) \
-				or not _same_value(ea.get("from"), eb.get("from")):
+				or not _same_value(ea.get("from"), eb.get("from")) or ea.get("track") != eb.get("track"):
 			return s0
 		var slopes_same: bool = ea.get("_m", PackedVector3Array()) == eb.get("_m", PackedVector3Array())
 		if is_equal_approx(float(ea["s1"]), float(eb["s1"])) and is_equal_approx(float(ea["t1"]), float(eb["t1"])) and slopes_same:
@@ -1002,28 +1243,22 @@ func replan() -> void:
 	var now_chan: Dictionary = work._chan
 	for ch in now_chan:
 		if _bakes(String(ch)):
-			from = minf(from, _changed_from(old.get(ch, []), now_chan[ch]))
+			from = minf(from, _hold_changed(String(ch), old.get(ch, []), now_chan[ch], _changed_from(old.get(ch, []), now_chan[ch])))
 	for ch in old:
 		if not now_chan.has(ch) and _bakes(String(ch)):
 			from = minf(from, _changed_from(old[ch], []))
-	# ...and when each sprinkle falls, by its act's own place in the plan
-	var seen := {}
-	for r in _runs_seen:
-		seen[int((r as Dictionary)["i"])] = r
-	var now := {}
-	for r in work.runs:
-		now[int((r as Dictionary)["i"])] = r
-	for sp in _sprinkles:
-		var ai := int((sp as Dictionary)["act"])
-		var a: Variant = seen.get(ai)
-		var b: Variant = now.get(ai)
-		if a == null and b == null:
-			continue
-		if a == null or b == null or not is_equal_approx(float(a["t0"]), float(b["t0"])) or not is_equal_approx(float(a["t1"]), float(b["t1"])):
-			from = minf(from, minf(float(a["t0"]) if a != null else INF, float(b["t0"]) if b != null else INF))
+	# ...and when each sprinkle falls, against when it fell in the plan before
+	# (the app's own list of them, [member _sprinkles_seen]: a sprinkle's Dictionary is the bake's, which writes into it as it falls)
+	for sp in _sprinkles_drawn:
+		var sd: Dictionary = sp
+		var was: Vector2 = _sprinkles_seen.get(String(sd["key"]), Vector2(INF, INF))
+		var now := _sprinkle_span_in(sd, work.runs)
+		if not now.is_equal_approx(was) and not (is_inf(now.x) and is_inf(was.x)):
+			from = minf(from, minf(was.x, now.x))
+		_sprinkles_seen[String(sd["key"])] = now
 	_runs_seen = (work.runs as Array).duplicate(true)
 	_chan_seen = now_chan
-	var job := {"chan": work._chan, "runs": work.runs, "from": from}
+	var job := {"chan": _entries_of(work._chan), "runs": work.runs, "from": from}
 	_lock.lock()
 	if _pending != null and float((_pending as Dictionary)["from"]) < from:
 		job["from"] = (_pending as Dictionary)["from"]
@@ -1031,6 +1266,68 @@ func replan() -> void:
 	_lock.unlock()
 	if _sem != null:
 		_sem.post()
+
+
+## THE TWIN'S OWN ENTRIES of channels [param chan] (each a copy; what they hold - a track, a pose - is never written again): posing
+## an entry keeps what it found on it (a carry's way over what is in it, its room, how far it sets down), and the app's thread
+## and the bake's both pose - on one entry, each wrote keys into a Dictionary the other was reading.
+static func _entries_of(chan: Dictionary) -> Dictionary:
+	var out := {}
+	for ch in chan:
+		var list: Array = []
+		for e in chan[ch]:
+			list.append((e as Dictionary).duplicate())
+		out[ch] = list
+	return out
+
+
+## ...OR SOONER, where a change at [param f] on channel [param ch] (plans [param a], then [param b]) has the hand HOLD what the move
+## before it left, which the last plan had it let go of ([method _holds_across]): its next move brought within a pause - baked
+## again from that move's end, or what an export holds lies wherever it fell (feedback 0004). Never the other way: what the last
+## plan held a pause longer than this one would is a thing that hovered a moment - and going back for it had the show wait while
+## the bake went back over what it had shown (841899: a stir placed 14 s after the ladle's move took the bake back 10 s). A move
+## placed where a hold already stood in for it ([method _to_come]) turns nothing.
+func _hold_changed(ch: String, a: Array, b: Array, f: float) -> float:
+	if f == INF:
+		return f
+	var last: Dictionary = {}
+	for e in b:
+		if float((e as Dictionary)["s1"]) <= f:
+			last = e
+	if last.is_empty():
+		return f
+	var was: Dictionary = {}
+	for e in a:
+		if float((e as Dictionary)["s0"]) > float(last["s1"]):
+			was = e
+			break
+	var now: Dictionary = {}
+	for e in b:
+		if float((e as Dictionary)["s0"]) > float(last["s1"]):
+			now = e
+			break
+	var to_come := _to_come_in(ch, last)
+	return minf(f, float(last["s1"])) if _holds_across(last, now, to_come) and not _holds_across(last, was, to_come) else f
+
+
+## [method _to_come] by the work's acts, for a plan on the app's thread ([method replan]): whether an act after [param last]'s moves
+## channel [param ch] at all - placed or not, as the bake's twin asks it of what it was handed.
+func _to_come_in(ch: String, last: Dictionary) -> bool:
+	for ai in range(int(last.get("i", -1)) + 1, work.acts.size()):
+		for tr in (work.acts[ai] as Dictionary)["tracks"]:
+			if String((tr as Dictionary).get("_ch", "")) == ch:
+				return true
+	return false
+
+
+## Show time at bake frame [param k].
+func _t_of(k: int) -> float:
+	return _t0 + float(k) / float(FPS)
+
+
+## The bake frame at show time [param t] (the one it lies in).
+func _k_of(t: float) -> int:
+	return int(floor((t - _t0) * float(FPS) + 1e-6))
 
 
 ## The plan handed over taken up: the twin's, and the bake gone back to the last checkpoint before what it moved. WHERE
@@ -1050,26 +1347,42 @@ func _take_plan() -> void:
 	_intervals = {}
 	_owner_pose = {}
 	_hold_spans = {}
+	_with_seat_of = {}
 	_spans = null
+	# ...FROM THE FIRST ACT, BEFORE 0 WHERE IT IS ([member _t0]): an earlier past is baked from as built - what was done before
+	# the first act changed nothing
+	var first := 0.0
+	for r in twin.runs:
+		first = minf(first, float((r as Dictionary)["t0"]))
+	var origin := minf(floor((first - PAST_LEAD) * float(FPS)) / float(FPS), 0.0) if first < 0.0 else 0.0
+	if origin < _t0:
+		_t0 = origin
+		_carried = null
+		_restore(_ck[0])
+		_lock.lock()
+		frames.resize(0)
+		_lock.unlock()
 	if _carried != null:
 		var c: Dictionary = _carried
 		_carried = null
 		if _take_carried(c):
+			resumed_at = _t_of(_k)
 			return
 	var from := float((job as Dictionary)["from"])
 	if from == INF:
 		return
-	if float(_k) / float(FPS) > from:
+	if _t_of(_k) > from:
 		var ck: Dictionary = _ck[0]
 		for c in _ck:
-			if float((c as Dictionary)["k"]) / float(FPS) <= from:
+			if _t_of(int((c as Dictionary)["k"])) <= from:
 				ck = c
 		_restore(ck)
+	resumed_at = _t_of(_k)
 	# ...AND WHAT WAS BAKED PAST THE CHANGE IS GONE: kept, it was the last plan's, drawn as this one's and counted as baked -
 	# the live viewer showed what the export never would, and said it was caught up (what lies between the checkpoint and the
 	# change is baked again the same)
 	_lock.lock()
-	var keep := maxi(_k, int(floor(from * float(FPS))))
+	var keep := maxi(_k, _k_of(from))
 	if frames.size() > keep:
 		frames.resize(keep)
 	_lock.unlock()
@@ -1087,6 +1400,9 @@ func _frames_reset() -> void:
 	_piece_at = {}
 	_runs_seen = (work.runs as Array).duplicate(true)
 	_chan_seen = work._chan
+	_woke = PackedInt32Array()
+	_rank_of.resize(rigid.bodies.size())
+	_rank_of.fill(-1)
 	_checkpoint()
 
 
@@ -1098,9 +1414,9 @@ func _checkpoint() -> void:
 		"sprinkled": _sprinkles.map(func(s: Dictionary) -> int: return int(s.get("done", 0))),
 		"sprinkled_ids": _sprinkles.map(func(s: Dictionary) -> PackedInt32Array: return (grains[int(s["grains"])] as Dictionary)["ids"]),
 		"held": _held.duplicate(true), "loose": loose.map(func(L: Dictionary) -> Array: return [L["body"], L["n0"], L["full"], L.get("rest"),
-			L.get("rest_host", -1), L.get("rest_hrel"), L["box"], L.get("calm", 0.0), L.get("rest_hxf"), L.get("rest_up"), L.get("mass", 0.0)]),
+			L.get("rest_host", -1), L.get("rest_hrel"), L["box"], L.get("calm", 0.0), L.get("rest_hxf"), L.get("rest_up"), L.get("mass", 0.0), L.get("rest_off")]),
 		"swing": _swing.map(func(s: Dictionary) -> Array: return [s["a"], s["w"], s["rest"], s["still"], s["sig"], s.get("b1"), s.get("b2")]),
-		"rigid": rigid.snapshot(), "body_solids": _body_solids()})
+		"rigid": rigid.snapshot(), "body_solids": _body_solids(), "woke": _woke.size()})
 	if _ck.size() > CHECKS_KEPT + 1:
 		# THINNED: of all but the first and the latest few, the one whose going leaves the shortest gap goes, the older on a tie
 		var drop := 1
@@ -1140,13 +1456,17 @@ func _restore(ck: Dictionary) -> void:
 		s["b2"] = was[6]
 		s["moved"] = false
 		twin.swung[int(s["wi"])] = rad_to_deg(float(s["a"]))
-	# ...and each rigid body where it was
+	# ...and each rigid body where it was, and the bodies woken by then the only ones a frame keeps
 	rigid.restore(ck.get("rigid", []))
+	var nw := mini(int(ck.get("woke", 0)), _woke.size())
+	for j in range(nw, _woke.size()):
+		_rank_of[_woke[j]] = -1
+	_woke.resize(nw)
 	_posed_now()
 	_liq = []
 	for s in ck["liq"]:
 		_liq.append((s as Dictionary).duplicate(true))
-	var t := float(_k) / float(FPS)
+	var t := _t_of(_k)
 	parcels = parcels.filter(func(p: Dictionary) -> bool: return float(p["t0"]) < t)
 	for p in parcels:
 		if float((p as Dictionary)["t1"]) >= t:
@@ -1188,6 +1508,7 @@ func _restore(ck: Dictionary) -> void:
 			L["rest_hxf"] = was[8]
 			L["rest_up"] = was[9]
 			L["mass"] = was[10]
+		L["rest_off"] = was[11] if was.size() > 11 else null
 	_lying_cells()
 	_ck = _ck.filter(func(c: Dictionary) -> bool: return int(c["k"]) <= _k)
 	# THE SOLIDS WHERE THEY WERE two frames and one before - the next frame moves them on to this one, as a bake from the
@@ -1211,8 +1532,8 @@ func _restore(ck: Dictionary) -> void:
 			d["presses"] = was[6]
 			d["on"] = _shown(d, t)
 			continue
-		d["xf0"] = _pose_owner(d, maxf(t - 2.0 / float(FPS), 0.0)) * (d["local"] as Transform3D)
-		d["xf"] = _pose_owner(d, maxf(t - 1.0 / float(FPS), 0.0)) * (d["local"] as Transform3D)
+		d["xf0"] = _pose_owner(d, maxf(t - 2.0 / float(FPS), _t0)) * (d["local"] as Transform3D)
+		d["xf"] = _pose_owner(d, maxf(t - 1.0 / float(FPS), _t0)) * (d["local"] as Transform3D)
 		d["xf00"] = d["xf0"]
 		d["inv"] = (d["xf"] as Transform3D).affine_inverse()
 		d["wbox"] = ((d["xf"] as Transform3D) * (d["box"] as AABB)).grow(0.001)
@@ -1226,19 +1547,24 @@ func _restore(ck: Dictionary) -> void:
 ## checkpoint before the first moment the two differ - or false, the bake begun as it would be: its table not this one,
 ## or nothing of it before that moment.
 func _take_carried(c: Dictionary) -> bool:
-	if int(c["layout"]) != _layout:
+	if int(c["layout"]) != _layout or not is_equal_approx(float(c.get("t0", 0.0)), _t0):
 		return false
-	var upto := minf(_changed_at(c["plan"], _plan_of()) - CARRY_MARGIN, float(c["k"]) / float(FPS))
+	var upto := minf(_changed_at(c["plan"], _plan_of()) - CARRY_MARGIN, _t_of(int(c["k"])))
 	var ck: Dictionary = {}
 	for x in c["ck"]:
 		var xd: Dictionary = x
-		if float(xd["k"]) / float(FPS) <= upto and (ck.is_empty() or int(xd["k"]) > int(ck["k"])):
+		if _t_of(int(xd["k"])) <= upto and (ck.is_empty() or int(xd["k"]) > int(ck["k"])):
 			ck = xd
 	if ck.is_empty() or int(ck["k"]) <= _k:
 		return false
 	_lock.lock()
 	frames = (c["frames"] as Array).slice(0, int(ck["k"]))
 	_lock.unlock()
+	# ...the bodies in the order they woke there, which its frames are kept by ([method _record])
+	_woke = (c.get("woke", PackedInt32Array()) as PackedInt32Array).duplicate()
+	_rank_of.fill(-1)
+	for j in _woke.size():
+		_rank_of[_woke[j]] = j
 	parcels = c["parcels"]
 	ripples = c["ripples"]
 	splashes = c["splashes"]
@@ -1256,7 +1582,7 @@ func carry() -> Dictionary:
 	if _carried != null:
 		return _carried
 	_lock.lock()
-	var out := {"layout": _layout, "k": _k, "frames": frames.slice(0, _k), "ck": _ck.duplicate(), "parcels": parcels.duplicate(),
+	var out := {"layout": _layout, "t0": _t0, "k": _k, "frames": frames.slice(0, _k), "ck": _ck.duplicate(), "woke": _woke.duplicate(), "parcels": parcels.duplicate(),
 		"ripples": ripples.duplicate(), "splashes": splashes.duplicate(), "breaks": breaks.duplicate(), "pieces": pieces.duplicate(), "plan": _plan_of()}
 	_lock.unlock()
 	return out
@@ -1289,11 +1615,9 @@ func _plan_of() -> Dictionary:
 	for s in _sprinkles:
 		var sp := _sprinkle_span(s)
 		sprinkled.append([sp.x, hash([(s as Dictionary)["track"], sp])])
-	var moved: Array = twin._moved.keys()
-	moved.sort()
-	var soft: Array = twin._soft.keys()
-	soft.sort()
-	return {"chan": chan, "sprinkles": sprinkled, "all": hash([moved, soft])}
+	# ...and nothing the acts decide for the whole show: what they move is in their channels, and the world is the table's, never
+	# the acts' ([method _goes]) - what is soft the work's clearance reads (a heap a pestle goes into), never the bake
+	return {"chan": chan, "sprinkles": sprinkled, "all": 0}
 
 
 ## The first moment two plans ([method _plan_of]) differ - 0 when they differ from the start, INF when never.
@@ -1365,7 +1689,7 @@ func _run() -> void:
 			_lock.lock()
 			var want := _want
 			_lock.unlock()
-			if float(_k) / float(FPS) > want:
+			if _t_of(_k) > want:
 				break
 			_bake_frame()
 
@@ -1374,7 +1698,7 @@ func _run() -> void:
 ## while the app's thread waits: [method TablePreview._bake]) - or as far as it got when [method halt]ed.
 func bake_until(t: float, breathe := false) -> void:
 	_take_plan()
-	var last := int(ceil(maxf(t, 0.0) * float(FPS)))
+	var last := int(ceil((maxf(t, _t0) - _t0) * float(FPS)))
 	while _k <= last and not _halt:
 		_bake_frame()
 		# ...and on a worker, a moment given up a frame, as a table built aside breathes ([method TableMedium._breathe])
@@ -1398,7 +1722,7 @@ func _bake_frame() -> void:
 ## FRAME [param k]: the solids where the plan has them, the liquids, what is held, a step of the grains and loose things,
 ## and what it all comes to - or, when nothing moves and nothing is moving, the frame before.
 func _frame(k: int) -> Dictionary:
-	var t := float(k) / float(FPS)
+	var t := _t_of(k)
 	var dt := 1.0 / float(FPS)
 	var busy := _flowing()
 	for i in sim.n:
@@ -1414,13 +1738,17 @@ func _frame(k: int) -> Dictionary:
 		# ...and its surface still moving
 		if bool(((s as Dictionary)["w"] as Dictionary)["on"]):
 			busy = true
-	busy = busy or _sprinkling(t) or _liquid_fills(t) or _swinging() or rigid.busy()
+	busy = busy or _sprinkling(t) or _liquid_fills(t) or _swinging() or rigid.busy() or _rings_boiling(t)
+	if profiling:
+		_why(t)
 	# NOTHING MOVES AND NOTHING IS MOVING: the frame before, with nothing reckoned
 	if not busy and not _may_move(t) and k > 0 and k - 1 < frames.size():
 		return frames[k - 1]
+	var c0 := Time.get_ticks_usec() if profiling else 0
 	# ...what swings by its weight first: where it has swung to is where its solids are
 	_swings_step(t, dt)
 	busy = _solids_at(t) or busy
+	_spent("solids", c0)
 	# ...or what the work holds of the loose things and of the parts it picks up: carried, it moves though nothing else does
 	if not busy:
 		for L in loose:
@@ -1435,22 +1763,73 @@ func _frame(k: int) -> Dictionary:
 	if not busy and k > 0 and k - 1 < frames.size():
 		return frames[k - 1]
 	# ...and what the work picks up, held or let go, among the solids where they are now
+	var c := Time.get_ticks_usec() if profiling else 0
 	if not rigid.bodies.is_empty():
 		_rigid_step(t, dt)
+	c = _spent("rigid", c)
 	_parcels_step(t, dt)
+	c = _spent("parcels", c)
 	var world := _liquids_step(t, dt)
+	c = _spent("liquids", c)
 	_wake_near_loose(t)
 	_held_step(t, dt)
 	_sprinkle_step(t, dt)
+	c = _spent("held", c)
 	sim.step(dt, world)
+	c = _spent("particles", c)
 	_events(t)
 	_rest_loose(dt)
-	return _record(t)
+	c = _spent("events", c)
+	var rec := _record(t)
+	_spent("record", c)
+	return rec
+
+
+## WHY A FRAME IS STEPPED, counted by each reason that holds ([member profiling]).
+func _why(t: float) -> void:
+	var why := PackedStringArray()
+	for i in sim.n:
+		if sim.alive[i] == 1 and sim.asleep[i] == 0:
+			why.append("grain or loose awake")
+			break
+	for s in _liq:
+		if (s as Dictionary)["d"] != Vector2.ZERO or absf(float((s as Dictionary)["swirl"])) > 0.005:
+			why.append("liquid sloshing")
+		if ((s as Dictionary)["hit"] as Vector4).w > 0.0:
+			why.append("stream landing")
+		if bool(((s as Dictionary)["w"] as Dictionary)["on"]):
+			why.append("surface waves")
+	if _flowing():
+		why.append("stream falling")
+	if _sprinkling(t):
+		why.append("sprinkling")
+	if _liquid_fills(t):
+		why.append("liquid filling")
+	if _swinging():
+		why.append("swinging")
+	if rigid.busy():
+		why.append("rigid busy")
+	if _rings_boiling(t):
+		why.append("boiling")
+	if _may_move(t):
+		why.append("an act may move")
+	for w in why:
+		profile["why: " + w] = int(profile.get("why: " + w, 0)) + 1
+	profile["frames asked"] = int(profile.get("frames asked", 0)) + 1
+
+
+## A FRAME'S COST BY WHAT TOOK IT, while [member profiling] (a probe's): microseconds by section, and the frames stepped.
+func _spent(section: String, since: int) -> int:
+	if not profiling:
+		return 0
+	var now := Time.get_ticks_usec()
+	profile[section] = int(profile.get(section, 0)) + now - since
+	return now
 
 
 ## Whether a stream is still falling.
 func _flowing() -> bool:
-	for i in range(_recent(float(_k) / float(FPS)), parcels.size()):
+	for i in range(_recent(_t_of(_k)), parcels.size()):
 		if float((parcels[i] as Dictionary)["t1"]) == INF:
 			return true
 	return false
@@ -1530,10 +1909,13 @@ func _solids_at(t: float) -> bool:
 	return any
 
 
-## Whether solid [param d] is there to meet at [param t]: a part a work takes away (a stopper drawn out) is not.
+## Whether solid [param d] is there to meet at [param t]: a part a work takes away (a stopper drawn out) is not, AND NEITHER IS ONE
+## NOT YET BROUGHT, WHATEVER HAS BEEN HEARD OF THE ACT THAT BRINGS IT - no act on it yet is what it started as, never "there"
+## (841899, feedback 0013: a vial's cork, `shown` 0 until the act after the pour, stood unseen in the vial's neck whenever that act's
+## words had not reached a live plan, and all 27 ml of the ladle's pour stopped on it; the whole plan baked at once had filled the vial).
 func _shown(d: Dictionary, t: float) -> bool:
 	var ch := String(d["shown_ch"])
-	return ch.is_empty() or not twin._chan.has(ch) or float(twin.value(ch, t)) > 0.5
+	return ch.is_empty() or float(twin.value(ch, t)) > 0.5
 
 
 ## Whether the node [param key] may move at [param t]: within a stretch of its own channels' - its pose, its joint's - or
@@ -1571,7 +1953,7 @@ func _cached_pose(key: String, d: Dictionary, t: float) -> Transform3D:
 	if is_nan(t):
 		if _owner_pose.has(key):
 			return (_owner_pose[key] as Array)[1]
-		t = float(_k) / float(FPS)
+		t = _t_of(_k)
 	var p := _pose_owner(d, t)
 	_owner_pose[key] = [t, p]
 	return p
@@ -1580,6 +1962,9 @@ func _cached_pose(key: String, d: Dictionary, t: float) -> Transform3D:
 ## THE LIQUIDS a frame on: their levels, sloshes, swirls and what pours over their rims - and the world the grains meet.
 func _liquids_step(t: float, dt: float) -> Dictionary:
 	var lw: Array = []
+	var cw := Time.get_ticks_usec() if profiling else 0
+	_wet_ids = _wet_now()
+	_spent("liquid: wet", cw)
 	for li in liquids.size():
 		var L: Dictionary = liquids[li]
 		var S: Dictionary = _liq[li]
@@ -1615,9 +2000,16 @@ func _liquids_step(t: float, dt: float) -> Dictionary:
 			lw.append({"vessel": vs, "xf": xf, "inv": sd["inv"], "n": Vector3.UP, "c": xf.origin, "axis": xf.origin, "swirl": 0.0,
 				"volume": 0.0, "solid": int(L["solid"])})
 			continue
+		# A LIQUID AT REST STAYS AT REST: its vessel still, its surface level, calm and unwaved, nothing pouring from it, filling it
+		# or ringing it, nothing moving or awake in it - its last frame's answer, nothing reckoned. (Of 841899's twelve liquids most
+		# stood in bottles nobody touched, and reckoning them was 4.6 ms of every frame the bake stepped, next/framework_audit.md.)
+		if _calm(li, t):
+			lw.append(S["lw"])
+			continue
+		var cl := Time.get_ticks_usec() if profiling else 0
 		var up := (binv * Vector3.UP).normalized()
-		var share := float(S["v"]) / maxf(float(L["full_v"]), 1e-12)
-		var s := vs.level(up, share)
+		var s := _level_of(li, up, xf, scale)
+		cl = _spent("liquid: level", cl)
 		var c_l := vs.surface_middle(up, s)
 		var c_w := xf * c_l
 		# SLOSH: the surface's tilt, a damped oscillator at its first mode driven by how its middle is pushed about
@@ -1640,12 +2032,14 @@ func _liquids_step(t: float, dt: float) -> Dictionary:
 			dd += acc * h
 			d += dd * h
 		d = d.limit_length(0.35)
-		if d.length() < 1e-5 and dd.length() < 1e-4:
+		# ...AND A VESSEL WITH PART OF ITS RIM UNDER A LIQUID HAS THAT LIQUID'S SURFACE ([method _dips]): nothing of its own to slosh
+		if (d.length() < 1e-5 and dd.length() < 1e-4) or int(S["dipped"]) >= 0:
 			d = Vector2.ZERO
 			dd = Vector2.ZERO
 		S["d"] = d
 		S["dd"] = dd
 		var n_w := (Vector3.UP + Vector3(d.x, 0.0, d.y)).normalized()
+		cl = _spent("liquid: slosh", cl)
 		# A TOOL IN IT TURNS IT
 		for sj in solids.size():
 			var o: Dictionary = solids[sj]
@@ -1659,16 +2053,21 @@ func _liquids_step(t: float, dt: float) -> Dictionary:
 			var vq := (q - q0) / dt
 			var rel := Vector3(q.x - c_w.x, 0.0, q.z - c_w.z)
 			if rel.length() > 0.002:
-				var target := rel.cross(vq).y / rel.length_squared()
+				# ...AS A VORTEX ABOUT WHERE IT GOES ([member Particles] `core`): turned as one about the axis by a tool at the middle's speed over its nearness to the axis, a whole surface
+				# went round at 4 radians a second, and what floated at its edge at half a meter a second (841899, feedback 0012: a "whiplash effect")
+				var core := maxf(rel.length(), R * SWIRL_CORE)
+				var target := rel.cross(vq).y / (core * core)
 				S["swirl"] = lerpf(float(S["swirl"]), target, minf(1.0, SWIRL_PULL * dt))
+				S["core"] = lerpf(float(S["core"]), core, minf(1.0, SWIRL_PULL * dt))
 		S["swirl"] = float(S["swirl"]) * exp(-dt / SWIRL_LIFE)
 		S["angle"] = float(S["angle"]) + float(S["swirl"]) * dt
+		cl = _spent("liquid: swirl", cl)
 		# OVER THE RIM where it stands above it - unless something stoppers it
 		var sealed := false
 		for pj in L["plugs"]:
 			sealed = sealed or bool((solids[int(pj)] as Dictionary)["on"])
 		S["q"] = 0.0
-		if not sealed and float(S["v"]) > 1e-10:
+		if not sealed and float(S["v"]) > 1e-10 and int(S["dipped"]) < 0:
 			var n_l := (binv * n_w).normalized()
 			var of := vs.overflow(n_l, c_l.dot(n_l))
 			var q := float(of["q"]) * scale
@@ -1686,25 +2085,258 @@ func _liquids_step(t: float, dt: float) -> Dictionary:
 				var carried := (lip - ((sd["xf0"] as Transform3D) * vs.lip[k])) / dt
 				parcels.append({"t0": t, "p": lip, "v": way * sqrt(GRAVITY * head * 0.667) + carried, "vol": out, "from": li, "t1": INF,
 					"into": -2, "color": S["color"]})
+		cl = _spent("liquid: rim", cl)
 		# ITS SURFACE MOVED by what crosses it ([SurfaceWaves])
-		_waves_step(li, binv * Vector3.UP, s, dt)
-		lw.append({"vessel": vs, "xf": xf, "inv": sd["inv"], "n": n_w, "c": c_w, "axis": c_w, "swirl": S["swirl"], "volume": S["v"],
-			"solid": int(L["solid"]), "waves": L["waves"], "w": S["w"], "dip": _dip(li), "r2": R * R * 0.5})
+		_waves_step(li, binv * Vector3.UP, s, dt, t)
+		cl = _spent("liquid: waves", cl)
+		S["lw"] = {"agit": _agitation(li, t, float(S["swirl"])), "flow": L["flow"], "t": t, "core": float(S["core"]), "vessel": vs, "xf": xf, "inv": sd["inv"], "n": n_w, "c": c_w, "axis": c_w, "swirl": S["swirl"], "volume": S["v"],
+			"solid": int(L["solid"]), "waves": L["waves"], "w": S["w"], "dip": _dip(li), "r2": R * R * 0.5}
+		lw.append(S["lw"])
 		S["r2"] = R * R * 0.5
 		S["n"] = n_w
 		S["c"] = c_w
+		# A SURFACE UNDER ANOTHER LIQUID'S IS NONE: a ladle's bowl under the brew is the brew there, and its own surface, drawn
+		# under the brew's, showed through it as a second, broken one (841899, at the ladle's spoon: "weird glitching artifacts
+		# in the water")
+		var over := _under_liquid(c_w + Vector3.UP * 0.001, li)
+		S["sunk"] = over >= 0 and float((liquids[over] as Dictionary)["full_v"]) > float(L["full_v"])
+		_spent("liquid: sunk", cl)
+	var cd := Time.get_ticks_usec() if profiling else 0
 	_dips(dt)
+	_spent("liquid: dips", cd)
 	var vessels: Array = []
 	for L in liquids:
 		vessels.append({"solid": int((L as Dictionary)["solid"]), "vessel": (L as Dictionary)["vessel"]})
 	return {"solids": solids, "liquids": lw, "top": 0.0, "vessels": vessels}
 
 
+## HOW LIQUID [param li] STIRS AT [param t], its boil and its swirl, 0 to 1 ([method Particles.current]) - never still: the least [constant AGITATION_LEAST], what the air and a table do.
+func _agitation(li: int, t: float, swirl: float) -> float:
+	var wi := int((liquids[li] as Dictionary)["wi"])
+	var boil := 0.0
+	if wi >= 0:
+		var ch := "w%d:boil" % wi
+		if twin._chan.has(ch) or float(twin._rest.get(ch, 0.0)) > 0.0:
+			boil = float(twin.value(ch, t))
+	return clampf(AGITATION_LEAST + (1.0 - AGITATION_LEAST) * sqrt(Boil.share(boil)) + absf(swirl) * AGITATION_SWIRL, 0.0, 1.0)
+
+
+## HOW LIQUID IN SOLID [param si] MOVES, drawn once from where it stands ([method Particles.current]): `[kx, kz, phase, speed]` for each of two current's waves and two swell's -
+## each as long as the vessel's own size makes it, so a vial's and a cauldron's are their own, a current's coming round in half a minute and a swell's in about two seconds.
+func _flow_of(si: int, vs: Vessel, scale: float) -> PackedFloat32Array:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(["liquid flow", si])
+	var wide := maxf(sqrt(vs.volume * scale / (PI * maxf((vs.top_y - vs.floor_y) * pow(scale, 1.0 / 3.0), 1e-4))), 0.005)
+	var out := PackedFloat32Array()
+	for m in 4:
+		var long := wide * rng.randf_range(2.2, 3.6) if m < 2 else wide * rng.randf_range(1.6, 2.6)
+		var a := rng.randf_range(0.0, TAU)
+		var k := TAU / long
+		var period := rng.randf_range(24.0, 38.0) if m < 2 else rng.randf_range(1.7, 2.8)
+		out.append_array([cos(a) * k, sin(a) * k, rng.randf_range(0.0, TAU), TAU / period * (1.0 if rng.randf() < 0.5 else -1.0)])
+	return out
+
+
+## WHETHER LIQUID [param li] IS AT REST at [param t] ([method _liquids_step]): it has been reckoned before; its vessel has not moved
+## these two frames; its surface is level and calm (no slosh, no swirl, no wave) and nothing pours from it, lands in it or rings it
+## boiling; the work fills it by no `to` now; and nothing moving stands in its vessel's room, nor anything awake in it.
+func _calm(li: int, t: float) -> bool:
+	var S: Dictionary = _liq[li]
+	var L: Dictionary = liquids[li]
+	# ...and holds what it held when it was last reckoned: a ladle held still under its surface fills from it, and its level falls
+	if not S.has("lw") or float(S["v"]) <= 1e-10 or not is_equal_approx(float(S["v"]), float((S["lw"] as Dictionary)["volume"])):
+		return false
+	var si := int(L["solid"])
+	var sd: Dictionary = solids[si]
+	if bool(sd["moving"]) or not (sd["xf"] as Transform3D).is_equal_approx(sd["xf0"]) or not (sd["xf0"] as Transform3D).is_equal_approx(sd["xf00"]):
+		return false
+	if (S["d"] as Vector2) != Vector2.ZERO or (S["dd"] as Vector2) != Vector2.ZERO or absf(float(S["swirl"])) > 1e-4 \
+			or float(S["q"]) > 0.0 or bool((S["w"] as Dictionary)["on"]) or ((S["hit"] as Vector4).w > 0.0):
+		return false
+	var wi := int(L["wi"])
+	if wi >= 0:
+		for e in twin._chan.get("w%d:fill" % wi, []):
+			if t >= float((e as Dictionary)["s0"]) - 0.05 and t <= float((e as Dictionary)["s1"]) + 0.05:
+				return false
+		var ch := "w%d:boil" % wi
+		if (twin._chan.has(ch) or float(twin._rest.get(ch, 0.0)) > 0.0) and Boil.radii(float(twin.value(ch, t))).y >= BUBBLE_RINGS:
+			return false
+	# ...NOTHING COMES TO IT: no moving solid in its vessel's room, nothing awake in it
+	var room: AABB = (sd["wbox"] as AABB).grow(0.01)
+	for o in solids:
+		if bool((o as Dictionary)["moving"]) and ((o as Dictionary)["wbox"] as AABB).intersects(room) and o != sd:
+			return false
+	var wet: Variant = _wet_ids.get(li) if _wet_ids is Dictionary else null
+	if wet is PackedInt32Array:
+		for i in (wet as PackedInt32Array):
+			if i < sim.n and sim.asleep[i] == 0:
+				return false
+	for i in range(_recent(t), parcels.size()):
+		if float((parcels[i] as Dictionary)["t1"]) == INF:
+			var pp: Vector3 = _parcel_at(parcels[i], t - float((parcels[i] as Dictionary)["t0"]))
+			if room.grow(0.05).has_point(pp):
+				return false
+	return true
+
+
+## LIQUID [param li]'s LEVEL along [param up] (its vessel's own space, posed [param xf], [param scale] its volume's): the
+## surface that leaves under it the liquid AND WHAT STANDS IN IT - each body's own matter, each vessel's whole inside whether
+## it is full or not (what is in it is in the column, and the air in it holds the liquid out), the loose things' and the
+## grains' spheres - less what stood in it as it was built, so it stands as the set dresser drew it. A ladle dipped leaves the
+## brew where it was, a stone dropped in raises it, and what is lifted out takes its share with it. (the-quiet-crucible
+## 841899, the user: "the ladle is placed into the liquid - and this causes the amount of liquid to DECREASE. That is
+## backwards" - the 39 ml that flowed into the ladle's bowl had left the brew's column, and the brew fell 2 mm.) Over its
+## rim, it stands above it, and pours.
+func _level_of(li: int, up: Vector3, xf: Transform3D, scale: float) -> float:
+	var L: Dictionary = liquids[li]
+	var vs: Vessel = L["vessel"]
+	var full := maxf(float(L["full_v"]), 1e-12)
+	var v := float((_liq[li] as Dictionary)["v"])
+	var s := vs.level(up, v / full)
+	var under := _displacers(li)
+	if (under[0] as PackedFloat32Array).is_empty() and float(L.get("d0", 0.0)) == 0.0:
+		return s
+	for k in 2:
+		var y := (xf * vs.surface_middle(up, s)).y
+		var want := v + _under(under, y) - float(L.get("d0", 0.0))
+		s = vs.level(up, clampf(want / full, 0.0, 1.0))
+		if want > full:
+			var r := maxf(vs.surface_radius(up, s), 0.002)
+			s += (want - full) / maxf(scale, 1e-9) / (PI * r * r)
+	return s
+
+
+## WHAT STOOD IN EACH LIQUID AS IT WAS BUILT, under its surface as drawn (`d0`, cubic meters): it stands where the set dresser
+## drew it, and whatever comes or goes after moves it ([method _level_of]).
+func _built_displaced() -> void:
+	_wet_ids = null
+	for li in liquids.size():
+		var L: Dictionary = liquids[li]
+		if float(L["v0"]) <= 1e-10:
+			continue
+		var sd: Dictionary = solids[int(L["solid"])]
+		var vs: Vessel = L["vessel"]
+		var xf: Transform3D = sd["rest"]
+		var up := (xf.basis.inverse() * Vector3.UP).normalized()
+		var y := (xf * vs.surface_middle(up, vs.level(up, float(L["v0"]) / maxf(float(L["full_v"]), 1e-12)))).y
+		L["d0"] = _under(_displacers(li), y)
+
+
+## WHAT STANDS IN LIQUID [param li]'s INSIDE, wherever its surface is: `[heights, volumes]` (the table's space; meters, cubic
+## meters) of the points of each body's matter ([method _matter_points]), of each moving vessel's inside ([member
+## Vessel.points], every [constant INSIDE_STEP]-th) and of the loose things' and grains' spheres, that lie within it.
+func _displacers(li: int) -> Array:
+	var L: Dictionary = liquids[li]
+	var own := int(L["solid"])
+	var sa: Dictionary = solids[own]
+	var box: AABB = sa["wbox"]
+	var inv: Transform3D = sa["inv"]
+	var vs: Vessel = L["vessel"]
+	var hs := PackedFloat32Array()
+	var ws := PackedFloat32Array()
+	# ...a body that has not stirred is the solid it was before it was one, and stood as the liquid was built ([method _dormant]): a pot's own wall, a body since every thing is one, was
+	# read as standing in a ladle dipped beside it - so only the bodies stirred are asked, not every solid on the table
+	var stirred := PackedInt32Array()
+	for rb in rigid.bodies:
+		if not bool((rb as Dictionary).get("dormant", false)):
+			stirred.append_array((rb as Dictionary)["solids"])
+	for si in stirred:
+		if si == own:
+			continue
+		var sd: Dictionary = solids[si]
+		if not bool(sd.get("on", true)) or not (sd["wbox"] as AABB).intersects(box):
+			continue
+		var xf: Transform3D = sd["xf"]
+		var det := absf(xf.basis.determinant())
+		var mp: Array = _matter_points(si)
+		var w := float(mp[1]) * det
+		for q in (mp[0] as PackedVector3Array):
+			var p := xf * q
+			if box.has_point(p) and vs.contains(inv * p):
+				hs.append(p.y)
+				ws.append(w)
+		var vi := int(_vessel_of.get(si, -1))
+		if vi >= 0 and vi != li:
+			var vb: Vessel = (liquids[vi] as Dictionary)["vessel"]
+			var n := vb.points.size()
+			var wv := vb.volume * det * float(INSIDE_STEP) / float(maxi(n, 1))
+			for k in range(0, n, INSIDE_STEP):
+				var p := xf * vb.points[k]
+				if box.has_point(p) and vs.contains(inv * p):
+					hs.append(p.y)
+					ws.append(wv)
+	# ...the spheres in it: as the solver last found them ([member Particles.wet]), or - as built, before it has - all in its box
+	var ids: Variant = _wet_ids.get(li) if _wet_ids != null else null
+	if ids == null and _wet_ids != null:
+		return [hs, ws]
+	for i in (ids if ids != null else range(sim.n)):
+		if sim.alive[i] == 1 and box.has_point(sim.x[i]) and vs.contains(inv * sim.x[i]):
+			hs.append(sim.x[i].y)
+			ws.append(4.0 / 3.0 * PI * pow(sim.r[i], 3.0))
+	return [hs, ws]
+
+
+## Whether solid [param sd] is a DORMANT body's ([RigidParts]): as built, untouched - exactly a solid that is no body.
+func _dormant(sd: Dictionary) -> bool:
+	return sd.has("body") and bool((rigid.bodies[int(sd["body"])] as Dictionary).get("dormant", false))
+
+
+## Each liquid's spheres, as the solver last found them in it: liquid -> PackedInt32Array ([method _displacers]).
+func _wet_now() -> Dictionary:
+	var out := {}
+	for i in sim.n:
+		if sim.alive[i] == 1 and i < sim.wet.size() and sim.wet[i] >= 0:
+			var li := sim.wet[i]
+			if not out.has(li):
+				out[li] = PackedInt32Array()
+			(out[li] as PackedInt32Array).append(i)
+	return out
+
+
+## The volume of [param under] ([method _displacers]) below height [param y].
+static func _under(under: Array, y: float) -> float:
+	var hs: PackedFloat32Array = under[0]
+	var ws: PackedFloat32Array = under[1]
+	var out := 0.0
+	for k in hs.size():
+		if hs[k] < y:
+			out += ws[k]
+	return out
+
+
+## SOLID [param si]'s MATTER as points (its own space) and the volume each stands for (its own space's cubic meters): its
+## field sampled as [method _mass_of] samples it, at most [constant MATTER_POINTS] of them.
+func _matter_points(si: int) -> Array:
+	var sd: Dictionary = solids[si]
+	if sd.get("matter_pts") != null:
+		return sd["matter_pts"]
+	var f: ShapeField = sd["field"]
+	var box: AABB = sd["box"]
+	var cell := maxf(minf(box.size.x, minf(box.size.y, box.size.z)) / 3.0, 0.0008)
+	var n := Vector3i(clampi(int(ceil(box.size.x / cell)), 2, MASS_CELLS), clampi(int(ceil(box.size.y / cell)), 2, MASS_CELLS),
+		clampi(int(ceil(box.size.z / cell)), 2, MASS_CELLS))
+	var step := box.size / Vector3(n)
+	var pts := PackedVector3Array()
+	for i in n.x:
+		for j in n.y:
+			for k in n.z:
+				var q := box.position + step * Vector3(i + 0.5, j + 0.5, k + 0.5)
+				if f.sample(q).x < 0.0:
+					pts.append(q)
+	var every := maxi(1, int(ceil(float(pts.size()) / float(MATTER_POINTS))))
+	var kept := PackedVector3Array()
+	for k in range(0, pts.size(), every):
+		kept.append(pts[k])
+	var out := [kept, step.x * step.y * step.z * float(pts.size()) / float(maxi(kept.size(), 1))]
+	sd["matter_pts"] = out
+	return out
+
+
 ## LIQUID [param li]'s SURFACE ([SurfaceWaves]) a frame of [param dt] on, its level [param s] along [param up] (its vessel's
 ## own space): each solid crossing it pushes up the cells it comes into and lets down those it leaves - a share of a cell
 ## at a time, by its field where the surface is - and the ripples run, come back off the walls and die. Tipped far (a
 ## pour), it is let be.
-func _waves_step(li: int, up: Vector3, s: float, dt: float) -> void:
+func _waves_step(li: int, up: Vector3, s: float, dt: float, t := 0.0) -> void:
 	var L: Dictionary = liquids[li]
 	var S: Dictionary = _liq[li]
 	var W: SurfaceWaves = L["waves"]
@@ -1772,7 +2404,45 @@ func _waves_step(li: int, up: Vector3, s: float, dt: float) -> void:
 		else:
 			occ.erase(sj)
 	st["occ"] = occ
+	# ...AND WHAT BOILS IN IT ([Boil]): each bubble big enough to be seen breaking rings it where it breaks - the bubbles the table
+	# draws and the work's sound hears
+	for bb in _bubbles_in(li, t - dt, t):
+		var r := float((bb as Dictionary)["r"])
+		if r < BUBBLE_RINGS:
+			continue
+		var half := float(W.n) * W.cell * 0.5
+		var at2: Vector2 = (bb as Dictionary)["at"]
+		var x := W.o.x + half + at2.x * half
+		var z := W.o.y + half + at2.y * half
+		W.dent(st, Vector3(x, (s - u.x * x - u.z * z) / maxf(u.y, 0.05), z), r * DENT, maxf(W.cell, r * 3.0))
 	W.step(st, dt)
+
+
+## LIQUID [param li]'s bubbles breaking from [param t0] to [param t1] ([Boil]), as its work boils it - none where it does not.
+func _bubbles_in(li: int, t0: float, t1: float) -> Array:
+	var wi := int((liquids[li] as Dictionary)["wi"])
+	if wi < 0:
+		return []
+	var ch := "w%d:boil" % wi
+	if not twin._chan.has(ch) and float(twin._rest.get(ch, 0.0)) <= 0.0:
+		return []
+	var W: SurfaceWaves = (liquids[li] as Dictionary)["waves"]
+	return Boil.bubbles(wi, t0, t1, func(T: float) -> float: return float(twin.value(ch, T)), float(W.n) * W.cell)
+
+
+## Whether a liquid boils hard enough at [param t] that its bubbles ring its surface ([constant BUBBLE_RINGS]): the bake is not
+## quiet then.
+func _rings_boiling(t: float) -> bool:
+	for li in liquids.size():
+		var wi := int((liquids[li] as Dictionary)["wi"])
+		if wi < 0:
+			continue
+		var ch := "w%d:boil" % wi
+		if not twin._chan.has(ch) and float(twin._rest.get(ch, 0.0)) <= 0.0:
+			continue
+		if Boil.radii(float(twin.value(ch, t))).y >= BUBBLE_RINGS and float((_liq[li] as Dictionary)["v"]) > 1e-9:
+			return true
+	return false
 
 
 ## How a turning liquid's surface curves (meters a square meter out from its middle, ω² / 2g): a stirred pot's stands low in
@@ -1791,17 +2461,20 @@ func _dent(li: int, at: Vector3, size: float) -> void:
 	W.dent((_liq[li] as Dictionary)["w"], inv * at, size * DENT, maxf(W.cell, size * 6.0))
 
 
-## A VESSEL UNDER A LIQUID FILLS FROM IT - a ladle in its pot, a cup pushed under, a jar sunk: where the liquid's surface
-## stands above the dipped vessel's rim, in the liquid's own inside, it flows in over that rim as a weir does (the flow it
-## would pour out by, [method Vessel.overflow]) until it stands as high inside as out, or there is none left outside. The
-## inside of anything is filled so, and empties again by tipping. (the-quiet-crucible 707668: the ladle "dips into the
-## finished brew, draws up a measure" - and came up empty, so its pour into the vial poured nothing.)
+## A VESSEL UNDER A LIQUID HAS ITS LEVEL - a ladle in its pot, a cup pushed under, a jar sunk: where the liquid's surface stands above the dipped
+## vessel's rim, in the liquid's own inside, it flows over that rim as a weir does (the flow it would pour out by, [method Vessel.overflow]), in or out, until it
+## stands as high inside as out. The inside of anything is filled so, and empties again by tipping. (the-quiet-crucible 707668: the ladle "dips into the finished
+## brew, draws up a measure" - and came up empty, so its pour into the vial poured nothing.) SO LONG AS ANY OF ITS RIM IS UNDER, THE TWO ARE ONE SURFACE
+## ([member _liq]'s `dipped`): it neither sloshes nor pours (841899, feedback 0009, 0011: "Every time I've seen the ladle go into the pot, the liquid level
+## decreases": let go, the ladle tipped against the wall with part of its rim under the brew - the sloshing of a surface 6 cm across stood it over the rim's other
+## side, at 400 to 1,100 ml a second, refilled as fast from the side under, and most of what it poured was spilled at the pot's wall: 955 ml to 273 over the show).
 func _dips(dt: float) -> void:
+	var dipped := {}
 	for bi in liquids.size():
 		var LB: Dictionary = liquids[bi]
 		var SB: Dictionary = _liq[bi]
 		var sb: Dictionary = solids[int(LB["solid"])]
-		if not bool(sb["on"]) or float(SB["v"]) >= float(LB["full_v"]):
+		if not bool(sb["on"]):
 			continue
 		var xb: Transform3D = sb["xf"]
 		var ib := xb.affine_inverse()
@@ -1813,6 +2486,9 @@ func _dips(dt: float) -> void:
 			if ai == bi or int(LA["solid"]) == int(LB["solid"]) or float(SA["v"]) <= 1e-9:
 				continue
 			var sa: Dictionary = solids[int(LA["solid"])]
+			# ...AND WHAT CANNOT HAVE CHANGED, asked again only if it was dipped: the pairs of a table's two dozen insides were a stir's every frame, and all but one stand still
+			if int(SB["dipped"]) != ai and not bool(sb["moving"]) and not bool(sa["moving"]) and (SA["was"] as Vector2) == Vector2(float(SA["v"]), (SA["c"] as Vector3).y if SA.has("c") else 0.0):
+				continue
 			if not bool(sa["on"]) or not (sa["wbox"] as AABB).intersects(sb["wbox"]):
 				continue
 			# its surface along the up the dipped vessel sees, in that vessel's own space
@@ -1820,14 +2496,21 @@ func _dips(dt: float) -> void:
 			var of := vb.overflow(up, s)
 			if float(of["q"]) <= 0.0 or not (LA["vessel"] as Vessel).contains((sa["inv"] as Transform3D) * (xb * vb.rim[int(of["at"])])):
 				continue
+			dipped[bi] = ai
 			var want := vb.share_under(up, s) * float(LB["full_v"]) - float(SB["v"])
-			var dv := minf(minf(float(of["q"]) * absf(xb.basis.determinant()) * dt, want), float(SA["v"]))
-			if dv <= 1e-12:
+			var most := float(of["q"]) * absf(xb.basis.determinant()) * dt
+			# ...in as it stands lower inside, out as it stands higher, neither past the other's level or past what there is
+			var dv := minf(minf(most, want), float(SA["v"])) if want > 0.0 else maxf(maxf(-most, want), -float(SB["v"]))
+			if absf(dv) <= 1e-12:
 				continue
 			SA["v"] = float(SA["v"]) - dv
 			SB["v"] = float(SB["v"]) + dv
-			if not bool(LB["made"]) or float(SB["v"]) <= dv * 1.01:
+			if dv > 0.0 and (not bool(LB["made"]) or float(SB["v"]) <= dv * 1.01):
 				SB["color"] = (SB["color"] as Color).lerp(SA["color"], clampf(dv / float(SB["v"]), 0.0, 1.0))
+	for bi in liquids.size():
+		var SB: Dictionary = _liq[bi]
+		SB["dipped"] = int(dipped.get(bi, -1))
+		SB["was"] = Vector2(float(SB["v"]), (SB["c"] as Vector3).y if SB.has("c") else 0.0)
 
 
 ## Whether a liquid's fill is being changed by the work at [param t].
@@ -1883,10 +2566,26 @@ func _parcels_step(t: float, dt: float) -> void:
 				break
 		if landed:
 			continue
-		# ...or something solid - but its own vessel's rim, which it leaves from, only once it has fallen clear of it
-		if at.y <= 0.0005 or _in_solid(at, int((liquids[int(pd["from"])] as Dictionary)["solid"]) if tau < 0.15 else -1):
+		# ...or something solid - but its own vessel's rim, which it leaves from, only once it has fallen clear of it - LOOKED FOR
+		# ALL ALONG ITS WAY, never only where the frame leaves it: at a stream's pace a parcel stepped over a pot's 3 mm wall
+		# between two frames (841899's dip: what went "into the brazier pan" had gone through the cauldron's wall)
+		var before := _solid_on_way(was, at, int((liquids[int(pd["from"])] as Dictionary)["solid"]) if tau < 0.15 else -1)
+		if before != Vector3.INF:
 			pd["t1"] = t
 			pd["into"] = -1
+			# ...AND WHAT STRIKES A VESSEL'S INSIDE RUNS DOWN INTO IT, never lost: a ladle drawn up out of its pot spills over the
+			# pot's inner wall, and its spill had been counted gone (841899's dip: 8.5 ml "SPILLED" of a pot it never left)
+			var skip_l := int(pd["from"]) if tau < 0.15 else -1
+			# ...asked a little back along its way too: right at a wall, a point lies in the inside's inset, outside it
+			var into := _inside_of(before, skip_l)
+			if into < 0:
+				into = _inside_of(before.lerp(was, 0.5), skip_l)
+			if into < 0:
+				into = _inside_of(was, skip_l)
+			if into >= 0:
+				var S: Dictionary = _liq[into]
+				S["v"] = minf(float(S["v"]) + float(pd["vol"]), float((liquids[into] as Dictionary)["full_v"]))
+				pd["into"] = into
 	# a stream that has stopped landing rings no more
 	for S in _liq:
 		var h: Vector4 = (S as Dictionary)["hit"]
@@ -1907,6 +2606,41 @@ func _under_liquid(p: Vector3, skip: int) -> int:
 		if not (sd["wbox"] as AABB).has_point(p) or not ((liquids[li] as Dictionary)["vessel"] as Vessel).contains((sd["inv"] as Transform3D) * p):
 			continue
 		if (p - (S["c"] as Vector3)).dot(S["n"] as Vector3) < 0.0:
+			return li
+	return -1
+
+
+## WHERE A WAY FROM [param a] TO [param b] (the table's space) FIRST MEETS SOMETHING SOLID but solid [param skip], or the table's
+## top: the last place on it before - or Vector3.INF, where it meets nothing. Looked along in steps of [constant PARCEL_STEP],
+## against the solids its way's box crosses.
+func _solid_on_way(a: Vector3, b: Vector3, skip: int) -> Vector3:
+	var way := AABB(a, Vector3.ZERO).expand(b)
+	var near := PackedInt32Array()
+	for si in solids.size():
+		var d: Dictionary = solids[si]
+		if si != skip and bool(d["on"]) and (d["wbox"] as AABB).intersects(way):
+			near.append(si)
+	var steps := clampi(int(ceil(a.distance_to(b) / PARCEL_STEP)), 1, 24)
+	var last := a
+	for k in range(1, steps + 1):
+		var q := a.lerp(b, float(k) / float(steps))
+		if q.y <= 0.0005:
+			return last
+		for si in near:
+			var d: Dictionary = solids[si]
+			if (d["wbox"] as AABB).has_point(q) and (d["field"] as ShapeField).sample((d["inv"] as Transform3D) * q).x < 0.0:
+				return last
+		last = q
+	return Vector3.INF
+
+
+## The liquid whose vessel's inside holds [param p] (the table's space), other than [param skip]; or -1.
+func _inside_of(p: Vector3, skip: int) -> int:
+	for li in liquids.size():
+		if li == skip:
+			continue
+		var sd: Dictionary = solids[int((liquids[li] as Dictionary)["solid"])]
+		if bool(sd.get("on", true)) and (sd["wbox"] as AABB).has_point(p) and ((liquids[li] as Dictionary)["vessel"] as Vessel).contains((sd["inv"] as Transform3D) * p):
 			return li
 	return -1
 
@@ -1935,11 +2669,14 @@ func _held_step(t: float, dt: float) -> void:
 		var b: Dictionary = sim.bodies[int(L["body"])]
 		var n0: Transform3D = L["n0"]
 		var now := sim.body_pose(int(L["body"])) * n0
-		var held: Variant = _held_pose(wi, t, now)
+		# ...HELD UP BETWEEN ITS MOVES as a rigid part is ([method _held_aloft]), when a later move takes it up again and let go it
+		# would fall: 841899's phoenix feather, fetched "and held up in the middle of the bench" till it was laid in the cauldron,
+		# was dropped on the table as its fetch ended
+		var held: Variant = _held_pose(wi, t, now) if _held_at(wi, t) else _held_aloft(-1, wi, t, li)
 		if held == null:
 			b["held"] = null
 			continue
-		var was: Variant = _held_pose(wi, t - dt, now)
+		var was: Variant = _held_pose(wi, t - dt, now) if _held_at(wi, t - dt) else _held_aloft(-1, wi, t - dt, li)
 		b["held"] = (held as Transform3D) * n0.affine_inverse()
 		b["held_from"] = (was as Transform3D) * n0.affine_inverse() if was != null else sim.body_pose(int(L["body"]))
 
@@ -1994,12 +2731,13 @@ func _held_pose(wi: int, t: float, now: Transform3D) -> Variant:
 		if not _held.has(key):
 			var e2 := ed.duplicate()
 			e2["from"] = now
-			# ...one riding another's move rides it as the bake has that one going ([method TableWork._pose])
-			if e2.has("_lead"):
-				var le: Dictionary = e2["_lead"]
-				var lk := str(le.get("t0")) + "|" + String(le["ch"]) + "|" + str(le.get("s0"))
-				if _held.get(lk) is Dictionary:
-					e2["_lead"] = _held[lk]
+			# ...its way over what is in it found from there ([method TableWork._clearance])
+			e2.erase("_clear")
+			e2.erase("_pour")
+			e2.erase("_dip")
+			# ...and a tool's way to its work ([method TableWork._entry_lift]) from where it is, never from where the plan had it
+			# (841899's pestle, set down in its mortar, rose 6 cm again on the lift planned from where it had been left in the air)
+			e2.erase("_entry")
 			_held[key] = e2
 		var e3: Dictionary = _held[key]
 		return twin._eval(e3, t - float(e3["t0"]), t)
@@ -2026,30 +2764,6 @@ func _held_pose(wi: int, t: float, now: Transform3D) -> Variant:
 	return null
 
 
-## Whether an act after act [param i] - in the order the show plays them, the intro's, each beat's and the close's, each as
-## written - moves channel [param own]: from the acts alone, never from what the reading has placed so far.
-func _moved_after(own: String, i: int) -> bool:
-	var key := own + "|" + str(i)
-	if not _moves_after.has(key):
-		var found := false
-		if i >= 0 and i < twin.acts.size():
-			var mine := _play_rank(i)
-			for j in twin.acts.size():
-				if _play_rank(j) <= mine:
-					continue
-				for tr in (twin.acts[j] as Dictionary)["tracks"]:
-					found = found or String((tr as Dictionary).get("_ch", "")) == own
-		_moves_after[key] = found
-	return bool(_moves_after[key])
-
-
-## Act [param i]'s place in the order the show plays the acts: its beat's (the intro first, the close last), then its own.
-func _play_rank(i: int) -> float:
-	var beat := String((twin.acts[i] as Dictionary).get("beat", ""))
-	var b := 0.0 if beat == "intro" else (1e6 if beat == "close" else beat.to_float())
-	return b * 10000.0 + float(i)
-
-
 # --- what the work picks up -------------------------------------------------------------------------------
 
 ## WHAT THE WORK PICKS UP, each a rigid body ([RigidParts]): a free part some act moves that is not loose - its own solids
@@ -2063,12 +2777,13 @@ func _play_rank(i: int) -> float:
 func _make_rigid() -> void:
 	for wi in work.works.size():
 		var wk: Dictionary = work.works[wi]
-		if String(wk["kind"]) != "free" or bool((wk["w"] as Dictionary).get("loose", false)) or not work._part_moves(wi) \
+		if String(wk["kind"]) != "free" or bool((wk["w"] as Dictionary).get("loose", false)) or not _goes(wi) \
 				or not work._rest.has("w%d:pose" % wi):
 			continue
 		_add_body(wi, _solids_of(_unjointed([wi])))
+	# ...AND EVERY THING THAT MAY BE MOVED WHOLE - all but what holds a flame - whether or not an act moves it (as [method _goes])
 	for ti in work.things.size():
-		if not work._moved.has("t%d:pose" % ti) or not work._rest.has("t%d:pose" % ti):
+		if bool((work.things[ti] as Dictionary).get("lit", false)) or not work._rest.has("t%d:pose" % ti):
 			continue
 		var own := PackedInt32Array()
 		for si in solids.size():
@@ -2091,15 +2806,25 @@ func _make_rigid() -> void:
 		d["bodies"] = on
 
 
-## Whether part [param wi] moves only as its thing does: neither it nor any part it hangs from has a joint of its own (a
-## free part no act moves stands where it was built in it) or is a body of its own.
+## Whether part [param wi] moves only as its thing does: neither it nor any part it hangs from has a joint of its own or is
+## a body of its own. A FREE PART IS A THING OF ITS OWN standing in its thing or on it, never welded into it ([method _goes]):
+## four jars side by side, carried whole, had been one rigid body (the-quiet-crucible 841899, 2026-10-31).
 func _rides_thing(wi: int) -> bool:
 	var c := wi
 	while c >= 0:
 		var k := String((work.works[c] as Dictionary)["kind"])
-		if _rigid_of.has(c) or not (k == "" or k == "free"):
+		if _rigid_of.has(c) or k != "":
 			return false
 		c = int(work._parent_work.get(c, -1))
+	return true
+
+
+## Whether free part [param wi] is a body of its own: EVERY FREE PART IS, whatever the acts do - riding what holds it up as a thing
+## set on another does. It had been one only if some act, at any time, moved it or what it stood in (2026-11-01, next/
+## framework_audit.md): a jar no act fetched was an immovable solid and the same jar a body the moment a later act did - so a
+## ladle that knocked it was held back by it or knocked it, by what came minutes after; and every new act that moved something
+## new changed the world itself, so nothing baked before it could be kept.
+func _goes(_wi: int) -> bool:
 	return true
 
 
@@ -2145,17 +2870,26 @@ func _add_body(key: int, own: PackedInt32Array) -> int:
 	_rigid_of[key] = bi
 	for si in own:
 		(solids[si] as Dictionary)["body"] = bi
-	# ...ITS SEAT: what of its own thing a part was built touching (a cork, its jar's neck), [constant SEAT_TOUCH] near
+		# ...and what its steps say of it, as it is read before its first ([RigidParts] sets them each step): never a key first given
+		# on the bake's thread
+		(solids[si] as Dictionary)["stirs"] = false
+		(solids[si] as Dictionary)["presses"] = true
+	# ...ITS SEAT: what of its own thing a part was built touching (a cork, its jar's neck), [constant SEAT_TOUCH] near - NEVER
+	# A PART OF ITS OWN: a jar is not seated in the cork in its neck (seated on each other, 841899's jar and cork were welded
+	# together where they stood, and the jar was never fetched)
 	var seat := PackedInt32Array()
 	if key >= 0:
 		var ti := int((solids[own[0]] as Dictionary)["thing"])
 		for si in solids.size():
 			var sd: Dictionary = solids[si]
-			if int(sd["thing"]) != ti or own.has(si):
+			if int(sd["thing"]) != ti or own.has(si) or work._within(int(sd["wi"]), key) != 0:
 				continue
+			# ...AND WHAT HOLDS IT UP: touching it where its surface faces up - a jar is not seated in the stopper pressing on its
+			# lip, whatever part of whom each is
 			var inv := (sd["rest"] as Transform3D).affine_inverse()
 			for q in pts:
-				if (sd["field"] as ShapeField).sample(inv * q).x < SEAT_TOUCH:
+				var f: Vector4 = (sd["field"] as ShapeField).sample(inv * q)
+				if f.x < SEAT_TOUCH and ((sd["rest"] as Transform3D).basis * Vector3(f.y, f.z, f.w)).normalized().y > RigidParts.HELD_UP:
 					seat.append(si)
 					break
 	(rigid.bodies[bi] as Dictionary)["seat"] = seat
@@ -2182,7 +2916,9 @@ func _rigid_host(own: PackedInt32Array, c: Vector3, pts: PackedVector3Array) -> 
 		if own.has(si):
 			continue
 		var sd: Dictionary = solids[si]
-		if not (sd["wbox"] as AABB).grow(bd).has_point(low):
+		# (never grown by less than nothing: the best so far is below 0 once the point is found inside a solid, and a
+		# thin solid's box shrunk by it had a negative size - "AABB size is negative", 841899's 2026-10-31 build)
+		if not (sd["wbox"] as AABB).grow(maxf(bd, 0.0)).has_point(low):
 			continue
 		var d := (sd["field"] as ShapeField).sample((sd["inv"] as Transform3D) * low).x
 		if d < bd:
@@ -2198,14 +2934,39 @@ func _rigid_step(t: float, dt: float) -> void:
 	for bi in rigid.bodies.size():
 		var b: Dictionary = rigid.bodies[bi]
 		var wi := int(b["wi"])
+		# ...A DORMANT ONE ([RigidParts]), untouched as built and taken up by no act now: nothing of it to reckon - the solver says
+		# whether something comes to it
+		if bool(b.get("dormant", false)) and not _held_at(wi, t):
+			b["seat_skip"] = PackedInt32Array()
+			continue
 		var n0 := _rest_of(wi)
 		var now := rigid.motion(bi) * n0
-		var held: Variant = _held_pose(wi, t, now) if _held_at(wi, t) else _held_aloft(bi, wi, t)
+		var moving := _held_at(wi, t)
+		var held: Variant = _held_pose(wi, t, now) if moving else _held_aloft(bi, wi, t)
 		b["seat_skip"] = PackedInt32Array()
+		# A PART IN ITS SEAT GOES WITH ITS SEAT, unless its own move takes it out ([method _with_seat]): a cork carried with its
+		# jar, however its keys were written, or let go seated in its neck - welded there, eased onto it, and woken by nothing
+		# but a hand taking it out
+		var seat := _seated(b, wi, now)
+		var weld := false
+		if seat >= 0:
+			if held != null:
+				weld = moving and _with_seat(wi, seat, t)
+			else:
+				# ...welded already, let go there by a hand this moment, or come to rest snug in it by itself - never pulled in
+				# from where it fell
+				weld = (rigid.welded(bi) and int(b["weld"]) == seat) or b["held"] != null or not _off_seat(seat, wi, now, SEAT_SNUG, SEAT_SNUG_TILT)
+		if weld:
+			if not rigid.welded(bi) or int(b["weld"]) != seat:
+				_weld(bi, seat)
+			continue
+		if rigid.welded(bi):
+			rigid.unweld(bi)
 		if held == null:
 			if b["held"] != null:
 				b["held"] = null
-				_seat(bi, b, now)
+				# ...A HAND LETS GO GENTLY: lowered onto what takes it, never dropped
+				rigid.guide(bi)
 			continue
 		# ...EASED INTO ITS SEAT OR OUT OF IT BY A HAND, it never meets its seat: the hand knows a fit the set dresser made to
 		# the millimeter, which the solver's points are coarser than ([method _seat])
@@ -2224,17 +2985,17 @@ func _rigid_step(t: float, dt: float) -> void:
 	_posed_now()
 
 
-## LET GO NEAR ITS SEAT - a stopper back in its jar's neck, a lid on its crock, within [constant SEAT_NEAR] and [constant SEAT_TILT]
-## of how it sat there as built - rigid part body [param bi] (its node at [param now]) SITS THERE as built, asleep on what holds
-## it: a fit the set dresser made is a rest, and the solver's points are coarser than a cork's cap on a lip 5 mm wide. (841899:
-## the frankincense cork, set down in its jar, fell through the neck into it and kept the frankincense in; the brimstone's cork,
-## put back by a hand a few millimeters off its seat, went in sideways and stuck there.)
-func _seat(bi: int, b: Dictionary, now: Transform3D) -> void:
-	var wi := int(b["wi"])
+## IN ITS SEAT - a stopper in its jar's neck, a lid on its crock, a vial in its rack, a ladle on its rest: the seat (what of its
+## own thing rigid part body [param b] was built touching) it sits on now within [constant SEAT_NEAR] and [constant SEAT_TILT]
+## of how it sat there as built (its node at [param now]), the nearest - or -1.
+func _seated(b: Dictionary, wi: int, now: Transform3D) -> int:
+	var seats: PackedInt32Array = b.get("seat", PackedInt32Array())
+	if seats.is_empty():
+		return -1
 	var built := _rest_of(wi)
 	var best := -1
 	var least := INF
-	for si in b.get("seat", PackedInt32Array()):
+	for si in seats:
 		var sd: Dictionary = solids[si]
 		if not bool(sd.get("on", true)) or _off_seat(si, wi, now, SEAT_NEAR, SEAT_TILT):
 			continue
@@ -2242,13 +3003,82 @@ func _seat(bi: int, b: Dictionary, now: Transform3D) -> void:
 		if d < least:
 			least = d
 			best = si
-	if best < 0:
-		return
-	var sd: Dictionary = solids[best]
-	# ...moved from as built as what holds it has been
-	RigidParts._set_motion(b, (sd["xf"] as Transform3D) * (sd["rest"] as Transform3D).affine_inverse())
-	b["touch"] = best
-	rigid._sleep(b)
+	return best
+
+
+## WELDED TO ITS SEAT: rigid part body [param bi] sits on solid [param si] exactly as it was built there, eased onto it, asleep
+## on it and woken by nothing but a hand ([method RigidParts.weld]) - a fit the set dresser made is a rest, and the solver's
+## points are coarser than a cork's cap on a lip 5 mm wide. (841899: the frankincense cork, set down in its jar, fell through the
+## neck into it; the brimstone's cork, put back a few millimeters off its seat, went in sideways and stuck there; and both, let
+## go seated after their jars were fetched, were woken as the jars settled and trembled 3 mm about their necks for seconds.)
+func _weld(bi: int, si: int) -> void:
+	var sd: Dictionary = solids[si]
+	var wi := int((rigid.bodies[bi] as Dictionary)["wi"])
+	# ...its motion from as built, in its seat's space, as it was built: the seat's own motion
+	var rel := (sd["rest"] as Transform3D).affine_inverse()
+	rigid.weld(bi, si, rel, sd["xf"])
+
+
+## WHETHER RIGID PART [param wi]'s MOVE AT [param t] CARRIES IT WITH SEAT [param si], never out of it: through the whole move,
+## as the plan has the part and the seat, it stays within [constant SEAT_NEAR] and [constant SEAT_TILT] of how it sat there as
+## built. A cork carried with its jar rides it so whatever its keys say - 841899's sulfur cork, its last key half a centimeter
+## above its jar's, had a hand of its own and wandered through the neck - and a cork drawn out of its jar is a move of its own.
+func _with_seat(wi: int, si: int, t: float) -> bool:
+	var own := _ch_of(wi)
+	var e: Dictionary = {}
+	for x in twin._chan.get(own, []):
+		# ...the move under way - or the one just ended, which the hand still holds it by for HOLD_GAP ([method _held_at])
+		if t >= float((x as Dictionary)["s0"]) and t < float((x as Dictionary)["s1"]) + HOLD_GAP:
+			e = x
+	if e.is_empty():
+		return false
+	var key := "%s|%s|%s|%d" % [own, str(e.get("t0")), str(e.get("s0")), si]
+	if _with_seat_of.has(key):
+		return bool(_with_seat_of[key])
+	var sd: Dictionary = solids[si]
+	# Compare the commands before automatic clearance: a jar's foot must clear obstacles its cork already stands above.
+	# Those two corrected paths can be centimeters apart. Only an actual seat permits this shared motion; equal paths
+	# on separate jars never create a connection. The seat constraint, rather than a second kinematic weld, carries it.
+	if sd.has("body"):
+		var carrier := int((rigid.bodies[int(sd["body"])] as Dictionary)["wi"])
+		for move in twin._chan.get(_ch_of(carrier), []):
+			if not is_equal_approx(float(move["s0"]), float(e["s0"])) or not is_equal_approx(float(move["s1"]), float(e["s1"])):
+				continue
+			var a: Dictionary = (e["track"] as Dictionary).duplicate()
+			var b: Dictionary = (move["track"] as Dictionary).duplicate()
+			for field in ["thing", "part", "_wi", "_ti", "_ch", "_hand", "_trip", "about"]:
+				a.erase(field)
+				b.erase(field)
+			if a == b:
+				_with_seat_of[key] = true
+				return true
+	var built := (sd["rest"] as Transform3D).affine_inverse() * _rest_of(wi)
+	var with := true
+	for k in 9:
+		var T := lerpf(float(e["s0"]), float(e["s1"]) - 1e-4, float(k) / 8.0)
+		var part: Transform3D = twin._eval(e, T - float(e["t0"]), T)
+		var rel := _planned_solid(si, T).affine_inverse() * part
+		# ...seated where the move begins and ends, as its keys have it - and on the way never further off than two hands'
+		# bows and sways could carry it (a cork's own hand and its jar's bowed 1.7 cm apart, 841899's sulfur)
+		var ends := k == 0 or k == 8
+		if rel.origin.distance_to(built.origin) > (SEAT_NEAR if ends else SEAT_RIDE.x) \
+				or Quaternion(rel.basis.orthonormalized()).angle_to(Quaternion(built.basis.orthonormalized())) > (SEAT_TILT if ends else SEAT_RIDE.y):
+			with = false
+			break
+	_with_seat_of[key] = with
+	return with
+
+
+## Solid [param si] where the plan has it at show time [param T] (the table's space): moved with the body it is a part of by
+## that body's own moves, else where it was built.
+func _planned_solid(si: int, T: float) -> Transform3D:
+	var sd: Dictionary = solids[si]
+	if sd.has("body"):
+		var key := int((rigid.bodies[int(sd["body"])] as Dictionary)["wi"])
+		var ch := _ch_of(key)
+		if twin._chan.has(ch):
+			return (twin.value(ch, T) as Transform3D) * _rest_of(key).affine_inverse() * (sd["rest"] as Transform3D)
+	return sd["rest"]
 
 
 ## Whether rigid part [param wi], its node at [param now], is further than [param near] meters or [param turn] radians from how it
@@ -2262,12 +3092,13 @@ func _off_seat(si: int, wi: int, now: Transform3D, near: float, turn: float) -> 
 
 
 ## HELD UP BETWEEN ITS MOVES ([method TableWork._held_up]): where the hand holds rigid part [param wi] (body [param bi]) at
-## [param t], between two of its moves, when the first left it touching nothing - where that move left it, swaying as the
-## work sways it - or null: it rests on or against something, or no move takes it up again, and the hand lets it go. Asked
-## once a move, as it ends. (841899 played live: the ladle stood down into its pot, the words before the stir longer than the
+## [param t], between two of its moves, when the first left it where it would fall - where that move left it, swaying as the
+## work sways it - or null, and the hand lets it go, gently ([method RigidParts.guide]): it rests where it is, held up from
+## below ([method RigidParts.supported]), or stands in a vessel and leans there ([method _stands_in]), or no move takes it up
+## again. Asked once a move, as it ends. (841899 played live: the ladle stood down into its pot, the words before the stir longer than the
 ## puppeteer's rehearsal, was let go a quarter second after its move and fell into the pot - where the work, the act's check
 ## and the rehearsal all had the hand holding it until the stir.)
-func _held_aloft(bi: int, wi: int, t: float) -> Variant:
+func _held_aloft(bi: int, wi: int, t: float, li := -1) -> Variant:
 	if twin._group_of.has(wi):
 		return null
 	var own := _ch_of(wi)
@@ -2280,22 +3111,198 @@ func _held_aloft(bi: int, wi: int, t: float) -> Variant:
 		elif float(ed["s0"]) > t:
 			next = ed
 			break
-	# ...A LATER ACT TAKES IT UP AGAIN, placed yet or not: a live reading places an act only once its word is heard, and a
-	# ladle stood down into its pot was let go there live, where an export, every act placed from the start, held it
-	if last.is_empty() or bool((last["track"] as Dictionary).get("down", false)) \
-			or (next.is_empty() and not _moved_after(own, int(last.get("i", -1)))):
+	# ...ONLY ACROSS A HAND'S PAUSE ([constant HOLD_MOST]): its next move begins that soon after this one ends, or the hand lets it
+	# go now, gently - it is set down where it is, into the vessel under it or onto what is under it, and the next move takes it up
+	# from there. A hand nobody sees holding a thing still in the air is a thing floating (2026-11-01, feedback 0001-0002: the
+	# ladle over the cauldron and the pestle over its mortar, each held for the words before the next act, 15 s); and how long
+	# that is was never the puppeteer's to know - a live reading places an act only once its word is heard. So nothing here looks
+	# further ahead than a pause.
+	# ...and THROUGH ITS OWN ACT: between two tracks of one act, the hand is still at work with it (a cup held under the water
+	# between its dip and its drawing up)
+	# ...AND WHILE ITS NEXT ACT IS STILL TO COME, a pause at most (2026-11-01, feedback 0004: the pour's end came before the word its way
+	# home is cued at was heard - a live reading places an act only then - where an export, its words all known, held it)
+	if last.is_empty() or bool((last["track"] as Dictionary).get("down", false)):
 		return null
 	var key := str(last.get("t0")) + "|" + own + "|" + str(last.get("s0"))
+	# ...ONLY WHAT WOULD FALL: what rests where it is - held up from below, its middle over what holds it - is let go, and so is
+	# what stands in a vessel, to lean there as a ladle left in its pot leans on the rim; touching is not resting (841899: the
+	# ladle held over the cauldron after its dip grazed the rim, and the ladle held over the vial after its pour grazed the vial
+	# - each let go as "touching", each fell; and the ladle stood upright in the brew was held there, swaying, for 14 s)
 	if not _held.has("aloft|" + key):
-		_held["aloft|" + key] = not rigid.touching(bi, TableWork.TOUCHING)
+		_held["aloft|" + key] = _loose_would_fall(li) if li >= 0 else _would_fall(bi, key)
+	var ended := float(last["s1"])
+	var to_come := next.is_empty() and _to_come(own, last)
 	if not bool(_held["aloft|" + key]):
-		return null
+		# ...BUT WHAT STANDS IN A VESSEL, TAKEN UP AGAIN IN A MOMENT, IS NOT DROPPED FOR THE MOMENT (841899, ladle-in-1 and its stir 1.6 s apart: let go 15 cm up, it
+		# fell against the wall and lay down, and was hauled upright again 6.6 cm in 0.6 s). No hand lets go of what it is about to stir with.
+		if not bool(_held.get("stands|" + key, false)) or not _holds_across(last, next, to_come) or (next.is_empty() and t - ended > HOLD_MOST):
+			return null
+	var back_at := INF
+	if not _holds_across(last, next, to_come) or (next.is_empty() and t - ended > HOLD_MOST):
+		# ...PAST A PAUSE: let go, unless it would come down badly - then held for a move that soon, or while one is to come, or put back
+		if li >= 0 or not _lands_ill(key):
+			return null
+		if next.is_empty():
+			if to_come and t - ended <= HOLD_ILL:
+				pass
+			else:
+				back_at = ended + (HOLD_ILL if to_come else HOLD_MOST)
+		elif float(next["s0"]) - ended > HOLD_ILL:
+			back_at = ended + HOLD_MOST
+		if t >= back_at + BACK_TIME:
+			return null
 	# ...where the move left it, as the bake had the move go ([method _held_pose])
-	var s1 := float(last["s1"]) - 1e-4
+	var s1 := ended - 1e-4
 	var end: Transform3D = twin._eval(_held[key], s1 - float(last["t0"]), s1) if _held.has(key) else last["end"]
+	if t > back_at:
+		return _put_back(own, last, key, end, (t - back_at) / BACK_TIME)
 	var up := smoothstep(0.0, TableWork.HOLD_IN, t - float(last["s1"])) * (smoothstep(0.0, TableWork.HOLD_IN, float(next["s0"]) - t) if not next.is_empty() else 1.0)
 	var dr: Array = Hands.drift(t, int((last["track"] as Dictionary).get("_hand", 0)), up * Hands.HOLD_SWAY)
 	return Transform3D((dr[1] as Basis) * end.basis, end.origin + (dr[0] as Vector3))
+
+
+## WOULD WHAT MOVE [param key] LEFT COME DOWN BADLY, let go where it is? - as its trial found ([method _would_fall], kept for the move), it
+## tumbled: a mortar over a cauldron's rim tips off it; a ladle over its pot leans there, and a rod over the table lies down
+## flat, and those are let go.
+func _lands_ill(key: String) -> bool:
+	return bool(_held.get("ill|" + key, false))
+
+
+## WHERE A HAND PUTS BACK WHAT IT CANNOT LET GO, [param u] of the way ([constant BACK_TIME]): from [param end], where move [param last] on
+## channel [param own] left it, to where it last rested - where the move that took it up began (the bake's own place for it,
+## [method _held_pose]), through any moves since that left it in the air.
+func _put_back(own: String, last: Dictionary, key: String, end: Transform3D, u: float) -> Transform3D:
+	if not _held.has("back|" + key):
+		var list: Array = twin._chan.get(own, [])
+		var took: Dictionary = last
+		for k in range(list.size() - 1, -1, -1):
+			var e: Dictionary = list[k]
+			if float(e["s0"]) > float(last["s0"]):
+				continue
+			took = e
+			if k == 0 or bool(((list[k - 1] as Dictionary)["track"] as Dictionary).get("down", false)):
+				break
+		var key0 := str(took.get("t0")) + "|" + own + "|" + str(took.get("s0"))
+		_held["back|" + key] = ((_held[key0] as Dictionary)["from"] if _held.get(key0) is Dictionary else took["from"]) as Transform3D
+	var rest: Transform3D = _held["back|" + key]
+	var seed := int((last["track"] as Dictionary).get("_hand", 0))
+	var lin := clampf(u, 0.0, 1.0)
+	var r := Basis(Quaternion(end.basis.orthonormalized()).slerp(Quaternion(rest.basis.orthonormalized()), Hands.timing(lin)))
+	return Transform3D(r, Hands.carried(end.origin, rest.origin, Vector3.ZERO, Vector3.ZERO, BACK_LIFT, lin, seed))
+
+
+## WHETHER A HAND HOLDS WHAT MOVE [param last] LEFT, until move [param next] on the same thing (empty: none placed yet - [param
+## to_come], a later act moves it all the same, its word not yet heard): never what it set down; across a pause ([constant
+## HOLD_MOST]) or within one act; and while one is to come, for a pause ([method _held_aloft]). What a plan's change turns here is
+## baked again from the end of [param last] ([method replan]).
+static func _holds_across(last: Dictionary, next: Dictionary, to_come: bool) -> bool:
+	if bool((last["track"] as Dictionary).get("down", false)):
+		return false
+	if next.is_empty():
+		return to_come
+	return float(next["s0"]) - float(last["s1"]) <= HOLD_MOST or String(next.get("act", "")) == String(last.get("act", "")) \
+		or is_equal_approx(float(next["t0"]), float(last["t0"]))
+
+
+## Whether an act after the one that left channel [param own] with move [param last] moves it again and is not placed yet - a live
+## reading places an act only once its word is heard (the acts are in the order the reader cues them).
+func _to_come(own: String, last: Dictionary) -> bool:
+	var placed := {}
+	for r in twin.runs:
+		placed[int((r as Dictionary)["i"])] = true
+	for ai in range(int(last.get("i", -1)) + 1, twin.acts.size()):
+		if placed.has(ai):
+			continue
+		for tr in (twin.acts[ai] as Dictionary)["tracks"]:
+			if String((tr as Dictionary).get("_ch", "")) == own:
+				return true
+	return false
+
+
+## WOULD IT FALL, LET GO? - loose thing [param li], a body of spheres: any of them further over what is under it than
+## [constant FALL_LEAST] (the table's top, or a solid found going down from it), its lowest the least - the rigid trial's own
+## measure ([method _would_fall]), found by looking down.
+func _loose_would_fall(li: int) -> bool:
+	var L: Dictionary = loose[li]
+	if int(L["body"]) < 0:
+		return false
+	var least := INF
+	for i in ((sim.bodies[int(L["body"])] as Dictionary)["ids"] as PackedInt32Array):
+		if sim.alive[i] != 1:
+			continue
+		least = minf(least, _drop_under(sim.x[i], sim.r[i]))
+	return least > FALL_LEAST and least < INF
+
+
+## How far a sphere at [param p] of radius [param r] falls before it meets the table's top or a solid under it (meters), looked at
+## down to [constant FALL_LEAST] and a step past it.
+func _drop_under(p: Vector3, r: float) -> float:
+	var to_top := p.y - r
+	var step := 0.003
+	var d := 0.0
+	while d < minf(to_top, FALL_LEAST + step):
+		var q := p - Vector3(0.0, d, 0.0)
+		for sd in solids:
+			if not bool((sd as Dictionary).get("on", true)) or not ((sd as Dictionary)["wbox"] as AABB).grow(r).has_point(q):
+				continue
+			if ((sd as Dictionary)["field"] as ShapeField).sample(((sd as Dictionary)["inv"] as Transform3D) * q).x < r:
+				return d
+		d += step
+	return to_top
+
+
+## WOULD IT FALL, LET GO? Rigid body [param bi] let go where it is now and tried alone for [constant LAND_TRIAL] seconds ([method
+## RigidParts.trial]): it falls when its lowest point goes down more than [constant FALL_LEAST], or is still going down at the end, or
+## it turns past [constant LAND_TILT] - off a hand holding it up in the air, off an edge, over a rim - and otherwise comes to rest about
+## where it is: on what holds it up, sitting on a rim. What it found is kept for the move ([param key], [method _lands_ill]). What stands in a vessel ([method _stands_in]) is caught by it, and leans there. A hand lets go of all of that, gently, and
+## holds only what would fall. ONE TEST FOR EVERY SHAPE (next/table_physics.md, "Primitives"): the rule it took the place of - held up
+## from below with its middle over what holds it ([method RigidParts.supported]) - missed a shape (the-quiet-
+## crucible 841899, 2026-10-31: the ladle put back on its rest and its block was read as not held up, and the hand held it there,
+## swaying, for two and a half minutes - the user: "this ladle will not settle, it's moving around on its block").
+func _would_fall(bi: int, key: String) -> bool:
+	# ...what stands in a vessel is caught by it, and leans there: a ladle left in its pot
+	if _stands_in(bi):
+		_held["stands|" + key] = true
+		return false
+	# ...tried long enough to see it: tipping over a rim begins slowly - 841899's mortar, tried for 1.2 s, had turned 13 degrees and dropped
+	# 8 mm, was judged at rest there, and a moment later was on the table
+	var tr := rigid.trial(bi, LAND_TRIAL, 1.0 / float(FPS))
+	_held["ill|" + key] = float(tr["turned"]) > LAND_TILT and float(tr["drop"]) > LAND_DROP and not _stands_in_at(bi, tr["pose"])
+	return float(tr["drop"]) > FALL_LEAST or bool(tr["falling"])
+
+
+## WHETHER RIGID BODY [param bi] STANDS IN A VESSEL: its lowest point inside another's inside, [constant STANDS_IN] or more
+## under that vessel's rim - a ladle left in its pot, a pestle in its mortar, a stirring rod in a jar - so a hand that is done
+## with it lets it lean there ([method _held_aloft]).
+func _stands_in(bi: int) -> bool:
+	return _stands_in_at(bi, rigid.motion(bi))
+
+
+## ...posed [param d] (the rigid motion from where it was built).
+func _stands_in_at(bi: int, d: Transform3D) -> bool:
+	var b: Dictionary = rigid.bodies[bi]
+	var low := Vector3.INF
+	for q in (b["pts"] as PackedVector3Array):
+		var p := d * q
+		if p.y < low.y:
+			low = p
+	if low == Vector3.INF:
+		return false
+	var own: PackedInt32Array = b["solids"]
+	for L in liquids:
+		var si := int((L as Dictionary)["solid"])
+		var sd: Dictionary = solids[si]
+		if own.has(si) or not bool(sd.get("on", true)) or not (sd["wbox"] as AABB).has_point(low):
+			continue
+		var vs: Vessel = (L as Dictionary)["vessel"]
+		if not vs.contains((sd["inv"] as Transform3D) * low):
+			continue
+		var rim := INF
+		for r in vs.rim:
+			rim = minf(rim, ((sd["xf"] as Transform3D) * r).y)
+		if rim - low.y >= STANDS_IN:
+			return true
+	return false
 
 
 ## The twin told where each rigid body is now: its node's pose, which every part of it hangs from ([member TableWork.posed],
@@ -2445,7 +3452,7 @@ func _box_of(list: Array) -> AABB:
 ## material's density. Too thin for the cells, it is its box a third full.
 func _mass_of(si: int) -> Dictionary:
 	var sd: Dictionary = solids[si]
-	if sd.has("mass"):
+	if sd.get("mass") != null:
 		return sd["mass"]
 	var f: ShapeField = sd["field"]
 	var box: AABB = sd["box"]
@@ -2680,8 +3687,15 @@ func _sprinkling(t: float) -> bool:
 
 
 func _sprinkle_span(s: Dictionary) -> Vector2:
+	return _sprinkle_span_in(s, twin.runs)
+
+
+## When sprinkle [param s] falls under the plan [param list] (its runs) - never, for one whose act is gone.
+func _sprinkle_span_in(s: Dictionary, list: Array) -> Vector2:
 	var ai := int(s["act"])
-	for r in twin.runs:
+	if ai < 0:
+		return Vector2(INF, INF)
+	for r in list:
 		if int((r as Dictionary)["i"]) == ai:
 			var w := TableWork._window(s["track"])
 			var t0 := float(r["t0"])
@@ -2829,6 +3843,8 @@ func _grain_mass(i: int) -> float:
 func _record(_t: float) -> Dictionary:
 	var bp := PackedVector3Array()
 	var bi := PackedByteArray()
+	var bo := PackedVector3Array()
+	bo.resize(_bo_n)
 	for L in loose:
 		var lb := int((L as Dictionary)["body"])
 		# one yet to be a body lies as it was built ([method pose_of]: none)
@@ -2839,7 +3855,15 @@ func _record(_t: float) -> Dictionary:
 		var pose: Transform3D = sim.body_pose(lb) * ((L as Dictionary)["n0"] as Transform3D) if lb >= 0 else (rested if rested != null else (L as Dictionary)["built"])
 		bp.append_array([pose.basis.x, pose.basis.y, pose.basis.z, pose.origin])
 		bi.append((RESTED if rested != null else LYING) if lb < 0 else (1 if bool((sim.bodies[lb] as Dictionary)["intact"]) else 0))
+		# ...and a sheet's bend
+		if bool((L as Dictionary)["soft"]):
+			var at := int((L as Dictionary)["bo_at"])
+			var off: Variant = _bent_built(L, sim.bodies[lb]) if lb >= 0 and (sim.bodies[lb] as Dictionary).has("links") else (L as Dictionary)["rest_off"]
+			if off != null:
+				for k in mini((off as PackedVector3Array).size(), ((L as Dictionary)["spheres"] as PackedVector3Array).size()):
+					bo[at + k] = (off as PackedVector3Array)[k]
 	var liq := PackedFloat32Array()
+	var sunk := PackedByteArray()
 	var waves: Array = []
 	var dips := PackedVector2Array()
 	var last_waves: Array = (frames[_k - 1] as Dictionary).get("waves", []) if _k > 0 and _k - 1 < frames.size() else []
@@ -2858,6 +3882,7 @@ func _record(_t: float) -> Dictionary:
 		var h: Vector4 = S["hit"]
 		liq.append_array([float(S["v"]), n.x, n.y, n.z, c.x, c.y, c.z, float(S["angle"]), float(S.get("q", 0.0)), col.r, col.g, col.b,
 			h.x, h.y, h.z, h.w])
+		sunk.append(1 if bool(S.get("sunk", false)) and float(S["v"]) > 1e-10 else 0)
 	# EVERYTHING THE PICTURE DRAWS is in the frame, made here, never read from the bake as it goes on: the streams in the air,
 	# the rings on each surface, the drops of each splash
 	# ...each array a copy of its own: one held in a Dictionary is the solver's own array, and every frame had been the latest
@@ -2869,20 +3894,32 @@ func _record(_t: float) -> Dictionary:
 	var sw := PackedFloat32Array()
 	for s in _swing:
 		sw.append(rad_to_deg(float((s as Dictionary)["a"])))
-	var rp := PackedVector3Array()
+	# ...ONLY THE BODIES WOKEN SO FAR, in the order they woke ([member _woke]): a dormant one is where it was built, and of a table's
+	# hundred and fifty bodies a frame of a stir moves a few - every body's pose every frame had been 120 MB of a show's bake
 	for rb in rigid.bodies.size():
-		var pose := rigid.motion(rb) * _rest_of(int((rigid.bodies[rb] as Dictionary)["wi"]))
-		rp.append_array([pose.basis.x, pose.basis.y, pose.basis.z, pose.origin])
+		if _rank_of[rb] < 0 and not bool((rigid.bodies[rb] as Dictionary).get("dormant", false)):
+			_rank_of[rb] = _woke.size()
+			_woke.append(rb)
+	var rp := PackedVector3Array()
 	# ...and how far each held one is from where its hand has it, and what it last met: one held back ([method report])
 	var rd := PackedFloat32Array()
 	var rt := PackedInt32Array()
-	for rb in rigid.bodies.size():
+	for rb in _woke:
 		var b: Dictionary = rigid.bodies[rb]
+		var pose := rigid.motion(rb) * _rest_of(int(b["wi"]))
+		rp.append_array([pose.basis.x, pose.basis.y, pose.basis.z, pose.origin])
 		rd.append(RigidParts._span(b, rigid.motion(rb), b["held"]) if b["held"] != null else 0.0)
 		rt.append(int(b.get("by", -1)))
-	return {"sw": sw, "rp": rp, "rd": rd, "rt": rt, "x": last["x"] if same else sim.x.duplicate(), "r": _kept(last, "r", sim.r), "alive": _kept(last, "alive", sim.alive),
+	# ...AND WHICH THEY ARE, the frame's own COPY (the frame before's while no body woke): read from the app's thread, a body's place
+	# is never looked up in what the bake keeps on changing - a plan taken up puts back the bodies woken since its checkpoint, and
+	# the frames kept between it and the change had drawn those where they were built. A copy: a packed array held in a Dictionary
+	# is the same array, and the frames had held [member _woke] itself, grown and cut as the bake went on (physics_check
+	# `_frame_names_bodies`)
+	return {"sw": sw, "bo": _kept(last, "bo", bo), "rp": _kept(last, "rp", rp), "rd": _kept(last, "rd", rd), "rt": _kept(last, "rt", rt), "rpn": _woke.size(),
+		"wk": _kept(last, "wk", _woke),
+		"x": last["x"] if same else sim.x.duplicate(), "r": _kept(last, "r", sim.r), "alive": _kept(last, "alive", sim.alive),
 		"owner": _kept(last, "owner", sim.owner), "body": _kept(last, "body", sim.body), "bp": bp, "bi": bi, "liq": liq,
-		"streams": _streams_at(_t), "rings": _rings_at(_t), "drops": _drops_at(_t), "cut": _cuts_now(), "waves": waves, "dips": dips}
+		"streams": _streams_at(_t), "rings": _rings_at(_t), "drops": _drops_at(_t), "cut": _cuts_now(), "waves": waves, "dips": dips, "sunk": sunk}
 
 
 ## The last frame's [param key] if [param now] is the same, else a copy of [param now].
@@ -2992,13 +4029,21 @@ func _drops_at(t: float) -> Array:
 ## THE PHYSICS AT SHOW TIME [param t]: the bake asked to keep ahead (or, where a picture waits for it, run to [param t]),
 ## and its frame drawn - grains and pieces, the liquids' surfaces, the streams, the splashes.
 func tick(t: float) -> void:
+	# ...the copies drawn so the GPU had what the picture's own nodes need ([method _drawn_nodes]), let go once drawn
+	if not _warm.is_empty():
+		_warm_ticks += 1
+		if _warm_ticks > WARM_TICKS:
+			for n in _warm:
+				if is_instance_valid(n):
+					(n as Node).queue_free()
+			_warm = []
 	if _sync:
 		bake_until(t)
 	else:
 		_lock.lock()
-		_want = t + HORIZON
-		var behind := float(_k) / float(FPS) <= _want
-		var at := float(frames.size()) / float(FPS)
+		_want = t + reach
+		var behind := _t_of(_k) <= _want
+		var at := _t_of(frames.size())
 		_lock.unlock()
 		if behind:
 			_sem.post()
@@ -3012,13 +4057,26 @@ func tick(t: float) -> void:
 		return
 	var fd: Dictionary = f
 	# the same frame as last drawn (a quiet stretch keeps one): nothing of it to draw again - by identity, never by value
+	var c := Time.get_ticks_usec() if profiling_drawn else 0
 	if not is_same(fd, _drawn):
 		_draw_particles(fd)
+		c = _drawn_spent("drawn: particles", c)
 		_draw_streams(fd)
 		_draw_drops(fd)
 		_draw_pieces(fd)
+		c = _drawn_spent("drawn: streams, drops, pieces", c)
 		_drawn = fd
 	_draw_liquids(fd, t)
+	_drawn_spent("drawn: liquids", c)
+
+
+## The picture's cost by section ([member drawn_profile]), while [member profiling_drawn].
+func _drawn_spent(section: String, since: int) -> int:
+	if not profiling_drawn:
+		return 0
+	var now := Time.get_ticks_usec()
+	drawn_profile[section] = int(drawn_profile.get(section, 0)) + now - since
+	return now
 
 
 ## The baked frame at [param t], or null when none is yet.
@@ -3026,7 +4084,7 @@ func frame_at(t: float) -> Variant:
 	_lock.lock()
 	var out: Variant = null
 	if not frames.is_empty():
-		out = frames[clampi(int(floor(maxf(t, 0.0) * float(FPS))), 0, frames.size() - 1)]
+		out = frames[clampi(_k_of(t), 0, frames.size() - 1)]
 	_lock.unlock()
 	return out
 
@@ -3047,7 +4105,7 @@ func baked_to() -> float:
 	_lock.lock()
 	var n := frames.size()
 	_lock.unlock()
-	return float(n - 1) / float(FPS)
+	return _t_of(n - 1)
 
 
 ## Where loose work [param wi]'s node is at [param t] (the table's space) - or a part the work picks up, a rigid body - or
@@ -3057,8 +4115,11 @@ func pose_of(wi: int, t: float) -> Variant:
 		var fr: Variant = frame_at(t)
 		if fr == null:
 			return null
+		var k := _frame_rank(fr as Dictionary, int(_rigid_of[wi]))
+		# ...one not woken by then is where it was built
+		if k < 0:
+			return _rest_of(wi)
 		var rp: PackedVector3Array = (fr as Dictionary).get("rp", PackedVector3Array())
-		var k := int(_rigid_of[wi])
 		if k * 4 + 3 >= rp.size():
 			return null
 		return Transform3D(Basis(rp[k * 4], rp[k * 4 + 1], rp[k * 4 + 2]), rp[k * 4 + 3])
@@ -3073,6 +4134,52 @@ func pose_of(wi: int, t: float) -> Variant:
 		return null
 	# (one lying again where it came to rest, RESTED, is there)
 	return Transform3D(Basis(bp[li * 4], bp[li * 4 + 1], bp[li * 4 + 2]), bp[li * 4 + 3])
+
+
+## Loose work [param wi]'s pose as it was built (the table's space).
+func loose_built(wi: int) -> Transform3D:
+	return (loose[int(_loose_of[wi])] as Dictionary)["built"]
+
+
+## WHETHER LOOSE WORK [param wi] IS A SHEET THAT BENDS ([method Particles.make_soft]).
+func bends(wi: int) -> bool:
+	return _loose_of.has(wi) and bool((loose[int(_loose_of[wi])] as Dictionary)["soft"])
+
+
+## Sheet [param wi]'s points as it was built (the table's space), what its bend is told by ([SheetBend]). Made once, as the bake is begun.
+func sheet_points(wi: int) -> PackedVector3Array:
+	return (loose[int(_loose_of[wi])] as Dictionary)["spheres"]
+
+
+## HOW SHEET [param wi] IS BENT AT [param t]: each of its points off where it would be in its own shape (from as it was built, meters) - null where no frame says. The frame's alone: any thread may ask.
+func bend_of(wi: int, t: float) -> Variant:
+	var f: Variant = frame_at(t)
+	if f == null:
+		return null
+	var L: Dictionary = loose[int(_loose_of[wi])]
+	var at := int(L["bo_at"])
+	return ((f as Dictionary)["bo"] as PackedVector3Array).slice(at, at + (L["spheres"] as PackedVector3Array).size())
+
+
+## Body [param bi]'s place among frame [param fr]'s bodies (its `wk`, the bodies woken by then), or -1: dormant then, where it
+## was built. The frame's alone - any thread may ask.
+func _frame_rank(fr: Dictionary, bi: int) -> int:
+	var k := (fr.get("wk", PackedInt32Array()) as PackedInt32Array).find(bi)
+	return k if k >= 0 and k < int(fr.get("rpn", 0)) else -1
+
+
+## How far body [param bi] was from where its hand had it in frame [param fr] (meters; 0 not held), and what held it back then (a
+## solid, or -1 for nothing) - a frame keeps only the bodies woken by then ([method _record]).
+func held_off(fr: Dictionary, bi: int) -> float:
+	var k := _frame_rank(fr, bi)
+	var rd: PackedFloat32Array = fr.get("rd", PackedFloat32Array())
+	return rd[k] if k >= 0 and k < rd.size() else 0.0
+
+
+func held_by(fr: Dictionary, bi: int) -> int:
+	var k := _frame_rank(fr, bi)
+	var rt: PackedInt32Array = fr.get("rt", PackedInt32Array())
+	return rt[k] if k >= 0 and k < rt.size() else -1
 
 
 ## WHETHER A LIVE SHOW AT [param t] WAITS FOR THE BAKE: its thread is less than [constant WAIT_UNDER] ahead, until it is
@@ -3106,13 +4213,20 @@ func whole(wi: int, t: float) -> bool:
 
 ## Whether work [param wi] is a liquid the physics keeps, and how full it is at [param t] (cubic meters), or -1.
 func liquid_volume(wi: int, t: float) -> float:
-	for li in liquids.size():
-		if int((liquids[li] as Dictionary)["wi"]) == wi and not ((liquids[li] as Dictionary)["nodes"] as Array).is_empty():
-			var f: Variant = frame_at(t)
-			if f == null:
-				return float((liquids[li] as Dictionary)["v0"])
-			return float(((f as Dictionary)["liq"] as PackedFloat32Array)[li * 16])
-	return -1.0
+	# ...the liquid each work is, found once (asked of every part every frame a live show draws)
+	if _liquid_of_work.is_empty() and not liquids.is_empty():
+		for li in liquids.size():
+			var w := int((liquids[li] as Dictionary)["wi"])
+			if w >= 0 and not _liquid_of_work.has(w):
+				_liquid_of_work[w] = li
+		_liquid_of_work[-2] = -1
+	var li := int(_liquid_of_work.get(wi, -1))
+	if li < 0 or ((liquids[li] as Dictionary)["nodes"] as Array).is_empty():
+		return -1.0
+	var f: Variant = frame_at(t)
+	if f == null:
+		return float((liquids[li] as Dictionary)["v0"])
+	return float(((f as Dictionary)["liq"] as PackedFloat32Array)[li * 16])
 
 
 func _draw_particles(f: Dictionary) -> void:
@@ -3124,6 +4238,18 @@ func _draw_particles(f: Dictionary) -> void:
 	var body: PackedInt32Array = f["body"]
 	# a piece a blade cut is drawn as its own mesh ([method _draw_pieces]), never as lumps
 	var cut: PackedByteArray = ((f.get("cut", []) as Array).back() as Array)[1] if not (f.get("cut", []) as Array).is_empty() else PackedByteArray()
+	# ...ONLY WHAT MOVED, while nothing was born, died, broke or was cut since the frame last drawn: every instance in its place,
+	# so a particle where it was is where it is drawn (2,000 grains set again every frame of a stir, every one still, had been 2.7
+	# ms of a live show's frame - next/framework_audit.md)
+	var same: bool = not _drawn_parts.is_empty() and alive == _drawn_parts[0] and owner == _drawn_parts[1] and bi == _drawn_parts[2] \
+		and cut == _drawn_parts[3] and body == _drawn_parts[4]
+	var last_x: PackedVector3Array = _drawn_parts[5] if same else PackedVector3Array()
+	var last_r: PackedFloat32Array = _drawn_parts[6] if same else PackedFloat32Array()
+	if _turn_of.size() < x.size():
+		var from := _turn_of.size()
+		_turn_of.resize(x.size())
+		for i in range(from, x.size()):
+			_turn_of[i] = Basis.from_euler(Vector3(Hands.share(i, 7), Hands.share(i, 8), Hands.share(i, 9)) * TAU)
 	var counts := {}
 	for i in x.size():
 		if alive[i] == 0:
@@ -3136,22 +4262,22 @@ func _draw_particles(f: Dictionary) -> void:
 				continue
 			if i < body.size() and body[i] >= 0 and body[i] < cut.size() and cut[body[i]] == 1:
 				continue
-			mm = ((loose[li] as Dictionary)["mm"] as MultiMeshInstance3D).multimesh
-		elif o >= 0 and o < grains.size():
-			mm = ((grains[o] as Dictionary)["mm"] as MultiMeshInstance3D).multimesh
+			mm = _drawn_mm.get(o)
+		elif o >= 0:
+			mm = _drawn_mm.get(o)
 		if mm == null:
 			continue
 		var k := int(counts.get(o, 0))
 		if k >= mm.instance_count:
 			continue
-		var s := r[i] * LUMP * 100.0 * 0.5
-		var turn := Basis.from_euler(Vector3(Hands.share(i, 7), Hands.share(i, 8), Hands.share(i, 9)) * TAU)
-		mm.set_instance_transform(k, Transform3D(turn.scaled(Vector3(s, s, s)), x[i]))
 		counts[o] = k + 1
-	for gi in grains.size():
-		((grains[gi] as Dictionary)["mm"] as MultiMeshInstance3D).multimesh.visible_instance_count = int(counts.get(gi, 0))
-	for li in loose.size():
-		((loose[li] as Dictionary)["mm"] as MultiMeshInstance3D).multimesh.visible_instance_count = int(counts.get(1000 + li, 0))
+		if same and x[i] == last_x[i] and r[i] == last_r[i]:
+			continue
+		var s := r[i] * LUMP * 100.0 * 0.5
+		mm.set_instance_transform(k, Transform3D((_turn_of[i] as Basis).scaled(Vector3(s, s, s)), x[i]))
+	_drawn_parts = [alive, owner, bi, cut, body, x, r]
+	for o in _drawn_mm:
+		(_drawn_mm[o] as MultiMesh).visible_instance_count = int(counts.get(o, 0))
 
 
 func _draw_liquids(f: Dictionary, t: float) -> void:
@@ -3173,9 +4299,10 @@ func _draw_liquids(f: Dictionary, t: float) -> void:
 		var col := Color(liq[li * 16 + 9], liq[li * 16 + 10], liq[li * 16 + 11])
 		var hit := Vector4(liq[li * 16 + 12], liq[li * 16 + 13], liq[li * 16 + 14], liq[li * 16 + 15])
 		var rings_at: Array = rings
+		var sunk: PackedByteArray = f.get("sunk", PackedByteArray())
 		for k in nodes.size():
 			var mesh: MeshInstance3D = nodes[k]
-			mesh.visible = v > 1e-9
+			mesh.visible = v > 1e-9 and not (li < sunk.size() and sunk[li] == 1)
 			if not mesh.visible:
 				continue
 			var mw := work._world_of(mesh)
@@ -3215,6 +4342,27 @@ func _draw_liquids(f: Dictionary, t: float) -> void:
 			var dp: PackedVector2Array = f.get("dips", PackedVector2Array())
 			mat.set_shader_parameter("dip", dp[li].x if li < dp.size() else 0.0)
 			mat.set_shader_parameter("dip_r2", dp[li].y if li < dp.size() else 0.0)
+			# ITS BUBBLES ([Boil]), each where it breaks, as the work's sound hears it: (x, z) from the surface's middle in the
+			# mesh's space, its radius and how far it is from rising to breaking (past 1, its ring running out)
+			var bubbles := PackedVector4Array()
+			var wi := int(L["wi"])
+			# ...by the WORK's channels, this thread's own: the twin's are the bake's, handed a new plan a sentence ([method
+			# _take_plan]) - read from here as it took one, the old plan was freed under the read (a crash, 2026-11-01)
+			if wi >= 0 and (work._chan.has("w%d:boil" % wi) or float(work._rest.get("w%d:boil" % wi, 0.0)) > 0.0):
+				var W2: SurfaceWaves = L["waves"]
+				var half := float(W2.n) * W2.cell * 0.5
+				var ch := "w%d:boil" % wi
+				var sc := mw.basis.get_scale().x
+				for bb in Boil.showing(wi, t, func(T: float) -> float: return float(work.value(ch, T)), half * 2.0, BUBBLES_DRAWN):
+					var at2: Vector2 = (bb as Dictionary)["at"]
+					var wpos := c_w + (mw.basis.x.normalized() * at2.x + mw.basis.z.normalized() * at2.y) * half
+					var mp := inv * wpos - inv * c_w
+					bubbles.append(Vector4(mp.x, mp.z, float((bb as Dictionary)["r"]) / maxf(sc, 1e-3), float((bb as Dictionary)["phase"])))
+			var nb := bubbles.size()
+			while bubbles.size() < BUBBLES_DRAWN:
+				bubbles.append(Vector4.ZERO)
+			mat.set_shader_parameter("bubble", bubbles)
+			mat.set_shader_parameter("bubble_count", nb)
 
 
 ## Liquid [param li]'s ripples [param bytes] (a frame's, [method SurfaceWaves.bytes]) as a texture its shader reads - made
@@ -3222,17 +4370,18 @@ func _draw_liquids(f: Dictionary, t: float) -> void:
 func _wave_texture(li: int, bytes: Variant) -> Variant:
 	if bytes == null:
 		return null
-	var L: Dictionary = liquids[li]
-	if L.has("tex") and is_same(L.get("tex_of"), bytes):
-		return L["tex"]
-	var W: SurfaceWaves = L["waves"]
+	var was: Array = _wave_tex.get(li, [])
+	if not was.is_empty() and is_same(was[1], bytes):
+		return was[0]
+	var W: SurfaceWaves = (liquids[li] as Dictionary)["waves"]
 	var img := Image.create_from_data(W.n, W.n, false, Image.FORMAT_R8, bytes)
-	if L.has("tex"):
-		(L["tex"] as ImageTexture).update(img)
+	var tex: ImageTexture = was[0] if not was.is_empty() else null
+	if tex != null:
+		tex.update(img)
 	else:
-		L["tex"] = ImageTexture.create_from_image(img)
-	L["tex_of"] = bytes
-	return L["tex"]
+		tex = ImageTexture.create_from_image(img)
+	_wave_tex[li] = [tex, bytes]
+	return tex
 
 
 ## The inside of empty vessel [param li], made as a liquid is first poured or dipped into it.
@@ -3242,10 +4391,13 @@ func _make_inside_node(li: int) -> void:
 	var mesh := MeshInstance3D.new()
 	holder.add_child(mesh)
 	mesh.transform = L["xform"]
-	mesh.mesh = _inside_mesh(L["vessel"], mesh, solids[int(L["solid"])])
+	# ...placed by the WORK's copy of its solid ([member TableWork._solids_ref]): this is the app's thread, and the bake's own solid
+	# takes keys as what it meets is found - the ladle's, as it first came up full (a live show's `double free`, 2026-11-01)
+	var sd: Dictionary = work._solids_ref[int(L["solid"])] if int(L["solid"]) < work._solids_ref.size() else solids[int(L["solid"])]
+	mesh.mesh = _inside_mesh(L["vessel"], mesh, sd)
 	var mat := Props.material(Props.sanitize_material({"kind": "liquid", "color": "#" + (L["color"] as Color).to_html(false)}, "#5060a0"), {}, 10.0, 5.0, li)
 	mat.shader = _LIQUID
-	_cavity_uniforms(mat, L["vessel"], mesh, solids[int(L["solid"])])
+	_cavity_uniforms(mat, L["vessel"], mesh, sd)
 	mesh.material_override = mat
 	mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	(L["nodes"] as Array).append(mesh)
@@ -3256,19 +4408,7 @@ func _make_inside_node(li: int) -> void:
 func _draw_streams(f: Dictionary) -> void:
 	var runs: Array = f.get("streams", [])
 	while _streams.size() < runs.size():
-		var mi := MeshInstance3D.new()
-		mi.mesh = ImmediateMesh.new()
-		var mat := StandardMaterial3D.new()
-		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		mat.roughness = 0.05
-		mat.metallic_specular = 0.9
-		mat.rim_enabled = true
-		mat.rim = 0.4
-		mat.rim_tint = 0.6
-		mi.material_override = mat
-		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		_root.add_child(mi)
-		_streams.append(mi)
+		_streams.append(_new_stream())
 	for si in _streams.size():
 		var mi: MeshInstance3D = _streams[si]
 		var mesh: ImmediateMesh = mi.mesh
@@ -3280,6 +4420,62 @@ func _draw_streams(f: Dictionary) -> void:
 		var c: Color = run["color"]
 		(mi.material_override as StandardMaterial3D).albedo_color = Color(c.r, c.g, c.b, 0.6)
 		_tube(mesh, run["pts"], run["rad"])
+
+
+## A stream's node: a tube drawn afresh each frame it falls ([method _tube]), in a glassy material of its own.
+func _new_stream() -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	mi.mesh = ImmediateMesh.new()
+	var mat := StandardMaterial3D.new()
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.roughness = 0.05
+	mat.metallic_specular = 0.9
+	mat.rim_enabled = true
+	mat.rim = 0.4
+	mat.rim_tint = 0.6
+	mi.material_override = mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.visible = false
+	_root.add_child(mi)
+	return mi
+
+
+## THE PICTURE'S OWN NODES, MADE AS THE TABLE IS ([method build]) - never the first time something drips: a stream's tube and
+## a splash's drops are drawn in materials of their own, and made as the ladle first came out of the brew, the GPU built their
+## shaders then - a picture frozen 3.3 s with the voice going on, as each viewing reached it (841899, 2026-11-01: "every time the
+## ladle is pulled out of the liquid ... a solid 3-4 seconds of completely-frozen screen, while the audio still plays"; measured
+## by tests/table/episode_bake_probe.gd `--live` on a GPU, 116 ms of it the table's). So they are made here, and a copy of each in
+## the same material is drawn at nothing's size where the camera looks for the table's first [constant WARM_TICKS] frames, then
+## freed: what the GPU needs for them is built as the table stands, while it is still being shown.
+func _drawn_nodes() -> void:
+	if _root == null:
+		return
+	if _drops == null:
+		_make_drops()
+	if _streams.is_empty():
+		_streams.append(_new_stream())
+	var at: Vector3 = work._spot if work._spot.is_finite() else Vector3.ZERO
+	var tiny := Vector3.ONE * 1e-5
+	var stream := MeshInstance3D.new()
+	stream.mesh = ImmediateMesh.new()
+	stream.material_override = (_streams[0] as MeshInstance3D).material_override
+	stream.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_tube(stream.mesh as ImmediateMesh, PackedVector3Array([at, at - Vector3(0.0, 1e-5, 0.0)]), PackedFloat32Array([1e-5, 1e-5]))
+	_root.add_child(stream)
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	mm.instance_count = 1
+	mm.mesh = _drops.multimesh.mesh
+	mm.set_instance_transform(0, Transform3D(Basis.from_scale(tiny), at))
+	mm.set_instance_color(0, Color.BLACK)
+	var drops := MultiMeshInstance3D.new()
+	drops.multimesh = mm
+	drops.material_override = _drops.material_override
+	drops.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_root.add_child(drops)
+	_warm = [stream, drops]
+	_warm_ticks = 0
 
 
 static func _tube(mesh: ImmediateMesh, pts: PackedVector3Array, rad: PackedFloat32Array) -> void:
@@ -3330,7 +4526,7 @@ func _draw_pieces(f: Dictionary) -> void:
 ## A PIECE of loose thing [param li], kept behind [param planes] (its own space): its meshes cut, each cut faced
 ## ([MeshCut]) - its words too, if it was written on.
 func _piece_node(li: int, planes: Array) -> Node3D:
-	var wn: Node3D = (work.works[int((loose[li] as Dictionary)["wi"])] as Dictionary)["node"]
+	var wn: Node3D = (work.works[_loose_wi[li]] as Dictionary)["node"]
 	var holder := Node3D.new()
 	holder.name = "piece"
 	_root.add_child(holder)
@@ -3361,26 +4557,7 @@ func _piece_node(li: int, planes: Array) -> Node3D:
 ## THE SPLASHES' DROPS of frame [param f].
 func _draw_drops(f: Dictionary) -> void:
 	if _drops == null:
-		var mm := MultiMesh.new()
-		mm.transform_format = MultiMesh.TRANSFORM_3D
-		mm.use_colors = true
-		mm.instance_count = DROPS
-		mm.visible_instance_count = 0
-		var sphere := SphereMesh.new()
-		sphere.radius = 0.5
-		sphere.height = 1.0
-		sphere.radial_segments = 8
-		sphere.rings = 4
-		mm.mesh = sphere
-		var mat := StandardMaterial3D.new()
-		mat.vertex_color_use_as_albedo = true
-		mat.roughness = 0.08
-		mat.metallic_specular = 0.9
-		_drops = MultiMeshInstance3D.new()
-		_drops.multimesh = mm
-		_drops.material_override = mat
-		_drops.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		_root.add_child(_drops)
+		_make_drops()
 	var mm: MultiMesh = _drops.multimesh
 	var drops: Array = f.get("drops", [])
 	for k in drops.size():
@@ -3389,6 +4566,30 @@ func _draw_drops(f: Dictionary) -> void:
 		mm.set_instance_transform(k, Transform3D(Basis.IDENTITY.scaled(Vector3(size, size, size)), d[0]))
 		mm.set_instance_color(k, d[2])
 	mm.visible_instance_count = drops.size()
+
+
+## The splashes' drops: [constant DROPS] spheres, each its own color, none shown.
+func _make_drops() -> void:
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	mm.instance_count = DROPS
+	mm.visible_instance_count = 0
+	var sphere := SphereMesh.new()
+	sphere.radius = 0.5
+	sphere.height = 1.0
+	sphere.radial_segments = 8
+	sphere.rings = 4
+	mm.mesh = sphere
+	var mat := StandardMaterial3D.new()
+	mat.vertex_color_use_as_albedo = true
+	mat.roughness = 0.08
+	mat.metallic_specular = 0.9
+	_drops = MultiMeshInstance3D.new()
+	_drops.multimesh = mm
+	_drops.material_override = mat
+	_drops.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_root.add_child(_drops)
 
 
 # --- telling the puppeteer --------------------------------------------------------------------------------
@@ -3420,13 +4621,18 @@ func contents_of(ti: int) -> PackedStringArray:
 ## WHAT THE PHYSICS DID between [param t0] and [param t1] (an act's run, baked through): what poured from what and where
 ## it went, what grains and loose things left what and where they are now, what sank, floated, dissolved and broke - and,
 ## for a vessel tipped that poured nothing, how far it would have to go.
-func report(t0: float, t1: float) -> PackedStringArray:
+func report(t0: float, t1: float, pours: Array = []) -> PackedStringArray:
 	bake_until(t1 + REPORT_AFTER)
 	var out := PackedStringArray()
 	var f0: Variant = frame_at(t0)
 	var f1: Variant = frame_at(t1 + REPORT_AFTER)
 	if f0 == null or f1 == null:
 		return out
+	# WHAT WAS MEANT, AGAINST WHAT HAPPENED: each pour the act makes, judged by where what left its vessel went
+	for pr in pours:
+		var said := _pour_said(pr as Dictionary, t0, t1, f0, f1)
+		if not said.is_empty():
+			out.append(said)
 	# LIQUIDS: what left, and where it went
 	for li in liquids.size():
 		var L: Dictionary = liquids[li]
@@ -3564,7 +4770,8 @@ func report(t0: float, t1: float) -> PackedStringArray:
 			var s1 := float((e as Dictionary)["s1"])
 			if s1 >= t0 and s1 <= t1 + 0.05:
 				end = maxf(end, s1)
-		if end == -INF or _held_at(wi, t1 + REPORT_AFTER):
+		# ...never one a hand still holds up until its next move ([method _held_aloft]): it was not let go
+		if end == -INF or _held_at(wi, t1 + REPORT_AFTER) or _held_aloft(bi, wi, t1 + REPORT_AFTER) != null:
 			continue
 		var now: Variant = pose_of(wi, t1 + REPORT_AFTER)
 		if now == null:
@@ -3572,31 +4779,195 @@ func report(t0: float, t1: float) -> PackedStringArray:
 		var mid: Vector3 = (work._rest[ch] as Transform3D).affine_inverse() * (b["c0"] as Vector3)
 		var meant: Transform3D = twin.value(ch, end - 1e-4)
 		var off := (meant * mid).distance_to((now as Transform3D) * mid)
+		# ...AGAINST WHAT HOLDS IT: one that rides what it rests in went where that went (a cork put back in its jar's neck, the jar
+		# then carried home with it - "came to rest 90 cm from where the act left it", 841899)
+		var hs := int(b["host"])
+		if hs >= 0 and hs < solids.size():
+			var h_end := _solid_at(solids[hs], end)
+			var h_now := _solid_at(solids[hs], t1 + REPORT_AFTER)
+			off = minf(off, (h_end.affine_inverse() * meant * mid).distance_to(h_now.affine_inverse() * (now as Transform3D) * mid))
 		if off > LET_GO_OFF:
+			# ...LEFT STANDING IN A VESSEL, it leans there: the hand let it go on purpose ([method _held_aloft]), and nothing is to fix
+			var in_vessel := _inside_of((now as Transform3D) * mid, _vessel_of.get(int((b["solids"] as PackedInt32Array)[0]), -1) if not (b["solids"] as PackedInt32Array).is_empty() else -1)
+			if in_vessel >= 0:
+				out.append("- %s: left standing in %s, it leans there as the hand let it go, %.1f cm from where the act left it." % [
+					_body_label(bi), _liquid_label(in_vessel), off * 100.0])
+				continue
 			out.append("- %s: let go, it came to rest %.1f cm from where the act left it - now %s. Set it `down` where it can rest, turned the way it stands there." % [
-				_body_label(bi), off * 100.0, _where((now as Transform3D) * mid)])
+				_body_label(bi), off * 100.0, _body_where(bi, now as Transform3D)])
 	# WHAT A HAND COULD NOT TAKE WHERE ITS ACT SENDS IT: nothing an act moves goes through anything ([method _make_rigid]), so
 	# a move that would is held back by what is in its way - said, with what stopped it, as far short as it came the most
+	# ...each frame read once, every body's lag in it (a body a frame had read every frame: 150 bodies over a 12 s act, 108,000 looks)
 	var fps := float(FPS)
-	for bi in rigid.bodies.size():
-		var most := 0.0
-		var at := 0.0
-		var by := -1
-		for k in range(int(floor(t0 * fps)), int(ceil(t1 * fps)) + 1):
-			var fr: Variant = frame_at(float(k) / fps)
-			if fr == null:
-				continue
-			var rd: PackedFloat32Array = (fr as Dictionary).get("rd", PackedFloat32Array())
-			if bi < rd.size() and rd[bi] > most:
-				most = rd[bi]
-				at = float(k) / fps
-				var rt: PackedInt32Array = (fr as Dictionary).get("rt", PackedInt32Array())
-				by = rt[bi] if bi < rt.size() else -1
-		if most > HELD_BACK:
+	var nb := rigid.bodies.size()
+	var most := PackedFloat32Array()
+	most.resize(nb)
+	var most_at := PackedFloat32Array()
+	most_at.resize(nb)
+	var most_by := PackedInt32Array()
+	most_by.resize(nb)
+	most_by.fill(-1)
+	var last_fr: Variant = null
+	for k in range(int(floor(t0 * fps)), int(ceil(t1 * fps)) + 1):
+		var fr: Variant = frame_at(float(k) / fps)
+		if fr == null or is_same(fr, last_fr):
+			continue
+		last_fr = fr
+		var rd: PackedFloat32Array = (fr as Dictionary).get("rd", PackedFloat32Array())
+		var rt: PackedInt32Array = (fr as Dictionary).get("rt", PackedInt32Array())
+		var wk: PackedInt32Array = (fr as Dictionary).get("wk", PackedInt32Array())
+		for j in mini(int((fr as Dictionary).get("rpn", 0)), mini(rd.size(), wk.size())):
+			var bi := wk[j]
+			# ...ONLY WHERE SOMETHING HELD IT: a body that met nothing that frame is behind its hand only as a hand's own pace leaves it
+			# (841899's frankincense jar, 18 cm over the table and 5 cm behind its fast hand, was told it was "HELD BACK by the table's
+			# top" - nothing it met had a name, and none was read as the top)
+			if rd[j] > most[bi] and j < rt.size() and rt[j] != -1:
+				most[bi] = rd[j]
+				most_at[bi] = float(k) / fps
+				most_by[bi] = rt[j]
+	for bi in nb:
+		if most[bi] > HELD_BACK:
 			out.append("- %s: HELD BACK by %s - it stopped %.1f cm short of where the act takes it, %.1f s in. Nothing an act moves passes through anything: lift it over what is in its way, or bring it round." % [
-				_body_label(bi), _solid_label(by), most * 100.0, at - t0])
+				_body_label(bi), _solid_label(most_by[bi]), most[bi] * 100.0, most_at[bi] - t0])
 	if not out.is_empty():
 		out.insert(0, "WHAT THE PHYSICS DID (liquids pour where they stand above a rim, loose things fall and tumble, a pestle pressed into them crushes them):")
+	return out
+
+
+## A POUR JUDGED ([method report]): [param pr] `{label: what poured, from: PackedInt32Array (the solids of what poured), into:
+## the name it was poured into}` over [param t0]-[param t1] (frames [param f0], [param f1]) - everything that left the insides
+## of what poured (its liquid's parcels, its grains, its broken or loose pieces) counted IN what it was meant for, or MISSED it,
+## by the part each went into. (2026-11-01, 841899: a mortar's powder "tipped into the brew" went into the brazier's pan beside
+## the pot, and `act` said "63 in the copper cauldron on its brazier" - the agent read a miss as a hit.) "" when nothing left it.
+func _pour_said(pr: Dictionary, t0: float, t1: float, f0: Variant, f1: Variant) -> String:
+	var from: PackedInt32Array = pr.get("from", PackedInt32Array())
+	var targets := _targets_of(String(pr.get("into", "")))
+	if from.is_empty():
+		return ""
+	var hit := 0.0
+	var missed := {}           # where -> how much
+	var unit := ""
+	# ...ITS LIQUID: each parcel that left it, by where it went
+	var ml_hit := 0.0
+	var ml_missed := {}
+	for p in parcels:
+		var pd: Dictionary = p
+		if float(pd["t0"]) < t0 or float(pd["t0"]) > t1 or int(pd["from"]) < 0 or not from.has(int((liquids[int(pd["from"])] as Dictionary)["solid"])):
+			continue
+		var into := int(pd["into"])
+		if targets.has(into):
+			ml_hit += float(pd["vol"])
+		else:
+			var w := ("into " + _liquid_label(into)) if into >= 0 else ("spilled" if into == -1 else "still falling")
+			ml_missed[w] = float(ml_missed.get(w, 0.0)) + float(pd["vol"])
+	# ...WHAT IS LOOSE IN IT OR ON IT (grains, pieces, loose things): each that lay in its inside or on it as the act began - within
+	# its box and a few centimeters over it (a stone taller than a shallow dish stands out of its inside) - and is out of it now, by
+	# where it is
+	var x0: PackedVector3Array = (f0 as Dictionary)["x"]
+	var x1: PackedVector3Array = (f1 as Dictionary)["x"]
+	var a0: PackedByteArray = (f0 as Dictionary)["alive"]
+	var a1: PackedByteArray = (f1 as Dictionary)["alive"]
+	var on0 := _mover_box(from, t0)
+	var on1 := _mover_box(from, t1 + REPORT_AFTER)
+	var n_hit := 0
+	var n_missed := {}
+	for i in mini(x0.size(), x1.size()):
+		if i >= a0.size() or i >= a1.size() or a0[i] != 1:
+			continue
+		var was := _inside_liquid(x0[i])
+		if not ((was >= 0 and from.has(int((liquids[was] as Dictionary)["solid"]))) or on0.has_point(x0[i])):
+			continue
+		if a1[i] != 1:
+			n_hit += 1 if targets.has(was) else 0
+			continue
+		var now := _inside_liquid(x1[i])
+		if (now >= 0 and from.has(int((liquids[now] as Dictionary)["solid"]))) or on1.has_point(x1[i]):
+			continue
+		if targets.has(now):
+			n_hit += 1
+		else:
+			var w := _where(x1[i])
+			n_missed[w] = int(n_missed.get(w, 0)) + 1
+	var bits := PackedStringArray()
+	var any_missed := not ml_missed.is_empty() or not n_missed.is_empty()
+	if ml_hit + _sum(ml_missed) > 1e-8:
+		var mb := PackedStringArray()
+		for w in ml_missed:
+			mb.append("%.1f ml %s" % [float(ml_missed[w]) * 1e6, w])
+		bits.append("%.1f ml went in%s" % [ml_hit * 1e6, (", " + ", ".join(mb)) if not mb.is_empty() else ""])
+	var n_out := n_hit
+	for w in n_missed:
+		n_out += int(n_missed[w])
+	if n_out > 0:
+		var nb := PackedStringArray()
+		for w in n_missed:
+			nb.append("%d %s" % [int(n_missed[w]), w])
+		bits.append("%d of the %d pieces that left it went in%s" % [n_hit, n_out, (", " + ", ".join(nb)) if not nb.is_empty() else ""])
+	if bits.is_empty():
+		return "- POUR of %s into \"%s\": NOTHING LEFT IT - tip it further (`tip`), or give it longer." % [String(pr.get("label", "it")), String(pr.get("into", ""))]
+	if targets.is_empty():
+		return "- POUR of %s into \"%s\" (nothing of that name holds anything): %s." % [String(pr.get("label", "it")), String(pr.get("into", "")), "; ".join(bits)]
+	return "- POUR of %s into \"%s\": %s%s." % [String(pr.get("label", "it")), String(pr.get("into", "")), "MISSED - " if any_missed else "", "; ".join(bits)]
+
+
+## The box solids [param from] fill at [param t] as baked, and [constant ON_IT] over it: what lies in it or on it ([method _pour_said]).
+func _mover_box(from: PackedInt32Array, t: float) -> AABB:
+	var box := AABB()
+	var any := false
+	for si in from:
+		var sd: Dictionary = solids[si]
+		var b := _solid_at(sd, t) * (sd["box"] as AABB)
+		box = b if not any else box.merge(b)
+		any = true
+	if not any:
+		return AABB()
+	box = box.grow(0.003)
+	box.size.y += ON_IT
+	return box
+
+
+static func _sum(d: Dictionary) -> float:
+	var t := 0.0
+	for k in d:
+		t += float(d[k])
+	return t
+
+
+## The solids of what a track moves: thing [param ti] whole, or part [param wi] and what goes where it goes (a stopper in its jar).
+func solids_of_mover(ti: int, wi: int) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	for si in solids.size():
+		var sd: Dictionary = solids[si]
+		if (ti >= 0 and int(sd["thing"]) == ti) or (wi >= 0 and work._within(int(sd["wi"]), wi) == 1):
+			out.append(si)
+	return out
+
+
+## THE INSIDES A POUR INTO [param into] IS MEANT FOR: the liquids (each an inside, filled or not) named so - a liquid's own name
+## ("brew"), the part that holds it ("vial 1", "cauldron"), its thing (every inside of it that holds a liquid, else every inside),
+## or "thing/part".
+func _targets_of(into: String) -> Array:
+	var name := into.strip_edges().to_lower()
+	var part := name.get_slice("/", 1) if name.contains("/") else name
+	var out: Array = []
+	var of_thing: Array = []
+	for li in liquids.size():
+		var L: Dictionary = liquids[li]
+		var sd: Dictionary = solids[int(L["solid"])]
+		var thing := String((work.things[int(L["thing"])] as Dictionary)["name"]).to_lower()
+		var holder := work._part_label(int(sd["wi"])).to_lower() if int(sd["wi"]) >= 0 else ""
+		var holder_name := String((work.works[int(sd["wi"])] as Dictionary)["name"]).to_lower() if int(sd["wi"]) >= 0 else ""
+		if String(L["name"]).to_lower() == part or (not holder.is_empty() and (holder == part or holder_name == part)):
+			out.append(li)
+		elif thing == name or (name.contains("/") and thing == name.get_slice("/", 0)):
+			of_thing.append(li)
+	if out.is_empty() and not of_thing.is_empty():
+		# ...a thing named whole: the insides that hold a liquid as built (a pot, never its brazier's pan), else all of them
+		for li in of_thing:
+			if float((liquids[int(li)] as Dictionary).get("v0", 0.0)) > 1e-9:
+				out.append(li)
+		if out.is_empty():
+			out = of_thing
 	return out
 
 
@@ -3614,34 +4985,85 @@ func _solid_label(si: int) -> String:
 		return "the loose things under it"
 	if si < 0 or si >= solids.size():
 		return "the table's top"
-	var sd: Dictionary = solids[si]
+	# ...named from the work's copy, which any thread may read ([member TableWork._solids_ref])
+	var sd: Dictionary = work._solids_ref[si] if si < work._solids_ref.size() else solids[si]
 	var thing := String((work.things[int(sd["thing"])] as Dictionary)["name"])
 	return thing if int(sd["wi"]) < 0 else "%s's %s" % [thing, work._part_label(int(sd["wi"]))]
 
 
+## Liquid [param li] as the puppeteer knows it: its own name and the part that holds it ("the copper cauldron's brew"), or, an
+## inside with no liquid of its name, THE PART whose inside it is - a thing may hold two (a cauldron and its brazier's pan), and
+## named by the thing alone they read alike.
 func _liquid_label(li: int) -> String:
 	var L: Dictionary = liquids[li]
 	var thing := String((work.things[int(L["thing"])] as Dictionary)["name"])
 	var nm := String(L["name"])
-	return "%s's %s" % [thing, nm] if not nm.is_empty() else "the inside of %s" % thing
+	return "%s's %s" % [thing, nm] if not nm.is_empty() else "the inside of %s" % _solid_label(int(L["solid"]))
 
 
-## Where [param p] is, in words: in a liquid, in a vessel, on the table.
-func _where(p: Vector3) -> String:
+## WHERE [param p] IS, in words the puppeteer can act on: in a liquid, or in the inside of THE PART that holds it (never the thing
+## alone: 2026-11-01, 841899's ground frankincense in the brazier's pan beside the cauldron was told "in the copper cauldron on its
+## brazier", and a miss read as a hit); else on what is under it, looked for straight down ([constant LOOK_DOWN]) - the table's
+## top or a part; else in the air. (A thing's middle 1.2 cm up had read "in the air" where it lay on the table.)
+func _where(p: Vector3, skip := PackedInt32Array()) -> String:
+	var li := _inside_liquid(p, skip)
+	if li >= 0:
+		var S: Dictionary = _liq[li]
+		var under := float(S["v"]) > 1e-9 and (p - (S.get("c", p) as Vector3)).dot(S.get("n", Vector3.UP) as Vector3) < 0.0
+		return ("in %s" % _liquid_label(li)) if under else "in the inside of %s" % _solid_label(int((liquids[li] as Dictionary)["solid"]))
+	var si := _solid_under(p, skip)
+	if si >= 0:
+		return "on %s" % _solid_label(si)
+	return "on the table" if p.y < LOOK_DOWN else "in the air"
+
+
+## WHERE RIGID BODY [param bi] LIES, posed [param now] (its node's pose): in the inside its middle is in, else on what is under
+## its lowest point - never in or on itself (a mortar's middle is in its own inside: "now in the bronze mortar and pestle").
+func _body_where(bi: int, now: Transform3D) -> String:
+	var b: Dictionary = rigid.bodies[bi]
+	var motion := now * _rest_of(int(b["wi"])).affine_inverse()
+	var own: PackedInt32Array = b["solids"]
+	var mid := motion * (b["c0"] as Vector3)
+	if _inside_liquid(mid, own) >= 0:
+		return _where(mid, own)
+	var low := Vector3(0.0, INF, 0.0)
+	for q in (b["pts"] as PackedVector3Array):
+		var w := motion * q
+		if w.y < low.y:
+			low = w
+	return _where(low + Vector3.UP * 0.004, own) if low.y < INF else _where(mid, own)
+
+
+## The liquid whose vessel's inside holds [param p], the smallest such, none of solids [param skip] - or -1.
+func _inside_liquid(p: Vector3, skip := PackedInt32Array()) -> int:
+	var best := -1
+	var least := INF
 	for li in liquids.size():
 		var L: Dictionary = liquids[li]
+		if skip.has(int(L["solid"])):
+			continue
 		var sd: Dictionary = solids[int(L["solid"])]
-		if (L["vessel"] as Vessel).contains((sd["inv"] as Transform3D) * p):
-			var S: Dictionary = _liq[li]
-			var under := float(S["v"]) > 1e-9 and (p - (S.get("c", p) as Vector3)).dot(S.get("n", Vector3.UP) as Vector3) < 0.0
-			return ("in %s" % _liquid_label(li)) if under else "in %s" % String((work.things[int(L["thing"])] as Dictionary)["name"])
-	if p.y < 0.012:
-		return "on the table"
-	for sd in solids:
-		var d: Dictionary = sd
-		if (d["wbox"] as AABB).grow(0.01).has_point(p):
-			return "on %s" % String((work.things[int(d["thing"])] as Dictionary)["name"])
-	return "in the air"
+		if (L["vessel"] as Vessel).contains((sd["inv"] as Transform3D) * p) and float(L["full_v"]) < least:
+			least = float(L["full_v"])
+			best = li
+	return best
+
+
+## The solid nearest under [param p], looked for straight down as far as [constant LOOK_DOWN] - or -1 when there is none that near
+## (what is under it then is the table's top, or nothing).
+func _solid_under(p: Vector3, skip := PackedInt32Array()) -> int:
+	var step := 0.002
+	var d := 0.0
+	while d <= minf(LOOK_DOWN, maxf(p.y, 0.0)):
+		var q := p - Vector3(0.0, d, 0.0)
+		for si in solids.size():
+			var sd: Dictionary = solids[si]
+			if skip.has(si) or not bool(sd.get("on", true)) or not (sd["wbox"] as AABB).grow(0.003).has_point(q):
+				continue
+			if (sd["field"] as ShapeField).sample((sd["inv"] as Transform3D) * q).x < 0.003:
+				return si
+		d += step
+	return -1
 
 
 ## The most liquid [param li]'s vessel is tipped between [param t0] and [param t1] (radians from upright).

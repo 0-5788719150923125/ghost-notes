@@ -3,8 +3,20 @@ extends Node
 ## YouTube - sign in to the author's YouTube channel and upload a finished export to it.
 ##
 ## THE GOOGLE CLIENT IS THE AUTHOR'S OWN: a Google Cloud project's "Desktop app" OAuth client, as
-## the JSON file Google hands out for it. It is imported once ([method import_client]) and kept in
-## `user://youtube/` - never in the repository - and every later sign-in uses that copy.
+## the JSON file Google hands out for it. Each is imported once ([method import_client]) and kept in
+## `user://youtube/clients/` - never in the repository - and every later sign-in uses that copy.
+##
+## EVERY CLIENT IS KEPT (the user, 2026-11-02: "simultaneously logged-in to two different clients, for
+## two different projects ... select from a list of previous clients"): there had been one slot, which
+## an import overwrote, so a client was a machine's and not a channel's. Now [method clients] lists all
+## of them, a note's YouTube card picks among them, and [method client_for] says which a sign-in goes
+## through: the note's pick, else the client the channel signed in with, else the one imported last. A
+## CHANNEL GOES BACK THROUGH ITS OWN CLIENT (the same day: a lapsed @the-ink had been sent through the
+## client imported for @the-arc, another Cloud project, and Google's 403 access_denied named neither -
+## its account was a test user of the project it came from, and a test-user list is one project's). What
+## this machine already held is read where it lies, nothing written: the old slot, `client.json`, and a
+## channel's copy of its client, which is all there is of one replaced by a later import (no project's
+## name in it until its file is imported again: [method client_name]).
 ##
 ## SIGNING IN is Google's flow for installed apps ([method sign_in]): the system browser opens
 ## Google's consent page, Google sends the browser back to a one-shot listener on 127.0.0.1 (a port
@@ -22,9 +34,9 @@ extends Node
 ## named by what YouTube calls that channel - its handle, else its title - asked once as it signs in
 ## ([method sign_in]; Google's account chooser is always shown, so another channel can be picked).
 ## It keeps a copy of the client it signed in with, so a client imported later (another Cloud
-## project, for its own quota) is the one NEW sign-ins use and costs no channel its sign-in. A lapsed
-## sign-in keeps its channel, to sign in again; a note's YouTube card picks the channel its uploads go
-## to, and the waiting upload names its own.
+## project, for its own quota) costs no channel its sign-in: channels signed in through different
+## clients stay signed in side by side. A lapsed sign-in keeps its channel and its client, to sign in
+## again; a note's YouTube card picks the channel its uploads go to, and the waiting upload names its own.
 ##
 ## AN UPLOAD IS RESUMABLE ([method resume], Google's protocol): a session is opened with the video's
 ## metadata, the file goes up in chunks, a chunk that fails asks YouTube how much arrived and carries
@@ -46,6 +58,13 @@ const READ_SCOPE := "https://www.googleapis.com/auth/youtube.readonly"
 const ROOT := "user://youtube"
 ## The folder under [constant ROOT] each channel's sign-in is kept in.
 const CHANNELS := "channels"
+## The folder under [constant ROOT] each imported client is kept in, named by its [method client_key].
+const CLIENTS := "clients"
+## The one slot under [constant ROOT] a client was kept in until 2026-11-02: read, never written.
+const OLD_CLIENT := "client.json"
+## Where a client that does not say goes for the consent page, and for tokens.
+const AUTH_URI := "https://accounts.google.com/o/oauth2/auth"
+const TOKEN_URI := "https://oauth2.googleapis.com/token"
 ## Every upload goes up private unless the note's card says otherwise, says it is not made for kids,
 ## declares itself altered or synthetic content (the voice is synthesized, and a mode's pictures may
 ## be painted by a model), and declares NO PAID PROMOTION - left unsaid, YouTube Studio showed the
@@ -100,6 +119,9 @@ const PAID_PROMOTION := false
 const TITLE_MAX := 100
 const DESCRIPTION_MAX := 5000
 const TAGS_MAX := 500
+## A CHAPTER IS AT LEAST THIS MANY SECONDS, or YouTube shows none of them: the shortest it accepts, the
+## last one counted to the video's end ([method fit_chapters]).
+const CHAPTER_LEAST := 10.0
 ## A chunk: a multiple of 256 KiB, as the protocol requires of every chunk but the last.
 const CHUNK := 8 * 1024 * 1024
 ## Seconds the browser's answer is waited for, and one chunk may take.
@@ -154,12 +176,17 @@ static func parse_client(text: String) -> Dictionary:
 			return {"error": "that is a \"Web application\" client - in Google Cloud, create an OAuth "
 				+ "client of type \"Desktop app\" and import its file"}
 		return {"error": "that file is not a Google OAuth client (it has no \"installed\" section)"}
-	var c: Dictionary = d["installed"]
+	return _client_fields(d["installed"])
+
+
+## Client [param c]'s fields, from a client file's `installed` section or a channel's copy of it: as
+## [method parse_client] says, or `{error}`.
+static func _client_fields(c: Dictionary) -> Dictionary:
 	var out := {"client_id": str(c.get("client_id", "")).strip_edges(),
 		"client_secret": str(c.get("client_secret", "")).strip_edges(),
 		"project_id": str(c.get("project_id", "")).strip_edges(),
-		"auth_uri": str(c.get("auth_uri", "https://accounts.google.com/o/oauth2/auth")).strip_edges(),
-		"token_uri": str(c.get("token_uri", "https://oauth2.googleapis.com/token")).strip_edges()}
+		"auth_uri": str(c.get("auth_uri", AUTH_URI)).strip_edges(),
+		"token_uri": str(c.get("token_uri", TOKEN_URI)).strip_edges()}
 	if String(out["client_id"]).is_empty() or String(out["client_secret"]).is_empty():
 		return {"error": "the client file has no client_id or client_secret"}
 	for k in ["auth_uri", "token_uri"]:
@@ -180,38 +207,157 @@ static func _google_endpoint(url: String) -> bool:
 	return url.begins_with("http://") and host in ["127.0.0.1", "localhost"]
 
 
-## The imported client, as [method parse_client] reads it.
-static func client() -> Dictionary:
-	var raw := _read(_path("client.json"))
-	if raw.is_empty():
+## WHAT A CLIENT'S FILE AND A NOTE'S BLOCK NAME IT BY: never its id, which a note that may be shared has
+## no need to carry. "" for no id.
+static func client_key(client_id: String) -> String:
+	return "" if client_id.is_empty() else client_id.md5_text().left(12)
+
+
+## What client [param c] is called: its Cloud project's id, as Google's console shows it, else its
+## project's number - the head of its id, which is all a channel's copy made before 2026-11-02 says of
+## it. "" for no client.
+static func client_name(c: Dictionary) -> String:
+	var project := str(c.get("project_id", "")).strip_edges()
+	if not project.is_empty():
+		return project
+	var id := str(c.get("client_id", "")).strip_edges()
+	return "" if id.is_empty() else "project " + id.get_slice("-", 0)
+
+
+## THE CLIENTS KEPT HERE, the one imported last at the end: `[{key, name, channels, added}]` - `name` is
+## what the card calls one ([method client_name], told apart when two are one project's), `channels` the
+## names of those that signed in with it. Only reads.
+static func clients() -> Array:
+	var kept := _kept_clients()
+	var called := {}
+	for key: String in kept:
+		var named := client_name(kept[key]["client"])
+		called[named] = int(called.get(named, 0)) + 1
+	var out: Array = []
+	for key: String in kept:
+		var c: Dictionary = kept[key]["client"]
+		var named := client_name(c)
+		if int(called[named]) > 1:
+			named += " (%s)" % String(c["client_id"]).get_slice("-", 1).left(6)
+		out.append({"key": key, "name": named, "channels": kept[key]["channels"], "added": kept[key]["added"]})
+	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return _sooner(float(a["added"]), String(a["key"]), float(b["added"]), String(b["key"])))
+	return out
+
+
+## Does what was added at [param t0], key [param k0], come before what was added at [param t1], key
+## [param k1]?
+static func _sooner(t0: float, k0: String, t1: float, k1: String) -> bool:
+	return t0 < t1 if t0 != t1 else k0 < k1
+
+
+## Every client kept here by its key, `{client, added, channels}`: imported, in the old slot, or known
+## only from a channel's copy. The first place one is found says what it is, so a file imported again
+## names a project a channel's old copy could not.
+static func _kept_clients() -> Dictionary:
+	var out := {}
+	var dir := _path(CLIENTS)
+	if DirAccess.dir_exists_absolute(dir):
+		for f in DirAccess.get_files_at(dir):
+			if f.get_extension() == "json":
+				var path := dir.path_join(f)
+				_found_client(out, parse_client(_read(path)), float(_read_json(path).get("added", 0.0)))
+	var old := _path(OLD_CLIENT)
+	if FileAccess.file_exists(old):
+		_found_client(out, parse_client(_read(old)), float(FileAccess.get_modified_time(old)))
+	for t: Dictionary in _channel_files():
+		if not (t.get("client") is Dictionary):
+			continue
+		var c := _client_fields(t["client"])
+		_found_client(out, c, float(t.get("added", 0.0)))
+		var named := String(_channel_of(t).get("name", ""))
+		if not c.has("error") and not named.is_empty():
+			(out[client_key(String(c["client_id"]))]["channels"] as Array).append(named)
+	for key: String in out:
+		(out[key]["channels"] as Array).sort()
+	return out
+
+
+static func _found_client(out: Dictionary, c: Dictionary, added: float) -> void:
+	if c.has("error"):
+		return
+	var key := client_key(String(c["client_id"]))
+	if not out.has(key):
+		out[key] = {"client": c, "added": added, "channels": []}
+
+
+## The client [param key] names, as [method parse_client] reads it; "" for the one imported last.
+static func client(key := "") -> Dictionary:
+	var kept := _kept_clients()
+	if kept.is_empty():
 		return {"error": "no Google client file has been imported"}
-	return parse_client(raw)
+	if not key.is_empty():
+		return kept[key]["client"] if kept.has(key) else {"error": "that Google client is not kept here"}
+	var last := ""
+	for k: String in kept:
+		if last.is_empty() or _sooner(float(kept[last]["added"]), last, float(kept[k]["added"]), k):
+			last = k
+	return kept[last]["client"]
 
 
 static func has_client() -> bool:
 	return not client().has("error")
 
 
-## Import the client file at [param path]: checked, then kept - owner read/write only - for every
-## later sign-in. "" on success, else why not. A channel already signed in keeps the client it
-## signed in with: only new sign-ins use this one.
+## THE CLIENT A SIGN-IN GOES THROUGH (see the header): the one [param key] names - a note's pick - else
+## the one channel [param id] signed in with, else the one imported last. `{error}` when none is kept. A
+## key or a channel's client not kept here is passed over: a note may come from another machine.
+static func client_for(key: String, id := "") -> Dictionary:
+	for k in [key, channel_client(id)]:
+		if not String(k).is_empty():
+			var c := client(k)
+			if not c.has("error"):
+				return c
+	return client()
+
+
+## The key of the client channel [param id] signed in with: "" when it keeps none.
+static func channel_client(id: String) -> String:
+	var c: Variant = _token(id).get("client")
+	return client_key(str((c as Dictionary).get("client_id", "")).strip_edges()) if c is Dictionary else ""
+
+
+## Import the client file at [param path]: checked, then kept - owner read/write only - beside the
+## others, the one imported last. "" on success, else why not. A file imported again replaces its own.
+## No channel changes the client it signed in with.
 static func import_client(path: String) -> String:
 	if not FileAccess.file_exists(path):
 		return "that file does not exist"
 	var c := parse_client(FileAccess.get_file_as_string(path))
 	if c.has("error"):
 		return String(c["error"])
-	var keep := {"installed": {"client_id": c["client_id"], "client_secret": c["client_secret"],
-		"project_id": c["project_id"], "auth_uri": c["auth_uri"], "token_uri": c["token_uri"]}}
-	var err := _write(_path("client.json"), JSON.stringify(keep, "\t"), true)
+	var err := _keep_client(c, _now())
 	if not err.is_empty():
 		return err
 	print("ghost: YouTube - imported the Google client of project %s" % c["project_id"])
 	return ""
 
 
-static func forget_client() -> void:
-	DirAccess.remove_absolute(_path("client.json"))
+static func _client_path(key: String) -> String:
+	return _path(CLIENTS.path_join(key + ".json"))
+
+
+static func _keep_client(c: Dictionary, added: float) -> String:
+	return _write(_client_path(client_key(String(c["client_id"]))), JSON.stringify({"added": added,
+		"installed": {"client_id": c["client_id"], "client_secret": c["client_secret"],
+			"project_id": c["project_id"], "auth_uri": c["auth_uri"], "token_uri": c["token_uri"]}}, "\t"), true)
+
+
+## Forget client [param key], wherever it was imported to. A channel that signed in with it keeps its
+## copy, and its sign-in, and so the client stays listed: the card offers this only for one no channel
+## holds.
+static func forget_client(key: String) -> void:
+	if key.is_empty():
+		return
+	DirAccess.remove_absolute(_client_path(key))
+	var old := _path(OLD_CLIENT)
+	if client_key(str(parse_client(_read(old)).get("client_id", ""))) == key:
+		DirAccess.remove_absolute(old)
 
 
 # --- the channels --------------------------------------------------------------------------------
@@ -221,18 +367,25 @@ static func forget_client() -> void:
 ## once its sign-in has lapsed or been refused (the channel stays, to sign in again).
 static func channels() -> Array:
 	var out: Array = []
-	var dir := _path(CHANNELS)
-	if not DirAccess.dir_exists_absolute(dir):
-		return out
-	for f in DirAccess.get_files_at(dir):
-		if f.get_extension() != "json":
-			continue
-		var ch := _channel_of(_read_json(dir.path_join(f)))
+	for t: Dictionary in _channel_files():
+		var ch := _channel_of(t)
 		if not ch.is_empty():
 			out.append(ch)
 	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return float(a["added"]) < float(b["added"]) if float(a["added"]) != float(b["added"]) \
 			else String(a["id"]) < String(b["id"]))
+	return out
+
+
+## Each channel's file, as it is kept.
+static func _channel_files() -> Array:
+	var out: Array = []
+	var dir := _path(CHANNELS)
+	if not DirAccess.dir_exists_absolute(dir):
+		return out
+	for f in DirAccess.get_files_at(dir):
+		if f.get_extension() == "json":
+			out.append(_read_json(dir.path_join(f)))
 	return out
 
 
@@ -267,10 +420,17 @@ static func signed_in(id: String) -> bool:
 	return not str(_token(id).get("refresh_token", "")).is_empty()
 
 
-## Forget channel [param id] altogether: its sign-in and its place on the list.
+## Forget channel [param id] altogether: its sign-in and its place on the list. Not its client, whose
+## only copy this may be: that stays on the list of clients.
 static func forget_channel(id: String) -> void:
-	if not id.is_empty():
-		DirAccess.remove_absolute(_channel_path(id))
+	if id.is_empty():
+		return
+	var t := _token(id)
+	if t.get("client") is Dictionary:
+		var c := _client_fields(t["client"])
+		if not c.has("error") and not FileAccess.file_exists(_client_path(client_key(String(c["client_id"])))):
+			_keep_client(c, float(t.get("added", _now())))
+	DirAccess.remove_absolute(_channel_path(id))
 
 
 ## Forget channel [param id]'s sign-in, keeping the channel: it lapsed, or Google refused it.
@@ -312,7 +472,8 @@ static func _keep(ch: Dictionary, c: Dictionary, tok: Dictionary, scope: String)
 	var was := _token(id)
 	return _write(_channel_path(id), JSON.stringify({
 		"channel": {"id": id, "handle": str(ch.get("handle", "")), "title": str(ch.get("title", ""))},
-		"client": {"client_id": c["client_id"], "client_secret": c["client_secret"], "token_uri": c["token_uri"]},
+		"client": {"client_id": c["client_id"], "client_secret": c["client_secret"], "project_id": str(c.get("project_id", "")),
+			"auth_uri": str(c.get("auth_uri", AUTH_URI)), "token_uri": c["token_uri"]},
 		"refresh_token": str(tok.get("refresh_token", "")), "access_token": str(tok.get("access_token", "")),
 		"scope": scope, "expires_at": _now() + float(tok.get("expires_in", 0)) - 60.0,
 		"added": float(was.get("added", _now()))}, "\t"), true)
@@ -370,15 +531,16 @@ static func query_of(path: String) -> Dictionary:
 
 ## Sign in through the browser, asking for [param scopes] (the upload's alone unless a playlist is
 ## wanted) and the channel's name, and keep the sign-in under the channel it landed on - whichever
-## the person chose: `{channel: {id, handle, title}}` once signed in, else `{error}`. The browser is
+## the person chose: `{channel: {id, handle, title}}` once signed in, else `{error}`. The client is
+## [method client_for]'s, for the pick [param key] and the channel [param id] meant. The browser is
 ## waited for up to [constant SIGN_IN_TIMEOUT]; [method stop_sign_in] ends the wait.
 ##
 ## A NEWER SIGN-IN REPLACES ONE STILL WAITING. Google's "Access blocked" page (an account that is
 ## not one of a Testing project's test users) is a dead end that never comes back here, and a page
 ## can open behind another window - refusing a second attempt left nothing to do but wait out the
 ## first one.
-func sign_in(scopes: Array = [SCOPE]) -> Dictionary:
-	var c := client()
+func sign_in(scopes: Array = [SCOPE], key := "", id := "") -> Dictionary:
+	var c := client_for(key, id)
 	if c.has("error"):
 		return {"error": String(c["error"])}
 	var ask: Array = scopes.duplicate()
@@ -397,7 +559,7 @@ func sign_in(scopes: Array = [SCOPE]) -> Dictionary:
 	sign_in_url = auth_url(c, redirect, challenge(v), state, ask)
 	phase = "signing_in"
 	reopen_sign_in()
-	print("ghost: YouTube - signing in through the browser (Google answers on %s)" % redirect)
+	print("ghost: YouTube - signing in through the browser, the client of %s (Google answers on %s)" % [client_name(c), redirect])
 	var got: Dictionary = await _await_answer(tcp, state, mine)
 	tcp.stop()
 	if mine != _wait:
@@ -587,8 +749,7 @@ func access_token(id: String) -> Dictionary:
 				return {"error": "the YouTube sign-in has lapsed or was revoked - sign in again", "signed_out": true}
 			"invalid_client", "unauthorized_client":
 				_drop_sign_in(id)
-				if str(client().get("client_id", "")) == str(c["client_id"]):
-					forget_client()
+				_forget_refused(id, c)
 				return {"error": "Google no longer accepts the client this channel signed in with - sign in again",
 					"signed_out": true, "bad_client": true}
 		return {"error": error_text(int(res["code"]), res["body"])}
@@ -600,6 +761,18 @@ func access_token(id: String) -> Dictionary:
 		t["scope"] = str(j["scope"])
 	_write(_channel_path(id), JSON.stringify(t, "\t"), true)
 	return {"token": str(t["access_token"])}
+
+
+## GOOGLE NO LONGER ACCEPTS CLIENT [param c], which channel [param id] signed in with: the channel lets go
+## of it, so its next sign-in goes through another, and it comes off the list - unless what is kept under
+## its id has another secret (imported since a secret was changed), which may well work.
+static func _forget_refused(id: String, c: Dictionary) -> void:
+	var key := client_key(str(c["client_id"]))
+	if str(client(key).get("client_secret", "")) == str(c.get("client_secret", "")):
+		forget_client(key)
+	var t := _token(id)
+	t.erase("client")
+	_write(_channel_path(id), JSON.stringify(t, "\t"), true)
 
 
 ## Channel [param id]'s access token, marked spent: the next [method access_token] renews it.
@@ -1178,6 +1351,36 @@ static func _unquote(s: String) -> String:
 	if s.length() >= 2 and (s[0] == "\"" or s[0] == "'") and s[s.length() - 1] == s[0]:
 		return s.substr(1, s.length() - 2)
 	return s
+
+
+## [param chapters] (`[{t, label}]`, seconds from the video's start) as YouTube takes them: in time
+## order, the first at 0, and each at least [constant CHAPTER_LEAST] long, running to the next one kept
+## (the last to [param end], the video's length; unknown, below 0). One shorter is dropped and the chapter
+## before it runs on - a card passed over in a few words, a part named a moment after its own mark - so
+## what begins next keeps its start. The first is never dropped or moved: what begins too soon after it
+## goes. A label is one line. YouTube draws chapters only from three or more; fewer are still
+## timestamps a viewer can click.
+static func fit_chapters(chapters: Array, end := -1.0) -> Array:
+	var sorted: Array = []
+	for c in chapters:
+		var label := " ".join(String((c as Dictionary).get("label", "")).split("\n", false)).strip_edges()
+		if not label.is_empty():
+			sorted.append({"t": maxf(0.0, float((c as Dictionary)["t"])), "label": label, "i": sorted.size()})
+	if sorted.is_empty():
+		return []
+	# (in the order given where two start together: a sort is not stable)
+	sorted.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return float(a["t"]) < float(b["t"]) or (float(a["t"]) == float(b["t"]) and int(a["i"]) < int(b["i"])))
+	var kept: Array = []
+	var next := end if end >= 0.0 else INF
+	for i in range(sorted.size() - 1, 0, -1):
+		var t := float((sorted[i] as Dictionary)["t"])
+		if next - t >= CHAPTER_LEAST:
+			kept.push_front({"t": t, "label": (sorted[i] as Dictionary)["label"]})
+			next = t
+	while not kept.is_empty() and float((kept[0] as Dictionary)["t"]) < CHAPTER_LEAST:
+		kept.pop_front()
+	return [{"t": 0.0, "label": (sorted[0] as Dictionary)["label"]}] + kept
 
 
 ## [param tags] as YouTube takes them: cleaned (no commas or quotes inside a tag), each once whatever

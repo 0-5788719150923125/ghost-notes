@@ -18,6 +18,9 @@ extends Node
 ## wait (the control: the wait over, the clock runs).
 ##
 ## SPACE plays and pauses through the transport, even with a button focused.
+##
+## WHAT IS BUFFERED ([method Spectrum.ready_ahead]): the least of what the conductor has made ahead (a reading's voice) and what
+## every part that draws ahead has baked (a table's physics) - none said, none shown; a negative figure takes a part's off.
 
 const FixtureAudio := preload("res://tests/fixture_audio.gd")
 const LEAD := 3.0
@@ -39,6 +42,7 @@ func _run() -> void:
 	_ok(not _bar._root.visible, "with nothing loaded the show is untimed and there is no transport")
 	await _song()
 	await _reading()
+	_buffered()
 	Spectrum.stop()
 	Spectrum.lead_in = 0.0
 	Spectrum.tail = 0.0
@@ -50,6 +54,21 @@ func _run() -> void:
 	for f in _fails:
 		print("   ", f)
 	get_tree().quit(1)
+
+
+## WHAT IS BUFFERED: the least of the parts' and the conductor's, nothing when none says, a part's taken off by a negative figure.
+func _buffered() -> void:
+	var owner := Node.new()
+	_ok(Spectrum.ready_ahead() < 0.0, "the control: nothing says it is ready ahead, and the transport is shown %.1f s buffered" % Spectrum.ready_ahead())
+	Spectrum.set_ready("table", 12.0)
+	_ok(is_equal_approx(Spectrum.ready_ahead(), 12.0), "a table baked 12 s ahead is shown %.1f s buffered" % Spectrum.ready_ahead())
+	Spectrum.conduct(owner, {"ahead": func() -> float: return 5.0})
+	_ok(is_equal_approx(Spectrum.ready_ahead(), 5.0), "the voice made 5 s ahead and the table 12, the transport is shown %.1f s buffered - the least" % Spectrum.ready_ahead())
+	Spectrum.set_ready("table", -1.0)
+	_ok(is_equal_approx(Spectrum.ready_ahead(), 5.0), "the table's taken off, the voice's 5 s is shown %.1f s" % Spectrum.ready_ahead())
+	Spectrum.release_conductor(owner)
+	_ok(Spectrum.ready_ahead() < 0.0, "nothing left saying it is ready, the transport is still shown %.1f s buffered" % Spectrum.ready_ahead())
+	owner.free()
 
 
 func _ok(cond: bool, msg: String) -> void:

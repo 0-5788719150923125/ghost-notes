@@ -32,6 +32,10 @@ uniform float ring_size[12];
 uniform int ring_count = 0;
 // where a stream falls on it (the mesh's space) and how hard (meters of ripple, 0 for none)
 uniform vec4 stream_at = vec4(0.0);
+// ITS BUBBLES BREAKING (src/table/boil.gd - the very ones the work's sound hears): each (x, z) from the surface's middle in the
+// mesh's space, its radius (meters), and how far it is from rising to breaking - past 1, its ring running out
+uniform vec4 bubble[16];
+uniform int bubble_count = 0;
 // THE INSIDE (Vessel.shader_tables): the mesh's space carried into the vessel's own, its warp undone, its heights, its
 // radius at 32 heights (a lathe's) and at 32 bearings round its middle (an outline's) - the surface is drawn only where
 // the eye crosses it within the inside (seen through the vessel's wall below it, the crossing lies outside)
@@ -193,12 +197,31 @@ void fragment() {
 		}
 		vec3 n = normalize(surface_up - e1 * (wv.y + rx * calm + sl.x) - e2 * (wv.z + rz * calm + sl.y));
 		float b = 0.0;
-		if (boil > 0.0) {
-			// each cell a bubble on its own clock: it swells, then breaks
-			vec3 c = cellsid(cq * vec3(0.7, 0.0, 0.7));
-			float life = fract(st * (0.35 + boil * 0.9) + c.z * 7.0);
-			float r = (1.0 - smoothstep(0.08, 0.3, c.x)) * smoothstep(0.0, 0.7, life) * (1.0 - smoothstep(0.85, 1.0, life));
-			b = r * step(1.0 - min(boil, 1.0) * 0.6, c.z);
+		vec2 rel2 = (hit - surface_at).xz;
+		for (int i = 0; i < 16; i++) {
+			if (i >= bubble_count) {
+				break;
+			}
+			vec4 bb = bubble[i];
+			vec2 dv = rel2 - bb.xy;
+			float d = length(dv);
+			if (bb.w <= 1.0) {
+				// a dome, swelling as it comes up, broken at 1
+				float swell = smoothstep(0.0, 0.8, bb.w) * (1.0 - smoothstep(0.93, 1.0, bb.w));
+				float rr = bb.z * (0.45 + 0.55 * swell);
+				if (d < rr && swell > 0.0) {
+					float k = d / rr;
+					b = max(b, swell * (1.0 - k * k));
+					n = normalize(n + vec3(dv.x, 0.0, dv.y) / rr * swell * 0.9);
+				}
+			} else {
+				// ...and its ring running out across the surface
+				float age = bb.w - 1.0;
+				float rad = bb.z * (1.0 + age * 6.0);
+				float ring = exp(-pow((d - rad) / (bb.z * 0.5), 2.0)) * (1.0 - age);
+				b = max(b, ring * 0.5);
+				n = normalize(n + vec3(dv.x, 0.0, dv.y) / max(d, 1e-5) * ring * 0.35);
+			}
 		}
 		albedo = color * (0.82 + 0.2 * rip);
 		albedo = mix(albedo, color2, clamp(smoothstep(0.62, 0.9, fbm(cq * 0.25 + vec3(st * 0.05)) + b * 0.4) * pattern, 0.0, 1.0));

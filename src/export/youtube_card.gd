@@ -32,6 +32,16 @@ class_name YouTubeCard
 ## none takes the first channel kept. A playlist is a channel's, so another channel clears it. The
 ## account rows below speak for the channel picked.
 ##
+## THE CLIENT IS PICKED FROM THOSE KEPT (the user, 2026-11-02: "we shouldn't be required to import
+## credentials for every new project ... easily switch between them, probably via a simple pick list on
+## the YouTube card"): a list of [method YouTube.clients], each by its Cloud project and the channels
+## signed in through it, showing the client this note's next sign-in goes through ([method _client_key]):
+## the note's channel's own until another is picked, which the block keeps by its key - never its id - and
+## another channel's toggle clears. A CHANNEL STAYS SIGNED IN THROUGH WHAT IT SIGNED IN WITH, whichever is
+## picked, since a refresh token is one client's: picking another offers "Sign in again", and the old
+## sign-in goes only once the new one lands. "+" signs in through the one shown. ✕, pressed twice, forgets
+## one no channel holds.
+##
 ## ONE LIST OF TAGS (the user, 2026-10-19: "I never know which tags are truly going to be applied ...
 ## I'd prefer to see just one, unified list"): the note's `tags:` line, which the panel shows in
 ## [member extra] and every upload takes. With "Write each episode's tags" ticked (2026-10-18: "allow
@@ -81,7 +91,7 @@ const YouTube := preload("res://src/export/youtube.gd")
 const KEY := "youtube"
 ## A new card's block: nothing goes up until the box is ticked, and then privately.
 const DEFAULTS := {"upload": false, "title": YouTube.TITLE_TEMPLATE, "privacy": YouTube.PRIVACY,
-	"category": YouTube.CATEGORY, "playlist": "", "playlist_title": "", "channel": "", "channel_name": "",
+	"category": YouTube.CATEGORY, "playlist": "", "playlist_title": "", "channel": "", "channel_name": "", "client": "",
 	"write_tags": false, "description": "", "thumbnail": YouTube.THUMBNAIL,
 	"thumbnail_writer": "claude", "thumbnail_writer_model": "", "thumbnail_writer_effort": "",
 	"thumbnail_painter": "codex", "thumbnail_painter_model": "", "thumbnail_painter_effort": "", "thumbnail_match": true}
@@ -103,6 +113,8 @@ var _upload: CheckBox
 var _chips: HFlowContainer
 var _chip_group: ButtonGroup
 var _add: Button
+var _clients: OptionButton
+var _client_del: Button
 var _title: LineEdit
 var _preview: Label
 var _privacy: OptionButton
@@ -141,6 +153,8 @@ var _tags_seen := []            # what the tag rows were last drawn for
 var _names: ScriptWriter
 ## The channel the note's uploads go to, kept whole even when it is not signed in here: `{id, name}`.
 var _chan := {"id": "", "name": ""}
+## The key of the client picked on this note, "" for the channel's own.
+var _client_pick := ""
 ## The playlist the block names, kept whole even before the list is loaded: `{id, title}`.
 var _list := {"id": "", "title": ""}
 var _lists: Array = []          # the channel's playlists, as last loaded
@@ -201,12 +215,26 @@ func _init() -> void:
 	_add.text = "+"
 	_add.focus_mode = Control.FOCUS_NONE
 	_add.add_theme_font_size_override("font_size", 12)
-	_add.tooltip_text = ("Sign in to another channel: your browser opens, and you choose the Google account - "
-		+ "and the channel, when Google asks which. It is named here as YouTube names it.")
+	_add.tooltip_text = ("Sign in to another channel, through the Client below: your browser opens, and you choose "
+		+ "the Google account - and the channel, when Google asks which. It is named here as YouTube names it.")
 	_add.pressed.connect(_on_add)
 	_chips.add_child(_add)
 	_row("Channel", _chips)
 	_chan = _first_channel()
+	var crow := HBoxContainer.new()
+	crow.add_theme_constant_override("separation", 6)
+	_clients = OptionButton.new()
+	_clients.fit_to_longest_item = false
+	_clients.clip_text = true
+	_clients.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_clients.tooltip_text = ("The Google Cloud project's client this note signs in through, from those imported here, "
+		+ "each with the channels signed in through it. Google asks only that project for its test users. A channel "
+		+ "stays signed in through its own client until it signs in again through another.")
+	_clients.item_selected.connect(_on_client_picked)
+	crow.add_child(_clients)
+	_client_del = _armed_delete("✕", _forget_client, "Forget this client: Ghost Notes keeps no copy of it. Its file can be imported again.")
+	crow.add_child(_client_del)
+	_row("Client", crow)
 	_title = LineEdit.new()
 	_title.placeholder_text = YouTube.TITLE_TEMPLATE
 	_title.tooltip_text = _title_tip({})
@@ -408,7 +436,7 @@ func capture() -> Dictionary:
 	var p := _thumb_painter.choice()
 	return {"upload": _upload.button_pressed, "title": _title.text, "privacy": _privacy_key(),
 		"category": _category_key(), "playlist": String(_list["id"]), "playlist_title": String(_list["title"]),
-		"channel": String(_chan["id"]), "channel_name": _channel_name(), "write_tags": writes_tags(),
+		"channel": String(_chan["id"]), "channel_name": _channel_name(), "client": _client_pick, "write_tags": writes_tags(),
 		"description": _desc.text, "thumbnail": thumbnail(),
 		"thumbnail_writer": w["agent"], "thumbnail_writer_model": w["model"], "thumbnail_writer_effort": w["effort"],
 		"thumbnail_painter": p["agent"], "thumbnail_painter_model": p["model"], "thumbnail_painter_effort": p["effort"],
@@ -445,6 +473,7 @@ func apply(block: Dictionary) -> void:
 	_chan = {"id": str(b["channel"]), "name": str(b["channel_name"])}
 	if String(_chan["id"]).is_empty():
 		_chan = _first_channel()
+	_client_pick = str(b["client"])
 	if String(_chan["id"]) != _looked:      # another channel's playlists are not this one's
 		_lists = []
 		_looked = ""
@@ -601,6 +630,7 @@ func meta(base: Dictionary, take := "") -> Dictionary:
 	out["playlist_title"] = String(_list["title"])
 	out["channel"] = String(_chan["id"])
 	out["channel_name"] = _channel_name()
+	out["client"] = _client_key()
 	out.merge(thumbnail_of(take, String(out.get("folder", ""))), true)
 	out.erase("folder")
 	return out
@@ -663,18 +693,26 @@ func _refresh_account() -> void:
 	var kept := YouTube.channel(id)
 	var signed := YouTube.signed_in(id)
 	var lists := YouTube.granted(YouTube.PLAYLIST_SCOPE, id)
+	var own := YouTube.channel_client(id)
+	if _client_pick == own:
+		_client_pick = ""            # the channel signed in through it since: nothing is left to choose
+	var clients := YouTube.clients()
+	var through := _client_key()
+	var moves := signed and not through.is_empty() and through != own
 	var p := YouTube.pending()
 	var busy := ex != null and bool(ex.youtube_busy())
 	var yt: Node = ex.youtube() if ex != null else null
 	var phase := String(yt.phase) if yt != null else ""
 	var pct := int(round(float(yt.progress) * 100.0)) if yt != null else 0
 	var now := [has_client, all, _chan, signed, lists, p.get("file", ""), p.get("channel", ""), busy, phase, pct,
-		ex != null, _loading]
+		ex != null, _loading, clients, through, own]
 	if now == _seen:
 		return
 	_seen = now
 	_fill_channels(all)
+	_fill_clients(clients, through)
 	var named := _channel_name()
+	var via := YouTube.client_name(YouTube.client(through)) if not through.is_empty() else "your Google client"
 	var no_client := ("No Google client yet: uploads go through your own Google Cloud project's "
 		+ "\"Desktop app\" OAuth client. Import its JSON file once; Ghost Notes keeps it.")
 	if ex == null:
@@ -682,25 +720,27 @@ func _refresh_account() -> void:
 	elif id.is_empty():
 		_account.text = no_client if not has_client else "No channel yet: + signs in to one. Your browser opens, and you choose the channel there."
 	elif not signed:
-		_account.text = ("%s is not signed in here%s. Signing in opens your browser: choose that channel there."
-			% [named, " (its sign-in lapsed)" if not kept.is_empty() else ""])
+		_account.text = ("%s is not signed in here%s. Signing in opens your browser, through %s: choose that channel there."
+			% [named, " (its sign-in lapsed)" if not kept.is_empty() else "", via])
 	else:
 		var title := String(kept.get("title", ""))
-		_account.text = "Uploads go to %s%s - signed in%s." % [named, (" (%s)" % title) if not title.is_empty() and title != named else "",
-			", playlists too" if lists else ", uploads only"]
-	_sign.visible = ex != null and not id.is_empty() and not signed
-	_sign.text = "Sign in"
-	_sign.tooltip_text = "Open your browser to sign in to %s. Choose that channel there." % named
+		_account.text = "Uploads go to %s%s - signed in through %s%s." % [named, (" (%s)" % title) if not title.is_empty() and title != named else "",
+			YouTube.client_name(YouTube.client(own)), ", playlists too" if lists else ", uploads only"]
+		if moves:
+			_account.text += " Signing in again moves it to %s; until that lands, it stays as it is." % via
+	_sign.visible = ex != null and not id.is_empty() and (not signed or moves)
+	_sign.text = "Sign in again" if moves else "Sign in"
+	_sign.tooltip_text = "Open your browser to sign in to %s through %s. Choose that channel there." % [named, via]
 	_remove.visible = ex != null and not kept.is_empty()
 	_remove.tooltip_text = ("Sign out of %s - Google is asked to revoke the sign-in - and take it off the list. "
 		% named + "Notes that upload to it keep its name, to sign in again.")
 	_client.visible = ex != null
-	_client.text = "Replace client…" if has_client else "Import client…"
+	_client.text = "Import another…" if has_client else "Import client…"
 	_client.tooltip_text = ("Import another Google OAuth client file (a \"Desktop app\" client's JSON) - another "
-		+ "Cloud project's, for its own quota. New sign-ins use it; a channel already signed in keeps the "
-		+ "client it signed in with." if has_client else "Import your Google OAuth client file (a \"Desktop "
+		+ "Cloud project's, for its own quota or test users. It joins the Client list above, and no channel "
+		+ "changes the client it signed in with." if has_client else "Import your Google OAuth client file (a \"Desktop "
 		+ "app\" client's JSON from Google Cloud). It stays on this machine, readable only by you, and one "
-		+ "client signs in to every channel.")
+		+ "client can sign in to every channel.")
 	var waiting := not p.is_empty() and FileAccess.file_exists(str(p.get("file", "")))
 	_resume.visible = ex != null and waiting and not busy
 	var to := YouTube.name_of(YouTube.channel(str(p.get("channel", ""))))
@@ -745,7 +785,7 @@ func _on_tick(on: bool) -> void:
 			pick_channel(landed)
 			_upload.set_pressed_no_signal(true)
 			refresh()
-	ex.youtube_sign_in(done, scopes, id, String(_chan["name"]))
+	ex.youtube_sign_in(done, scopes, id, String(_chan["name"]), _client_key())
 
 
 func _scopes() -> Array:
@@ -756,7 +796,7 @@ func _on_sign() -> void:
 	var ex := _exporter()
 	if ex == null:
 		return
-	ex.youtube_sign_in(Callable(), _scopes(), String(_chan["id"]), String(_chan["name"]))
+	ex.youtube_sign_in(Callable(), _scopes(), String(_chan["id"]), String(_chan["name"]), _client_key(), true)
 	_seen = []
 
 
@@ -917,10 +957,10 @@ func _delete_thumb() -> void:
 
 ## A DELETE PRESSED TWICE, as a book's picture is deleted ([IllustrationPanel]): the first press arms it for
 ## 3 s ("Delete?"), the second calls [param act].
-func _armed_delete(text: String, act: Callable) -> Button:
+func _armed_delete(text: String, act: Callable, tip := "Delete this thumbnail - its painting too. The one before it goes up instead, or none.") -> Button:
 	var b := Button.new()
 	b.text = text
-	b.tooltip_text = "Delete this thumbnail - its painting too. The one before it goes up instead, or none."
+	b.tooltip_text = tip
 	b.focus_mode = Control.FOCUS_NONE
 	b.add_theme_font_size_override("font_size", 12)
 	var disarm := Timer.new()
@@ -1054,6 +1094,7 @@ func pick_channel(id: String) -> void:
 		return
 	var kept := YouTube.channel(id)
 	_chan = {"id": id, "name": String(kept.get("name", ""))}
+	_client_pick = ""
 	_list = {"id": "", "title": ""}
 	_lists = []
 	_fill_playlists()
@@ -1099,10 +1140,10 @@ func _on_channel(id: String) -> void:
 	pick_channel(id)
 	var ex := _exporter()
 	if ticked() and ex != null and not YouTube.missing_scopes(_scopes(), id).is_empty():
-		ex.youtube_sign_in(Callable(), _scopes(), id, _channel_name())
+		ex.youtube_sign_in(Callable(), _scopes(), id, _channel_name(), _client_key())
 
 
-## "+": sign in to another channel, whichever the person picks, and make it the note's.
+## "+": sign in to another channel, whichever the person picks, through the client shown, and make it the note's.
 func _on_add() -> void:
 	var ex := _exporter()
 	if ex == null:
@@ -1112,13 +1153,61 @@ func _on_add() -> void:
 		if is_instance_valid(self):
 			pick_channel(landed)
 			noted.emit("Signed in to %s: this note's uploads go there." % YouTube.name_of(YouTube.channel(landed)))
-	ex.youtube_sign_in(then, [YouTube.SCOPE], "")
+	ex.youtube_sign_in(then, [YouTube.SCOPE], "", "", _client_key())
 
 
+# --- the client ----------------------------------------------------------------------------------
+
+## The key of the client this note's next sign-in goes through ([method YouTube.client_for]): "" when none
+## is kept here.
+func _client_key() -> String:
+	return YouTube.client_key(str(YouTube.client_for(_client_pick, String(_chan["id"])).get("client_id", "")))
+
+
+## The list: each client by its project and the channels signed in through it, [param shown] selected. ✕
+## only where no channel holds the one shown, since one that does would keep its copy and stay listed.
+func _fill_clients(all: Array, shown: String) -> void:
+	_clients.clear()
+	var holds := false
+	for c in all:
+		var d: Dictionary = c
+		var on := PackedStringArray(d["channels"])
+		_clients.add_item(String(d["name"]) + (" (%s)" % ", ".join(on) if not on.is_empty() else ""))
+		_clients.set_item_metadata(_clients.item_count - 1, String(d["key"]))
+		if String(d["key"]) == shown:
+			_clients.select(_clients.item_count - 1)
+			holds = not on.is_empty()
+	if all.is_empty():
+		_clients.add_item("None yet")
+	_clients.disabled = all.is_empty()
+	_client_del.visible = not all.is_empty() and not holds
+
+
+## A client picked: the note signs in through it from now on, and the channel's own is no pick at all.
+func _on_client_picked(i: int) -> void:
+	var key := String(_clients.get_item_metadata(i))
+	_client_pick = "" if key == YouTube.channel_client(String(_chan["id"])) else key
+	_seen = []
+	refresh()
+
+
+## ✕, pressed twice: the client shown is forgotten, and the list shows the next.
+func _forget_client() -> void:
+	var key := _client_key()
+	YouTube.forget_client(key)
+	if _client_pick == key:
+		_client_pick = ""
+	_seen = []
+	refresh()
+
+
+## A file imported is the one imported last: the note picks it, and "+" or Sign in go through it.
 func _on_client() -> void:
 	var ex := _exporter()
 	if ex != null:
-		ex.youtube_import_client(func() -> void: _seen = [])
+		ex.youtube_import_client(func() -> void:
+			_client_pick = YouTube.client_key(str(YouTube.client().get("client_id", "")))
+			_seen = [])
 
 
 func _on_resume() -> void:
@@ -1149,7 +1238,7 @@ func load_playlists(quiet := false) -> void:
 		var again := func(_landed: String) -> void:
 			if is_instance_valid(self):
 				load_playlists()
-		ex.youtube_sign_in(again, [YouTube.SCOPE, YouTube.PLAYLIST_SCOPE], id, _channel_name())
+		ex.youtube_sign_in(again, [YouTube.SCOPE, YouTube.PLAYLIST_SCOPE], id, _channel_name(), _client_key())
 		return
 	_loading = true
 	_looked = id
@@ -1215,5 +1304,5 @@ func _on_playlist(i: int) -> void:
 	if ticked() and not YouTube.missing_scopes(_scopes(), id).is_empty():
 		var ex := _exporter()
 		if ex != null:
-			ex.youtube_sign_in(Callable(), _scopes(), id, _channel_name())
+			ex.youtube_sign_in(Callable(), _scopes(), id, _channel_name(), _client_key())
 	refresh()

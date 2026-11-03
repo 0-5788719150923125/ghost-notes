@@ -16,6 +16,10 @@ extends SceneTree
 ## - A READER'S CUE IS KEPT ONLY FOR ITS OWN ACTS: `<!-- act: grind -->` stays in a passage whose beat has a
 ##   `grind`, and goes with any other comment (the control: a passage with no acts keeps none).
 ## - A PLAN'S WORK LANDS: each position's `work`, the intro's and the close's, as the producer wrote them.
+## - THE READER NAMES THE VIDEO'S CHAPTERS (2026-10-31: a seven-minute brew in one chapter, its close "The
+##   spread"): each passage is told the chapter it begins - the intro's, a card's by its place and name, the
+##   close's with no card word - and a card's work passage is asked to name its own. A reader's
+##   `<!-- chapter: name -->` is kept, one line, as a table mark beside it goes (the control: an empty one goes).
 
 const FixtureDeck := preload("res://tests/fixture_deck.gd")
 
@@ -34,7 +38,7 @@ func _ok(cond: bool, what: String) -> void:
 
 func _run() -> void:
 	await process_frame
-	for check in [_steps, _script, _no_cheating, _cues, _lands]:
+	for check in [_steps, _script, _no_cheating, _cues, _lands, _chapters]:
 		var done: Variant = (check as Callable).call()
 		_ok(done == true, "%s stopped part way (a script error - see above)" % (check as Callable).get_method())
 	_clean()
@@ -154,6 +158,26 @@ func _cues() -> bool:
 	_ok(kept.contains("<!-- act: grind -->") and not kept.contains("pour") and not kept.contains("table:"),
 		"a reader's cue was not kept for its own act alone: %s" % kept)
 	_ok(not TableProducer.clean_spoken(text).contains("act:"), "the control: a passage with no acts kept a cue")
+	return true
+
+
+func _chapters() -> bool:
+	var ep := _episode(true)
+	ep.write_json("acts", {"acts": [
+		{"name": "grind", "beat": 2, "about": "the second thing is ground", "length": 6, "tracks": [{"thing": "a", "part": "b", "law": "to", "state": "grow", "value": 0}]}]})
+	var prod := TableProducer.new(ep, {"title": "Brews", "brief": "A brief.", "deck": FixtureDeck.cards()})
+	var card2 := String(prod.say_prompt("2")["prompt"])
+	var named := TableEpisode.card_chapter("Stage 2", String(prod._card(2)["name"]), bool(prod._card(2).get("reversed", false)))
+	_ok(card2.contains("begins the chapter \"%s\"" % named), "card 2's reader is not told its chapter, %s" % named)
+	var work := String(prod.say_prompt("work:2")["prompt"])
+	_ok(work.contains("name its chapter") and not work.contains("begins the chapter"), "card 2's work passage is not asked to name its chapter")
+	_ok(String(prod.say_prompt("intro")["prompt"]).contains("first chapter, \"%s\"" % TableEpisode.INTRO_CHAPTER), "the intro is not told it is the first chapter")
+	var close := String(prod.say_prompt("close")["prompt"])
+	_ok(close.contains("begins the chapter \"%s\"" % TableEpisode.CLOSE_CHAPTER) and not close.contains("\"The spread\""),
+		"the close is not told its chapter by no card word")
+	var kept := TableProducer.clean_spoken("<!-- chapter: The  first\nstep -->\nWe grind. <!-- table: draw 2 --> <!-- chapter:  --> On.")
+	_ok(kept.contains("<!-- chapter: The first step -->") and not kept.contains("table:") and kept.count("chapter:") == 1,
+		"a reader's chapter is not kept, one line, an empty one and a table mark gone: %s" % kept)
 	return true
 
 

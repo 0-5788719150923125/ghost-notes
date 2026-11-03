@@ -19,6 +19,12 @@ class_name ReadingFollower
 ## long ago, so those words get times in the far past, spaced as a voice would have said them,
 ## and every action anchored there has already happened by the first frame.
 ##
+## A SCRUB CAN BE A SEEK ([method seek]; a table's, 2026-11-01 - the user, scrubbed back to look again: "it's just stuck on
+## 'catching up' ... It might be best if we just saved the buffer... so that returning to a position is fast"): the reading
+## started again from a word keeps THE CLOCK OF THE ONE BEFORE IT. Every word heard so far keeps its time - so whatever the
+## medium planned and made from them still stands - and the new reading's words come on that clock, [member offset] added: where
+## its first word is heard is where that word was heard before. Each word heard again takes its new time.
+##
 ## A ONE-LETTER VOICE WORD STARTS THE NEXT WORD it begins: the page's "[c]'s" is one word, `cs`, and
 ## the voice says it as two, "c" and "'s". Looked for ahead instead, the "c" matched the next `c`
 ## seven words on, the words between were never heard, and a desk waiting on one of them stood still
@@ -33,6 +39,14 @@ class_name ReadingFollower
 const NO_TIME := -1.0
 ## The past a mid-way start's earlier words are placed in.
 const START_PAST := -100000.0
+## ...or, NEAR ([member near_past]), how long before 0 the last of them ends (seconds).
+const PAST_GAP := 1.0
+
+## A MID-WAY START'S PAST, NEAR: its earlier words placed just before 0, spaced as the estimate spaces them and ending PAST_GAP
+## before it, never "long ago" - so what they cue is done in the minutes before the show begins, and a table's physics bakes it
+## before its first frame is drawn ([member TablePhysics._t0]; the-quiet-crucible 841899, 2026-10-31, scrubbed: "it totally
+## breaks physics, every time"). The table's own follower asks for it; a desk's keeps its past long ago.
+var near_past := false
 ## A word's length where nothing heard gives one (seconds).
 const A_WORD := 0.4
 
@@ -47,6 +61,8 @@ var said0 := PackedFloat32Array()
 var said1 := PackedFloat32Array()
 ## The spoken index a mid-way start begins at, -1 for a reading from the top.
 var start_si := -1
+## THE CLOCK THIS READING'S WORDS COME ON, past their own ([method seek]): 0 for a reading of its own.
+var offset := 0.0
 
 var _norms := PackedStringArray()
 var _j := 0
@@ -54,6 +70,9 @@ var _rem := ""
 var _loose: Array = []              # [t0, t1] of each voice word since the last one matched
 var _gaps := {}                     # spoken index -> [t0, t1] of the voice's loose words just before it
 var _known := -2                    # [method known_last], kept until a word is matched (-2: not worked out)
+var _heard := PackedByteArray()     # spoken index -> 1 once heard in this reading (its first part brings its start)
+var _was0 := PackedFloat32Array()   # a seek's: each word's start as heard before it, which its first word is put at
+var _placing := false               # a seek's clock not yet put where its first word was heard before
 
 
 ## Start over against [param norms] (the document's spoken words, normalized - see
@@ -72,15 +91,53 @@ func reset(norms: PackedStringArray, from_si := -1, est := PackedFloat32Array())
 	st0.resize(n)
 	st0.fill(NO_TIME)
 	st1 = st0.duplicate()
+	_heard = PackedByteArray()
+	_heard.resize(n)
+	offset = 0.0
+	_placing = false
 	start_si = from_si
 	if from_si > 0:
 		_j = from_si
+		var base := START_PAST
+		if near_past:
+			var last := mini(from_si, n) - 1
+			base = -PAST_GAP - 0.3 - (est[last] if last >= 0 and last < est.size() else float(maxi(last, 0)) * A_WORD)
 		for j in mini(from_si, n):
 			var e := est[j] if j < est.size() else float(j) * A_WORD
-			st0[j] = START_PAST + e
+			st0[j] = base + e
 			st1[j] = st0[j] + 0.3
 	said0 = st0.duplicate()
 	said1 = st1.duplicate()
+
+
+## THE SAME READING AGAIN FROM SPOKEN INDEX [param from_si] (0: from its top), ON THE SAME CLOCK: a new list of voice words to
+## come, every word heard so far keeping its time, and [member offset] the clock that puts the new reading's first word where it
+## was heard before - [param at] until it is heard (where that word was heard, or is guessed to have been). SKIPPED AHEAD, THE WORDS
+## SKIPPED WERE SAID ALL THE SAME: each given its time before [param at], spaced as the estimate [param est] spaces them, so what
+## they cue was done before the reading lands at its full length (2026-11-01, the user, skipping an intro: with no time they were
+## placed as their moment had passed, all at once as it landed - the ladle in, stirred and home in 4 s).
+func seek(from_si: int, at: float, est := PackedFloat32Array()) -> void:
+	var last := -1
+	for k in mini(from_si, st0.size()):
+		if st1[k] != NO_TIME:
+			last = k
+	for k in range(last + 1, mini(from_si, st0.size())):
+		var e0 := est[k] if k < est.size() else float(k) * A_WORD
+		var e1 := est[from_si] if from_si < est.size() else float(from_si) * A_WORD
+		st0[k] = at - maxf(e1 - e0, 0.0)
+		st1[k] = st0[k] + 0.3
+	map = []
+	_j = clampi(from_si, 0, _norms.size())
+	_rem = ""
+	_loose = []
+	_gaps = {}
+	_known = -2
+	_heard = PackedByteArray()
+	_heard.resize(_norms.size())
+	_was0 = st0.duplicate()
+	offset = at
+	_placing = true
+	_fill()
 
 
 ## Take in every voice word not yet seen. A list that SHRANK is a new reading - start over.
@@ -113,15 +170,22 @@ func extend(words: Array) -> void:
 				_j = got + 1
 				if not _loose.is_empty():
 					_gaps[got] = [float(_loose[0][0]), float(_loose.back()[1])]
+		# ...a seek's clock put where its first word was heard before, once that word is matched
+		if got >= 0 and _placing:
+			_placing = false
+			if got < _was0.size() and _was0[got] != NO_TIME:
+				offset = _was0[got] - float(w.get("t0", 0.0))
 		map.append(got)
 		if got >= 0:
 			_known = -2
-			st1[got] = float(w.get("t1", 0.0))
-			if st0[got] == NO_TIME:
-				st0[got] = float(w.get("t0", 0.0))
+			st1[got] = float(w.get("t1", 0.0)) + offset
+			# ...its start from its first part heard in this reading (a word the voice says in two keeps the first's)
+			if got < _heard.size() and _heard[got] == 0:
+				_heard[got] = 1
+				st0[got] = float(w.get("t0", 0.0)) + offset
 			_loose = []
 		else:
-			_loose.append([float(w.get("t0", 0.0)), float(w.get("t1", 0.0))])
+			_loose.append([float(w.get("t0", 0.0)) + offset, float(w.get("t1", 0.0)) + offset])
 	_fill()
 
 
@@ -208,7 +272,7 @@ func place(actions: Array, opening: float, lead: float, tail: float) -> Array:
 			i += 1
 		if n > 0 and known < 0 or n - 1 > known:
 			break
-		var prev := START_PAST if start_si > 0 else opening - lead
+		var prev := (st0[0] - 1.0 if near_past and n_s > 0 else START_PAST) if start_si > 0 else opening - lead
 		for k in range(mini(n - 1, n_s - 1), -1, -1):
 			if st1[k] != NO_TIME:
 				prev = st1[k]

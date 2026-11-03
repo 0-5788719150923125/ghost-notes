@@ -15,7 +15,16 @@ extends Node
 ##   other one left out is caught); a jar of ink tipped over the brew pours by itself (next/table_physics.md) - its stream
 ##   shows while it flows and none after, the jar holds less and the brew more; the brew is its new color when the pour is
 ##   done; a cue's burst and the hatchlings' huffs have their particles.
-## - THE CONTROL: the same table with no acts - nothing scheduled, no stream, no cue - and its clock still runs.
+## - A SCRUB IN THE SAME EPISODE IS A SEEK ([method TableMedium._seek_to]; 2026-11-01, scrubbed back: "it's just stuck on
+##   'catching up' ... It might be best if we just saved the buffer"): the reading started again from a word before the grind -
+##   its words timed from 0, the document naming where it starts, as the reading hands a scrub - keeps the table, its work and
+##   what was baked: nothing built or baked again, the new reading's clock where its first word was heard before, and the pestle
+##   drawn where it was at that moment.
+## - A SKIP AHEAD LANDS IN THE WORLD THE READING WOULD HAVE REACHED (2026-11-01, the user, skipping an intro watched 20 times: "ensure that
+##   timeline scrubbing can recover properly"): only a reading's first words heard, then started again past the grind's word - the
+##   acts of the words skipped are placed before the landing, each at its written length, never all at once as it lands.
+## - THE CONTROL: the same table with no acts - nothing scheduled, no stream, no cue - and its clock still runs; and, its acts
+##   written again, it is a new table, never the last one sought in.
 ##
 ## A BOOT probe (the medium reaches the Director); no GPU - what is checked is where things are, never pixels.
 
@@ -103,6 +112,9 @@ func _run() -> void:
 	add_child(subs)
 	medium.bind_captions(subs)
 	_worked()
+	_seek()
+	_skip()
+	_laid_rests()
 	_control()
 	print("table_work_live_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
 	get_tree().quit(0 if _fails == 0 else 1)
@@ -282,10 +294,141 @@ func _worked() -> void:
 	_ok(not (w._huffs as Array).is_empty(), "the hatchlings never huff in an hour")
 
 
+func _seek() -> void:
+	var w = medium._work
+	var ph: TablePhysics = w.physics
+	var grind := _run_of("grind")
+	if grind.is_empty() or ph == null:
+		_ok(false, "the seek: no grind, or no physics, to scrub back over")
+		return
+	var at := float(grind["t0"]) + 1.0
+	ph.bake_until(at + 2.0)
+	var baked := ph.baked_to()
+	var pestle: int = w._work_of(w._thing_named("pestle"), "pestle")
+	var before: Variant = ph.pose_of(pestle, at)
+	# ...the reading started again from the word some seconds before the grind
+	var words: Array = subs.words
+	var fi := 0
+	while fi < words.size() - 1 and float((words[fi] as Dictionary)["t0"]) < float(grind["t0"]) - 4.0:
+		fi += 1
+	var si := int(medium._follow.map[fi])
+	var t_start := float((words[fi] as Dictionary)["t0"])
+	var again: Array = []
+	for i in range(fi, words.size()):
+		var wd: Dictionary = (words[i] as Dictionary).duplicate()
+		wd["t0"] = float(wd["t0"]) - t_start + 0.25
+		wd["t1"] = float(wd["t1"]) - t_start + 0.25
+		again.append(wd)
+	var doc: Dictionary = (subs.document as Dictionary).duplicate()
+	var spoken: PackedStringArray = medium._plan.parse["spoken"]
+	doc["start_words"] = spoken.slice(si, si + 8)
+	doc["start_index"] = si
+	doc["start_time"] = t_start
+	medium.release()
+	subs.queue_free()
+	subs = preload("res://src/show/subtitles.gd").new()
+	add_child(subs)
+	subs.document = doc
+	subs.words = again
+	medium.bind_captions(subs)
+	medium._ensure_doc()
+	medium._follow.extend(subs.words)
+	medium._sched = medium._follow.place(medium._plan.parse["actions"], maxf(Director.intro_hold, 0.6), TableMedium.LEAD, TableMedium.TAIL)
+	medium._work.schedule(medium._sched, medium._plan.parse, medium._follow.said0, medium._follow.said1, medium._est, at)
+	var after: Variant = ph.pose_of(pestle, at)
+	_ok(is_same(medium._work, w), "the seek: the table is %s" % ("the one standing" if is_same(medium._work, w) else "BUILT AGAIN"))
+	_ok(absf(medium._follow.offset - (t_start - 0.25)) < 1e-3, "the seek: the new reading's clock is put %.2f s on - where its first word was heard, %.2f s" % [
+		medium._follow.offset, t_start - 0.25])
+	_ok(absf(ph.baked_to() - baked) < 1e-3, "the seek: what was baked stands - to %.2f s, where it was %.2f s" % [ph.baked_to(), baked])
+	_ok(before != null and after != null and (after as Transform3D).origin.distance_to((before as Transform3D).origin) < 1e-4,
+		"the seek: the pestle at %.1f s of the episode is where it was drawn before" % at)
+
+
+func _skip() -> void:
+	_build(_acts())
+	var w = medium._work
+	var words: Array = subs.words
+	var spoken: PackedStringArray = medium._plan.parse["spoken"]
+	# ...the reading from its top, its first words heard
+	medium._follow.reset(spoken, -1, medium._est)
+	medium._follow.extend(words.slice(0, 5))
+	w._begun = {}
+	w._last_now = -INF
+	w._plan_key = ""
+	var heard_to := float((words[4] as Dictionary)["t1"])
+	medium._sched = medium._follow.place(medium._plan.parse["actions"], maxf(Director.intro_hold, 0.6), TableMedium.LEAD, TableMedium.TAIL)
+	w.schedule(medium._sched, medium._plan.parse, medium._follow.said0, medium._follow.said1, medium._est, heard_to)
+	_ok(_run_of("grind").is_empty(), "the skip: before it, the grind's word not heard, the grind is not placed")
+	# ...and started again a few words past the grind's
+	var fi := 0
+	while fi < words.size() - 1 and String((words[fi] as Dictionary)["text"]).to_lower().find("grind") < 0:
+		fi += 1
+	fi = mini(fi + 3, words.size() - 1)
+	var si := spoken.find(TabletScript.norm(String((words[fi] as Dictionary)["text"])), spoken.find("grind"))
+	var t_start := float((words[fi] as Dictionary)["t0"])
+	var again: Array = []
+	for i in range(fi, words.size()):
+		var wd: Dictionary = (words[i] as Dictionary).duplicate()
+		wd["t0"] = float(wd["t0"]) - t_start + 0.25
+		wd["t1"] = float(wd["t1"]) - t_start + 0.25
+		again.append(wd)
+	var doc: Dictionary = (subs.document as Dictionary).duplicate()
+	doc["start_words"] = spoken.slice(si, si + 8)
+	doc["start_index"] = si
+	doc["start_time"] = t_start
+	medium.release()
+	subs.queue_free()
+	subs = preload("res://src/show/subtitles.gd").new()
+	add_child(subs)
+	subs.document = doc
+	subs.words = []
+	medium.bind_captions(subs)
+	medium._ensure_doc()
+	_ok(is_same(medium._work, w), "the skip: the table is %s" % ("the one standing" if is_same(medium._work, w) else "BUILT AGAIN"))
+	var at: float = medium._follow.offset
+	subs.words = again.slice(0, 8)
+	medium._follow.extend(subs.words)
+	medium._sched = medium._follow.place(medium._plan.parse["actions"], maxf(Director.intro_hold, 0.6), TableMedium.LEAD, TableMedium.TAIL)
+	w.schedule(medium._sched, medium._plan.parse, medium._follow.said0, medium._follow.said1, medium._est, at)
+	for act in [["fetch-jar", 3.0], ["pour-ink", 4.0]]:
+		var r := _run_of(String(act[0]))
+		_ok(not r.is_empty() and float(r["t1"]) - float(r["t0"]) >= float(act[1]) * 0.9, "the skip: %s runs its written %.0f s, not squeezed: %s" % [act[0], float(act[1]),
+			"not placed" if r.is_empty() else "%.2f s" % (float(r["t1"]) - float(r["t0"]))])
+		_ok(not r.is_empty() and float(r["t1"]) <= at + 0.01, "the skip: %s is done before the reading lands at %.2f s: %s" % [act[0], at, "not placed" if r.is_empty() else "it ends at %.2f s" % float(r["t1"])])
+	var g := _run_of("grind")
+	_ok(not g.is_empty() and float(g["t0"]) < at, "the skip: the grind, its word skipped, began before the landing at %.2f s: %s" % [at, "not placed" if g.is_empty() else "at %.2f s" % float(g["t0"])])
+
+
+## WHAT A HAND LAYS DOWN RESTS ([constant TableWork.LAID_REST]; feedback 0008, the phoenix feather: "It came to the table, touched the table, then immediately bounced
+## upward again"): a jar brought back down to the table and taken up by the next act lies there first, on the reading's schedule and on the rehearsal `act` checks alike;
+## one set `down` likewise. The control: a jar lowered in the air, over a cauldron, goes straight on into its pour.
+func _laid_rests() -> void:
+	var up := [{"at": 0.0}, {"at": 0.3, "by": [0, 12, 0]}, {"at": 0.8, "by": [10, 12, 0]}, {"at": 1.0, "by": [10, 0, 0]}]
+	var acts := {"acts": [
+		{"name": "lay", "beat": 1, "about": "x", "length": 2, "tracks": [{"thing": "jar", "law": "path", "keys": up}]},
+		{"name": "again", "beat": 1, "about": "x", "length": 2, "tracks": [{"thing": "jar", "law": "carry", "to": [-8, 0, -10], "lift": 8, "down": true}]},
+		{"name": "after-down", "beat": 1, "about": "x", "length": 2, "tracks": [{"thing": "jar", "law": "path", "keys": [{"at": 0.0}, {"at": 1.0, "by": [0, 3, 0]}]}]}]}
+	_build(acts)
+	var w: TableWork = medium._work
+	var gap := float(_run_of("again").get("t0", 0.0)) - float(_run_of("lay").get("t1", 0.0))
+	var gap_down := float(_run_of("after-down").get("t0", 0.0)) - float(_run_of("again").get("t1", 0.0))
+	_ok(gap >= TableWork.LAID_REST - 0.01, "a jar brought down to the table lies %.2f s before its next act takes it up (at least %.1f)" % [gap, TableWork.LAID_REST])
+	_ok(gap_down >= TableWork.LAID_REST - 0.01, "a jar set `down` lies %.2f s before its next act" % gap_down)
+	var times: Dictionary = w.rehearse(0.0)
+	var again_at := float((times["again"] as Array)[0]) - float((times["lay"] as Array)[1])
+	_ok(again_at >= TableWork.LAID_REST - 0.01, "the rehearsal `act` checks gives it the same rest (%.2f s)" % again_at)
+	_build(_acts())
+	var air := float(_run_of("pour-ink").get("t0", 0.0)) - float(_run_of("fetch-jar").get("t1", 0.0))
+	_ok(air < TableWork.LAID_REST * 0.5, "the control: a jar lowered in the air rests %.2f s before its pour" % air)
+
+
 func _control() -> void:
 	_build(null)
 	var w = medium._work
-	_ok((w.acts as Array).is_empty() and (w.runs as Array).is_empty() and (w.physics == null or (w.physics._streams as Array).is_empty()),
+	# ...and no stream shown (a stream's node is made with the table, hidden, so the GPU has what it needs before a first drip -
+	# TablePhysics._drawn_nodes)
+	_ok((w.acts as Array).is_empty() and (w.runs as Array).is_empty() and (w.physics == null
+			or (w.physics._streams as Array).all(func(n: Node) -> bool: return not (n as MeshInstance3D).visible)),
 		"the control: a table with no acts schedules work - %d acts, %d runs" % [(w.acts as Array).size(), (w.runs as Array).size()])
 	_posed(300.0)
 	var turned := false

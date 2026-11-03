@@ -1217,11 +1217,13 @@ func _reader_name() -> String:
 ## deal a card nobody drew; the table's actions are the producer's to write ([method CardReading.compose]).
 ##
 ## [param acts]: the names of the acts this passage may start at a word (`<!-- act: name -->`, [CardReading]) -
-## a cue naming any other is dropped as any mark is.
+## a cue naming any other is dropped as any mark is. A CHAPTER the reader names (`<!-- chapter: name -->`)
+## stays, its name one line: the export times it from the take ([method CardReading.chapters]).
 static func voice_marks_only(text: String, acts: Array = []) -> String:
 	var keep := [Manuscript._rx(Manuscript.DELIVERY), Manuscript._rx(Manuscript.HESITATION),
 		Manuscript._rx(Manuscript.SPEAKER)]
 	var cue := Manuscript._rx(CardReading.ACT_MARK)
+	var chapter := Manuscript._rx(CardReading.CHAPTER_MARK)
 	var out := ""
 	var at := 0
 	for m in Manuscript._rx(Manuscript.COMMENT).search_all(text):
@@ -1232,6 +1234,12 @@ static func voice_marks_only(text: String, acts: Array = []) -> String:
 		if named != null:
 			if acts.has(named.get_string(1).strip_edges().to_lower()):
 				out += "<!-- act: %s -->" % named.get_string(1).strip_edges().to_lower()
+			continue
+		var part := chapter.search(c)
+		if part != null:
+			var title := " ".join(part.get_string(1).split("\n", false)).strip_edges()
+			if not title.is_empty():
+				out += "<!-- chapter: %s -->" % title
 			continue
 		if keep.any(func(r: RegEx) -> bool: return r.search(c) != null):
 			out += c

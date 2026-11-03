@@ -176,6 +176,8 @@ var paused := false
 ## an export never would while its bake was behind). The player and the bookends stop as for a pause; the transport still says
 ## playing, and a pause and a wait are each let go on their own. who -> true.
 var _waits := {}
+## HOW FAR AHEAD EACH PART THAT MAKES ITS PICTURE AHEAD IS READY ([method set_ready]): who -> seconds past now.
+var _ready_of := {}
 
 var _hold := 0.0                # counts up through the lead-in
 var _held := false              # lead-in running: the player has NOT been started yet
@@ -494,6 +496,33 @@ func set_waiting(who: String, on: bool) -> void:
 ## Whether show time is held for something that is catching up ([method set_waiting]).
 func waiting() -> bool:
 	return not _waits.is_empty()
+
+
+## HOW FAR AHEAD [param who] IS READY to draw (seconds past now - [method ShowFeed.ready_ahead]): a table's physics baked on. Said
+## every frame by what makes its picture ahead; a negative figure takes it off.
+func set_ready(who: String, seconds: float) -> void:
+	if seconds < 0.0:
+		_ready_of.erase(who)
+	else:
+		_ready_of[who] = seconds
+
+
+## HOW FAR AHEAD THE SHOW IS READY TO PLAY (seconds past the playhead): the least of what the conductor has made (a reading's voice,
+## its `ahead` hook) and what every part that draws ahead has ([method set_ready]) - -1 when nothing says. What the transport
+## shows as buffered, as a video player shows it.
+func ready_ahead() -> float:
+	var h := _hook("ahead")
+	var said := false
+	var least := INF
+	if h.is_valid():
+		var a := float(h.call())
+		if a >= 0.0:
+			said = true
+			least = a
+	for k in _ready_of:
+		said = true
+		least = minf(least, float(_ready_of[k]))
+	return least if said else -1.0
 
 
 ## The panels' name for the same pause, from before it held the bookends too.

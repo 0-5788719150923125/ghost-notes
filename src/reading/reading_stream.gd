@@ -56,6 +56,8 @@ const LIVE_PREROLL := 2.5
 ## fifteen sentences, this one never; at Piper's pace both start at the same moment.
 const DEPTH_SAFETY := 1.5
 const DEPTH_MOST := 45.0
+## How much voice a PAUSED reading makes ahead of the playhead (seconds, [method _depth_now]): the whole of any reading a show makes.
+const BUFFER_PAUSED := 900.0
 
 # THE PLAN on the stream ([ReadingPlan])
 var chunks: Array = []        # [{tokens, words, ...}] planned up front, cheap
@@ -459,6 +461,14 @@ func seek_now() -> void:
 
 # --- the window: what is asked of the host ----------------------------------------------------
 
+## HOW FAR AHEAD OF THE PLAYHEAD THE VOICE IS MADE (seconds): what is decoded and waiting, the ring's too - and, once the last
+## sentence is made, to the end ([method ReadingPanel.transport_hooks]'s `ahead`).
+func ahead() -> float:
+	if _next_to_play >= chunks.size() and _outro_queued:
+		return INF
+	return _buffered_seconds()
+
+
 ## How much finished audio is waiting to be heard: decoded but not yet pushed,
 ## plus whatever is still sitting in the ring.
 func _buffered_seconds() -> float:
@@ -494,8 +504,14 @@ func _pump() -> void:
 		_req_chunk[id] = {"idx": idx, "epoch": _epoch, "sent": Time.get_ticks_msec()}
 
 
-## How deep the window is now: [method depth] over the chunks the pump would ask for next.
+## How deep the window is now: [method depth] over the chunks the pump would ask for next - and, WHILE THE READING IS PAUSED,
+## [constant BUFFER_PAUSED]: the voice goes on being made while nobody listens, so what follows plays with the host idle beside it
+## and the transport shows it buffered (the user, 2026-11-01: "if we pause, the computations are able to continue rolling-ahead
+## ... such that I could watch the buffered part of the episode with better performance"). What is made stays made: playing on,
+## the window is as deep as it was, and the host is asked again only as the made voice runs down to it.
 func _depth_now() -> float:
+	if Spectrum.paused:
+		return BUFFER_PAUSED
 	var up := PackedFloat32Array()
 	for k in range(_next_to_request, mini(_next_to_request + LOOKAHEAD, _chunk_t.size() - 1)):
 		up.append(_chunk_t[k + 1] - _chunk_t[k])

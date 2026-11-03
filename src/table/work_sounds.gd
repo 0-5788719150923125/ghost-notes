@@ -22,8 +22,9 @@ class_name WorkSounds
 ## SYNTHESIZED, as the place is ([Soundscape]; Farnell, "Designing Sound", 2010): a thing set down is a thump of the
 ## table's wood under it and the ring of what it is made of - glass clinks high and long, metal rings lower and longer,
 ## stone and pottery tock, wood knocks, and paper and cloth are all but silent - lower for a bigger thing, louder for a
-## heavier one; a boil is bubbles (Minnaert's: a sine that rises as it dies) and a little hiss under them; a pour is a run
-## of small high bubbles where it lands.
+## heavier one; a boil is the bubbles the table draws breaking ([Boil]: each Minnaert's sine, at the pitch its size gives,
+## rising as it dies - a simmer a quiet fizz, a rolling boil a busy bubbling) and a little hiss under them; a pour is a run of
+## small high bubbles where it lands.
 ##
 ## GRINDING IS A SCRAPE, only while the point touches and as fast as it goes (the user, 2026-10-29, of the grit it had
 ## been - noise through a band at 2.2 kHz, steady: "Stone on stone should be a scraping sound, low and rough, abrasive.
@@ -83,8 +84,7 @@ const SCRAPE_RING := 0.05
 const MODES := 4
 ## A piece broken off this big (meters, a sphere's radius) crunches at its loudest and lowest; a speck, faint and high.
 const BREAK_BIG := 0.004
-## A BOIL: bubbles a second at a boil of 1, a bubble's peak, and the hiss under them at a boil of 1.
-const BUBBLES := 7.0
+## A BOIL ([Boil]'s bubbles): the peak of the biggest a rolling boil breaks, and the hiss under them at a rolling boil.
 const BUBBLE := 0.009
 const SIMMER := 0.0015
 ## A POUR: bubbles a second where it lands at full flow, their peak, and its hiss.
@@ -311,14 +311,22 @@ func _look(t0: float, t1: float) -> Array:
 	var hiss := 0.0
 	for b in work.boiling(t0):
 		var bd: Dictionary = b
-		var key := "boil %d" % int(bd["wi"])
-		_due[key] = float(_due.get(key, _rand())) + BUBBLES * float(bd["boil"]) * dt
-		while float(_due[key]) >= 1.0:
-			_due[key] = float(_due[key]) - 1.0
-			var spot := (bd["at"] as Vector3) + Vector3(_rand() - 0.5, 0.0, _rand() - 0.5) * float(bd["size"]) * 0.6
-			spawn.append([int(_rand() * float(STEP)), _bubble.bind(lerpf(320.0, 900.0, _rand()), BUBBLE * lerpf(0.35, 1.0, _rand()), _ears(spot))])
-		if SIMMER * float(bd["boil"]) > hiss:
-			hiss = SIMMER * float(bd["boil"])
+		var wi := int(bd["wi"])
+		var ch := "w%d:boil" % wi
+		var at_t := func(T: float) -> float: return float(work.value(ch, T))
+		var across := float(bd["size"])
+		var s := Boil.share(float(bd["boil"]))
+		# ...EACH BUBBLE THE TABLE DRAWS BREAKING ([Boil]): its own ring, the pitch its size gives, as loud as it is big - a simmer
+		# a quiet fizz of small quick ticks, a rolling boil a busy low bubbling
+		for bb in Boil.bubbles(wi, t0, t1, at_t, across):
+			var r := float((bb as Dictionary)["r"])
+			var at2: Vector2 = (bb as Dictionary)["at"]
+			var spot := (bd["at"] as Vector3) + Vector3(at2.x, 0.0, at2.y) * across * 0.5
+			var big := r / Boil.R_ROLLING
+			spawn.append([clampi(int((float((bb as Dictionary)["t"]) - t0) * float(RATE)), 0, STEP - 1),
+				_bubble.bind(Boil.pitch(r), BUBBLE * sqrt(big) * lerpf(0.35, 1.0, s), _ears(spot), lerpf(0.006, 0.035, sqrt(big)))])
+		if SIMMER * s * 2.0 > hiss:
+			hiss = SIMMER * s * 2.0
 			_hiss_pan = _ears(bd["at"])
 	var pour := _pouring(t0)
 	if not pour.is_empty():
@@ -506,9 +514,11 @@ func _modes_for(kind: String, size: float) -> void:
 		_my2[k] = 0.0
 
 
-## A BUBBLE closing (Minnaert): a sine at [param f] rising a fifth as it dies, [param amp] at its peak.
-func _bubble(f: float, amp: float, ears: Vector2) -> void:
-	var life := lerpf(0.015, 0.035, _rand())
+## A BUBBLE closing (Minnaert): a sine at [param f] rising a fifth as it dies, [param amp] at its peak - over [param life]
+## seconds (or a pour's, drawn).
+func _bubble(f: float, amp: float, ears: Vector2, life := -1.0) -> void:
+	if life <= 0.0:
+		life = lerpf(0.015, 0.035, _rand())
 	_sine(f, life, amp, ears, pow(1.5, 1.0 / (life * 2.0 * float(RATE))))
 
 

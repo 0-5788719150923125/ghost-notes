@@ -1,5 +1,5 @@
 {
-	"digest": "131d7122e50cabc0bb17de2d44d16bf6d242613a77e386c4ff13bd67073081ef",
+	"digest": "deeb988a2f370ba78209999afa29017acd020caf528fd51df8263f66df93b935",
 	"files": [
 		"res://project.godot",
 		"res://scenes/main.tscn",
@@ -122,6 +122,7 @@
 		"res://src/notes/note_store.gd",
 		"res://src/notes/save_mark.gd",
 		"res://src/notes/script_marks.gd",
+		"res://src/platform/app_icon.gd",
 		"res://src/platform/app_update.gd",
 		"res://src/platform/boot.gd",
 		"res://src/platform/bundled_hosts.gd",
@@ -256,6 +257,7 @@
 		"res://src/ui/episode_step_rows.gd",
 		"res://src/ui/icons.gd",
 		"res://src/ui/note_cards.gd",
+		"res://src/ui/note_editor.gd",
 		"res://src/ui/note_grid.gd",
 		"res://src/ui/note_tile.gd",
 		"res://src/ui/schema_form.gd",
@@ -264,6 +266,7 @@
 		"res://src/ui/shell.gd",
 		"res://src/ui/side_panel.gd",
 		"res://src/ui/tag_field.gd",
+		"res://src/ui/touch_text.gd",
 		"res://src/ui/volume_knob.gd",
 		"res://src/voice/delivery.gd",
 		"res://src/voice/phonemes.gd",

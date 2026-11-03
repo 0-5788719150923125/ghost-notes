@@ -75,12 +75,14 @@ func _run() -> void:
 	_ok(smash_line.contains("PASSES THROUGH"), "the control: act does not catch the pestle driven through the bowl: %s" % smash_line)
 	_ok(answer.contains("a jar nobody built"), "act does not say an act naming a thing the table lacks was left out:\n%s" % answer)
 	await tools.call_tool("remove", {"names": ["smash", "ghost-jar"]})
-	# A BAKE GOES ON TO THE NEXT CALL: the grinding put again as it was
+	# ONE TABLE FOR THE SESSION, ITS BAKE GOING ON (next/framework_audit.md): the grinding put again as it was is bound to the table
+	# the first call stood, and baked again only from where the draft changed - never from the start
 	var first_ph = tools._preview._medium._work.physics
 	_ok(first_ph != null and first_ph._clear_at == 0.0, "the control: the first act call's table took up a bake, none made before it (at %s s)" % (str(first_ph._clear_at) if first_ph != null else "-"))
 	var again: Dictionary = await tools.call_tool("act", {"acts": [acts[2]]})
 	var next_ph = tools._preview._medium._work.physics
-	_ok(next_ph != null and next_ph != first_ph and next_ph._clear_at > 0.0, "the second act call baked its table from the start (taken up at %s s)" % (str(next_ph._clear_at) if next_ph != null else "-"))
+	_ok(next_ph != null and next_ph == first_ph, "the second act call stood the table again")
+	_ok(next_ph != null and float(next_ph.resumed_at) > 0.0, "the second act call baked its table from the start (taken up at %s s)" % (str(next_ph.resumed_at) if next_ph != null else "-"))
 	_ok(_block(String(again.get("text", "")), "grind").contains("Nothing passes through anything"), "put again as it was, the grinding's answer changed:\n%s" % String(again.get("text", "")))
 	# WATCH: six frames of the grinding, each a picture, and they differ
 	var watched: Dictionary = await tools.call_tool("watch", {"name": "grind"})
@@ -112,6 +114,7 @@ func _run() -> void:
 	long["beat"] = "close"
 	long["length"] = 120
 	var was = tools._preview._medium._work.physics
+	var was_at: float = float(was.resumed_at) if was != null else -1.0
 	var box := {}
 	var go := func() -> void:
 		box["got"] = await tools.call_tool("act", {"acts": [long]})
@@ -122,7 +125,8 @@ func _run() -> void:
 		await get_tree().process_frame
 		var m = tools._preview._medium
 		var ph = m._work.physics if m != null and is_instance_valid(m) and m._work != null else null
-		if seen < 0 and ph != null and ph != was and int(ph._k) > int(float(ph._clear_at) * TablePhysics.FPS) + TablePhysics.FPS:
+		if seen < 0 and ph != null and ph == was and int(ph._k) > int(float(ph.resumed_at) * TablePhysics.FPS) + TablePhysics.FPS \
+				and float(ph.resumed_at) > float(was_at):
 			# ...how far the call bakes: through the end of the long act, the last of the rehearsal
 			var end := 0.0
 			for r in m._work.runs:

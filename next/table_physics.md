@@ -1,5 +1,8 @@
 # What is in things: liquids, grains, loose things, and the hand that moves them
 
+Latest playback investigation (2026-10-31): [independent objects, action order, vessel entry transitions and measured
+rendering cost](table_playback_investigation.md). It supersedes the two-at-a-time collection fallback described below.
+
 Opened 2026-10-28, for the user's report on the first alchemy episode (`the-quiet-crucible` #181083):
 
 1. "The liquids are not liquids; they are textures or shaders or something, with no fluid dynamics or collision. By that
@@ -590,7 +593,7 @@ show once on a copy and logging it (where every parcel went, each body's sleep, 
   must fall within 3 cm of it (`TableWork._sprinkles_said`, `PINCH_NEAR`; the puppeteer is told a pinch is never a pour); and
   each jar's stopper was carried back with no `turn`, lying on its side as it had been laid at the fetch, so it dropped into
   its jar - a part let go more than a centimeter from where its act left it is said so (`TablePhysics.report`, `LET_GO_OFF`).
-  841899's acts are as the puppeteer wrote them: its Acts step made again would put them right.
+  841899's acts are as the puppeteer wrote them: its Work row's "Block the work again" would put them right.
 - Measured: the crushed frankincense goes home in the mortar and lies on its floor, none under the table; "lump 8" of the last
   section did not come back - all seven lumps ride their jar home. What lagged was the bake: from 100 s on it ran 2 to 4 times
   the show's pace, and the stage costs said why - the particle solver alone was 1 to 2.4 times the show's pace on some 130
@@ -607,7 +610,7 @@ the glass (16 spheres awake): the let-go solve's mean is weak against many conta
 mortar's rim (`pestle-down`) jumps 2 cm in a frame as it is pushed across the rim; the cost of a busy frame with nothing
 awake, about half the show's pace.
 
-### Played live with new acts (2026-10-30, 841899's Acts step made again): the ladle over the pot
+### Played live with new acts (2026-10-30, 841899's work blocked again): the ladle over the pot
 
 The user: "the first time the ladle is picked-up, it misses the cauldron completely, and lands upside-down and past it,
 backwards, clipping through the cauldron from the outside" - "that bug didn't exist until we recently regenerated the 'work'
@@ -800,3 +803,172 @@ it, and let go within `SEAT_NEAR`/`SEAT_TILT` it sits as built (`TablePhysics._s
 cork's fit. On 841899 the frankincense and sulfur corks go back to 0.0 mm. Gates: physics_check `_carried_with`, `_put_back_in`.
 OPEN: the hearth ash lid ends ash-away 56 mm off its crock, still moving a second after (the user saw ash on the lid - ash on
 the rim holding it up would be right; not yet traced, the probe was stopped).
+
+## A step back (2026-10-31, 841899 exported): the hand plans, the physics settles
+
+The user, of the export (`One Card from a Glasshouse Recipe Tin on a Foggy October Night.mp4`): at 0:29 "the ladle is held
+straight up in the water, and it's wiggling unstably. Really, it should be set into the cauldron, and laid down against the
+rim"; at 3:48 and 6:40 a jar's lid "is shifting and moving; it is unstable, when it should be rested snugly upon the jar"; at
+7:11 "the ladel is placed into the liquid - and this causes the amount of liquid to DECREASE. That is backwards"; at 8:40 the
+phoenix feather "clipping through the cauldron ... clipped outside of it ... a phoenix feather shouldn't be so rigid", "weird
+glitching artifacts in the water, at the ladle's spoon", and the feather "clipping through the ladle"; at 9:35 the spoon
+"spills liquid in a strange way when lifting from the cauldron, then it dumps liquid into a vial in a strange way, both missing
+the vial AND pouring from much too high in the air. Not carefully"; at 9:57 the ladle "misses its mark ... and gets stuck on the
+box of cards forever". And: "We are not just playing whack-a-mole ... we are building a framework ... The goal is to fix entire
+classes of problems. We spent all night fighting with these exact issues ... Let us take a step back".
+
+### How it was looked at
+
+`tests/table/episode_bake_probe.gd` (kept): the episode the take's sidecar names, stood from a COPY, its acts scheduled on the
+take's own word times - exactly what the export baked - and the whole show baked on the probe's thread, then the parts asked
+for followed every quarter second (place, tilt, turn, how far off the hand, what held it back), each liquid's volume and surface
+height, the streams in the air, each act's report, each pour's plan; `--acts-file` tries other acts on the copy, `--shots` (on
+a GPU) draws chosen moments as the export drew them. Every cause below was read off its log; nothing was guessed from the video.
+
+### Why it kept happening
+
+Three layers, and the patches of the nights before each fixed one instance in the last of them:
+
+1. THE AGENT WRITES GEOMETRY: a pour's lip, a carry's height, where a tool is left - in centimeters, by a model that cannot see
+   what it would hit. 841899's pour held the ladle's bowl 8 cm over a vial 1.6 cm across and turned it about its middle; its
+   carry home lifted 6 cm over an 8.5 cm tin.
+2. THE WORK PLAYS IT LITERALLY, and the physics then fights it: held back, dropped, flung.
+3. THE PHYSICS DECIDED WHAT A HAND DOES BY LOCAL TESTS: a hand held anything "touching nothing" within 4 mm and dropped anything
+   touching something; a part was seated only at the moment it was let go; a liquid's level counted its own volume alone; a
+   floating body skipped the guard that keeps a body out of a wall.
+
+So the fixes are rules a hand and a liquid keep - one each - and a law that takes the geometry away from the agent:
+
+| What the user saw | The class | The rule now |
+|---|---|---|
+| 0:29 ladle upright in the brew, swaying for 14 s | a hand holding what would not fall | A HAND HOLDS ONLY WHAT WOULD FALL (`TablePhysics._held_aloft`): what rests where it is - held up from below, its middle over what holds it (`RigidParts.supported`) - is let go, and so is what STANDS IN A VESSEL (`_stands_in`: its lowest point 2.5 cm under a rim), to lean there; what would fall is held until its next move; after its last it is lowered |
+| 9:35 the full ladle dropped into the pot after its dip; 9:57 dropped on the table after the pour | touching taken for resting | the same rule: grazing a rim or a vial is not resting, and the ladle is held over the pot and over the vial |
+| (both) things let go fell and struck | a let-go is a drop | A HAND LETS GO GENTLY (`RigidParts.guide`): for 2.5 s after a hand lets go, or until it rests, no point of a body goes faster than 12 cm/s - it is lowered onto what takes it |
+| 3:48, 6:40 corks shifting on their jars | a part in its seat simulated as a free body in a neck its points cannot resolve | A PART IN ITS SEAT GOES WITH IT (`_weld`, `RigidParts.weld`): carried with its seat (a move that begins and ends seated, never further off on the way than two hands' bows - `_with_seat`, `SEAT_RIDE`), let go there by a hand, or come to rest snug in it, it is WELDED - eased onto the seat over a quarter second, then exactly where the seat is, woken by nothing but a hand taking it out. A seat is what HOLDS IT UP (touching it from below) and never a part of its own: seated on each other, a jar and its cork had been welded where they stood |
+| 7:11 the brew falls as the ladle goes in | a level that counts only its own volume | WHAT STANDS IN A LIQUID IS UNDER ITS SURFACE (`_level_of`, `_displacers`): the level leaves under it the liquid and every body's matter, every moving vessel's whole inside (filled or not) and every sphere in it, less what stood in it as built (`d0`) |
+| 8:40 the ladle's bowl "glitching" in the brew | a sunk vessel's own surface drawn under the brew's | A SURFACE UNDER ANOTHER LIQUID'S IS NONE (the frame's `sunk`) |
+| 8:40 the feather through the cauldron's wall, and the ladle through the feather | a sheet as a line of spheres; a floating body unguarded | A THIN THING IS MET ACROSS ITS FACE (`Particles.fill_shape`: a sheet thinner than its spheres had been one line of seven spheres 18 mm apart down its middle - 35 now, across its width); and A STILL WALL IS NEVER CROSSED WHOLE by what floats or is pushed (`Particles._way`'s `still_only`) |
+| 9:57 the ladle held back on the recipe tin | a carry's lift as written | A CARRY CLEARS WHAT STANDS IN ITS WAY (`TableWork._clearance`): its lowest point 2 cm over the highest thing under its way, the written lift the least it rises |
+| 9:35 the pour from too high, missing the vial | a pour written as raw keys | A POUR IS A HAND'S (`Motions.LAWS` `pour`, `TableWork._pour_at`): `{"law": "pour", "into": "vial 1"}` - brought level over the mouth with its handle turned away, lowered onto it tipping about its lip so its body swings clear, turned about its lip (so the stream leaves where it was put - as ladles for molten metal are tilted about an axis at the lip), set back by the stream's throw (`sqrt(4/3 head fall)`), its lip as low as the mouth's width allows; back level, its lip rising |
+
+### Measured on 841899 (a copy; the export's timing)
+
+Before (the export's code) against after, each read off `episode_bake_probe` - the episode's own acts unless it says `pour`:
+
+- 0:29 - the ladle stood upright in the brew 14 s, held and swaying (its turn reading ±70 degrees a second); now let go standing
+  in the pot, it leans on the rim at 48 degrees and lies still from 23 s to the stir.
+- 3:48 - the frankincense cork wandered 3 mm and 2 degrees about its neck for 5 s after its jar was set down; now it rides its jar
+  through the fetch and sits still to the millimeter. 6:40 - the sulfur cork, on keys of its own half a centimeter up, was 1.7 cm
+  off its jar mid-carry and trembled 3-4 mm after; now the same.
+- 7:11 - the brew went 955 to 916 ml as the ladle filled and its surface fell with it; now its surface stands 0.9 mm HIGHER with
+  the ladle in (its metal displaces) and the 39 ml in the bowl stays in the column.
+- 8:40 - the phoenix feather was walked through the cauldron's wall at 458 s and lay outside in the coals; now it is in the brew
+  to the end. And the ladle's own surface is no longer drawn under the brew's.
+- 9:35 - after the dip the full ladle was dropped into the pot (it grazed the rim), pulled out again full and tilted, and spilled
+  into the brazier's pan; now it is held over the pot until the pour. The hand-written pour (8 cm over the vial, turned about the
+  ladle's middle) puts none of its 11.9 ml in the vial; with `pour` (the act's tracks replaced by `{"law": "pour", "into": "vial
+  1"}` on a copy) 7.8 ml go in. On a bench of the episode's own ladle and vial, 88% of a fuller ladle.
+- 9:57 - the ladle carried home 6 cm up was held back 19 cm by the recipe tin and lay on it to the end; now it is lifted to 26 cm
+  over the tin and set on its rest, seated.
+
+Pictures drawn at each moment (`--shots`, the export's renderer at 1280x720) show each of these as described.
+
+Gates (physics_check): `_seat_rides` (841899's sulfur-fetch keys and hands: the stopper within 0.5 mm of its seat, still; the old
+rule, 21 mm off), `_leans_in`, `_held_unless_resting`, `_level_counts`, `_floats_in` (the old code: a sphere through the wall 29
+times), `_clears_way`, `_pours_into` (the jug: all of it into the cup, its lip 3 cm over the rim; by hand about its middle 10 cm
+up, most of it spilled), `_runs_down` (a parcel thrown at a pot's inner wall ends in its water; the old code stepped through the
+wall). Each fails with its fix taken out.
+
+ALSO FOUND ON THE WAY: a stream's parcels were looked at only where each frame left them, and at a stream's pace stepped over a
+3 mm wall between two frames (`_solid_on_way`); what struck a vessel's inside was counted gone (`_inside_of`); a seat had been
+anything of its thing a part touched, so a jar and the cork in its neck were welded to each other where they stood.
+
+### Open
+
+- 841899's own acts still pour and dip by hand. Two ways to change that: the Episode card's Work row, "Block the work again" - the
+  puppeteer writes `acts.json` afresh, now told of `pour` and `dip`, and the readings of the work are cleared and rewritten (agent
+  runs, and a new take) - or `acts.json` edited by hand, the ladle-dip and ladle-pour tracks replaced by `{"law": "dip", "into":
+  "the copper cauldron on its brazier"}` and `{"law": "pour", "into": "vial 1"}` (the table reads the file at every stand, so the
+  next export plays them; the readings still say what is done). A straight-handled ladle cannot come level out of a deep pot at all (below); the set dresser might crook its handles.
+- A sheet is met across its face but drawn rigid: a feather that bends needs its mesh skinned to its spheres.
+- The pour's way back level lags its hand a few centimeters for half a second (`act` says HELD BACK).
+- Not yet watched by the user, live or exported.
+
+### Built the same evening, asked for: `dip`
+
+The user, checking in: "Go ahead with the lip law stuff while we're here" - the dip, the last of the evening's open items: 841899's
+ladle, dipped by an aim's keys, was drawn up full and tipped 30 degrees at 16 cm a second beside the rim, and 10.6 ml went over the
+rim. `{"law": "dip", "into": "the pot"}` (`Motions.LAWS`, `TableWork._dip_at`, `_dip_plan`): the hand brings the vessel over the
+mouth with its handle out over the rim the way it came; finds, at each of seven depths from over the rim down to 1.2 cm over the
+floor, THE LEAST TIP its body (every solid of what moves) clears the other's walls by - with its bowl as far across from that rim as
+goes deepest and least tipped (`_vessel_into`: the inside that holds a liquid before an empty one - a pot, never its brazier's
+pan); lowers it straight in, tipping as each depth asks; holds it while it fills; and draws it up slowly, LEVELLING AS FAST AS THE
+WALLS ALLOW, so what it cannot hold falls back inside, and level at last. And what strikes a vessel's inside wall now runs down into
+it (`_inside_of`), and a stream is looked along its whole way for what it meets (`_solid_on_way`).
+
+Measured on a bench of 841899's own ladle - a bowl with a straight handle at its rim's height - and a pot 13 cm deep: it must tip 45
+degrees to reach near the floor from the middle, and a shallow bowl holds nothing at 45 (drawn up so, it came up empty, every drop
+back in the pot); levelling as it rises, it comes up 59% full, level, nothing outside the pot. Gate: physics_check `_dips_full`
+(the control: lowered level by hand, its handle meets the rim, it is held back and comes up empty).
+
+And the pour made careful, found on the same bench with the ladle as full as a dip leaves it (43 ml into a vial 1.6 cm across: 5
+ml went in): TIPPED ALONG ITS BRINK (`_pour_plan`'s `brink`: for each twentieth of its inside, the least tip at which that much
+reaches the lip's crest, found from its level table - tipped along it the outflow is steady, never a gush); TIPPED COMING IN ONLY
+AS FAR AS ITS BODY NEEDS, held up to 1.5 cm higher rather (`POUR_HIGHER`); ITS STREAM AIMED FOR THE HEIGHT IT FALLS FROM; BACK
+LEVEL FROM WHERE ITS TIPPING ENDED (it had begun from its `tip`, a 56 degree jump in a frame that left the ladle 21 cm behind its
+hand); and WHAT A STREAM STRIKES INSIDE A VESSEL IS ASKED A LITTLE BACK ALONG ITS WAY (right at a wall a point lies in the inside's
+inset, outside it: the stream crossed the vial's mouth, struck its glass inside, and was counted spilled). On the bench 78%; on
+841899 itself, its ladle-dip and ladle-pour acts replaced by `dip` and `pour` on a copy: the dip spills nothing outside the
+cauldron (10.4 ml falls back into the brew) and comes up with 42.3 ml where the act's own keys brought up 11.9; the pour puts 41.4
+of them in the vial, 0.9 ml beside it. And `act` no longer calls a thing the hand still holds up "let go".
+
+## The primitives (2026-10-31 night, 841899's work blocked again, played live; feedback 0001-0003)
+
+The user, of the episode played live: "this ladel will not settle, it's moving around on its block" (1:03); "All 4 jars of
+ingrediants are stuck together, and moved together here" (2:28); "This phoenix feather appears to be floating above the table. You
+can tell, because it seems to be casting too much of a shadow ... I scrubbed the timeline to get here - and it totally breaks
+physics, every time ... there is a piece of some ingredient sitting on top of the recipe card" (3:51); the ladle on the cauldron's
+lip "floats above the lip, and you can tell because it casts a shadow"; a "bloop" one or two times a second while the pot only
+steams. And: "We're still playing whack-a-mole with bugs, we really need to handle physics better because we're going to be
+generating all kinds of objects, constantly, in future episodes. We need better handling of the underlying primitives, to support
+whatever we would imagine."
+
+The episode had no take (played live only): `~/scratch_qc/make_take.py` writes one from the episode's `script.md`, each word timed
+as Kokoro roughly reads it and scaled to the live transport's 6:34, so `episode_bake_probe` could bake it on a copy. Its `--gaps`
+(new) measures, at a moment the medium posed as an export poses it, a watched part's DRAWN surface against what is drawn under it
+- the floating the eye sees, never the physics' own idea of it.
+
+Each report was one more instance of a rule that held for the shapes it was written for and not for the next one. So each fix is a
+PRIMITIVE - one test or one representation for every shape the agents make - and each is measured on the exact thing that failed:
+
+| What the user saw | The class | The primitive now |
+|---|---|---|
+| the ladle on its block, swaying for two and a half minutes | "would it fall" told by a rule (`RigidParts.supported`: points within 3 mm facing up, the middle over them) | LET GO, WHERE DOES IT GO? (`RigidParts.trial`, `TablePhysics._would_fall`): the body let go where it is, stepped alone for 1.2 s among everything as it stands; the hand lets go of whatever comes to rest within 2 cm of where it is, or stands in a vessel (which catches it), and holds the rest |
+| the feather dropped on the table between "held up" and "laid in" | a loose thing had no hold between moves (a rigid one did) | THE SAME HAND FOR BOTH (`_held_aloft`'s `li`, `_loose_would_fall`): a loose thing a later act takes up again is held where its move left it, if let go it would fall |
+| four jars moved as one | a whole move welded every free part into one rigid body | A THING IS ONE ONLY AS FAR AS SOMETHING HOLDS IT TOGETHER: a free part is a body of its own whenever what it stands in moves (`TablePhysics._goes`, `_rides_thing`), riding it as a thing set on another does; a thing with nothing fixed to it is the hand's TRIPS (`TableWork._trips`): its free parts carried two at a time, one in each hand, each to its place in the arrangement, over the same stretch (one at a time, four jars in five seconds went a meter a second and could not be followed), a part of one moved with it in the same stretch going in its trip, and `act` says so |
+| the feather floating, its shadow apart from it | a sheet had no shape of its own (its box: a bent feather five millimeters deep) and rested on its spheres' radius (3.3 mm round a sheet 0.8 mm thick) | A SHEET'S OWN SHAPE (`ShapeField` "sheet": its outline's 2D field and the slab its thickness makes, bent and folded as `Props._sheet` bends it); its spheres one layer on its bent middle (`Particles.fill_shape`); and a sphere RESTS AT ITS THING'S THICKNESS against the table and the solids (`Particles.rc`, `add_body`'s `contact`), a matched body lifted out whole by its deepest (`_out_whole`) |
+| the ladle on the cauldron's lip | contacts at 120 points of a body and 200 of the other: a handle crossing a rim between them sank 2.2 mm into it as drawn while its points said 0.4 | THE DEEPEST POINT, FOUND (`RigidParts._refined`, after Macklin et al., "Local Optimization for Robust Signed Distance Field Collision", 2020): from each place a body's points come near a solid (up to four, 2 cm apart), down the solid's distance along the body's own surface, each step put back onto it by its nearest solid's field - a contact where the surfaces really meet. Measured: the drawn ladle leaning on 841899's cauldron, 2.20 mm into the rim before, 0.49 after (the meshes are within half a millimeter of their fields); and of several contacts, the deepest left past twice the slack by their mean is put out alone, straight along it (turned about it, a jar at rest trembled and kept its filings awake) |
+| the balance and the batch jars held back by each other 10 and 19 cm for minutes | two acts sent things to one spot | ROOM FOR IT (`TableWork._room`): a move ending where another thing stands (any of its surface 2 mm in a solid as the plan has it then - the solids' own fields, so a cup dipped into a bowl's hollow is clear of the bowl) is set the nearest place beside it that is clear; never against what it is a part of or was built in, and judged as it will stand, set down first |
+| (found re-baking the jars' trips) the first jar lifted from its row knocked the next, lagged 22 cm behind its hand, and lay on its side | a carry goes across from its first instant (5 mm and its bow in its first tenth) | UP CLEAR FIRST, DOWN AMONG THEM LAST (`TableWork._rise_among`, `Hands.carried`'s `rise`): a thing with others within 1.5 cm round it rises clear of them before it goes across, and is across before it comes down among those where it goes - a jar from its row, a vial from its rack, a cork from its neck |
+| the balance's way home held back 53 cm short by the open tin | a path's keys played as written | A PATH CLEARS WHAT IS IN ITS WAY (`TableWork._path_clearance`), as a carry does; and what is under a way is looked for in a grid over all it covers (`_probes_of`) - corners and middle had looked into an open jar's hollow at its floor - free parts where they are included (`_part_mesh_of`; a thing's own mesh leaves them out) |
+| scrubbing: a tear on the recipe card | the bake began at 0, and what a mid-way start's acts did before it was never baked | THE PAST IS BAKED: a mid-way start's earlier words placed just before 0, spaced as estimated (`ReadingFollower.near_past`, the table's follower), and the bake begins at its first act (`TablePhysics._t0`, `_t_of`, `_k_of`); a live show waits for it as it waits for any bake |
+| a "bloop" a second while the pot only steamed | the boil's sound was its own seven big bubbles a second per unit of `boil`, 320-900 Hz, nothing seen | ONE STREAM OF BUBBLES, SEEN AND HEARD (`Boil`): a seeded stream a pure function of the liquid, the time and its `boil` - many more as it boils harder, bigger, each ringing at Minnaert's pitch for its size (a millimeter's 3.3 kHz) as loud as it is big - drawn breaking on the surface (`prop_liquid.gdshader`'s `bubble`), the big ones ringing it in the bake (`_waves_step`), and heard as each breaks (`WorkSounds`). A simmer (`boil` 0.2, the set dresser's for a warm pot) is now about sixteen faint ticks a second at 2.6-6.5 kHz |
+
+Gates (physics_check, each two-sided): `_jars_apart` (the control: on a tray they go together), `_rests_let_go` (841899's own ladle
+and rest; the old rule held it, moving 7 mm in a second), `_sheet_lies` (on its spheres' radius it lies 2.9 mm up; with no later
+move it is let fall), `_past_baked` (the act after 0 has not yet moved the stone; a follower keeping its past long ago places it at
+-100000 s), `_tool_meets` (an aim drives the rod into the block and the physics holds it; a path there now goes over it), `_rests_on_rim`
+(841899's ladle let go in 841899's cauldron, its drawn surface within 0.8 mm of the pot's; drawn 3 mm lower it reads sunk);
+work_sounds_check's simmer (at `boil` 0.2 over ten bubbles a second, all above 2 kHz; a rolling boil's reach under 800 Hz; every
+bubble heard is drawn just before it breaks).
+
+## The framework, audited (2026-11-01, feedback 0001-0003)
+
+The user: "are our bugs coming from our own, underlying framework code? Or are they coming from agents that have too much
+freedom?" - measured, the framework: [framework_audit.md](framework_audit.md). 841899's puppeteer spent 9.7 of its 105 minutes
+thinking and 78+ inside our tools; the physics world had been built from the acts, so every act that moved something new baked
+the show again from its start; a hand held a thing in the air for a later act however far off; `pour` stopped at an empty
+liquid's brink; the prompt's example taught the hand-written tip; and `act` named the thing, not the part, where things landed.
+Built that day, each held by a gate: the world from the table (every free part and movable thing a dormant body), one table a
+puppeteer session (`rebind`), holds only across a 3 s pause, `pour` past the brink, reports by part and pours judged IN or MISSED,
+a live frame posing only what changes, and the viewer buffering while paused.
