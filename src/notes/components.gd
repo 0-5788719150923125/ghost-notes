@@ -94,7 +94,7 @@ const WORKSPACES := {
 		"classic": ["text", "table", "voice", "look", "bookends"]},
 	"proof": {"label": "Proof", "section": "proof",
 		"blurb": "A ghost doing math at a desk: the episodes agents make from the note's problem, and the voice that teaches them.",
-		"hint": "The note's words are the problem: write one, or press Invent a problem. Make episode has the agents fix it, solve it at the desk and check the proof in Lean, then write the lesson the voice below reads while the pen writes it on the pad.",
+		"hint": "The note's words are the problem: write one, or press Invent a problem. Generate, on the Pipeline card, has the agents fix it, solve it at the desk and check the proof in Lean, then write the lesson the voice below reads while the pen writes it on the pad.",
 		"hosts": ["proof", "voice", "voice_training", "look", "bookends"],
 		"classic": ["text", "proof", "voice", "look", "bookends"]},
 	"lab": {"label": "Voice lab", "section": "synth", "mode": "synthesis",

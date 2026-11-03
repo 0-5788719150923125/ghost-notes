@@ -47,7 +47,7 @@ class_name YouTubeCard
 ## [member extra] and every upload takes. With "Write each episode's tags" ticked (2026-10-18: "allow
 ## the 'Generate' button to override/rewrite those tags"), the card adds a step to the episodes the note
 ## makes ([YouTubeTags], an [EpisodeStep] - offered by [method episode_steps], never handed to a card by
-## name): the card that makes them lists it, writes it with the episode and again on its ⟳, and what it
+## name): the note's Pipeline card lists it, Generate writes it after the episode's words and its ⟳ again, and what it
 ## writes REPLACES that list. The box stands at the top, beside "Upload after export" (the user: "where
 ## it belongs"); a line under the list says what the writer is doing to it.
 ##
@@ -56,7 +56,7 @@ class_name YouTubeCard
 ## card's Thumbnail says ([constant YouTube.THUMBNAILS]): YouTube's own choice (a new card's), a frame of
 ## the title screen - asked of the take, which says whether it opened on its title ([method
 ## Openings.of_take]) - or one PAINTED for the episode by the writer and the painter picked under it, a
-## step this card offers the card that makes the episode ([YouTubeThumbnail]), shown here once it is
+## step this card hands the note's Pipeline card ([YouTubeThumbnail]), shown here once it is
 ## painted. What cannot be had is said under it, and the video goes up with YouTube's. EVERY ONE PAINTED IS
 ## KEPT (2026-10-30, the user: "there is no way to cycle backward/forward through generated thumbnails, as
 ## the generated in-episode pictures can be cycled through"): ‹ › under it picks the one that goes up, as a
@@ -132,6 +132,8 @@ var _desc: TextEdit
 var _tags_note: Label
 ## The step that writes each episode's tags, while the box is ticked.
 var _tags: YouTubeTags
+## WHAT THIS CARD HANDS THE NOTE'S PIPELINE CARD: its tags and its thumbnail, under its own name ([method pipeline]).
+var _section: EpisodeSteps
 var _thumbnail: OptionButton
 var _thumb_writer: AgentPick
 var _thumb_painter: AgentPick
@@ -189,10 +191,9 @@ func _init() -> void:
 	_write_tags.add_theme_font_size_override("font_size", 12)
 	_write_tags.tooltip_text = ("The show's writer writes tags for each episode from what it says - its words, "
 		+ "title and description - and they REPLACE the note's tags below (the writer is shown those, and keeps "
-		+ "the ones that fit). The card that makes the episode lists them as a step: they are written along "
-		+ "with the episode, and ⟳ on their row writes them again. A note read as it is written is its own "
-		+ "episode: an export that goes up writes its tags from its words once they have changed, and ⟳ on "
-		+ "their row writes them now.")
+		+ "the ones that fit). The Pipeline card lists them: Generate writes them once the words are written, and ⟳ "
+		+ "on their row writes them again. A note read as it is written is its own episode: an export that goes up "
+		+ "writes its tags from its words too, once they have changed.")
 	_write_tags.toggled.connect(func(_on: bool) -> void: refresh())
 	boxes.add_child(_write_tags)
 	# WITH THE CARD'S OTHER BOXES (the user, 2026-10-30: "at the top, near the other options"), shown while the
@@ -394,6 +395,7 @@ func _build_thumbnail() -> void:
 ## it on is at the top, beside "Upload after export"; the list it writes is the panel's, above).
 func _build_tags() -> void:
 	_tags = YouTubeTags.new(func() -> bool: return _write_tags.button_pressed)
+	_section = EpisodeSteps.new("YouTube", episode_steps, self)
 	_tags_note = _small("")
 	add_child(_tags_note)
 
@@ -525,11 +527,15 @@ func description() -> String:
 	return _desc.text.strip_edges() if _desc.visible else ""
 
 
-## THE STEPS THIS CARD ADDS TO THE NOTE'S EPISODES ([EpisodeStep]), for whatever card makes them: each
-## episode's tags, listed only while [method writes_tags] (see [method YouTubeTags.wanted]), and its
-## thumbnail, only while it is Painted.
+## THE STEPS THIS CARD MAKES FROM THE NOTE'S EPISODES ([EpisodeStep]): each episode's tags, listed only while
+## [method writes_tags] (see [method YouTubeTags.wanted]), and its thumbnail, only while it is Painted.
 func episode_steps() -> Array:
 	return [_tags, _thumb]
+
+
+## WHAT IT HANDS THE NOTE'S PIPELINE CARD: those steps, as a section of its own ([EpisodeSteps]).
+func pipeline() -> PipelineSection:
+	return _section
 
 
 ## THE NOTE'S NAMES ARE [param writer]'S - its Script card's - from now on: %title% its Title (else the
@@ -814,16 +820,16 @@ func _on_remove() -> void:
 ## only when something it says has changed.
 func _refresh_tags() -> void:
 	var on := writes_tags()
-	var feed: EpisodeFeed = _tags.shown if on and not _tags.host.is_empty() else null
+	var feed: EpisodeFeed = _tags.shown if on else null
 	var st := _tags.state(feed) if feed != null else ""
 	var words := feed != null and not feed.words().is_empty()
 	var stale := feed != null and not _tags.made(feed).is_empty() and not _tags.fresh(feed)
-	var now := [on, _tags.host, feed.folder() if feed != null else "", st, words, stale,
+	var now := [on, feed.folder() if feed != null else "", feed.made_by() if feed != null else "", st, words, stale,
 		_tags.said(feed) if st == "failed" else ""]
 	if now == _tags_seen:
 		return
 	_tags_seen = now
-	var row := "⟳ on its Tags row on %s" % _tags.host
+	var row := "⟳ on its Tags row in the Pipeline"
 	var t := ""
 	if not on:
 		t = ""
@@ -840,10 +846,10 @@ func _refresh_tags() -> void:
 		t = "This episode's tags are written once its words are, along with it, replacing the tags above."
 	elif stale:
 		t = "This episode's words were written again after its tags: %s writes new ones over the tags above, and so does %s." % [
-			row, _tags.host_makes]
+			row, feed.made_by()]
 	else:
 		t = "No tags are written for this episode yet: %s writes them over the tags above, and so does %s." % [
-			row, _tags.host_makes]
+			row, feed.made_by()]
 	_tags_note.text = t
 	_tags_note.visible = not t.is_empty()
 
@@ -851,7 +857,7 @@ func _refresh_tags() -> void:
 # --- the thumbnail -------------------------------------------------------------------------------
 
 ## UNDER THE THUMBNAIL: the writer and painter rows of a painted one, what goes up as it stands - a frame
-## of the title screen and when, or what the painter is doing for the episode the card that makes it shows
+## of the title screen and when, or what the painter is doing for the episode shown
 ## - and the painted one itself. Drawn again only when something it says has changed.
 func _refresh_thumbnail() -> void:
 	var th := thumbnail()
@@ -863,7 +869,7 @@ func _refresh_thumbnail() -> void:
 	var n := _thumb.versions(feed).size() if feed != null else 0
 	var at := _thumb.chosen(feed) if feed != null else -1
 	var none_to_match := feed != null and _thumb.matching() and feed.pictures().is_empty()
-	var now := [th, Director.opening_shown(), Director.intro_hold, _thumb.host, feed.folder() if feed != null else "",
+	var now := [th, Director.opening_shown(), Director.intro_hold, feed.made_by() if feed != null else "", feed.folder() if feed != null else "",
 		st, img, FileAccess.get_modified_time(img) if not img.is_empty() else 0, words, stale, n, at, none_to_match,
 		_thumb.said(feed) if st in ["failed", "running", "queued"] else ""]
 	if now == _thumb_seen:
@@ -881,7 +887,7 @@ func _refresh_thumbnail() -> void:
 	_thumb_writer.visible = th == "painted"
 	_thumb_painter.visible = th == "painted"
 	_thumb_match.visible = th == "painted"
-	var row := "⟳ on its Thumbnail row on %s" % _thumb.host
+	var row := "⟳ on its Thumbnail row in the Pipeline"
 	var t := ""
 	match th:
 		"title":
@@ -910,7 +916,7 @@ func _refresh_thumbnail() -> void:
 				t = "This episode's thumbnail is painted once its words are written, along with it."
 			else:
 				t = "No thumbnail is painted for this episode yet: %s paints one, and so does %s. Until then YouTube chooses." % [
-					row, _thumb.host_makes]
+					row, feed.made_by()]
 	if th == "painted" and none_to_match and not t.begins_with("⚠"):
 		t += " This episode has no pictures of its own yet, so there is no look to match: it is painted free of one."
 	_thumb_note.text = t
@@ -928,9 +934,9 @@ func _thumb_button(text: String, tip: String) -> Button:
 	return b
 
 
-## The episode the card that makes them shows, while its thumbnail is Painted; null otherwise.
+## The episode shown, while its thumbnail is Painted; null otherwise.
 func _thumb_feed() -> EpisodeFeed:
-	return _thumb.shown if thumbnail() == "painted" and not _thumb.host.is_empty() else null
+	return _thumb.shown if thumbnail() == "painted" else null
 
 
 ## ‹ or › ([param step] -1 or 1): the thumbnail painted before or after the one shown goes up instead.

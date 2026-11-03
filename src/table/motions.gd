@@ -86,6 +86,11 @@ const LAWS := {
 			["material", "a material of the table's (its look, how heavy it is, whether it dissolves)"],
 			["grain", "a grain's size in centimeters (0.1 a powder, drawn as small clumps, to 1)"], ["amount", "how many grains fall (up to 120)"],
 			["spread", "how wide it falls, centimeters (left out: 1)"], ["between", "[u0, u1]: when they fall"]]},
+	# A THING BUILT OF MANY SMALL PARTS (next/assembly.md): a law over no one part - the steps are [Assembly]'s, each a hand's pick, try
+	# or press, and they say what they take. It runs "under" its words whatever it says: its length comes out of what its steps do
+	"assemble": {"label": "Assemble", "on": [],
+		"blurb": "the table's assembly worked, one step after another (ASSEMBLY, below, says what the steps are) - a thing built from many small parts, a part picked up, tried, pressed on or taken off. It takes as long as its steps take, its length worked out from them, and it stretches to fill what its words leave, by stopping between moves, never by slowing them",
+		"fields": [["ops", "the steps, in order: each {\"do\": a step's name, and its fields}"]]},
 	# WORDS ARE WRITTEN, NEVER LAID ON (the-quiet-crucible 707668: its brief puts a poison in as "its name on a slip of
 	# paper", and nothing on the table may carry words - the user, 2026-10-29, of the white square that went in: "a little
 	# white square kind of looks like nothing ... The slip should show writing, if the script says it should")
@@ -589,6 +594,8 @@ static func sanitize_law(raw: Variant, notes: PackedStringArray, running := fals
 				return {}
 			out["into"] = into_d
 			out["between"] = _between(d.get("between"))
+		"assemble":
+			out["ops"] = Assembly.sanitize_ops(d.get("ops"), notes)
 		"sprinkle":
 			var at: Variant = _place(d.get("at"))
 			if at != null:
@@ -710,7 +717,7 @@ static func sanitize_acts(raw: Variant, beats: int) -> Dictionary:
 			if law.is_empty():
 				continue
 			var thing := Props._text((t as Dictionary).get("thing", ""), 100)
-			if thing.is_empty() and String(law["law"]) != "sprinkle":
+			if thing.is_empty() and not String(law["law"]) in ["sprinkle", "assemble"]:
 				notes.append("%s: a track names no thing - left out" % nm)
 				continue
 			law["thing"] = thing
@@ -736,6 +743,17 @@ static func sanitize_acts(raw: Variant, beats: int) -> Dictionary:
 				cue["at"] = clampf(float(Props._num(cd.get("at"), 0.0, 0.0, 1.0)), 0.0, 1.0)
 			cues.append(cue)
 		act["cues"] = cues
+		# WHAT IS BUILT TAKES WHAT ITS STEPS TAKE, whatever was written: under its words, never quickened past them ([Assembly])
+		var ops: Array = []
+		for tr in tracks:
+			if String((tr as Dictionary)["law"]) == "assemble":
+				ops.append_array((tr as Dictionary).get("ops", []))
+		if not ops.is_empty():
+			var took := Assembly.timing(ops)
+			act["under"] = true
+			act["length"] = took.x
+			act["_natural"] = took.x
+			act["_min_length"] = took.y
 		names[nm] = true
 		acts.append(act)
 	return {"acts": acts, "notes": notes}

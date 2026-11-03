@@ -117,6 +117,12 @@ func _check() -> void:
 	actor_card.apply({"id": actor.id})
 	_ok(card._picked.has(voice.id) and not card._picked.has(actor.id) and card._voice != null and card._voice.id == voice.id,
 		"the card offers the voices alone, and opens the note's")
+	# THE VOICE'S STEPS ARE A SECTION OF THE NOTE'S PIPELINE CARD (next/pipeline.md), and an actor's are all of its own
+	var voice_rows: PipelineSection = card.pipeline()
+	_ok(voice_rows.title == "Voice training" and voice_rows.shown() and not voice_rows.make_tip().is_empty()
+		and (card._steps._steps as Array) == ActorSteps.voice_chain() and (actor_card._steps._steps as Array) == ActorSteps.ORDER
+		and actor_card.pipeline().title == "Actor",
+		"the voice's chain is the Voice training section, an actor's every step the Actor section")
 	_ok(actor_card._picked.has(actor.id) and not actor_card._picked.has(voice.id),
 		"CONTROL: the Actor card offers the actors, not the voice")
 	card._refresh()

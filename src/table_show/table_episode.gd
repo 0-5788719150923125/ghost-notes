@@ -447,6 +447,33 @@ func dependents(step: String) -> Array:
 	return out
 
 
+## WHAT EACH STEP WOULD TAKE WITH IT, for every step at once (step -> [method dependents]): [method needs] parses the episode's
+## files on every call, and the Pipeline card's rows each say what their ⟳ throws away, so walking them row by row would
+## be thousands of parses - a frame of a playing show lost whenever a step lands.
+func all_dependents() -> Dictionary:
+	var made_from := {}
+	var all := steps()
+	for t in all:
+		for s in needs(String(t)):
+			if _soft(String(s), String(t)):
+				continue
+			if not made_from.has(String(s)):
+				made_from[String(s)] = []
+			(made_from[String(s)] as Array).append(String(t))
+	var out := {}
+	for step in all:
+		var from := String(step)
+		var reached: Array = []
+		var frontier: Array = [from]
+		while not frontier.is_empty():
+			for t in made_from.get(String(frontier.pop_front()), []):
+				if t != from and not reached.has(t):
+					reached.append(t)
+					frontier.append(t)
+		out[from] = reached
+	return out
+
+
 ## The edges [method needs] lists only for ORDER: a card's picture waits for the back and for
 ## the card before it, because it is sent them as references, but it is not made from them; a card's
 ## design waits for the one before it, which it is shown, and is not made from it either; and

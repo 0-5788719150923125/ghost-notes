@@ -32,10 +32,16 @@ func track(card: Card) -> void:
 
 
 ## THE CHIPS FOLLOW THEIR CARDS BY LOOKING, every frame - a handful of booleans. A fold set by
-## assignment raises no signal (FoldableContainer emits `folding_changed` only for fold(),
+## assignment raises no signal ([Card] emits `folding_changed` only for fold(),
 ## expand() and a click), and that is exactly how a card puts back its stored fold, so a wired
 ## chip came up "open" on a folded card at every launch.
 func _process(_delta: float) -> void:
+	follow()
+
+
+## Each chip painted again where its card has changed: every frame - and at once for a panel that has just hidden a card, so
+## its chip is not seen for a frame.
+func follow() -> void:
 	for c in _cards:
 		var card: Card = c
 		if not is_instance_valid(card):

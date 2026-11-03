@@ -9,7 +9,8 @@ class_name VoiceTrainingCard
 ## A PERSON OF THE [Actors] LIBRARY WHOSE VOICE IS ALL THAT IS LEARNED OF THEM (A VOICE ALONE, [method
 ## ActorFolder.sound_only]) - their recordings (a folder, files, or links to videos, playlists or a channel, fetched as
 ## their sound) and the voice's steps over them ([method ActorSteps.voice_chain]: Fetch, Probe, Hear, Utterances,
-## Voice), run by the Actor card's [ActorBuilder] and shown by its parts ([ActorSourceList], [ActorStepRows]).
+## Voice), run by the Actor card's [ActorBuilder] and shown by its parts ([ActorSourceList], [ActorPipeline] on the note's
+## Pipeline card).
 ## KOKORO IS TAUGHT THEM (2026-10-26, the user: "I likely won't use Piper models for anything other than testing now,
 ## given that Kokoro is so much better-sounding ... our own custom training loop would probably be perfectly fine"):
 ## its decoder and prosody predictor, on their sentences, on the graphics card (hosts/voice_train/kokoro_voice.py),
@@ -39,11 +40,8 @@ var _picked: Array = []
 var _body: VBoxContainer       # everything below the picker: hidden with no one picked
 var _name: LineEdit
 var _sources: ActorSourceList
-var _steps: ActorStepRows
-var _gen_btn: Button
-var _stop_btn: Button
+var _steps: ActorPipeline
 var _read_btn: Button
-var _line: Label
 var _lessons: SpinBox
 ## The reading this card is on (it brings a Voice, so there is one): its status line says what the card says, and
 ## the voice made is read in it. Without one (a gate) the card only builds, and `noted` says.
@@ -60,6 +58,15 @@ static func for_note(ctx: Dictionary) -> VoiceTrainingCard:
 func _exit_tree() -> void:
 	if _builder != null:
 		_builder.stop()
+	if _steps != null:
+		_steps.wait()
+
+
+## A worker still working the steps' states out is waited for, before this card goes (a card freed out of the tree - a
+## gate's - never leaves it).
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PREDELETE and _steps != null:
+		_steps.wait()
 
 
 func _process(delta: float) -> void:
@@ -211,20 +218,25 @@ func _refresh() -> void:
 		return
 	_voice.forget()
 	_sources.refresh()
-	var busy := _builder.running or _builder.busy()
-	_gen_btn.disabled = busy
-	_stop_btn.disabled = not busy
-	_steps.refresh(busy)
-	var ready := made()
-	_read_btn.disabled = not ready or _panel == null
-	var line := ""
+	_read_btn.disabled = not made() or _panel == null
+
+
+## WHAT THIS CARD MAKES, on the note's one list ([PipelineCard]): the voice's steps.
+func pipeline() -> PipelineSection:
+	return _steps
+
+
+## What the voice as a whole says, over the rows.
+func _pipeline_line() -> String:
+	if _voice == null or _builder == null:
+		return ""
 	if not _builder.waiting.is_empty():
-		line = "Waiting: %s - Ghost Notes fetches these itself, once (see ⚙ for progress)." % _builder.waiting
-	elif ready:
-		line = "Their voice is made: \"%s\" on every Voice card." % ActorBuilder.voice_name(_voice)
-	elif _voice.ticked().is_empty():
-		line = "Half an hour or more of their ordinary speaking voice is plenty: one person, little noise or music under it."
-	_line.text = line
+		return "Waiting: %s - Ghost Notes fetches these itself, once (see ⚙ for progress)." % _builder.waiting
+	if made():
+		return "Their voice is made: \"%s\" on every Voice card." % ActorBuilder.voice_name(_voice)
+	if _voice.ticked().is_empty():
+		return "Half an hour or more of their ordinary speaking voice is plenty: one person, little noise or music under it."
+	return ""
 
 
 # --- the card itself -----------------------------------------------------------------------------
@@ -275,26 +287,12 @@ func _build() -> void:
 	_sources.said.connect(_say)
 	_body.add_child(_sources)
 
-	_body.add_child(ActorCard.heading("Steps"))
-	_steps = ActorStepRows.new(ActorSteps.voice_chain())
+	_steps = ActorPipeline.new(String(Registry.field(Components.REGISTRY, KEY, "label", "Voice training")), ActorSteps.voice_chain(), self,
+		_generate, _pipeline_line, "Make their voice and whatever it needs that is missing or stale, in order: each recording fetched (its sound alone) and heard, their sentences cut, then Kokoro's lessons on the graphics card - about an hour.")
 	_steps.said.connect(_say)
-	_body.add_child(_steps)
 	var grow := HBoxContainer.new()
 	grow.add_theme_constant_override("separation", 6)
 	_body.add_child(grow)
-	_gen_btn = Button.new()
-	_gen_btn.text = "Generate"
-	_gen_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_gen_btn.tooltip_text = "Make their voice and whatever it needs that is missing or stale, in order: each recording fetched (its sound alone) and heard, their sentences cut, then Kokoro's lessons on the graphics card - about an hour."
-	_gen_btn.pressed.connect(_generate)
-	grow.add_child(_gen_btn)
-	_stop_btn = Button.new()
-	_stop_btn.text = "Stop"
-	_stop_btn.tooltip_text = "Stop now. What is finished is kept, and the lessons go on from their last save (a few minutes back) at the next Generate."
-	_stop_btn.pressed.connect(func() -> void:
-		if _builder != null:
-			_builder.stop())
-	grow.add_child(_stop_btn)
 	_read_btn = Button.new()
 	_read_btn.text = "Read in it"
 	_read_btn.tooltip_text = "Read this note in their voice: the Voice card's reader is set to it."
@@ -302,11 +300,6 @@ func _build() -> void:
 		if _voice != null and made():
 			_voice_made(ActorBuilder.voice_id(_voice)))
 	grow.add_child(_read_btn)
-	_line = Label.new()
-	_line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_line.add_theme_font_size_override("font_size", 11)
-	_line.modulate = Color(1, 1, 1, 0.7)
-	_body.add_child(_line)
 
 	var row: Dictionary = ActorSteps.SETTINGS["kokoro_steps"]
 	var r := HBoxContainer.new()

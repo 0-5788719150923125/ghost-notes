@@ -5,8 +5,9 @@ class_name IllustrationPanel
 ##
 ## Four things, top to bottom: which painter, its model and its effort ([AgentPick]); the STYLE
 ## every picture shares; the REFERENCE images that show that style rather than describe it; and
-## the chapter's own pictures, one row each, with what exists, what is being painted and a button
-## to make or remake it.
+## the chapter's own pictures, one row each, with what exists and a button to make or remake it, where
+## it can be judged. THE SAME PICTURES ARE ROWS OF THE NOTE'S PIPELINE CARD ([Section]; next/pipeline.md), with what
+## is being painted, Generate, and the one that paints them all again.
 ##
 ## THE LIST FOLLOWS THE TEXT, not the library. [method set_script_text] is called with the
 ## chapter whenever it is read, so the rows are exactly the `<!-- image: -->` markers in it,
@@ -36,9 +37,8 @@ var _style_kind := "image"        # which of Illustrations.STYLE_KINDS the box i
 var _kind_pick: OptionButton
 var _self_ref: CheckBox
 var _pick: AgentPick
-var _missing_btn: Button
-var _all_btn: Button
-var _confirm: ConfirmationDialog = null
+## WHAT IT HANDS THE NOTE'S PIPELINE CARD ([method pipeline]).
+var _section := Section.new(self)
 var _preview: Window = null
 var _status: Label
 var _dialog: FileDialog = null
@@ -144,29 +144,12 @@ func _ready() -> void:
 	_refs_none.modulate = Color(1, 1, 1, 0.6)
 	add_child(_refs_none)
 
-	var grow := HBoxContainer.new()
-	grow.add_theme_constant_override("separation", 8)
-	add_child(grow)
-	_missing_btn = Button.new()
-	_missing_btn.focus_mode = Control.FOCUS_NONE
-	_missing_btn.tooltip_text = "Paint every picture in this chapter that does not have one yet."
-	_missing_btn.pressed.connect(_generate_missing)
-	grow.add_child(_missing_btn)
-	# REGENERATE ALL IS CONFIRMED, and says what it costs: it is the one button here that can
-	# spend a chapter's worth of quota in a click.
-	_all_btn = Button.new()
-	_all_btn.focus_mode = Control.FOCUS_NONE
-	_all_btn.tooltip_text = ("Paint every picture in this chapter again, including ones "
-		+ "already made (those are kept as earlier versions). Asks first.")
-	_all_btn.pressed.connect(_confirm_all)
-	grow.add_child(_all_btn)
 	_status = Label.new()
 	_status.add_theme_font_size_override("font_size", 11)
 	_status.add_theme_color_override("font_color", Color(0.55, 0.95, 0.75, 0.85))
 	_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	# ITS OWN ROW. Beside the two buttons it was left a sliver of width, and a wrapping label
-	# given a sliver wraps every character: the progress read vertically, one letter a line.
+	# ITS OWN ROW: a wrapping label given a sliver wraps every character, one letter a line.
 	add_child(_status)
 
 	_list = VBoxContainer.new()
@@ -241,10 +224,7 @@ func _refresh() -> void:
 	_live.clear()
 	for c in _list.get_children():
 		c.queue_free()
-	var missing := 0
 	for im in _images:
-		if Illustrations.status(String(im["key"])) in ["missing", "error"]:
-			missing += 1
 		_list.add_child(_row(im))
 	if _images.is_empty():
 		var none := Label.new()
@@ -252,10 +232,6 @@ func _refresh() -> void:
 		none.add_theme_font_size_override("font_size", 11)
 		none.modulate = Color(1, 1, 1, 0.6)
 		_list.add_child(none)
-	_missing_btn.text = "Generate missing (%d)" % missing
-	_missing_btn.disabled = missing == 0 or Illustrations.read_only()
-	_all_btn.text = "Regenerate all (%d)" % _images.size()
-	_all_btn.disabled = _images.is_empty() or Illustrations.read_only()
 	var n := Illustrations.busy()
 	_status.text = ("⏳  Painting %d…" % n) if n > 0 else ""
 	if not PageCapture.doing().is_empty():
@@ -378,19 +354,6 @@ func _ask(im: Dictionary) -> void:
 	if not err.is_empty():
 		_status.text = "⚠  " + err
 	_seen = ""
-
-
-func _confirm_all() -> void:
-	if _confirm == null:
-		_confirm = ConfirmationDialog.new()
-		_confirm.title = "Regenerate every picture?"
-		_confirm.ok_button_text = "Regenerate all"
-		_confirm.confirmed.connect(_generate_all)
-		add_child(_confirm)
-	_confirm.dialog_text = ("This paints all %d pictures in the chapter again, one request "
-		% _images.size() + "each against your image quota. Pictures already made are kept "
-		+ "as earlier versions.")
-	_confirm.popup_centered()
 
 
 func _generate_all() -> void:
@@ -527,6 +490,109 @@ func _generate_missing() -> void:
 				_status.text = "⚠  " + err
 				return
 	_seen = ""
+
+
+# --- on the Pipeline card ------------------------------------------------------------------------
+
+## WHAT THIS PANEL MAKES, on the note's one list ([PipelineCard]): a row a picture, and all of them again. Listed while the
+## panel is shown (a Picture card shows it under the media that print a reading) and its text calls for any.
+class Section extends PipelineSection:
+	var panel: IllustrationPanel
+
+	func _init(p: IllustrationPanel) -> void:
+		panel = p
+		owner = p
+		title = "Pictures"
+
+	func shown() -> bool:
+		return panel.visible and not panel._images.is_empty()
+
+	func rows() -> Array:
+		return panel._step_rows()
+
+	func make() -> void:
+		panel._generate_missing()
+
+	func make_tip() -> String:
+		return "Paint every picture in this chapter that does not have one yet."
+
+	func stop() -> void:
+		Illustrations.stop(panel._images.map(func(im: Dictionary) -> String: return String(im["key"])))
+
+	func busy() -> bool:
+		return panel._painting()
+
+	func missing() -> bool:
+		return panel._missing()
+
+
+## What it hands the note's Pipeline card.
+func pipeline() -> PipelineSection:
+	return _section
+
+
+func _painting() -> bool:
+	for im in _images:
+		if Illustrations.status(String(im["key"])) in ["queued", "running"]:
+			return true
+	return false
+
+
+## Whether a picture of the chapter that can be painted has none. (A page is captured, never painted: its own ⟳.)
+func _missing() -> bool:
+	for im in _images:
+		if not im.has("url") and Illustrations.status(String(im["key"])) in ["missing", "error"]:
+			return true
+	return false
+
+
+## A ROW A PICTURE, ITS WORDS ITS NAME - and, with more than one, all of them again, which costs a chapter of quota and asks.
+func _step_rows() -> Array:
+	var out: Array = []
+	if _images.is_empty():
+		return out
+	var ro := Illustrations.read_only()
+	var painting := _painting()
+	if _images.size() > 1:
+		var all := PipelineRow.new("all", "All pictures")
+		all.state = "none"
+		all.again = "Paint every picture in this chapter again"
+		all.open = not ro and not painting
+		all.asks = ("That is all %d pictures, one request each against your image quota. Pictures already made are kept as "
+			+ "earlier versions.") % _images.size()
+		all.redo = _generate_all
+		out.append(all)
+	for im in _images:
+		var key := String(im["key"])
+		var r := PipelineRow.new(key, String(im["prompt"]))
+		r.tip = String(im["prompt"])
+		var st := Illustrations.status(key)
+		var captured: bool = (im as Dictionary).has("url")
+		match st:
+			"ready":
+				r.state = "stale" if Illustrations.is_stale(key) else "made"
+				var vs := Illustrations.versions(key).size()
+				r.said = ("v%d/%d" % [Illustrations.current_index(key) + 1, vs]) if vs > 1 else ""
+				if Illustrations.is_stale(key):
+					r.said = (r.said + " - " if not r.said.is_empty() else "") + "made under another style"
+			"queued", "running":
+				r.state = st
+				r.said = Illustrations.activity(key)
+				r.wraps = true
+			"error":
+				r.state = "failed"
+				r.said = Illustrations.error_of(key)
+			_:
+				r.state = "missing"
+		var has_one := not Illustrations.path_for(key).is_empty()
+		if captured:
+			r.again = "Capture this page from the web as it is now (headless Chromium, via Playwright). Any current capture is kept as an earlier version."
+		else:
+			r.again = "Paint it again. The current picture is kept as an earlier version." if has_one else "Paint this picture."
+		r.open = not ro and not st in ["queued", "running"]
+		r.redo = _ask.bind(im)
+		out.append(r)
+	return out
 
 
 ## Keyed by the file's path AND its modification time (and the size asked for): a path can come

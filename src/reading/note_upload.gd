@@ -6,13 +6,9 @@ class_name NoteUpload
 ## way ... be sure that the auto-tagging mechanism should work as well"). Nothing on such a note makes
 ## episodes - its words are the author's, read by a Voice or an Actor - so its YouTube card holds what a
 ## show's card holds for its episodes: the description its uploads take (the card's own box, [method
-## YouTubeCard.describe]), the note's tags as one list (its `tags:` line, as a show's), and THE STEPS THE
-## NOTE'S OTHER CARDS ADD ([EpisodeStep] - the YouTube card's tags and painted thumbnail), listed here with the note as their
-## episode ([Feed]): a row each with its ⟳ - UNLESS A CARD ON THE NOTE LISTS THEM UNDER ITS OWN, beside its
-## Generate: the card that handed the reading how it goes out (the Actor's, the Letter's - handed this
-## note's [method feed]; the user, 2026-10-23: "push the generate/regenerate step into the Actor card. Right
-## now, it's buried at the bottom of the YouTube card"; [method ReadingPanel.hand_publish]). With no such
-## card - a Voice alone - the rows are here ([EpisodeSteps], [EpisodeStepRows]).
+## YouTubeCard.describe]), the note's tags as one list (its `tags:` line, as a show's), and THE NOTE AS THE EPISODE ITS
+## STEPS READ ([Feed], [EpisodeStep] - the YouTube card's tags and painted thumbnail), whose rows are the note's Pipeline
+## card's like any other ([method ReadingPanel.episode_feed]).
 ##
 ## AN EXPORT THAT GOES UP MAKES THEM, when they are not made from the words as they are (a painted thumbnail only
 ## while none is - [method YouTubeThumbnail.owed]): started as the
@@ -30,10 +26,6 @@ const TagField := preload("res://src/ui/tag_field.gd")
 ## How long an export waits for the steps an upload takes, in seconds: a painted thumbnail is a writer's
 ## brief and then a painting, minutes of both.
 const SETTLE_MOST := 360.0
-## Where the steps' rows say they are, and what makes the note's episode, when they are listed here.
-const HOST := "this card"
-const MAKES := "an export that goes up"
-
 ## Where each note's folder is: what the steps made from its words. A gate points it at its own.
 const ROOT := "user://readings"
 static var root := ROOT
@@ -42,8 +34,7 @@ var reading: ReadingPanel
 var youtube: YouTubeCard
 var _feed: Feed
 var _tags_field: TagField
-var _added: EpisodeSteps          # the steps the note's other cards add, the note their episode
-var _added_rows: EpisodeStepRows  # ...and their rows, while no card on the note lists them
+var _steps: EpisodeSteps          # what the YouTube card makes from the note, as the Pipeline card lists it
 var _words := ""
 var _pictures := PackedStringArray()
 var _pictures_of := []            # what they were found for: the words' hash and the library's revision
@@ -77,6 +68,9 @@ class Feed extends EpisodeFeed:
 	func words() -> String:
 		return upload._words
 
+	func made_by() -> String:
+		return "Generate, or an export that goes up"
+
 	func pictures() -> PackedStringArray:
 		return upload.pictures()
 
@@ -98,20 +92,12 @@ func _init(panel: ReadingPanel, card: YouTubeCard) -> void:
 		+ "characters of tags in all; a dimmed tag is past that.")
 	_tags_field.changed.connect(_save_tags)
 	add_child(_tags_field)
-	_added = EpisodeSteps.new(HOST, reading.episode_steps, MAKES)
-	_added_rows = EpisodeStepRows.new(_added, " - once the note has words")
-	_added_rows.redo.connect(_redo)
-	add_child(_added_rows)
+	_steps = youtube.pipeline()
 
 
-## The note as the steps read it, for a card that lists them under its own.
+## The note as the steps read it.
 func feed() -> EpisodeFeed:
 	return _feed
-
-
-## Whether the steps are listed here: no card on the note lists them under its own.
-func hosting() -> bool:
-	return reading.steps_by.is_empty()
 
 
 func _ready() -> void:
@@ -197,14 +183,10 @@ func pictures() -> PackedStringArray:
 	return _pictures
 
 
-## EACH REFRESH: the note's words as the steps read them; while they are listed here, what the steps' jobs
-## ended with, landed, the note said to the steps listed, and their rows; and the chips.
+## EACH REFRESH: the note's words as the steps read them, and the chips.
 func refresh() -> void:
 	var box := reading.source_box()
 	_words = Manuscript.unspoken(reading.walk.body(box.text if box != null else "")).strip_edges()
-	if hosting():
-		_added.tick(_feed)
-	_added_rows.refresh(_feed if hosting() else null)
 	_refresh_tags()
 
 
@@ -214,27 +196,20 @@ func start() -> void:
 	if not youtube.ticked():
 		return
 	refresh()
-	_added.generate(_feed)
+	_steps.generate(_feed)
 
 
 ## A COROUTINE: the take is rendered, and the upload waits for the steps making what it takes (its tags,
 ## its painted thumbnail) - at most [constant SETTLE_MOST] - saying so on the panel's line.
 func settled() -> void:
-	if not youtube.ticked() or not _added.busy(_feed):
+	if not youtube.ticked() or not _steps.busy_on(_feed):
 		return
-	reading.status("Making the note's %s for the upload…" % ", ".join(_added.names(_feed, true)))
+	reading.status("Making the note's %s for the upload…" % ", ".join(_steps.names(_feed, true)))
 	var t0 := Time.get_ticks_msec()
-	while _added.busy(_feed) and float(Time.get_ticks_msec() - t0) < SETTLE_MOST * 1000.0:
+	while _steps.busy_on(_feed) and float(Time.get_ticks_msec() - t0) < SETTLE_MOST * 1000.0:
 		await get_tree().create_timer(0.25).timeout
-	if _added.busy(_feed):
-		reading.status("The note's %s were still being made: this upload takes them as they were." % ", ".join(_added.names(_feed, true)))
-
-
-## ⟳ on a step's row: made again now, from the note's words - which must be written first.
-func _redo(step: EpisodeStep) -> void:
-	if not step.redo(_feed):
-		reading.status("%s waits for the note's words: write them on the Script card." % step.label)
-	refresh()
+	if _steps.busy_on(_feed):
+		reading.status("The note's %s were still being made: this upload takes them as they were." % ", ".join(_steps.names(_feed, true)))
 
 
 ## The chips follow the note's line, unless they are being typed in.

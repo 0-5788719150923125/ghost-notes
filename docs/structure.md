@@ -5,7 +5,7 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 497 references inside a folder, 956 down the stack, 0 up it.
+Between scripts today: 518 references inside a folder, 967 down the stack, 0 up it.
 
 ## The stack, top first
 
@@ -18,15 +18,15 @@ Between scripts today: 497 references inside a folder, 956 down the stack, 0 up 
 | `proof/` | Proof | 6 | `desk`, `reading`, `export`, `show`, `ui`, `notes`, `agents`, `platform`, `data` |
 | `desk/` | The desk | 9 | `table`, `media`, `scene_kit`, `render`, `data` |
 | `table_show/` | The table's show | 11 | `table`, `reading`, `export`, `show`, `voice`, `ui`, `notes`, `agents`, `geometry`, `audio`, `platform`, `data` |
-| `table/` | The set | 38 | `media`, `scene_kit`, `geometry`, `render`, `audio`, `data` |
+| `table/` | The set | 42 | `media`, `scene_kit`, `geometry`, `render`, `audio`, `data` |
 | `reading/` | The voice's workspaces | 12 | `export`, `show`, `media`, `voice`, `ui`, `notes`, `audio`, `platform`, `data` |
 | `export/` | Export | 5 | `show`, `media`, `voice`, `ui`, `notes`, `agents`, `stage`, `scene_kit`, `audio`, `platform`, `data` |
 | `timeline/` | The storyboard's editor | 5 | `show`, `ui`, `scenes`, `stage`, `audio`, `data` |
 | `show/` | The show | 9 | `media`, `ui`, `scenes`, `stage`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
-| `media/` | Media | 20 | `voice`, `ui`, `agents`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
+| `media/` | Media | 20 | `voice`, `ui`, `notes`, `agents`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
 | `voice/` | Synthesis (voice) | 14 | `audio`, `platform`, `data` |
-| `ui/` | The panel kit | 17 | `notes`, `agents`, `platform`, `data` |
-| `notes/` | Notes | 8 | `agents`, `stage`, `platform`, `data` |
+| `ui/` | The panel kit | 18 | `notes`, `agents`, `platform`, `data` |
+| `notes/` | Notes | 10 | `agents`, `stage`, `platform`, `data` |
 | `agents/` | Agents | 6 | `platform`, `data` |
 | `scenes/` | Scenes | 59 | `stage`, `scene_kit`, `geometry`, `motion`, `render`, `audio` |
 | `stage/` | Storyboards & stage | 4 | `geometry`, `render`, `audio`, `data` |
@@ -100,15 +100,15 @@ Every piece of writing and painting ghost asks an AI for: who writes (TextGen) a
 
 ### `notes/` - Notes
 
-The note as a file: where notes live, a document kept in step with its file, the registry of what a note can carry (`Components`), the registry of the marks a script may carry (`ScriptMarks`), and where a note's cards meet without naming each other: an episode one card makes (`EpisodeFeed`) and the steps the others add to it (`EpisodeStep`).
+The note as a file: where notes live, a document kept in step with its file, the registry of what a note can carry (`Components`), the registry of the marks a script may carry (`ScriptMarks`), and where a note's cards meet without naming each other: what each hands the note's one list of what is made for it (`PipelineSection`, `PipelineRow`), the episode one card makes (`EpisodeFeed`) and the steps the others make from it (`EpisodeStep`, `EpisodeSteps`).
 
-[`components`](../src/notes/components.gd), [`doc_source`](../src/notes/doc_source.gd), [`episode_feed`](../src/notes/episode_feed.gd), [`episode_step`](../src/notes/episode_step.gd), [`episode_steps`](../src/notes/episode_steps.gd), [`note_store`](../src/notes/note_store.gd), [`save_mark`](../src/notes/save_mark.gd), [`script_marks`](../src/notes/script_marks.gd)
+[`components`](../src/notes/components.gd), [`doc_source`](../src/notes/doc_source.gd), [`episode_feed`](../src/notes/episode_feed.gd), [`episode_step`](../src/notes/episode_step.gd), [`episode_steps`](../src/notes/episode_steps.gd), [`note_store`](../src/notes/note_store.gd), [`pipeline_row`](../src/notes/pipeline_row.gd), [`pipeline_section`](../src/notes/pipeline_section.gd), [`save_mark`](../src/notes/save_mark.gd), [`script_marks`](../src/notes/script_marks.gd)
 
 ### `ui/` - The panel kit
 
-What every note's panel is built from, and what it asks of the window it is in: a side panel that cannot outgrow the window and its "+", a component's folding card in its family's color and the chips over the cards, the cards a note's components bring (built from the registry's rows, attached and detached), the Script card every note has (its editor window and highlighter), rows drawn from a table of fields, two small controls, and `Shell` - the bottom-right row, room along the bottom edge, the way back to the notes. Above `notes/` because it is a kit for a note's components.
+What every note's panel is built from, and what it asks of the window it is in: a side panel that cannot outgrow the window and its "+", a component's folding card in its family's color and the chips over the cards, the cards a note's components bring (built from the registry's rows, attached and detached), the one list of what is made for a note (`PipelineCard`), the Script card every note has (its editor window and highlighter), rows drawn from a table of fields, two small controls, and `Shell` - the bottom-right row, room along the bottom edge, the way back to the notes. Above `notes/` because it is a kit for a note's components.
 
-[`agent_pick`](../src/ui/agent_pick.gd), [`card`](../src/ui/card.gd), [`card_row`](../src/ui/card_row.gd), [`episode_step_rows`](../src/ui/episode_step_rows.gd), [`icons`](../src/ui/icons.gd), [`note_cards`](../src/ui/note_cards.gd), [`note_editor`](../src/ui/note_editor.gd), [`note_grid`](../src/ui/note_grid.gd), [`note_tile`](../src/ui/note_tile.gd), [`schema_form`](../src/ui/schema_form.gd), [`script_highlighter`](../src/ui/script_highlighter.gd), [`script_writer`](../src/ui/script_writer.gd), [`shell`](../src/ui/shell.gd), [`side_panel`](../src/ui/side_panel.gd), [`tag_field`](../src/ui/tag_field.gd), [`touch_text`](../src/ui/touch_text.gd), [`volume_knob`](../src/ui/volume_knob.gd)
+[`agent_pick`](../src/ui/agent_pick.gd), [`card`](../src/ui/card.gd), [`card_row`](../src/ui/card_row.gd), [`icons`](../src/ui/icons.gd), [`note_cards`](../src/ui/note_cards.gd), [`note_editor`](../src/ui/note_editor.gd), [`note_grid`](../src/ui/note_grid.gd), [`note_tile`](../src/ui/note_tile.gd), [`panel_deck`](../src/ui/panel_deck.gd), [`pipeline_card`](../src/ui/pipeline_card.gd), [`schema_form`](../src/ui/schema_form.gd), [`script_highlighter`](../src/ui/script_highlighter.gd), [`script_writer`](../src/ui/script_writer.gd), [`shell`](../src/ui/shell.gd), [`side_panel`](../src/ui/side_panel.gd), [`tag_field`](../src/ui/tag_field.gd), [`touch_text`](../src/ui/touch_text.gd), [`volume_knob`](../src/ui/volume_knob.gd)
 
 ### `voice/` - Synthesis (voice)
 
@@ -150,7 +150,7 @@ The panels a voice runs in: the reading (script, cast, voice, stream, export), t
 
 A place, seen and heard, built from a written description: the table itself (Tables), the things on it (Props), its air (Effects, and what the wind carries: Drifts), its light (Lights) and the one wind both share (Winds), its sound (Soundscape), where cards go on it, what can be done with them and how a reading says so, the faces printed on them - and the medium that puts it all on the stage (`table.gd`, a row of `Medium.REGISTRY`).
 
-[`boil`](../src/table/boil.gd), [`card_faces`](../src/table/card_faces.gd), [`card_reading`](../src/table/card_reading.gd), [`card_table`](../src/table/card_table.gd), [`drifts`](../src/table/drifts.gd), [`effects`](../src/table/effects.gd), [`formula`](../src/table/formula.gd), [`hands`](../src/table/hands.gd), [`intro_blur`](../src/table/intro_blur.gd), [`lights`](../src/table/lights.gd), [`mesh_cut`](../src/table/mesh_cut.gd), [`motions`](../src/table/motions.gd), [`particles`](../src/table/particles.gd), [`props`](../src/table/props.gd), [`rides`](../src/table/rides.gd), [`rigid_parts`](../src/table/rigid_parts.gd), [`shape_field`](../src/table/shape_field.gd), [`sheet_bend`](../src/table/sheet_bend.gd), [`sheet_writing`](../src/table/sheet_writing.gd), [`show_opening`](../src/table/show_opening.gd), [`soundscape`](../src/table/soundscape.gd), [`surface_waves`](../src/table/surface_waves.gd), [`table`](../src/table/table.gd), [`table_actions`](../src/table/table_actions.gd), [`table_box`](../src/table/table_box.gd), [`table_card_pose`](../src/table/table_card_pose.gd), [`table_light`](../src/table/table_light.gd), [`table_physics`](../src/table/table_physics.gd), [`table_plan`](../src/table/table_plan.gd), [`table_positions`](../src/table/table_positions.gd), [`table_shuffle`](../src/table/table_shuffle.gd), [`table_things`](../src/table/table_things.gd), [`table_work`](../src/table/table_work.gd), [`tables`](../src/table/tables.gd), [`title_card`](../src/table/title_card.gd), [`vessel`](../src/table/vessel.gd), [`winds`](../src/table/winds.gd), [`work_sounds`](../src/table/work_sounds.gd)
+[`assembly`](../src/table/assembly.gd), [`assembly_heap`](../src/table/assembly_heap.gd), [`assembly_meshes`](../src/table/assembly_meshes.gd), [`boil`](../src/table/boil.gd), [`card_faces`](../src/table/card_faces.gd), [`card_reading`](../src/table/card_reading.gd), [`card_table`](../src/table/card_table.gd), [`drifts`](../src/table/drifts.gd), [`effects`](../src/table/effects.gd), [`formula`](../src/table/formula.gd), [`hands`](../src/table/hands.gd), [`intro_blur`](../src/table/intro_blur.gd), [`lights`](../src/table/lights.gd), [`mesh_cut`](../src/table/mesh_cut.gd), [`motions`](../src/table/motions.gd), [`particles`](../src/table/particles.gd), [`props`](../src/table/props.gd), [`rides`](../src/table/rides.gd), [`rigid_parts`](../src/table/rigid_parts.gd), [`shape_field`](../src/table/shape_field.gd), [`sheet_bend`](../src/table/sheet_bend.gd), [`sheet_writing`](../src/table/sheet_writing.gd), [`show_opening`](../src/table/show_opening.gd), [`soundscape`](../src/table/soundscape.gd), [`surface_waves`](../src/table/surface_waves.gd), [`table`](../src/table/table.gd), [`table_actions`](../src/table/table_actions.gd), [`table_assembly`](../src/table/table_assembly.gd), [`table_box`](../src/table/table_box.gd), [`table_card_pose`](../src/table/table_card_pose.gd), [`table_light`](../src/table/table_light.gd), [`table_physics`](../src/table/table_physics.gd), [`table_plan`](../src/table/table_plan.gd), [`table_positions`](../src/table/table_positions.gd), [`table_shuffle`](../src/table/table_shuffle.gd), [`table_things`](../src/table/table_things.gd), [`table_work`](../src/table/table_work.gd), [`tables`](../src/table/tables.gd), [`title_card`](../src/table/title_card.gd), [`vessel`](../src/table/vessel.gd), [`winds`](../src/table/winds.gd), [`work_sounds`](../src/table/work_sounds.gd)
 
 ### `table_show/` - The table's show
 
@@ -180,7 +180,7 @@ A note read as a letter written by hand at a desk: the card that pins its medium
 
 An actor played from their own footage: the library of actors, each built from their videos (a folder, or links fetched) - surveyed, grouped into sets by camera and look, the agent that audits them, a still of each set and a model of them from every video (their head's motion, their blinks, their mouths for each sound, their voice) - the card that makes one and puts them on a note's stage, and the medium that plays them reading it: the still, its head turned and its mouth and eyes drawn from their own, through one mesh over the frame; and a voice alone, taught their speech from their recordings by the Voice training card. Design: next/likeness.md.
 
-[`actor_builder`](../src/likeness/actor_builder.gd), [`actor_card`](../src/likeness/actor_card.gd), [`actor_folder`](../src/likeness/actor_folder.gd), [`actor_prompts`](../src/likeness/actor_prompts.gd), [`actor_source_list`](../src/likeness/actor_source_list.gd), [`actor_sources`](../src/likeness/actor_sources.gd), [`actor_step_rows`](../src/likeness/actor_step_rows.gd), [`actor_steps`](../src/likeness/actor_steps.gd), [`actors`](../src/likeness/actors.gd), [`likeness`](../src/likeness/likeness.gd), [`likeness_face`](../src/likeness/likeness_face.gd), [`likeness_plan`](../src/likeness/likeness_plan.gd), [`splat_head`](../src/likeness/splat_head.gd), [`visemes`](../src/likeness/visemes.gd), [`voice_training_card`](../src/likeness/voice_training_card.gd)
+[`actor_builder`](../src/likeness/actor_builder.gd), [`actor_card`](../src/likeness/actor_card.gd), [`actor_folder`](../src/likeness/actor_folder.gd), [`actor_pipeline`](../src/likeness/actor_pipeline.gd), [`actor_prompts`](../src/likeness/actor_prompts.gd), [`actor_source_list`](../src/likeness/actor_source_list.gd), [`actor_sources`](../src/likeness/actor_sources.gd), [`actor_steps`](../src/likeness/actor_steps.gd), [`actors`](../src/likeness/actors.gd), [`likeness`](../src/likeness/likeness.gd), [`likeness_face`](../src/likeness/likeness_face.gd), [`likeness_plan`](../src/likeness/likeness_plan.gd), [`splat_head`](../src/likeness/splat_head.gd), [`visemes`](../src/likeness/visemes.gd), [`voice_training_card`](../src/likeness/voice_training_card.gd)
 
 ### `masking/` - Masking
 

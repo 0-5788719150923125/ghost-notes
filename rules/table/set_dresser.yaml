@@ -359,6 +359,16 @@ prompt:
   # the wind, water, rain, fire, a stream, insects: Soundscape.describe()
   - insert: sounds
   - ""
+  # WHAT IS BUILT HERE (next/assembly.md): the pieces are drawn, never things; the set dresser says where they wait and in what colors
+  - when: assembly
+    say: >-
+          WHAT IS BUILT ON THIS TABLE is built of many small parts, on a plate in the middle of the picture, and you say where the
+          pieces wait. Keep the way clear between the plate and where they wait, and nothing tall on it: the pieces go back and forth
+          over it all episode. Build each container that holds them as a real hollow thing, in the frame and within a reach of the plate.
+  - when: assembly
+    insert: assembly_stock
+  - when: assembly
+    say: ""
   # THE RIDE: the user, 2026-10-19 - "the script will mention that we are on a moving thing ... there was
   # no clear indication that the train was moving"; the camera is mounted, so the ride shows in what moves
   # on the table (Rides). No example: one would be copied onto tables that stand still

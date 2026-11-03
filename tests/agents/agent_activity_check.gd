@@ -193,10 +193,10 @@ func _rows() -> bool:
 	var ed: GDScript = load("res://src/table_show/episode_card.gd")
 	var makers: Dictionary = ed.MAKERS
 	var missing := PackedStringArray()
-	for r in ed.ROWS:
-		for s in r[1]:
-			var kind := String(s).get_slice(":", 0)
-			if not (kind in ["draw", "script"]) and not makers.has(kind):
-				missing.append(String(s))
-	_ok(missing.is_empty(), "every agent step a row covers has a maker to name (%s)" % ", ".join(missing))
+	# (a beat's row is only a reading called what the producer calls one: `say:K`, a key of its own for its name and its ⟳)
+	for key in ed.STEPS:
+		var kind := String(key).get_slice(":", 0)
+		if not (kind in ["draw", "script", "beat"]) and not makers.has(kind):
+			missing.append(String(key))
+	_ok(not (ed.STEPS as Dictionary).is_empty() and missing.is_empty(), "every agent step a row covers has a maker to name (%s)" % ", ".join(missing))
 	return true

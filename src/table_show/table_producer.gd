@@ -52,7 +52,7 @@ signal changed
 ## A step whose job fails is tried this many more times before the episode stops on it.
 const RETRIES := 1
 ## The most beats a show that draws no cards is planned in, between its intro and its close.
-const BEATS_MOST := 8
+const BEATS_MOST := 12
 ## The most cards an episode draws: a spread planned longer is cut to it ([method _land_plan]).
 const SPREAD_MOST := 10
 ## How many times the art director may send one card's painting back ([method _land_check]): past
@@ -770,8 +770,10 @@ func _land(step: String, res: Dictionary) -> void:
 				err = _land_check(step, String(res.get("text", "")))
 			"say":
 				# ...keeping the act cues its own beat's acts may be started by ([CardReading], `<!-- act: name -->`)
-				var cues: Array = _acts_of(_beat_of(step, episode.cardless())).map(func(a: Dictionary) -> String: return String(a["name"]))
+				var beat_acts := _acts_of(_beat_of(step, episode.cardless()))
+				var cues: Array = beat_acts.map(func(a: Dictionary) -> String: return String(a["name"]))
 				var t := own_voices(clean_spoken(String(res.get("text", "")), cues), _voices(), _reader_name())
+				t = fit_silence(t, beat_acts)
 				err = "the reader wrote nothing speakable" if t.split(" ", false).size() < (1 if step.split(":")[1].is_valid_int() else 20) \
 					else episode.write_text(step, t)
 			"image":
@@ -930,6 +932,9 @@ func _land_beats(plan: Dictionary) -> String:
 	for k in ["episode_title", "description", "audience", "topic", "premise", "reader_mood", "running_bit", "work_intro", "work_close"]:
 		plan[k] = _str(plan.get(k, ""))
 	plan["beat_word"] = beat_word_of(plan.get("beat_word", ""))
+	# WHAT THE EPISODE IS MADE OF: built from many small parts ([Assembly]) or not, and how much of it nobody talks through
+	plan["assembly"] = plan.get("assembly") == true
+	plan["quiet"] = TablePrompts.quiet_of(plan)
 	for k in ["tags", "habits"]:
 		plan[k] = Array(DataPath.strings(plan.get(k, [])))
 	plan["look"] = CardTable.sanitize_look(plan["look"] as Dictionary if plan.get("look") is Dictionary else {})
@@ -1221,7 +1226,7 @@ func _reader_name() -> String:
 ## stays, its name one line: the export times it from the take ([method CardReading.chapters]).
 static func voice_marks_only(text: String, acts: Array = []) -> String:
 	var keep := [Manuscript._rx(Manuscript.DELIVERY), Manuscript._rx(Manuscript.HESITATION),
-		Manuscript._rx(Manuscript.SPEAKER)]
+		Manuscript._rx(Manuscript.SPEAKER), Manuscript._rx(CardReading.QUIET_MARK)]
 	var cue := Manuscript._rx(CardReading.ACT_MARK)
 	var chapter := Manuscript._rx(CardReading.CHAPTER_MARK)
 	var out := ""
@@ -1244,6 +1249,39 @@ static func voice_marks_only(text: String, acts: Array = []) -> String:
 		if keep.any(func(r: RegEx) -> bool: return r.search(c) != null):
 			out += c
 	return out + text.substr(at)
+
+
+## WHAT THE WORK TAKES, THE VOICE LEAVES ROOM FOR ([Assembly]; a reader is told how long its acts take, and words are only ever about
+## that long): a passage whose words and silences come to less than the least its acts can be hurried to has the difference added as
+## a silence before its last sentence - so the work never runs on past the talk, and the talk is never quickened. It adds nothing to
+## a passage whose acts have no such floor, or that gives them room.
+static func fit_silence(text: String, acts: Array) -> String:
+	var least := 0.0
+	for a in acts:
+		least += float((a as Dictionary).get("_natural", 0.0)) * SILENCE_FITS
+	if least <= 0.0:
+		return text
+	var words := Manuscript._rx(Manuscript.COMMENT).sub(text, "", true).split(" ", false).size()
+	var quiet := 0.0
+	for m in Manuscript._rx(CardReading.QUIET_MARK).search_all(text):
+		quiet += float(m.get_string(1))
+	var short := least - float(words) * TablePrompts.SAID_WORD - quiet
+	if short < SILENCE_LEAST:
+		return text
+	short = minf(short, CardReading.QUIET_MOST)
+	var mark := "<!-- quiet: %d --> " % roundi(short)
+	# ...before its last sentence, its last words left for after it
+	var at := -1
+	for rx in [". ", "? ", "! "]:
+		at = maxi(at, text.rstrip(" \n").rfind(rx))
+	if at < 0:
+		return mark + text
+	return text.substr(0, at + 2) + mark + text.substr(at + 2)
+
+
+## How much of what its acts take at an easy pace a passage must cover, and the least it is worth saying a silence for (seconds).
+const SILENCE_FITS := 0.9
+const SILENCE_LEAST := 6.0
 
 
 static func own_voices(text: String, voices: Array, reader := "") -> String:

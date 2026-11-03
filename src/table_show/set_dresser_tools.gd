@@ -93,6 +93,7 @@ var _light_put := false
 var _sound := {}                 # what the place sounds like ([Soundscape]), part by part, once put
 var _sound_put := false
 var _ride := {}                  # what the table is aboard ([Rides]), as written, once put
+var _assembly := {}              # what is built on it ([Assembly]), as written, once put
 var _ride_put := false
 var _looks := 0
 var _busy := false               # a call is in hand ([method call_tool])
@@ -143,7 +144,8 @@ func list_tools() -> Array:
 				"layers": {"type": "array", "items": {"type": "object"}, "description": "cloths laid on the top, bottom first: each {name, what, outline, size, drop, at, turn, fabric, pattern, border, fringe, relief, sheen}, replacing a layer of the same name (a new one goes on top)"},
 				"light": {"type": "object", "description": "the table's light, {why, sky, sun, through, clouds, wind, birds, lamps, shadows}: each part given replaces that part (null takes it away); in `through`, `lamps` and `shadows` an entry replaces the one of the same name (an empty list takes them all away)"},
 				"sound": {"type": "object", "description": "what the place sounds like behind the reader, {why, wind, water, rain, fire, stream, insects, ride}: each part given replaces that part (null takes it away)"},
-				"ride": {"type": "object", "description": "what the table is aboard, when it moves: {on, rough, speed, why} - replaces the ride before ({} takes it away: the table stands still)"}}}},
+				"ride": {"type": "object", "description": "what the table is aboard, when it moves: {on, rough, speed, why} - replaces the ride before ({} takes it away: the table stands still)"},
+				"assembly": {"type": "object", "description": "what is built on this table from many small parts, when the show builds something: {colors, base, stock} - replaces the assembly before ({} takes it away)"}}}},
 		{"name": "remove", "description": "Take things - or effects of its air, layers, or parts of its light (what the sun falls through, a lamp or a shadow, by name; or \"sun\", \"clouds\", \"wind\", \"birds\", or \"light\" for all of it), its sound (\"sound\") or its ride (\"ride\") - off the table you are setting, by name.",
 			"inputSchema": {"type": "object", "properties": {"names": {"type": "array", "items": {"type": "string"}}}, "required": ["names"]}},
 		{"name": "blueprint", "description": "Lay the things out on the table's BLUEPRINT and draw it: the table from straight above as a plan, black on white, ruled in centimeters from the middle of the reading (x to the reader's right, z toward the reader; the far side negative) - the top and its cloths, where the cards go (hatched: nothing stands there), the reader's hands, the camera's frame (gray past it), lines saying how tall a thing there can be and still be seen whole, the line flames stand behind, and every thing placed: its foot as it stands, numbered as put numbers it, a tick toward its front. Give `things` to place them first, each {name, at: [x, z], turn, scale}: only what changes need be given. Answers with the drawing and, for each thing, where it stands, its foot and height against the height its spot shows, and what moved it or kept it off.",
@@ -227,6 +229,8 @@ func draft() -> Dictionary:
 		out["sound"] = _sound.duplicate(true)
 	if _ride_put and not _ride.is_empty():
 		out["ride"] = _ride.duplicate(true)
+	if not _assembly.is_empty():
+		out["assembly"] = _assembly.duplicate(true)
 	return out
 
 
@@ -250,9 +254,12 @@ func _put(args: Dictionary) -> Dictionary:
 	var any_light: bool = args.get("light") is Dictionary
 	var any_sound: bool = args.get("sound") is Dictionary
 	var any_ride: bool = args.get("ride") is Dictionary
+	var any_assembly: bool = args.get("assembly") is Dictionary
 	if not (raw is Array) or ((raw as Array).is_empty() and mats.is_empty() and not any_air and not any_table and not any_light
-			and not any_sound and not any_ride and not (args.get("idea") is String)):
+			and not any_sound and not any_ride and not any_assembly and not (args.get("idea") is String)):
 		return {"text": "Nothing was put: give `things` (a list of things), `materials`, `effects`, the table's `top` or `layers`, its `light`, its `sound`, its `ride`, or an `idea`.", "error": true}
+	if any_assembly:
+		_assembly = (args["assembly"] as Dictionary).duplicate(true)
 	if any_ride:
 		_ride = (args["ride"] as Dictionary).duplicate(true)
 		_ride_put = true
@@ -348,6 +355,12 @@ func _put(args: Dictionary) -> Dictionary:
 		lines.append_array(_describe_sound())
 	if any_ride:
 		lines.append_array(_describe_ride())
+	if any_assembly:
+		var said := PackedStringArray()
+		var made := Assembly.sanitize(_assembly, said)
+		lines.append("The assembly: %s." % ("none" if made.is_empty() else "a plate of %s studs, stock: %s" % [str((made["base"] as Dictionary)["size"]), ", ".join(PackedStringArray((made["stock"] as Array).map(func(q: Dictionary) -> String: return String(q["name"]))))]))
+		for n in said:
+			lines.append("- " + String(n))
 	if junk > 0:
 		lines.append("%d of the things given %s not an object {name, parts, ...} - left out." % [junk, "was" if junk == 1 else "were"])
 	if not notes.is_empty():

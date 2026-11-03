@@ -106,7 +106,7 @@ const CATEGORY := "22"
 const THUMBNAILS := {
 	"youtube": {"label": "YouTube's choice", "blurb": "No thumbnail is set: YouTube offers frames of the video and shows one until another is picked in YouTube Studio."},
 	"title": {"label": "Title screen", "blurb": "A frame of the video's opening with the show's name fully up over the picture out of focus - only when the video opens on its title (Opening, on the Intro & outro card)."},
-	"painted": {"label": "Painted", "blurb": "Painted for each episode from what it says: a writer reads the episode and describes a thumbnail that is true of it and makes a viewer want to watch, and a painter paints it. The card that makes the episode lists it as a step, and ⟳ on its row paints it again."},
+	"painted": {"label": "Painted", "blurb": "Painted for each episode from what it says: a writer reads the episode and describes a thumbnail that is true of it and makes a viewer want to watch, and a painter paints it. The Pipeline card lists it, and ⟳ on its row paints it again."},
 }
 const THUMBNAIL := "youtube"
 ## A thumbnail's size, as YouTube recommends it (a portrait video's, turned).

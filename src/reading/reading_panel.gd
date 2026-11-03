@@ -129,10 +129,9 @@ var _youtube: YouTubeCard
 ## made from its words - when [member publish] says it is one; null otherwise.
 var _note_upload: NoteUpload
 
-## THE STEPS THE NOTE'S CARDS ADD TO ITS EPISODES ([EpisodeStep]): every one a card built here offers
-## (`episode_steps()` - the YouTube card's tags), for the card that makes episodes to list
-## ([method episode_steps]). The two never name each other: this panel puts them together.
-var _steps: Array = []
+## EVERYTHING AGENTS AND TOOLS MAKE FOR THE NOTE, ONE LIST ([PipelineCard]): every card built here that has anything to
+## make hands it a section ([method _offer_pipeline]). No card names another: this panel puts them together.
+var _pipeline: PipelineCard
 var _dirty := false
 var _last_edit_ms := 0
 
@@ -160,14 +159,8 @@ var workspace := "reading":
 var bed: ReadingBed = ReadingBed.new()
 
 ## HOW THE READING GOES OUT ([ReadingPublish]): what its export is called, what is held while the
-## take renders, what an upload says. A note's own, unless a component's card hands another
-## ([method hand_publish]).
+## take renders, what an upload says. A note's own, unless a component's card hands another.
 var publish: ReadingPublish = ReadingPublish.new()
-
-## THE CARD THAT LISTS THE STEPS THE NOTE'S CARDS ADD ([EpisodeSteps]), as their rows name it ("the
-## Letter card"): the one that handed the reading how it goes out. "" while none has - a Voice alone -
-## and the YouTube card lists them itself ([NoteUpload]).
-var steps_by := ""
 
 ## THE AUTHOR CHANGED THE SCRIPT by hand (never a document arriving): for a component that keeps
 ## count of what an edit changes - Cards' brief changes the NEXT episode, not this one.
@@ -295,6 +288,8 @@ func _build_panel() -> void:
 	var box: VBoxContainer = _panel.body
 	box.add_theme_constant_override("separation", 8)
 	_build_header(box)
+	# made before the cards, which hand it what they make; pinned once they are, its chip after theirs
+	_pipeline = PipelineCard.new(_section)
 	# THE CARDS (next/notes.md, step 2): each section a colored card that folds, its chip in the
 	# row under the heading. The order is the families': the text, what produces it, the voice,
 	# the picture, the Look - read top to bottom, the panel says what happens to the note.
@@ -319,6 +314,8 @@ func _build_panel() -> void:
 	# ...and where the video goes, when the note says so
 	if _attached.has("youtube"):
 		_add_youtube()
+	# ...and what is made for all of it, last of them: found in one place on every note (next/pipeline.md)
+	_pipeline.put_on(_panel)
 	# rows only some media use (the Ink) follow the medium the moment it changes
 	_sync_medium_rows()
 	Director.medium_changed.connect(_sync_medium_rows)
@@ -457,8 +454,8 @@ func _rewrite(write: Callable) -> void:
 	reopen.call(note_path)
 
 
-## THE YOUTUBE CARD, last of the cards (the families' order ends where the video goes). One attached
-## while the panel is up is moved above the status line, where a card built with the panel stands.
+## THE YOUTUBE CARD, last of the note's cards (the families' order ends where the video goes). One attached
+## while the panel is up is moved above the Pipeline card, where a card built with the panel stands.
 func _add_youtube() -> void:
 	_youtube = YouTubeCard.new()
 	_youtube.values = func() -> Dictionary: return publish.upload_values()
@@ -466,12 +463,12 @@ func _add_youtube() -> void:
 	_panel.add_card(YouTubeCard.KEY, "YouTube", &"publish", "youtube").add_child(_youtube)
 	_block_cards[YouTubeCard.KEY] = _youtube
 	_youtube.noted.connect(_set_status)
-	_offer_steps(_youtube)
+	_offer_pipeline(_youtube)
 	var card: Node = _youtube.get_parent()
 	while card != null and not (card is Card):
 		card = card.get_parent()
-	if card != null and _status != null and _status.get_parent() == card.get_parent():
-		card.get_parent().move_child(card, _status.get_index())
+	if card != null and _pipeline.card != null and _pipeline.card.get_parent() == card.get_parent():
+		card.get_parent().move_child(card, _pipeline.card.get_index())
 	publish.youtube_built(_youtube)
 	if publish.note_is_episode():
 		_note_upload = NoteUpload.new(self, _youtube)
@@ -483,39 +480,38 @@ func _add_block(card: Object) -> void:
 	_block_cards[String(card.KEY)] = card
 	if card.has_signal("noted"):
 		card.noted.connect(_note)
-	_offer_steps(card)
+	_offer_pipeline(card)
 
 
-## What [param card] adds to the note's episodes, if it adds anything (`episode_steps()`).
-func _offer_steps(card: Object) -> void:
-	if not card.has_method("episode_steps"):
+## WHAT [param card] MAKES FOR THE NOTE, if it makes anything (`pipeline()`), on the one list. The one way in: a card
+## attached while the panel is up adds its own at once.
+func _offer_pipeline(card: Object) -> void:
+	if not card.has_method("pipeline") or _pipeline == null:
 		return
-	for s in card.call("episode_steps"):
-		if s is EpisodeStep and not _steps.has(s):
-			_steps.append(s)
+	var section: PipelineSection = card.call("pipeline")
+	if section != null:
+		section.episode = episode_feed
+		_pipeline.add(section)
 
 
-## THE STEPS THE NOTE'S CARDS ADD TO ITS EPISODES, as offered - all of them; the card that makes the
-## episodes lists the ones [method EpisodeStep.wanted] now. A card attached while the panel is up adds
-## its own at once.
-func episode_steps() -> Array:
-	return _steps
+## The note's Pipeline card.
+func pipeline() -> PipelineCard:
+	return _pipeline
 
 
-## The note as its own episode ([NoteUpload]), for a card that lists the steps made from its words under its
-## own (the Actor's, the Letter's); null while the note has no YouTube card, or makes episodes.
-func note_upload() -> NoteUpload:
-	return _note_upload
+## THE EPISODE WHAT IS MADE FROM ONE READS ([EpisodeFeed]): the one the note's show picked, else the note itself, which
+## is then its own ([NoteUpload]); null while the note has neither.
+func episode_feed() -> EpisodeFeed:
+	var shown := publish.feed()
+	if shown != null:
+		return shown
+	return _note_upload.feed() if _note_upload != null else null
 
 
-## A CARD HANDS THE READING HOW IT GOES OUT ([param p]) AND SO LISTS THE STEPS THE NOTE'S OTHER CARDS ADD
-## under its own, beside its Generate ([EpisodeSteps]), named as their rows say it ([param by]): what makes
-## what goes out is where what goes up with it is made (the user, 2026-10-23, of the Actor card: "push the
-## generate/regenerate step into the Actor card"). The one way a card hands a publish (docs.py's
-## `check_publish_handed`), so none can make what goes out and leave the steps on the YouTube card.
-func hand_publish(p: ReadingPublish, by: String) -> void:
-	publish = p
-	steps_by = by
+## THE EPISODE IN [param feed] IS BEING LEFT OR THROWN AWAY: what is being made of it stops.
+func episode_left(feed: EpisodeFeed) -> void:
+	if _pipeline != null:
+		_pipeline.episode_left(feed, episode_feed())
 
 
 func _build_header(box: VBoxContainer) -> void:

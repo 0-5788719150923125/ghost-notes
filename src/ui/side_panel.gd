@@ -32,9 +32,12 @@ class_name SidePanel
 ## scrolling to the top, to click those buttons"), and goes with the panel when it is hidden. A note's
 ## panel names no mode there ([method pin_title_row]).
 ##
+## ITS CARDS ARE A DECK ([PanelDeck]; next/panel_deck.md): one scroll, folded cards overlapping, and the title bars of the
+## cards out of view lying in piles at the scroll's top and bottom, so every card is always one click away.
+##
 ## A FOOTER CAN BE PINNED under the scrolling body ([method add_footer_card]): a card that stays in
 ## view however far the body is scrolled, taken off the room the body has. Masking's marker list
-## lives there - "the whole manage-markers workflow stays visible together", as its own panel kept it.
+## lives there, alone - "the whole manage-markers workflow stays visible together", as its own panel kept it.
 
 ## Distance from the window's edge, and the gap left at the bottom. The panel is placed here
 ## rather than by the caller so that "how much room is there" has one answer.
@@ -88,6 +91,7 @@ var _footer: VBoxContainer
 var _head: VBoxContainer
 var _head_pad: MarginContainer      # the header's own margin, matched to the body's (see _apply)
 var _foot_pad: MarginContainer      # the footer's own margin, matched to the body's (see _apply)
+var _deck: PanelDeck                # the title bars of the body's cards
 ## Controls already named for making the panel too wide (see [method _check_width]).
 var _warned := {}
 
@@ -126,6 +130,8 @@ func _init(width := 380.0) -> void:
 	_footer = VBoxContainer.new()
 	_footer.add_theme_constant_override("separation", 6)
 	_foot_pad.add_child(_footer)
+	_deck = PanelDeck.new(_scroll, body, room)
+	add_child(_deck)
 
 
 ## What other furniture keeps clear of: the scrub bar starts to the right of an open panel.
@@ -197,6 +203,7 @@ func add_card(key: String, card_title: String, family: StringName, component := 
 	var card: Card = CardScript.new(("%s.%s" % [card_prefix, key]) if not card_prefix.is_empty() else "",
 		card_title, family)
 	body.add_child(card)
+	_deck.adopt(card)
 	if card_row != null:
 		card_row.track(card)
 	if not component.is_empty() and detach.is_valid():
@@ -213,6 +220,13 @@ func _add_detach(card: Card, component: String) -> void:
 	x.flat = true
 	x.focus_mode = Control.FOCUS_NONE
 	x.add_theme_font_size_override("font_size", 14)
+	# NO TALLER THAN THE TITLE BESIDE IT: a button's own margins made the bar taller, the title sat lower in it, and in a pile the
+	# next bar cut through its words (only ever on a note's panel: the gates' cards had no ×)
+	var snug := StyleBoxEmpty.new()
+	snug.content_margin_left = 4
+	snug.content_margin_right = 4
+	for st in ["normal", "hover", "pressed", "disabled", "focus"]:
+		x.add_theme_stylebox_override(st, snug)
 	var label := String((Components.REGISTRY.get(component, {"label": card.title}) as Dictionary)["label"])
 	var tip := "Detach %s from this note. Its settings here are removed with it." % label
 	x.tooltip_text = tip
@@ -309,9 +323,10 @@ func _corner() -> HBoxContainer:
 	return _restore
 
 
-## Every card on the panel, top to bottom, the pinned ones last.
+## Every card standing on the panel, top to bottom, a pinned one last - not one it has hidden (a Pipeline card with
+## nothing to list), which has no chip either.
 func cards() -> Array:
-	return (body.get_children() + _footer.get_children()).filter(func(c: Node) -> bool: return c is Card)
+	return (body.get_children() + _footer.get_children()).filter(func(c: Node) -> bool: return c is Card and (c as Card).visible)
 
 
 func _ready() -> void:
@@ -322,6 +337,7 @@ func _ready() -> void:
 	add_sibling.call_deferred(corner)
 	# The content's height, not just the window's - see the note at the top.
 	body.minimum_size_changed.connect(_fit)
+	_scroll.get_v_scroll_bar().visibility_changed.connect(_fit)
 	get_viewport().size_changed.connect(_fit)
 	_fit()
 	# THE WHEEL SCROLLS THE PANEL, NEVER A SLIDER. Every slider already here, and every one a
@@ -382,6 +398,16 @@ func _fit() -> void:
 	_apply.call_deferred()
 
 
+## THE MOST THE SCROLL VIEW CAN BE, whatever is in it: the window, less the panel's place, its header and its footer.
+func room() -> float:
+	var left: float = get_viewport().get_visible_rect().size.y - position.y - MARGIN
+	if _head_pad.visible:
+		left -= _head_pad.get_combined_minimum_size().y + float(_col.get_theme_constant("separation"))
+	if _foot_pad.visible:
+		left -= _foot_pad.get_combined_minimum_size().y + float(_col.get_theme_constant("separation"))
+	return left
+
+
 func _apply() -> void:
 	if not is_inside_tree() or _scroll == null or not is_instance_valid(_scroll):
 		return
@@ -390,18 +416,16 @@ func _apply() -> void:
 	var bar := _scroll.get_v_scroll_bar()
 	var w: int = int(bar.get_combined_minimum_size().x + GUTTER) if bar != null else int(GUTTER)
 	_pad.add_theme_constant_override("margin_right", w)
-	_foot_pad.add_theme_constant_override("margin_right", w)     # the pinned cards line up with the body's
+	# THE PINNED CARDS LINE UP WITH THE BODY'S: while its bar shows, the scroll view gives the body that much less (and only
+	# what scrolls has a bar to clear)
+	var beside: int = int(bar.size.x) if bar != null and bar.visible else 0
+	_foot_pad.add_theme_constant_override("margin_right", w + beside)
 	_head_pad.add_theme_constant_override("margin_right", w)
-	var room: float = get_viewport().get_visible_rect().size.y - position.y - MARGIN
-	if _head_pad.visible:
-		room -= _head_pad.get_combined_minimum_size().y + float(_col.get_theme_constant("separation"))
-	if _foot_pad.visible:
-		room -= _foot_pad.get_combined_minimum_size().y + float(_col.get_theme_constant("separation"))
 	var want: float = _pad.get_combined_minimum_size().y
 	# `want` when it fits, the room when it does not, and never below the floor. Taking the
 	# minimum is what keeps a short panel short: this must not become a full-height sidebar
 	# on a panel with four rows in it.
-	_scroll.custom_minimum_size.y = maxf(minf(want, room), MIN_HEIGHT)
+	_scroll.custom_minimum_size.y = maxf(minf(want, room()), MIN_HEIGHT)
 	# ...and shrink the panel itself onto that. A Control outside a container keeps whatever
 	# size it was last given, so without this the panel stays at its old height and the scroll
 	# view is laid out inside a box that is still too tall.

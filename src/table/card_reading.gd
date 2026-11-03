@@ -64,6 +64,12 @@ const SETTLE := TableActions.SETTLE
 const ACT_MARK := "<!--\\s*act\\s*:\\s*([\\w-]+)\\s*-->"
 ## A CHAPTER OF THE VIDEO, named by the reader where its words begin one: group 1 its name.
 const CHAPTER_MARK := "<!--\\s*chapter\\s*:\\s*([\\s\\S]*?)\\s*-->"
+## A SILENCE, written where the reader stops talking and the work goes on (the user, 2026-11-02: "There might be stretches where we do
+## not talk at all"): group 1 its seconds. It is a rest as a table's move is, never a hesitation, so it stays with the Hesitate box
+## off and is as long as it says up to QUIET_MOST; a passage's words may end on one, and it is still its beat's ([method
+## TableWork.schedule], an action's `tail`). An act cued inside one begins as much into it as is written before its mark.
+const QUIET_MARK := "<!--\\s*quiet\\s*:\\s*([0-9]*\\.?[0-9]+)\\s*-->"
+const QUIET_MOST := 240.0
 
 
 static func _rx(pattern: String) -> RegEx:
@@ -108,6 +114,7 @@ static func speakable(body: String) -> String:
 ##   cues      - [{name, si}]: each act cued at a word, `si` the spoken word it starts at
 ##   chapters  - [{name, si, opens, action}]: each chapter mark; `opens` when no word of its passage is
 ##               before it, `action` the index of its passage's own action (-1: none)
+##   quiets    - [{si, s}]: each silence ([constant QUIET_MARK]), `si` the spoken word it comes before, `s` its seconds
 static func parse(body: String) -> Dictionary:
 	var src := Manuscript.strip_frontmatter(body)
 	var mark := _rx(mark_pattern())
@@ -130,6 +137,8 @@ static func parse(body: String) -> Dictionary:
 	var actions: Array = []
 	var cues: Array = []
 	var chapters: Array = []
+	var quiets: Array = []
+	var quiet_rx := _rx(QUIET_MARK)
 	var act_rx := _rx(ACT_MARK)
 	var chapter_rx := _rx(CHAPTER_MARK)
 	var spoken := PackedStringArray()
@@ -147,7 +156,15 @@ static func parse(body: String) -> Dictionary:
 		var voiced := _voice_marks(text)
 		# AN ACT AT A WORD: the spoken words before its mark, counted as the table counts them
 		for m in act_rx.search_all(text):
-			cues.append({"name": m.get_string(1).strip_edges().to_lower(), "si": spoken.size() + _words_before(text, m.get_start())})
+			var cue := {"name": m.get_string(1).strip_edges().to_lower(), "si": spoken.size() + _words_before(text, m.get_start())}
+			# ...IN A SILENCE, no word comes at it: it is timed from the word before, and how far into the silence it stands
+			var into := quiet_around(text, m.get_start(), m.get_end())
+			if into >= 0.0:
+				cue["quiet"] = into
+			cues.append(cue)
+		# A SILENCE: the word it comes before, for what estimates a reading's time ([method TablePlan.estimated_times])
+		for m in quiet_rx.search_all(text):
+			quiets.append({"si": spoken.size() + _words_before(text, m.get_start()), "s": minf(float(m.get_string(1)), QUIET_MOST)})
 		# A CHAPTER AT A WORD, and whether it opens its passage - then it names the chapter of the passage's
 		# own mark (`action`, the index that mark's action is about to take; -1 for words before any mark)
 		for m in chapter_rx.search_all(text):
@@ -157,6 +174,8 @@ static func parse(body: String) -> Dictionary:
 			var n_before := _words_before(text, m.get_start())
 			chapters.append({"name": named, "si": spoken.size() + n_before, "opens": n_before == 0,
 				"action": actions.size() if not kind.is_empty() else -1})
+		var tail_quiet := quiet_at_end(text)
+		var lead_quiet := quiet_at_start(text)
 		text = Manuscript._rx(Manuscript.COMMENT).sub(text, "", true).strip_edges()
 		if not kind.is_empty():
 			if not TableActions.source_of(kind).is_empty():
@@ -166,7 +185,7 @@ static func parse(body: String) -> Dictionary:
 			var takes := TableActions.takes_from_source(kind)
 			var dur := TableActions.rest_of(kind, showing, takes and not moved,
 				bool((TableActions.SOURCES[source] as Dictionary)["pushes"]), last - card + 1)
-			actions.append({"kind": kind, "card": card, "last": last, "after": spoken.size(), "dur": dur})
+			actions.append({"kind": kind, "card": card, "last": last, "after": spoken.size(), "dur": dur, "tail": tail_quiet, "lead": lead_quiet})
 			speak.append("<!-- action-hold: %s -->" % String.num(dur, 2))
 			moved = moved or takes
 			if TableActions.shows(kind):
@@ -195,7 +214,79 @@ static func parse(body: String) -> Dictionary:
 				if not cued.is_empty():
 					who = cued
 	return {"passages": out_passages, "actions": actions, "spoken": spoken,
-		"speakable": "\n\n".join(speak), "cards": cards, "source": source, "cues": cues, "chapters": chapters}
+		"speakable": "\n\n".join(speak), "cards": cards, "source": source, "cues": cues, "chapters": chapters, "quiets": quiets}
+
+
+## HOW FAR INTO A SILENCE a mark from [param from] to [param to] in [param text] stands: the seconds of the quiet marks between the word
+## before it and it, if there is any quiet between the word before it and the word after it; -1 when it is at a word.
+static func quiet_around(text: String, from: int, to: int) -> float:
+	var q := _rx(QUIET_MARK)
+	var before := 0.0
+	var some := false
+	var head := text.substr(0, from)
+	var last_word := -1
+	var stripped := Manuscript._rx(Manuscript.COMMENT)
+	# the end of the last word before it: the last place outside a comment that holds other than space
+	var at := 0
+	for m in stripped.search_all(head):
+		if not head.substr(at, m.get_start() - at).strip_edges().is_empty():
+			last_word = m.get_start()
+		at = m.get_end()
+	if not head.substr(at).strip_edges().is_empty():
+		last_word = head.length()
+	for m in q.search_all(head):
+		if m.get_start() >= last_word:
+			before += minf(float(m.get_string(1)), QUIET_MOST)
+			some = true
+	var tail := text.substr(to)
+	var next_word := tail.length()
+	at = 0
+	for m in stripped.search_all(tail):
+		if not tail.substr(at, m.get_start() - at).strip_edges().is_empty():
+			next_word = at
+			break
+		at = m.get_end()
+	if next_word == tail.length() and not tail.substr(at).strip_edges().is_empty():
+		next_word = at
+	for m in q.search_all(tail):
+		if m.get_start() < next_word:
+			some = true
+	return before if some else -1.0
+
+
+## The silence [param text] opens on: the seconds of the quiet marks before its first word. The move of a mark is made before it, not
+## after ([method ReadingFollower.place], `lead`): a beat that opens in silence opens as the silence does.
+static func quiet_at_start(text: String) -> float:
+	var q := _rx(QUIET_MARK)
+	var at := 0
+	var out := 0.0
+	for m in Manuscript._rx(Manuscript.COMMENT).search_all(text):
+		if not text.substr(at, m.get_start() - at).strip_edges().is_empty():
+			return out
+		var hit := q.search(m.get_string())
+		if hit != null:
+			out += minf(float(hit.get_string(1)), QUIET_MOST)
+		at = m.get_end()
+	return out
+
+
+## The silence [param text] ends on: the seconds of the quiet marks after its last word.
+static func quiet_at_end(text: String) -> float:
+	var q := _rx(QUIET_MARK)
+	var stripped := Manuscript._rx(Manuscript.COMMENT)
+	var last_word := 0
+	var at := 0
+	for m in stripped.search_all(text):
+		if not text.substr(at, m.get_start() - at).strip_edges().is_empty():
+			last_word = m.get_start()
+		at = m.get_end()
+	if not text.substr(at).strip_edges().is_empty():
+		return 0.0
+	var out := 0.0
+	for m in q.search_all(text):
+		if m.get_start() >= last_word:
+			out += minf(float(m.get_string(1)), QUIET_MOST)
+	return out
 
 
 ## How many spoken words of [param text] come before [param at], counted as the table counts them.
@@ -215,12 +306,17 @@ static func _voice_marks(text: String) -> String:
 	var lean := _rx(Manuscript.DELIVERY)
 	var hes := _rx(Manuscript.HESITATION)
 	var cue := _rx(Manuscript.SPEAKER)
+	var quiet := _rx(QUIET_MARK)
 	var out := ""
 	var at := 0
 	for m in _rx(Manuscript.COMMENT).search_all(text):
 		out += text.substr(at, m.get_start() - at)
 		at = m.get_end()
-		if lean.search(m.get_string()) != null or hes.search(m.get_string()) != null:
+		var q := quiet.search(m.get_string())
+		if q != null:
+			# a table's rest, as a move's is ([constant QUIET_MARK])
+			out += "<!-- action-hold: %s -->" % String.num(minf(float(q.get_string(1)), QUIET_MOST), 2)
+		elif lean.search(m.get_string()) != null or hes.search(m.get_string()) != null:
 			out += m.get_string()
 		elif cue.search(m.get_string()) != null:
 			out = out.rstrip(" \t") + "\n" + m.get_string().strip_edges() + "\n"

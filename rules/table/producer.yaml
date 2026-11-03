@@ -223,6 +223,8 @@ reply_beats: |-
     "beats": [{"name": "the beat's name", "asks": "what it does, in a short phrase", "work": "what is done at the table during it - optional"}],
     "work_intro": "what is done at the table while the intro is said - optional",
     "work_close": "what is done at the table during the close - optional",
+    "assembly": "true only when the work is building something out of many small parts that fit together on a grid",
+    "quiet": "how much of the work nobody talks through, as the brief has it, a share from 0 to 0.8 - 0 when the voice goes on throughout",
     "look": {
       "palette": ["#rrggbb", "four to six colors"],
       "surface": "the tabletop the things stand on, seen from above: the bare material, dry",
@@ -393,3 +395,11 @@ work:
       brings. Plan only work a table can show from the host's chair - things lifted, carried, tipped,
       turned, pressed, stirred, poured, filled, emptied, changing color, rising, settling - in large
       clear moves, never fiddly ones. When the brief has no such work, leave every `work` out.
+  - >-
+      An episode that draws no cards says how it goes in two more fields. `assembly`, true when what
+      is done is building something from many small parts that fit together on a grid, so the table
+      keeps a stock of them and the moves are worked out from which part goes where - and in each
+      beat's `work`, say then what the hands are after and what comes of it, what was tried and given
+      up and what comes down again as well as what goes on, not a list of what is finished. And
+      `quiet`, how much of the work nobody talks through, as the brief has it. A beat's words are only
+      as many as the part of it that is talked through.

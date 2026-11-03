@@ -19,6 +19,8 @@ class_name PuppeteerTools
 ##   remove   acts taken out, by name
 ##   watch    one act photographed from the camera's place, six times start to end
 ##            ([method TablePreview.work_watch])
+##   model    what is built ([Assembly]) as an act leaves it, from four sides close to ([method TablePreview.model_views]): only
+##            on a table with an assembly
 ##   submit   hand the acts in: written beside the job ([constant SUBMITTED]) for the producer to land as an
 ##            answer in words would land ([method TableProducer._land_acts]) - refused while an act passes
 ##            through something, until it is fixed or handed in so twice
@@ -88,6 +90,8 @@ func list_tools() -> Array:
 			"inputSchema": {"type": "object", "properties": {"names": {"type": "array", "items": {"type": "string"}}}, "required": ["names"]}},
 		{"name": "watch", "description": "Watch one act on this episode's own table from the camera's place: six pictures, start to end, left to right and down.",
 			"inputSchema": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}},
+		{"name": "model", "description": "What is built on this table as one act leaves it, close to and from four sides, by the table's own light: its shape, seen as the chair never sees it. A table with no assembly has nothing to show.",
+			"inputSchema": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}},
 		{"name": "submit", "description": "Hand in the acts as they now stand. Answers with what keeps them from being handed in, if anything; otherwise the work is blocked, and so is your work.",
 			"inputSchema": {"type": "object", "properties": {}}},
 	]
@@ -117,9 +121,11 @@ func _call(name: String, args: Dictionary) -> Dictionary:
 			return _remove(args)
 		"watch":
 			return await _watch(args)
+		"model":
+			return await _model(args)
 		"submit":
 			return _submit()
-	return {"text": "There is no tool called \"%s\": parts, act, remove, watch and submit are the tools." % name, "error": true}
+	return {"text": "There is no tool called \"%s\": parts, act, remove, watch, model and submit are the tools." % name, "error": true}
 
 
 ## The draft as written - the shape a one-reply answer has.
@@ -226,13 +232,30 @@ func _watch(args: Dictionary) -> Dictionary:
 		"images": [got["image"]]}
 
 
+func _model(args: Dictionary) -> Dictionary:
+	var nm := Manuscript.slug(String(args.get("name", "")))
+	if _index_of(nm) < 0:
+		return {"text": "There is no act called \"%s\" (the acts: %s)." % [nm, _names()], "error": true}
+	if _looks >= LOOKS:
+		return {"text": "No looks left: submit the work.", "error": true}
+	if not TablePreview.can_set() or not TablePreview.can_see():
+		return {"text": "No pictures can be taken in this run: judge it by the levels `act` told you."}
+	var got: Dictionary = await _preview.model_views(_table, draft(), nm)
+	if got.has("error"):
+		return {"text": "What \"%s\" leaves could not be shown: %s" % [nm, String(got["error"])], "error": true}
+	_looks += 1
+	return {"text": "As \"%s\" leaves it, from four sides. Does it look like what it is meant to be, from every side? Looks left: %d." % [nm, LOOKS - _looks],
+		"images": [got["image"]]}
+
+
 func _submit() -> Dictionary:
 	var made := Motions.sanitize_acts(draft(), episode.beat_count())
 	if (made["acts"] as Array).is_empty():
 		return {"text": "No act can be kept yet - put acts first.%s" % (("\n" + "\n".join(made["notes"])) if not (made["notes"] as PackedStringArray).is_empty() else ""), "error": true}
 	var unseen: Array = []
 	for a in made["acts"]:
-		if not _watched.has(String((a as Dictionary)["name"])):
+		# (what builds is known exactly from what `act` says of it: a look at it is the agent's to spend, never owed)
+		if not _watched.has(String((a as Dictionary)["name"])) and not (a as Dictionary).has("_natural"):
 			unseen.append(String((a as Dictionary)["name"]))
 	if not unseen.is_empty() and not _warned_unseen and TablePreview.can_see() and _looks < LOOKS:
 		_warned_unseen = true

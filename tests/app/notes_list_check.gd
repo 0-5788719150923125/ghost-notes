@@ -455,6 +455,10 @@ func _check_round_trip() -> void:
 				var titles: Array = (reading._panel as SidePanel).cards().map(func(c: Node) -> String: return (c as Card).title)
 				_ok(titles == ["Body", "Voice"], "a voice alone: its words and its voice, and no picture until one is attached (%s)" % str(titles))
 				_ok(not bool(reading.show_plan()["picture"]), "...so its reading puts no stage up")
+				# THE REAL WAY IN: a panel built in the tree, which the panel gates' are not
+				var pipe: PipelineCard = reading._pipeline
+				_ok(pipe.card != null and pipe.card.head.is_ancestor_of(pipe._generate) and not pipe.card.body.is_ancestor_of(pipe._generate),
+					"opened for real, the Pipeline's Generate stands on its title bar, not in its list")
 			ch._home_button.pressed.emit()
 			await _frames(12)
 			await _quiet(int(home["procs"]))
@@ -504,7 +508,8 @@ func _detach_button(panel: NotePanel, title: String) -> Button:
 	for c in panel._panel.cards():
 		if (c as Card).title != title:
 			continue
-		for b in (c as Card).find_children("*", "Button", true, false):
+		# on its title bar, which a deck holds apart from the card
+		for b in (c as Card).head.find_children("*", "Button", true, false):
 			if (b as Button).text == "×":
 				return b as Button
 	return null

@@ -4,7 +4,7 @@ extends Node
 ##
 ##   tests/run_boot_probe.sh tests/ui/card_fold_check.gd 120
 ##
-## next/notes.md step 2: each mode's sections in colored FoldableContainers; "a fold is the
+## next/notes.md step 2: each mode's sections in colored cards; "a fold is the
 ## viewer's, remembered in ghost.cfg". Checked on the Generative, Synthesis and Cards panels, on a
 ## note's own panel (a song played by hand) and on Masking's, before a clip is chosen:
 ##
@@ -73,7 +73,8 @@ func _panel(name: String, make: Callable) -> void:
 	var panel: SidePanel = built[1]
 	var cards: Array = panel.cards()
 	_ok(cards.size() >= 3, "%s: the panel's sections are cards (%d)" % [name, cards.size()])
-	_ok(panel.card_row != null and panel.card_row.get_child_count() == cards.size(),
+	# a card the panel has hidden (a Pipeline card with nothing to list) has no chip showing, as it has no place in cards()
+	_ok(panel.card_row != null and panel.card_row.get_children().filter(func(c: Control) -> bool: return c.visible).size() == cards.size(),
 		"%s: a chip for every card" % name)
 	for c in cards:
 		var card: Card = c
@@ -109,7 +110,7 @@ func _panel(name: String, make: Callable) -> void:
 			alone = false
 	_ok(alone, "%s: ctrl-clicking '%s''s chip opens it alone" % [name, second.title])
 
-	# THE TITLE BAR FOLDS ITS CARD TOO (FoldableContainer's own click)
+	# THE TITLE BAR FOLDS ITS CARD TOO
 	second.fold()
 	await get_tree().process_frame
 	_ok(second.folded and bool(Settings.read(Card.SECTION, second.key, false)),

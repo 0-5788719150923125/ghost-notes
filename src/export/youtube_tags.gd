@@ -7,8 +7,8 @@ class_name YouTubeTags
 ## override/rewrite those tags, to be something more appropriate to the upload").
 ##
 ## A STEP OF THE EPISODE ([EpisodeStep]), offered by the YouTube card while its "Write each episode's
-## tags" box is ticked: the card that makes episodes lists it under its own steps, Generate writes it
-## with them and its ⟳ writes it again. The writer is the show's own; it reads the episode - its words,
+## tags" box is ticked: the note's Pipeline card lists it, Generate writes it once the words are written and
+## its ⟳ writes it again. The writer is the show's own; it reads the episode - its words,
 ## title and description - and the note's tags, keeps those that fit and leaves out the rest
 ## (rules/youtube/tags.yaml).
 ##

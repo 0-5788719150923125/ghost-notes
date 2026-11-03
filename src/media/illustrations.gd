@@ -717,6 +717,17 @@ static func generate(image: Dictionary) -> String:
 	return ""
 
 
+## STOP PAINTING [param keys]: each waiting its turn is taken out of the line, and each being painted has its painter
+## stopped. What was painted before stays, each its current version.
+static func stop(keys: Array) -> void:
+	_queue = _queue.filter(func(q: Dictionary) -> bool: return not keys.has(String(q["key"])))
+	for key in keys:
+		if not _jobs.has(key):
+			continue
+		Subprocess.stop(int((_jobs[key] as Dictionary)["pid"]))
+		_jobs.erase(key)
+
+
 ## Start what fits, notice what finished. Called from main._process and from the panel, the
 ## Films.pump rule: a job is a subprocess, and something with a frame has to see it end.
 static func pump() -> void:

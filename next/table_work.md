@@ -351,6 +351,10 @@ unless the work makes it so.
 
 ## 8. Assemblies: bricks, then the jigsaw
 
+**Built 2026-11-02, differently: see next/assembly.md.** The user dropped the challenge cards for a free-form build that meanders, so
+there is no builder role and no booklet: the puppeteer writes the meander in one law, and a piece has a life before and after it is
+used. What follows is the first design, kept for the jigsaw's sake and for what it got right.
+
 The user, 2026-10-25: "Another idea: building stuff with LEGO (unbranded, of course)." Of the four, it
 is the one that fits a table of rigid things best: every part is rigid, every place is on a grid, a part
 goes on by being pressed down, and nothing bends, pours or melts. Every check is exact rather than
@@ -450,7 +454,7 @@ each telling its agents everything about its work in plain words, since the rule
 | show | file | the cards | runs today? | what it still needs |
 |---|---|---|---|---|
 | The Quiet Crucible (alchemy) | `the-quiet-crucible.md` | one recipe card from a box of them (ingredients drawn until 2026-10-26) | yes | a recipe-box episode, by eye |
-| The Spare Bin (building bricks, unbranded) | `the-spare-bin.md` | challenge cards, each shaping the next stage of one build | no | the instanced assembly, `assemble`, brick kinds on the stud grid, `plastic`, the exact checks, the builder, the booklet (section 8) |
+| Brick by Brick (building bricks, unbranded; The Spare Bin until 2026-11-02) | `brick-by-brick.md` | none: a slow free-form build, dug for, tried and torn down, with long silences | built 2026-11-02, not yet by real agents | next/assembly.md |
 | Corner by Corner (jigsaw) | `corner-by-corner.md` | find-it cards: details of the night's picture, the draw the order it is built in | no | the puzzle cut, a picture across the pieces (`image:picture`), the assembly, the box lid showing the same picture |
 | The Recipe Tin (baking) | `the-recipe-tin.md` | one recipe card from a tin of one baker's cards | in part | pieces and `apart`, `becomes`, time passing, a thick stream, `squash` and `roll`, spreading (the painted surface, section 11) |
 | Joker Motivation (clown makeup on a mask) | `joker-motivation.md` | none | in part | its fixed things; a mask form; the painted surface; `press` in any direction (section 11) - the show with no cards is built |
@@ -785,7 +789,7 @@ puppeteer are told of beats (`cardless` in their rules); the Episode card lists 
 - **Cards in the alchemy show** - ingredient cards drawn by the seed (recommended), or a brew the
   producer plans with no draw.
 - **The sandbox for the puppeteer** (and the builder) - allowed, as Proof's solver is?
-- **What a brick show draws** - a set, a dip into the bin, or challenge cards (section 8).
+- **What a brick show draws** - decided 2026-11-02: nothing. A free-form build (next/assembly.md).
 - **The order after alchemy** - recommended: bricks, then the jigsaw (they share the assembly), then
   baking, which asks the most of rigid parts.
 - **The camera stays locked.** Work too small to see from the chair is brought to the lens the way a card

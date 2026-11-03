@@ -6,10 +6,10 @@ class_name EpisodeFeed
 ##
 ## WHERE THE CARDS ON A NOTE MEET (the user, 2026-10-18: "dependency inversion. It's okay to hook into
 ## an interface that populates that list of steps, but it would not be okay to tightly-couple the two
-## cards"). A card that makes episodes - Cards' [EpisodeCard], Proof's [ProofCard] - hands one of these
-## to each step it lists, and names no card that adds one; a card that adds a step - the YouTube card's
-## tags ([YouTubeTags]) - reads the episode through it, and names no card that makes one. The panel puts
-## the two together ([method ReadingPanel.episode_steps]).
+## cards"). A card that makes episodes - Cards' [EpisodeCard], Proof's [ProofCard] - says which it shows, and names
+## no card that makes a step from it; a card that makes one - the YouTube card's tags ([YouTubeTags]) - reads the
+## episode through this, and names no card that makes it. The panel puts the two together ([method
+## ReadingPanel.episode_feed]).
 ##
 ## ONE EPISODE, not whichever is picked: a step started on one writes into it after another is picked.
 ## A maker hands a feed of its own (`EpisodeCard.Feed`, `ProofCard.Feed`); these defaults are an
@@ -52,6 +52,12 @@ func replace_tags(_tags: PackedStringArray) -> String:
 ## when a step made from them can be made.
 func words() -> String:
 	return ""
+
+
+## WHAT MAKES WHAT IS MADE FROM ITS WORDS, as a row and the YouTube card say it ("Generate"; a note read as it is written,
+## "Generate, or an export that goes up").
+func made_by() -> String:
+	return "Generate"
 
 
 ## THE EPISODE'S OWN PICTURES, absolute paths - a show's paintings - for a step that may be shown them;

@@ -19,15 +19,11 @@ class_name EpisodeCard
 ## ([EpisodeCard.Publish]: the episode's title, the episode held through a render, upload notes and its
 ## chapters). The panel is the one a chapter is read in, and knows nothing of cards.
 ##
-## GENERATION IS EXPLICIT, as with every picture in ghost: Generate makes what the episode is
-## missing, New episode makes a new seed, and a step's redo deletes it (and what was made from
-## it) and makes it again. Nothing runs on open - it spends the author's quota.
-##
-## THE NOTE'S OTHER CARDS ADD STEPS OF THEIR OWN ([EpisodeStep], the user, 2026-10-18: "an interface
-## that would allow other cards (like the YouTube one) to hook-in to that list"): the panel hands over
-## what they offer ([method ReadingPanel.episode_steps]), and the ones wanted now are rows under the
-## Close, each with its ✓ and its ⟳ - the YouTube card's tags. Each is handed the episode as a [Feed]
-## and made once Generate's own steps are done; this card never asks what one is.
+## GENERATION IS EXPLICIT, as with every picture in ghost, and ON THE NOTE'S PIPELINE CARD ([Section]; next/pipeline.md):
+## Generate makes what the episode is missing, New episode (here) makes a new seed, and a row's ⟳ deletes that step (and
+## what was made from it, asking first when that is anything) and makes it again. Nothing runs on open - it spends the
+## author's quota. EACH THING THAT CAN BE MADE AGAIN IS A ROW OF ITS OWN (the user, 2026-11-02: "I don't think we should
+## bury options under that button"; a menu of four under every card's ⟳ until then).
 
 const YouTube := preload("res://src/export/youtube.gd")
 const TagField := preload("res://src/ui/tag_field.gd")
@@ -44,38 +40,34 @@ const KNOBS := {"show": "", "seed": 1, "environment": 0.5,
 ## Who makes each kind of step (a step's name up to its first ":"), as a row's status names them.
 const MAKERS := {"plan": "producer", "design": "designer", "image": "painter", "check": "art director",
 	"table": "set dresser", "say": "reader", "acts": "puppeteer"}
-## The rows of the episode list: a label and the steps it covers ("K" is each card - or, in a show that draws
-## no cards, each beat: [method TableEpisode.cardless]). A ROW IS WHAT THE EPISODE HAS (2026-10-26, the user of
-## an alchemy show: "Shuffle" and "Card" "no longer appropriate names"): the draw only where cards are drawn,
-## the work only where the plan has work, and each beat called what the producer calls one ([method
+## EVERY STEP AS ITS ROW SAYS IT, "K" each card or beat: what it is called, and what its ⟳ does ("" for a step with no ⟳ of
+## its own - the draw is a function of the seed, so dealing again deals the same cards, and a different deal is a different
+## episode; a check and the depth come with their painting; the script with its readings). A ROW IS WHAT THE EPISODE HAS
+## (2026-10-26, the user of an alchemy show: "Shuffle" and "Card" "no longer appropriate names"): the draw only where cards
+## are drawn, the work only where the plan has work, and each beat called what the producer calls one ([method
 ## TableEpisode.beat_word] - an ingredient, a card, a coat of paint), with its own name beside it.
-const ROWS := [
-	["Plan", ["plan"]],
-	["Draw", ["draw"]],
-	["Table", ["image:back", "image:surface", "image:backdrop", "table", "image:height"]],
-	["Work", ["acts"]],
-	["Intro", ["say:intro"]],
-	["Card", ["design:K", "image:card:K", "check:K", "say:K", "say:work:K"]],
-	["Beat", ["say:K"]],
-	["Close", ["say:close", "script"]],
-]
-## What a row's redo menu offers: label -> the step made again. ONLY that step is made (and what
-## [constant TOGETHER] makes with it): what was made from it is cleared (it no longer follows), and
-## waits for Generate. The shuffle has none: the draw is a function of the seed, so dealing again
-## deals the same cards - a different deal is a different episode (New episode).
-const REDO := {
-	"Plan": [["Make a new plan (clears the cards and the reading)", "plan"]],
-	"Table": [["Paint a new card back", "image:back"], ["Paint a new cloth", "image:surface"],
-		["Paint a new room", "image:backdrop"], ["Set the table again", "table"]],
-	"Work": [["Block the work again (clears the readings of it)", "acts"]],
-	"Intro": [["Rewrite the intro (clears the readings after it)", "say:intro"]],
-	"Beat": [["Rewrite this beat (clears the ones after it)", "say:K"]],
-	"Card": [["Paint this card again (clears its reading and the ones after)", "image:card:K"],
-		["Rewrite this card's reading (clears the ones after it)", "say:K"],
-		["Rewrite what is said while its work is done (clears the ones after it)", "say:work:K"],
-		["Redesign the card (clears its picture and its reading on)", "design:K"]],
-	"Close": [["Rewrite the close", "say:close"]],
+const STEPS := {
+	"plan": {"label": "Plan", "again": "Make a new plan"},
+	"draw": {"label": "Draw", "again": ""},
+	"image:back": {"label": "Back", "again": "Paint a new card back"},
+	"image:back:": {"label": "Back", "again": "Paint a new back for this printing"},
+	"image:surface": {"label": "Cloth", "again": "Paint a new cloth"},
+	"image:backdrop": {"label": "Room", "again": "Paint a new room"},
+	"table": {"label": "Set", "again": "Set the table again"},
+	"image:height": {"label": "Depth", "again": ""},
+	"acts": {"label": "Work", "again": "Block the work again"},
+	"say:intro": {"label": "Intro", "again": "Rewrite the intro"},
+	"design:K": {"label": "Design", "again": "Redesign this card"},
+	"image:card:K": {"label": "Painting", "again": "Paint this card again"},
+	"check:K": {"label": "Art check", "again": ""},
+	"say:K": {"label": "Reading", "again": "Rewrite this card's reading"},
+	"say:work:K": {"label": "Over its work", "again": "Rewrite what is said while its work is done"},
+	"beat:K": {"label": "Beat", "again": "Rewrite this beat"},
+	"say:close": {"label": "Close", "again": "Rewrite the close"},
+	"script": {"label": "Script", "again": ""},
 }
+## How much of what a ⟳ would throw away it names, before "and 12 more".
+const NAMED_MOST := 6
 ## WHAT A REDO MAKES ALONG WITH ITS STEP: what is made from it and nothing else, so no choice is left
 ## (the user, 2026-10-17: "if you're changing the first, then by definition you'll need the other
 ## automatically"). The cloth's depth is painted from the cloth: a new cloth is a new depth, where
@@ -88,15 +80,17 @@ var _producer: TableProducer = null
 var _episode_pick: OptionButton
 var _episode_seeds: Array = []
 var _new_btn: Button
-var _gen_btn: Button
-var _halt_btn: Button
 var _del_btn: Button
 var _writer: AgentPick
 var _painter: AgentPick
 var _environment_dial: HSlider
-var _rows_box: VBoxContainer
-var _episode_note: Label
 var _row_t := 0.0
+## WHAT IT HANDS THE NOTE'S PIPELINE CARD ([method pipeline]).
+var _section: Section = null
+## WHAT THE ROWS ARE DRAWN FROM, read again only when the episode's files change ([method _facts]): they refresh four
+## times a second, and an episode's steps are a JSON parse each.
+var _facts_of := []
+var _facts_kept := {}
 var _brief_changed := false
 var _deck_note: Label
 var _deck_seen := -1
@@ -111,10 +105,8 @@ var _export_pin := {}
 var _taken := {}
 ## THE YOUTUBE FIELDS: the show's description and tags (on the YouTube card - null without one). The
 ## picked episode's title is the Script card's Episode ([method episode_title], edited in its plan).
-## The picked episode, as the steps other cards add to it read it ([method _tick_steps]).
+## The picked episode, as what other cards make from it reads it ([method ReadingPanel.episode_feed]).
 var _feed: Feed = null
-## THE STEPS THE NOTE'S OTHER CARDS ADD, listed here: this card hands the reading how it goes out.
-var _added := EpisodeSteps.new(host_name(), Callable())
 var _yt_desc: TextEdit
 var _yt_tags: TagField
 var _yt_note: Label
@@ -155,8 +147,7 @@ func serve(panel: ReadingPanel) -> void:
 	_text = reading.source_box()
 	reading.walk = EpisodeWalk.new(func() -> TableEpisode: return _episode)
 	reading.bed = Bed.new(self)
-	reading.hand_publish(Publish.new(self), host_name())
-	_added = EpisodeSteps.new(host_name(), reading.episode_steps)
+	reading.publish = Publish.new(self)
 	_doc.opened.connect(_on_show_opened)
 	_doc.mode_changed.connect(_on_doc_mode)
 	reading.source_edited.connect(func() -> void: _brief_changed = true)
@@ -187,7 +178,6 @@ func _enter_tree() -> void:
 func _exit_tree() -> void:
 	if _producer != null:
 		_producer.stop()
-	_added.stop(_feed)
 	if reading != null:
 		Director.unpin_medium(self)
 
@@ -206,8 +196,7 @@ func _process(delta: float) -> void:
 		_row_t = 0.25
 		if _producer != null:
 			_producer.tick()
-		_tick_steps()
-		_refresh_rows()
+		_refresh_card()
 		_seed_globals()
 
 
@@ -294,9 +283,12 @@ class Publish extends ReadingPublish:
 	func youtube_built(yt: YouTubeCard) -> void:
 		card.youtube_built(yt)
 
-	# its episodes say what they go up with, and list the other cards' steps themselves
+	# its episodes say what they go up with
 	func note_is_episode() -> bool:
 		return false
+
+	func feed() -> EpisodeFeed:
+		return card._feed
 
 
 ## THE EPISODE AS THE STEPS OTHER CARDS ADD TO IT READ IT ([EpisodeFeed]): its folder, the show's name,
@@ -673,7 +665,7 @@ func _build() -> void:
 	_new_btn = Button.new()
 	_new_btn.text = "New episode"
 	_new_btn.tooltip_text = ("A fresh seed: a new plan, a new deck, a new reading - made when you press "
-		+ "Generate, or a part at a time with ⟳.")
+		+ "Generate, or a part at a time with ⟳, on the Pipeline card.")
 	_new_btn.pressed.connect(_new_episode)
 	erow.add_child(_new_btn)
 
@@ -716,21 +708,6 @@ func _build() -> void:
 	var grow := HBoxContainer.new()
 	grow.add_theme_constant_override("separation", 6)
 	box.add_child(grow)
-	_gen_btn = Button.new()
-	_gen_btn.text = "Generate"
-	_gen_btn.tooltip_text = ("Make whatever this episode is missing, in order: the plan, the shuffle, "
-		+ "the deck, the pictures, and the reading - one card at a time, each written knowing only "
-		+ "the cards already drawn. Spends the writer's and the painter's quota.")
-	_gen_btn.pressed.connect(_generate)
-	grow.add_child(_gen_btn)
-	_halt_btn = Button.new()
-	_halt_btn.text = "Stop"
-	_halt_btn.tooltip_text = "Stop making this episode. Whatever is finished is kept."
-	_halt_btn.pressed.connect(func() -> void:
-		if _producer != null:
-			_producer.stop()
-		_added.stop(_feed))
-	grow.add_child(_halt_btn)
 	var folder := Button.new()
 	folder.text = "Folder"
 	folder.tooltip_text = "Open this episode's folder: every prompt exactly as sent, every reply, every picture."
@@ -757,14 +734,7 @@ func _build() -> void:
 		+ "shuffle of the deck, from a seed drawn from the system's own randomness; no agent ever picks a card.")
 	_deck_note.mouse_filter = Control.MOUSE_FILTER_STOP
 	box.add_child(_deck_note)
-	_rows_box = VBoxContainer.new()
-	_rows_box.add_theme_constant_override("separation", 1)
-	box.add_child(_rows_box)
-	_episode_note = Label.new()
-	_episode_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_episode_note.add_theme_font_size_override("font_size", 11)
-	_episode_note.modulate = Color(1, 1, 1, 0.7)
-	box.add_child(_episode_note)
+	_section = Section.new(self)
 	_show_knobs()
 
 
@@ -804,7 +774,8 @@ func _open_episode() -> void:
 		return
 	if _producer != null and _producer.running:
 		_producer.stop()
-	_added.stop(_feed)          # ...and what the other cards were making of it
+	if reading != null:
+		reading.episode_left(_feed)   # ...and what the other cards were making of it
 	_flush_upload_fields()      # an edit still waiting belongs to the episode being left
 	var seed := int(_knobs["seed"])
 	_episode = TableEpisode.open(_show_key(), seed)
@@ -814,7 +785,6 @@ func _open_episode() -> void:
 	_producer = TableProducer.new(_episode, {})
 	_brief_changed = false
 	_refill_episodes()
-	_rebuild_rows()
 	_fill_upload_fields(true)
 	_mark_stale()
 
@@ -870,7 +840,7 @@ func _run(steps: Array) -> void:
 	if _episode == null:
 		return
 	if Settings.is_read_only():
-		_episode_note.text = "This session is read-only (a render or a probe) - nothing is generated here."
+		_section.tell("This session is read-only (a render or a probe) - nothing is generated here.")
 		return
 	if String(_knobs["show"]).is_empty():
 		_knobs["show"] = _show_key()
@@ -879,10 +849,7 @@ func _run(steps: Array) -> void:
 	# the spec as it is NOW: the brief may have been edited since the episode was opened
 	_producer.spec = _spec()
 	_brief_changed = false
-	# THE WHOLE EPISODE IS WHAT THE OTHER CARDS' STEPS ARE MADE WITH: a redo of one part is that part
-	_added.asked = steps.is_empty()
 	_producer.start(steps)
-	_refresh_rows()
 
 
 ## Asked first: an episode is minutes of the writer's and the painter's quota.
@@ -919,7 +886,8 @@ func _delete_episode(ep: TableEpisode) -> void:
 	var open := _episode != null and _episode.dir == ep.dir
 	if open and _producer != null:
 		_producer.stop()
-	_added.stop(Feed.new(self, ep), _feed)
+	if reading != null:
+		reading.episode_left(Feed.new(self, ep))
 	if _live_episode_dir() == ep.dir:
 		reading.stop_speaking()
 	var err := ep.trash()
@@ -949,122 +917,279 @@ func _redo(step: String) -> void:
 		_producer.stop()
 	var gone := _episode.invalidate(step)
 	print("ghost: table redo %s - removed %s" % [step, ", ".join(PackedStringArray(gone))])
-	_rebuild_rows()
 	_mark_stale()
 	_run([step] + (TOGETHER.get(step, []) as Array))
 
 
-# --- the rows ------------------------------------------------------------------------------------
+# --- on the Pipeline card ------------------------------------------------------------------------
 
-## One row per stage of the episode, each card its own; rebuilt when the card count changes.
-var _row_widgets: Array = []      # [{label, steps, status: Label, text: Label}]
-var _rows_for := -1
-var _rows_beats := -1           # the beats of a show with no cards the rows were built for
-var _rows_backs := ""            # the printings the rows were built for (each prints its own back)
-var _rows_steps := ""            # the other cards' steps the rows were built for
-var _rows_word := ""             # what a beat was called when the rows were built
-var _rows_work := false          # whether the episode had work when the rows were built
+## WHAT THIS CARD MAKES, on the note's one list ([PipelineCard]).
+class Section extends PipelineSection:
+	var card: EpisodeCard
 
-func _rebuild_rows() -> void:
-	if _rows_box == null or _episode == null:
-		return
-	for c in _rows_box.get_children():
-		c.queue_free()
-	_row_widgets = []
-	var n := _episode.card_count()
-	_rows_for = n
-	var beats := _episode.beat_count() if _episode.cardless() else 0
-	_rows_beats = beats
-	_rows_backs = ",".join(_episode.printings())
-	# ONLY THE STEPS THIS EPISODE HAS: its work's (next/table_work.md) only where its plan has work, and a card
-	# back only where it draws cards
-	var has := _episode.steps()
-	var made := func(st: String) -> bool: return not (st == "acts" or st.begins_with("say:work:") or st == "image:back") or has.has(st)
-	var word := _episode.beat_word()
-	for r in ROWS:
-		var label := String(r[0])
-		if (label == "Draw" and _episode.cardless()) or (label == "Work" and not made.call("acts")):
-			continue
-		if label == "Table":
-			# a back per printing the drawn cards are in, beside the deck's own (TableEpisode.printings)
-			var steps: Array = (r[1] as Array).filter(func(st: Variant) -> bool: return made.call(String(st)))
-			for key in _episode.printings():
-				steps.insert(1, "image:back:%s" % key)
-			_add_row(label, label, steps, 0)
-		elif label == "Card":
-			for k in range(1, n + 1):
-				var steps: Array = []
-				for s in r[1]:
-					if made.call(String(s).replace("K", str(k))):
-						steps.append(String(s).replace("K", str(k)))
-				_add_row("%s %d" % [word, k], label, steps, k)
-		elif label == "Beat":
-			for k in range(1, beats + 1):
-				_add_row("%s %d" % [word, k], label, ["say:%d" % k], k)
-		else:
-			_add_row(label, label, r[1], 0)
-	# THE STEPS THE NOTE'S OTHER CARDS ADD, under the Close
-	for st in _added.listed(_feed):
-		_add_row((st as EpisodeStep).label, "", [], 0, st as EpisodeStep)
-	_rows_steps = _added.key(_feed)
-	_rows_word = word
-	_rows_work = made.call("acts")
-	# ...their names one column wide, whatever the producer called a beat
-	var wide := 56.0
-	for w in _row_widgets:
-		wide = maxf(wide, ((w as Dictionary)["name"] as Label).get_minimum_size().x)
-	for w in _row_widgets:
-		((w as Dictionary)["name"] as Label).custom_minimum_size.x = wide
-	_refresh_rows()
+	func _init(c: EpisodeCard) -> void:
+		card = c
+		owner = c
+		title = String(Registry.field(Components.REGISTRY, EpisodeCard.KEY, "heading", "Episode"))
+
+	func shown() -> bool:
+		return card._episode != null
+
+	func rows() -> Array:
+		return card._step_rows()
+
+	func group_said(group: String) -> String:
+		return card._group_said(group)
+
+	func line() -> String:
+		return card._pipeline_line()
+
+	func make() -> void:
+		card._generate()
+
+	func make_tip() -> String:
+		return ("Make whatever this episode is missing, in order: the plan, the shuffle, the deck, the pictures, and the "
+			+ "reading - one card at a time, each written knowing only the cards already drawn. Spends the writer's and "
+			+ "the painter's quota.")
+
+	func stop() -> void:
+		if card._producer != null:
+			card._producer.stop()
+
+	func busy() -> bool:
+		return card._making()
+
+	func missing() -> bool:
+		return card._episode != null and not bool(card._facts()["complete"])
 
 
-## A row: [param title], its glyph and what it says, and its ⟳ - the [constant REDO] of its [param kind],
-## or, for a [param step] another card added, that step made again.
-func _add_row(title: String, kind: String, steps: Array, k: int, step: EpisodeStep = null) -> void:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 6)
-	_rows_box.add_child(row)
-	var status := Label.new()
-	status.custom_minimum_size = Vector2(18, 0)
-	status.add_theme_font_size_override("font_size", 12)
-	row.add_child(status)
-	var name := Label.new()
-	name.text = title
-	name.custom_minimum_size = Vector2(56, 0)
-	name.add_theme_font_size_override("font_size", 12)
-	row.add_child(name)
-	var text := Label.new()
-	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	text.clip_text = true
-	text.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	text.add_theme_font_size_override("font_size", 11)
-	text.modulate = Color(1, 1, 1, 0.7)
-	text.mouse_filter = Control.MOUSE_FILTER_STOP
-	row.add_child(text)
-	var redo := MenuButton.new()
-	redo.text = "⟳"
-	redo.flat = true
-	redo.tooltip_text = ("Make this part again - only this part. What was made from it is cleared "
-		+ "and waits for Generate.")
-	var menu := redo.get_popup()
-	var items: Array = REDO.get(kind, []) if step == null else [[step.first, ""]]
-	# a redo of the work only where the episode has work (next/table_work.md)
-	if step == null and _episode != null:
-		var has := _episode.steps()
-		items = items.filter(func(it: Array) -> bool:
-			var st := String(it[1]).replace("K", str(k))
-			return not (st == "acts" or st.begins_with("say:work:") or st == "image:back") or has.has(st))
-	for i in items.size():
-		menu.add_item(String(items[i][0]), i)
-	menu.id_pressed.connect(func(id: int) -> void:
-		if step != null:
-			_redo_step(step)
-		else:
-			_redo(String(items[id][1]).replace("K", str(k))))
-	redo.modulate.a = 1.0 if not items.is_empty() else 0.0
-	redo.disabled = items.is_empty()
-	row.add_child(redo)
-	_row_widgets.append({"steps": steps, "status": status, "name": name, "text": text, "kind": kind, "k": k, "step": step, "redo": redo})
+## What it hands the note's Pipeline card.
+func pipeline() -> PipelineSection:
+	return _section
+
+
+func _making() -> bool:
+	return _producer != null and (_producer.running or _producer.busy())
+
+
+## WHAT THE ROWS READ, ONCE PER CHANGE OF THE EPISODE'S FILES: a step made or thrown away changes the listing, and the
+## plan's own edits (the Episode's title) its time. What is worked out row by row is kept here too (`asks`, `ready`, `said`).
+func _facts() -> Dictionary:
+	var dir := _episode.dir
+	var files := DirAccess.get_files_at(dir) if DirAccess.dir_exists_absolute(dir) else PackedStringArray()
+	# ...and its size: a file's clock is in seconds, and a plan written again inside one must be read again
+	var plan_at := _episode.file_of("plan")
+	var now := [dir, files, _mtime(plan_at), FileAccess.get_size(plan_at) if FileAccess.file_exists(plan_at) else 0]
+	if now == _facts_of:
+		return _facts_kept
+	_facts_of = now
+	var needs := {}
+	var all := _episode.steps()
+	for st in all:
+		needs[String(st)] = _episode.needs(String(st))
+	_facts_kept = {"plan": _episode.read_json("plan"), "steps": all, "needs": needs, "lost": _episode.all_dependents(),
+		"doc": _episode.document(), "complete": _episode.complete(), "cardless": _episode.cardless(),
+		"cards": _episode.card_count(), "beats": _episode.beat_count() if _episode.cardless() else 0,
+		"word": _episode.beat_word(), "printings": _episode.printings(), "depth": _episode.wants_height(),
+		"asks": {}, "ready": {}, "said": {}}
+	return _facts_kept
+
+
+## THE EPISODE'S ROWS, each thing that can be made again a row of its own.
+func _step_rows() -> Array:
+	if _episode == null or _producer == null:
+		return []
+	var f := _facts()
+	var has: Array = f["steps"]
+	var busy := _making()
+	var out: Array = [_row_of("plan", "plan", "", busy, f)]
+	if not bool(f["cardless"]):
+		out.append(_row_of("draw", "draw", "", busy, f))
+	# THE TABLE: a back only where cards are drawn, and a back per printing the drawn cards are in (TableEpisode.printings)
+	if has.has("image:back"):
+		out.append(_row_of("image:back", "image:back", "Table", busy, f))
+	for key in f["printings"]:
+		if has.has("image:back:%s" % key):
+			out.append(_row_of("image:back:%s" % key, "image:back:", "Table", busy, f, "Back: %s" % key))
+	for st in ["image:surface", "image:backdrop", "table"]:
+		out.append(_row_of(st, st, "Table", busy, f))
+	if bool(f["depth"]):
+		out.append(_row_of("image:height", "image:height", "Table", busy, f))
+	if has.has("acts"):
+		out.append(_row_of("acts", "acts", "", busy, f))
+	out.append(_row_of("say:intro", "say:intro", "", busy, f))
+	var word := String(f["word"])
+	for k in range(1, int(f["cards"]) + 1):
+		var group := "%s %d" % [word, k]
+		for kind in ["design:K", "image:card:K", "check:K", "say:K", "say:work:K"]:
+			var st := String(kind).replace("K", str(k))
+			# ...a card read before checks has none (TableEpisode.checks), a written card no picture, and a card its work
+			# words only where it has work: what the episode has
+			if has.has(st):
+				out.append(_row_of(st, String(kind), group, busy, f))
+	for k in range(1, int(f["beats"]) + 1):
+		out.append(_row_of("say:%d" % k, "beat:K", "", busy, f, "%s %d" % [word, k]))
+	out.append(_row_of("say:close", "say:close", "", busy, f))
+	out.append(_row_of("script", "script", "", busy, f))
+	return out
+
+
+func _row_of(step: String, kind: String, group: String, busy: bool, f: Dictionary, named := "") -> PipelineRow:
+	var info: Dictionary = STEPS[kind]
+	var r := PipelineRow.new(step, named if not named.is_empty() else String(info["label"]), group)
+	var st := _producer.state_of(step)
+	r.state = String({"ready": "made", "running": "running", "queued": "queued", "failed": "failed"}.get(st, "missing"))
+	r.said = _said_of(step, f)
+	# WHAT ITS AGENT IS DOING, while it is made: who, doing what, for how long (TableProducer.activity_of) - a step of many
+	# minutes showed only its glyph, and could not be told from one stuck. WHAT IS BEING DONE COMES FIRST, AND WHOLE
+	# (2026-10-26: an 18-minute run's status sat past the end of a clipped row, behind what was already made)
+	var doing := _doing_of(step)
+	if not doing.is_empty():
+		r.said = doing + (" - " + r.said if not r.said.is_empty() else "")
+		r.wraps = true
+	if st == "failed":
+		r.said = _producer.error_of(step)
+	# A DEPTH NOT MADE YET HOLDS NOTHING BACK ([method TableEpisode.complete]): it comes with the cloth, where the table wants one
+	if step == "image:height" and st == "missing":
+		r.state = "none"
+		r.said = "comes with the cloth"
+	if step == "table" and st == "ready" and not _table_things().is_empty():
+		r.tip = "On the table:\n" + "\n".join(_table_things())
+	r.again = String(info["again"])
+	if r.again.is_empty():
+		return r
+	# ⟳ ONLY WHAT CAN START: a step whose inputs are not made was passed by without a word (TableProducer.tick)
+	var ready := _ready_to_make(step, f)
+	r.open = ready and not busy
+	if not ready:
+		r.again += " - once what it is made from is made"
+	r.asks = _asks_of(step, f)
+	r.redo = _redo.bind(step)
+	return r
+
+
+## What [param step] says of what it made - kept with the facts: it is the file's, and the file's being there is theirs.
+func _said_of(step: String, f: Dictionary) -> String:
+	var kept: Dictionary = f["said"]
+	if kept.has(step):
+		return String(kept[step])
+	var said := ""
+	var plan: Variant = f["plan"]
+	if step == "plan":
+		said = String((plan as Dictionary).get("episode_title", "")) if plan is Dictionary else ""
+	elif step == "draw":
+		var n := int(f["cards"])
+		said = ("%d card%s" % [n, "" if n == 1 else "s"]) if _episode.has("draw") else ""
+	elif step == "table":
+		var things := _table_things()
+		said = "%d thing%s" % [things.size(), "" if things.size() == 1 else "s"] if not things.is_empty() else ""
+	elif step == "acts":
+		var acts: Variant = _episode.read_json("acts") if _episode.has("acts") else null
+		var n := ((acts as Dictionary).get("acts", []) as Array).size() if acts is Dictionary and (acts as Dictionary).get("acts") is Array else 0
+		said = ("%d act%s" % [n, "" if n == 1 else "s"]) if _episode.has("acts") else ""
+	elif step.begins_with("say:"):
+		var words := _episode.read_text(step) if _episode.has(step) else ""
+		said = "%d words" % words.split(" ", false).size() if not words.is_empty() else ""
+		# ...and a beat's name, as the plan gives it
+		if bool(f["cardless"]) and step.get_slice(":", 1).is_valid_int():
+			var name := _beat_name(plan, int(step.get_slice(":", 1)))
+			said = (name + (" - " + said if not said.is_empty() else "")) if not name.is_empty() else said
+	kept[step] = said
+	return said
+
+
+## What the agents making [param step] are doing, "" while none is: who, what, and for one with tools its last call.
+func _doing_of(step: String) -> String:
+	var a := _producer.activity_of(step)
+	if a.is_empty():
+		return ""
+	var piece := "%s %s" % [String(MAKERS.get(step.get_slice(":", 0), "agent")), a]
+	var calls := _tools_progress(step) if step in ["table", "acts"] else ""
+	if not calls.is_empty():
+		# THE BUDGET IN VIEW: a run with no clock ends at its last picture, and the row says how near that is
+		var looked: Array = _producer.looks_of(step)
+		piece += " - %s%s" % ["%d of %d looks - " % looked if looked.size() == 2 else "", calls]
+	return piece
+
+
+## Whether everything [param step] is made from is made.
+func _ready_to_make(step: String, f: Dictionary) -> bool:
+	var kept: Dictionary = f["ready"]
+	if not kept.has(step):
+		var ready := true
+		for need in (f["needs"] as Dictionary).get(step, []):
+			ready = ready and _episode.has(String(need))
+		kept[step] = ready
+	return bool(kept[step])
+
+
+## WHAT [param step]'S ⟳ THROWS AWAY besides what it remakes: "" for nothing, and it starts at once; otherwise the row goes
+## amber and asks (the menu had been all that stood between a stray click on Plan and every painting and reading).
+func _asks_of(step: String, f: Dictionary) -> String:
+	var kept: Dictionary = f["asks"]
+	if kept.has(step):
+		return String(kept[step])
+	var lost := PackedStringArray()
+	var with_it: Array = TOGETHER.get(step, [])
+	for s in (f["lost"] as Dictionary).get(step, []):
+		# the script is only the readings put together, and what is made along with it is remade now
+		if String(s) != "script" and not with_it.has(s) and _episode.has(String(s)):
+			lost.append(_step_name(String(s), f))
+	var said := ""
+	if not lost.is_empty():
+		var named := ", ".join(lost.slice(0, NAMED_MOST))
+		if lost.size() > NAMED_MOST:
+			named += " and %d more" % (lost.size() - NAMED_MOST)
+		said = "It also throws away what was made from it, which then waits for Generate: %s." % named
+	kept[step] = said
+	return said
+
+
+## [param step] as a person would name it among others: "Card 3 Reading".
+func _step_name(step: String, f: Dictionary) -> String:
+	var word := String(f["word"])
+	var k := step.get_slice(":", step.get_slice_count(":") - 1)
+	if not k.is_valid_int():
+		return String(Registry.field(STEPS, step, "label", step))
+	if bool(f["cardless"]):
+		return "%s %s" % [word, k]
+	var kind := step.substr(0, step.length() - k.length()) + "K"
+	return "%s %s %s" % [word, k, String(Registry.field(STEPS, kind, "label", step))]
+
+
+## WHAT A CARD'S GROUP SAYS: the card, under its beat's name, as the plan gives it.
+func _group_said(group: String) -> String:
+	var at := group.rsplit(" ", true, 1)
+	if at.size() != 2 or not String(at[1]).is_valid_int() or _episode == null:
+		return ""
+	var k := int(at[1])
+	var f := _facts()
+	var cards: Array = (f["doc"] as Dictionary).get("cards", [])
+	var text := ""
+	if k - 1 < cards.size():
+		var c: Dictionary = cards[k - 1]
+		text = "%s%s%s" % [String(c.get("name", "")), " (reversed)" if bool(c.get("reversed", false)) else "",
+			" - jumper" if bool(c.get("jumper", false)) else ""]
+	var place := _beat_name(f["plan"], k)
+	return (place + (": " + text if not text.is_empty() else "")) if not place.is_empty() else text
+
+
+## What the episode as a whole says, over the rows.
+func _pipeline_line() -> String:
+	if _episode == null:
+		return ""
+	var note := ""
+	if bool(_facts()["complete"]):
+		note = "Ready - press Play to watch it, or export it."
+	elif _making():
+		note = "Making episode #%d…" % _episode.seed
+	elif _episode.has("plan"):
+		note = "Partly made - Generate finishes it."
+	else:
+		note = "Not made yet - Generate makes it."
+	if _brief_changed and _episode.has("plan"):
+		note += " The brief has changed since this episode was made; New episode uses it."
+	return note
 
 
 ## What the set dresser put on the picked episode's table, by name - read again only when the file
@@ -1111,10 +1236,11 @@ static func _beat_name(plan: Variant, k: int) -> String:
 	return String((b as Dictionary).get("name", "")) if b is Dictionary else ""
 
 
-func _refresh_rows() -> void:
-	if _episode == null or _rows_box == null:
+## EACH REFRESH, WHAT THE CARD ITSELF SHOWS: the picked episode's entry, the deck, Delete, and the upload's fields.
+func _refresh_card() -> void:
+	if _episode == null or _episode_pick == null:
 		return
-	var plan: Variant = _episode.read_json("plan")
+	var plan: Variant = _facts()["plan"]
 	# THE PICKER FOLLOWS THE EPISODE: its entries are written when the list is filled, so an episode
 	# made while it was open went on saying "(not made yet)" until another was picked and back
 	var at := _episode_seeds.find(int(_knobs["seed"]))
@@ -1123,172 +1249,14 @@ func _refresh_rows() -> void:
 			String((plan as Dictionary).get("episode_title", "")) if plan is Dictionary else "")
 		if _episode_pick.get_item_text(at) != label:
 			_episode_pick.set_item_text(at, label)
-	if _episode.card_count() != _rows_for or (_episode.beat_count() if _episode.cardless() else 0) != _rows_beats \
-			or ",".join(_episode.printings()) != _rows_backs \
-			or _added.key(_feed) != _rows_steps or _episode.beat_word() != _rows_word or _episode.steps().has("acts") != _rows_work:
-		_rebuild_rows()
-		return
-	var doc := {}
-	for w in _row_widgets:
-		if w["step"] != null:
-			_refresh_step_row(w, w["step"])
-			continue
-		var states := {}
-		var why := ""
-		for s in (w as Dictionary)["steps"]:
-			# the painting's height map is a step only where the table wants one (TableEpisode.wants_height)
-			if String(s) == "image:height" and not _episode.wants_height():
-				continue
-			# ...and a card's check only where it is one (TableEpisode.checks: a card read before checks has none)
-			if String(s).begins_with("check:") and not _episode.checks(int(String(s).get_slice(":", 1))):
-				continue
-			var st := _producer.state_of(String(s))
-			# ...and a height map not made yet holds nothing back: it shows only while it is made, or why not
-			if String(s) == "image:height" and st == "missing":
-				continue
-			states[st] = true
-			if st == "failed" and why.is_empty():
-				why = _producer.error_of(String(s))
-		var glyph := "·"
-		if states.has("failed"):
-			glyph = "✗"
-		elif states.has("running") or states.has("queued"):
-			glyph = "◌"
-		elif states.size() == 1 and states.has("ready"):
-			glyph = "✓"
-		(w["status"] as Label).text = glyph
-		var text := ""
-		match String(w["kind"]):
-			"Plan":
-				text = String((plan as Dictionary).get("episode_title", "")) if plan is Dictionary else ""
-			"Draw":
-				var n := _episode.card_count()
-				text = ("%d card%s" % [n, "" if n == 1 else "s"]) if _episode.has("draw") else ""
-			"Table":
-				var have := PackedStringArray()
-				for s in ["back", "surface", "backdrop"]:
-					if _episode.has("image:" + s):
-						have.append({"back": "back", "surface": "cloth", "backdrop": "room"}[s])
-				if _episode.has("image:height"):
-					have.append("depth")
-				var things := _table_things()
-				if not things.is_empty():
-					have.append("%d thing%s" % [things.size(), "" if things.size() == 1 else "s"])
-				text = ", ".join(have)
-			"Work":
-				var acts: Variant = _episode.read_json("acts") if _episode.has("acts") else null
-				var n := ((acts as Dictionary).get("acts", []) as Array).size() if acts is Dictionary and (acts as Dictionary).get("acts") is Array else 0
-				text = ("%d act%s" % [n, "" if n == 1 else "s"]) if _episode.has("acts") else ""
-			"Card":
-				if doc.is_empty():
-					doc = _episode.document()
-				var cards: Array = doc.get("cards", [])
-				var k := int(w["k"])
-				if k - 1 < cards.size():
-					var c: Dictionary = cards[k - 1]
-					text = "%s%s%s" % [String(c.get("name", "")), " (reversed)" if bool(c.get("reversed", false)) else "",
-						" - jumper" if bool(c.get("jumper", false)) else ""]
-				# ...under its beat's name, as the plan gives it
-				var place := _beat_name(plan, k)
-				text = (place + (": " + text if not text.is_empty() else "")) if not place.is_empty() else text
-			"Intro", "Close", "Beat":
-				var step := String({"Intro": "say:intro", "Close": "say:close"}.get(String(w["kind"]), "say:%d" % int(w["k"])))
-				var said := _episode.read_text(step) if _episode.has(step) else ""
-				text = "%d words" % said.split(" ", false).size() if not said.is_empty() else ""
-				# ...and a beat's name, as the plan gives it
-				if String(w["kind"]) == "Beat":
-					var name := _beat_name(plan, int(w["k"]))
-					text = (name + (" - " + text if not text.is_empty() else "")) if not name.is_empty() else text
-		# WHAT ITS AGENTS ARE DOING, while any of its steps is being made: who, doing what, for how long
-		# (TableProducer.activity_of) - a step of many minutes showed only its glyph, and could not be
-		# told from one stuck
-		var doing := PackedStringArray()
-		for s in (w as Dictionary)["steps"]:
-			var a := _producer.activity_of(String(s))
-			if a.is_empty():
-				continue
-			var piece := "%s %s" % [String(MAKERS.get(String(s).get_slice(":", 0), "agent")), a]
-			var calls := _tools_progress(String(s)) if String(s) in ["table", "acts"] else ""
-			if not calls.is_empty():
-				# THE BUDGET IN VIEW: a run with no clock ends at its last picture, and the row says how near that is
-				var looked: Array = _producer.looks_of(String(s))
-				piece += " - %s%s" % ["%d of %d looks - " % looked if looked.size() == 2 else "", calls]
-			doing.append(piece)
-		# WHAT IS BEING DONE COMES FIRST, AND WHOLE (2026-10-26: an 18-minute run's status sat past the end of a
-		# clipped row, behind what was already made, and read as stuck): a running row wraps to say all of it
-		if not doing.is_empty():
-			text = "; ".join(doing) + (" - " + text if not text.is_empty() else "")
-		if not why.is_empty():
-			text = why
-		var lb := w["text"] as Label
-		var wraps := not doing.is_empty() and why.is_empty()
-		lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART if wraps else TextServer.AUTOWRAP_OFF
-		lb.clip_text = not wraps
-		lb.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING if wraps else TextServer.OVERRUN_TRIM_ELLIPSIS
-		(w["text"] as Label).text = text
-		(w["text"] as Label).tooltip_text = text
-		if String(w["kind"]) == "Table" and why.is_empty() and not _table_things().is_empty():
-			(w["text"] as Label).tooltip_text = "On the table:\n" + "\n".join(_table_things())
 	# the deck, recounted whenever the brief changes
 	if _text != null and _text.get_version() != _deck_seen and _deck_note != null:
 		_deck_seen = _text.get_version()
 		var own := CardDeck.parse(_text.text)
 		_deck_note.text = ("Deck: %d cards, from the brief's Cards." % own.size()) if not own.is_empty() \
 			else "Deck: the producer's choice, each episode (the brief lists no cards)."
-	var busy := _producer.running or _producer.busy() or _added.asked or _added.busy(_feed)
-	var whole := _episode.complete() and not _added.missing(_feed)
-	_gen_btn.disabled = busy or whole
-	_halt_btn.disabled = not busy
 	_del_btn.disabled = not DirAccess.dir_exists_absolute(_episode.dir) or _exporting(_episode)
-	var note := ""
-	if whole:
-		note = "Ready - press Play to watch it, or export it."
-	elif busy:
-		note = "Making episode #%d…" % _episode.seed
-	elif _episode.complete():
-		note = "Ready to play - Generate makes its %s." % ", ".join(_added.names(_feed, true))
-	elif _episode.has("plan"):
-		note = "Partly made - Generate finishes it."
-	else:
-		note = "Not made yet - Generate makes it."
-	if _brief_changed and _episode.has("plan"):
-		note += " The brief has changed since this episode was made; New episode uses it."
-	_episode_note.text = note
 	_fill_upload_fields()
-
-
-# --- the steps the note's other cards add -------------------------------------------------------
-
-## This card as the steps' rows say where they are: "the Episode card".
-static func host_name() -> String:
-	return "the %s card" % String(Registry.field(Components.REGISTRY, KEY, "heading", "Episode"))
-
-
-## EACH REFRESH ([EpisodeSteps]): the picked episode said to the steps listed, and once Generate's own steps
-## are done, each made - from the episode's words, so only when they were written.
-func _tick_steps() -> void:
-	_added.tick(_feed, _producer == null or _producer.running or _producer.busy())
-
-
-## ⟳ on a step's row: made again now, from the episode's words - which must be written first.
-func _redo_step(step: EpisodeStep) -> void:
-	if not step.redo(_feed):
-		_set_status("%s waits for the episode's words - Generate writes them." % step.label)
-
-
-## A step's row: its glyph, what it says, and its ⟳ - offered once the episode's words are written.
-func _refresh_step_row(w: Dictionary, step: EpisodeStep) -> void:
-	var st := step.state(_feed)
-	(w["status"] as Label).text = {"ready": "✓", "running": "◌", "queued": "◌", "failed": "✗"}.get(st, "·")
-	var said := step.said(_feed)
-	(w["text"] as Label).text = said
-	(w["text"] as Label).tooltip_text = said
-	var redo: MenuButton = w["redo"]
-	var made := not step.made(_feed).is_empty()
-	redo.get_popup().set_item_text(0, step.again if made else step.first)
-	redo.disabled = step.busy(_feed) or _feed.words().is_empty()
-	redo.tooltip_text = (step.again if made else step.first) + (" - once the episode's words are written"
-		if _feed.words().is_empty() else "")
 
 
 # --- the YouTube fields ------------------------------------------------------------------------

@@ -1,59 +1,43 @@
-extends RefCounted
+extends PipelineSection
 class_name EpisodeSteps
 
-## EpisodeSteps - THE STEPS THE NOTE'S OTHER CARDS ADD ([EpisodeStep]), as the one card that lists them runs
-## them: each refresh what their jobs ended with is landed and the episode the card shows is said to each,
-## Generate makes them once the card's own steps are done, Stop stops them, and the card's buttons ask
-## whether they are being made or still to make.
+## EpisodeSteps - THE STEPS ONE CARD MAKES FROM THE EPISODE ANOTHER CARD MAKES ([EpisodeStep], [EpisodeFeed]), as a section
+## of the note's Pipeline card ([PipelineSection]): each refresh what their jobs ended with is landed and the episode shown
+## is said to each, Generate makes them at their turn - after the section that writes the words - and Stop stops them.
 ##
-## ONCE, FOR EVERY CARD THAT LISTS THEM (the user, 2026-10-28, of a Letter's note whose tags waited at the
-## bottom of its YouTube card: "keeping this tagging updated is going to be a game of whack-a-mole"). Cards',
-## Proof's and the Actor's cards each kept a copy of this, and so did the note's own upload ([NoteUpload]);
-## a card that made what goes out with no copy of its own - the Letter's - left the steps on the YouTube
-## card, out of reach of its Generate.
-##
-## WHICH CARD LISTS THEM IS NOT THE CARD'S CHOICE: the one that hands the reading how it goes out does
-## ([method ReadingPanel.hand_publish]); with none - a Voice alone - the YouTube card does ([NoteUpload]).
-## Their rows are [EpisodeStepRows], or the card's own where its steps are one list (Cards').
-
-## The card listing them, as their rows say where they are ("the Proof card").
-var host := ""
-## What makes the episode there, as their rows say it ("making the episode"; a note read as it is written,
-## "Generate, or an export that goes up").
-var makes := "making the episode"
-## GENERATE ASKED FOR THEM: made once the card's own steps are done ([method tick]).
-var asked := false
+## THE CARD THAT OFFERS THEM HANDS THIS (the YouTube card's "YouTube" section: its tags and its thumbnail), so where they
+## are listed is never a question (the user, 2026-11-02: "why is there a regenerate button for YouTube tags up under the
+## 'Episode' list, and why is it under 'Letter' in other scenarios?"). Which episode they are of is the panel's to say
+## ([member PipelineSection.episode], [method ReadingPanel.episode_feed]).
 
 var _offered: Callable
 
 
-## Listed by [param by], from what [param offered] () -> Array hands - the panel's steps ([method
-## ReadingPanel.episode_steps]), never a card's - their episode made by [param makes_it].
-func _init(by: String, offered: Callable, makes_it := "making the episode") -> void:
-	host = by
+## A section called [param named], of what [param offered] () -> Array hands - the card's steps.
+func _init(named := "", offered := Callable(), by: Object = null) -> void:
+	title = named
 	_offered = offered
-	makes = makes_it
+	owner = by
 
 
-## Every step the note's cards add, as the panel holds them - listed or not, each is landed.
+## The episode shown, null with none.
+func current() -> EpisodeFeed:
+	return episode.call() if episode.is_valid() else null
+
+
+## Every step offered - listed or not, each is landed.
 func offered() -> Array:
 	return _offered.call() if _offered.is_valid() else []
 
 
-## The ones listed now for [param feed]'s episode ([method EpisodeStep.wanted]): none without an episode
-## kept anywhere.
+## The ones listed now for [param feed]'s episode ([method EpisodeStep.wanted]): none without an episode kept anywhere.
 func listed(feed: EpisodeFeed) -> Array:
 	if feed == null or feed.folder().is_empty():
 		return []
 	return EpisodeStep.listed_of(offered())
 
 
-## What a card's rows were built for: the listed steps' keys.
-func key(feed: EpisodeFeed) -> String:
-	return ",".join(PackedStringArray(listed(feed).map(func(s: EpisodeStep) -> String: return s.key)))
-
-
-## The listed steps' names, lower-cased, for a card's line - only the ones not made yet with [param unmade].
+## The listed steps' names, lower-cased, for a line - only the ones not made yet with [param unmade].
 func names(feed: EpisodeFeed, unmade := false) -> PackedStringArray:
 	var out := PackedStringArray()
 	for s in listed(feed):
@@ -62,40 +46,14 @@ func names(feed: EpisodeFeed, unmade := false) -> PackedStringArray:
 	return out
 
 
-## EACH REFRESH: what every step's jobs ended with, landed; [param feed]'s episode said to the steps listed;
-## and once Generate asked and the card's own steps are done ([param busy] false), each listed step made -
-## from the episode's words, so only once they are written.
-func tick(feed: EpisodeFeed, busy := false) -> void:
-	for s in offered():
-		(s as EpisodeStep).tick()
-	var now := listed(feed)
-	for s in now:
-		(s as EpisodeStep).listed(host, feed, makes)
-	if asked and not busy:
-		asked = false
-		for s in now:
-			(s as EpisodeStep).generate(feed)
-
-
-## Each listed step not made from [param feed]'s words as they are, made now (an export that goes up).
+## Each listed step not made from [param feed]'s words as they are, made now.
 func generate(feed: EpisodeFeed) -> void:
 	for s in listed(feed):
 		(s as EpisodeStep).generate(feed)
 
 
-## STOP what they are making of [param feed]'s episode - and, unless it is another than the one the card
-## shows ([param shown]), what Generate asked of them.
-func stop(feed: EpisodeFeed, shown: EpisodeFeed = null) -> void:
-	if feed == null or shown == null or feed.folder() == shown.folder():
-		asked = false
-	if feed == null:
-		return
-	for s in offered():
-		(s as EpisodeStep).stop(feed)
-
-
 ## Is a listed step being made for [param feed]'s episode?
-func busy(feed: EpisodeFeed) -> bool:
+func busy_on(feed: EpisodeFeed) -> bool:
 	for s in listed(feed):
 		if (s as EpisodeStep).busy(feed):
 			return true
@@ -103,8 +61,77 @@ func busy(feed: EpisodeFeed) -> bool:
 
 
 ## Is a listed step still to make for [param feed]'s episode ([method EpisodeStep.to_make])?
-func missing(feed: EpisodeFeed) -> bool:
+func missing_on(feed: EpisodeFeed) -> bool:
 	for s in listed(feed):
 		if (s as EpisodeStep).to_make(feed):
 			return true
 	return false
+
+
+# --- as a section of the Pipeline card ---------------------------------------------------------------------------------
+
+func shown() -> bool:
+	return not listed(current()).is_empty()
+
+
+func tick() -> void:
+	for s in offered():
+		(s as EpisodeStep).tick()
+	var feed := current()
+	for s in listed(feed):
+		(s as EpisodeStep).listed(feed)
+
+
+func rows() -> Array:
+	var feed := current()
+	var words := feed != null and not feed.words().is_empty()
+	var out: Array = []
+	for s in listed(feed):
+		var step: EpisodeStep = s
+		var made := not step.made(feed).is_empty()
+		var r := PipelineRow.new(step.key, step.label)
+		var st := step.state(feed)
+		r.state = String({"ready": "made", "running": "running", "queued": "queued", "failed": "failed"}.get(st,
+			"stale" if made else "missing"))
+		r.said = step.said(feed)
+		r.wraps = st == "running" or st == "queued"
+		r.again = (step.again if made else step.first) + ("" if words else " - once there are words to make it from")
+		r.open = words and not step.busy(feed)
+		r.redo = func() -> void: step.redo(feed)
+		out.append(r)
+	return out
+
+
+func make() -> void:
+	generate(current())
+
+
+func make_tip() -> String:
+	return "Make what is missing of these, from the words as they are."
+
+
+func stop() -> void:
+	var feed := current()
+	if feed == null:
+		return
+	for s in offered():
+		(s as EpisodeStep).stop(feed)
+
+
+func busy() -> bool:
+	return busy_on(current())
+
+
+func missing() -> bool:
+	return missing_on(current())
+
+
+func leave() -> void:
+	stop()
+
+
+func episode_left(feed: EpisodeFeed) -> void:
+	if feed == null:
+		return
+	for s in offered():
+		(s as EpisodeStep).stop(feed)

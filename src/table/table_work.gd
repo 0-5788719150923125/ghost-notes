@@ -24,6 +24,9 @@ class_name TableWork
 
 ## The [TableMedium] this is a part of.
 var medium: TableMedium
+## What is built on this table ([TableAssembly]; null where the table has no `assembly`), and what the table wrote of it.
+var assembly: TableAssembly
+var assembly_spec := {}
 
 ## A FRAME POSES ONLY WHAT CAN HAVE CHANGED ([method _settled]): every part after a jump in show time longer than QUIET_JUMP
 ## (seconds - a scrub, a seek), and a part from QUIET_EDGE before a move of it to twice that after it, so its last value is drawn.
@@ -277,6 +280,9 @@ func clear() -> void:
 	things = []
 	works = []
 	groups = []
+	assembly = null
+	assembly_spec = {}
+	assembly_notes = PackedStringArray()
 	_group_of = {}
 	acts = []
 	notes = PackedStringArray()
@@ -366,7 +372,15 @@ func build(raw: Variant, beats: int, sound: Dictionary = {}) -> void:
 	_root.name = "Work"
 	medium._root3.add_child(_root)
 	_sound = sound
+	# WHAT IS BUILT HERE, STOOD OVER THE THINGS AS THEY STAND ([TableAssembly]): before the acts are taken, which it answers for
+	if not assembly_spec.is_empty():
+		var noted := notes.size()
+		assembly = TableAssembly.new(self, assembly_spec)
+		assembly.stand()
+		assembly_notes = notes.slice(noted)
 	_take_acts(raw, beats)
+	if assembly != null:
+		assembly.perform(acts)
 	# WHAT EACH PART IS BEFORE ANYTHING ACTS ON IT, and what it follows all the time
 	for wi in works.size():
 		var wk: Dictionary = works[wi]
@@ -474,6 +488,8 @@ func rebind(raw: Variant, beats: int) -> void:
 		_air.release()
 	_air = null
 	_take_acts(raw, beats)
+	if assembly != null:
+		assembly.perform(acts)
 	_fit_acts()
 	_build_cues()
 	plan_cues()
@@ -481,10 +497,16 @@ func rebind(raw: Variant, beats: int) -> void:
 		physics.rebind()
 
 
+## What standing the assembly had to say ([member assembly]), said again as the notes are made again.
+var assembly_notes := PackedStringArray()
+
+
 ## The acts [param raw] made safe for [param beats] beats and found on the table: [member acts], [member notes], what each writes.
 func _take_acts(raw: Variant, beats: int) -> void:
 	var made := Motions.sanitize_acts(raw if raw != null else {}, beats)
 	notes = made["notes"]
+	if assembly != null:
+		notes.append_array(assembly_notes)
 	_writing = {}
 	_aloft_of = {}
 	acts = []
@@ -593,6 +615,11 @@ func _build_cues() -> void:
 ## found, else why not. A sprinkle has none: the physics lets its grains fall.
 func _resolve(track: Dictionary) -> String:
 	var law := String(track["law"])
+	if law == "assemble":
+		# its steps are the assembly's, on no channel of the work's
+		if assembly == null:
+			return "this table has no `assembly` for it to work on"
+		return ""
 	if law == "sprinkle":
 		# grains let fall from a point: the physics' ([TablePhysics]), on no channel of the work's
 		if not String(track.get("thing", "")).is_empty() and _thing_named(String(track["thing"])) < 0:
@@ -605,6 +632,8 @@ func _resolve(track: Dictionary) -> String:
 		return "no thing on the table is called \"%s\"" % String(track["thing"])
 	var part := String(track.get("part", ""))
 	var pose := law in ["circle", "aim", "carry", "pour", "dip"] or (law == "path" and _path_moves(track))
+	if pose and part.is_empty() and assembly != null and assembly.holds_stock(String((things[ti] as Dictionary)["name"])):
+		return "\"%s\" holds the assembly's pieces, which are not its parts: it stays where it stands" % String(track["thing"])
 	var state := String(track.get("state", ""))
 	if part.is_empty():
 		if not pose:
@@ -1327,10 +1356,24 @@ func schedule(sched: Array, parse: Dictionary, said0: PackedFloat32Array, said1:
 		if not e.is_empty():
 			b0 = float(e["t0"]) + float(a["dur"]) * float(e["s"])
 		var b1 := float(w1.call(si1 - 1)) if si1 > si0 else b0 + 2.0
+		# ...AND ITS LAST SILENCE IS ITS OWN ([CardReading], a quiet its words end on): the work goes on through it
+		b1 += float(a.get("tail", 0.0))
 		spans[beat] = Vector2(b0, maxf(b1, b0 + 1.0))
 	var cued := {}
 	for c in parse.get("cues", []):
-		cued[String((c as Dictionary)["name"])] = float(w0.call(int((c as Dictionary)["si"])))
+		var cd: Dictionary = c
+		# ...A CUE IN A SILENCE is timed from the word the silence follows: the next word is not said until the silence is over, and
+		# what was cued to begin in it would wait out the whole of it
+		if cd.has("quiet"):
+			var heard_to := int(cd["si"]) - 1
+			if heard_to < 0:
+				# ...and before any word at all, from when its beat begins
+				cued[String(cd["name"])] = -INF
+			else:
+				var ended := said1[heard_to] if heard_to < said1.size() and said1[heard_to] != ReadingFollower.NO_TIME else INF
+				cued[String(cd["name"])] = ended + float(cd["quiet"]) if ended != INF else INF
+		else:
+			cued[String(cd["name"])] = float(w0.call(int(cd["si"])))
 	var out: Array = []
 	var busy := {}            # channel -> when the last act placed on it ends
 	for beat in spans:
@@ -1378,18 +1421,22 @@ func schedule(sched: Array, parse: Dictionary, said0: PackedFloat32Array, said1:
 				# the acts after it take
 				var until := span.y
 				var after := 0.0
+				var shared := float(a.get("_natural", 0.0))    # what builds, and what builds after it before anything cued: each its share
 				for k in range(j + 1, mine.size()):
 					var b: Dictionary = acts[mine[k]]
 					if cued.has(String(b["name"])) and float(cued[String(b["name"])]) < INF:
 						until = minf(until, float(cued[String(b["name"])]))
 						break
-					after += 1.5 if bool(b["under"]) else maxf(float(b["length"]) * quick, float(b.get("_min_length", 0.0)))
+					shared += float(b.get("_natural", 0.0))
+					after += maxf(1.5, float(b.get("_min_length", 0.0))) if bool(b["under"]) else maxf(float(b["length"]) * quick, float(b.get("_min_length", 0.0)))
 					# ...its rest too, where the one before laid down what it takes up
 					for ch in _laid_by(mine[k - 1]):
 						if _channels_of(b).has(ch):
 							after += LAID_REST
 							break
 				t1 = maxf(t0 + 1.0, until - after)
+				if a.has("_natural") and shared > 0.0 and until < INF:
+					t1 = t0 + (until - t0) * float(a["_natural"]) / shared
 				t1 = maxf(t1, t0 + float(a.get("_min_length", 0.0)))
 				if t1 == INF:
 					t1 = t0 + Motions.UNDER_GUESS
@@ -1412,6 +1459,8 @@ func schedule(sched: Array, parse: Dictionary, said0: PackedFloat32Array, said1:
 	_plan_key = key
 	runs = out
 	_spent("plan: placing the acts", c0)
+	if assembly != null:
+		assembly.lay(runs, acts, now)
 	_timelines()
 
 
@@ -1488,7 +1537,8 @@ static func _channels_of(a: Dictionary) -> PackedStringArray:
 	var out := PackedStringArray()
 	for t in a["tracks"]:
 		var tr: Dictionary = t
-		var chs: Array = [String(tr.get("_ch", ""))]
+		# ...one hand on what is being built: its acts go one after another
+		var chs: Array = ["assembly" if String(tr.get("law", "")) == "assemble" else String(tr.get("_ch", ""))]
 		for ch in chs:
 			if not String(ch).is_empty() and not out.has(ch):
 				out.append(ch)
@@ -1516,7 +1566,7 @@ func rehearse(from: float) -> Dictionary:
 			var a: Dictionary = acts[i]
 			if String(a["beat"]) != String(beat):
 				continue
-			var len := Motions.UNDER_GUESS if bool(a["under"]) else float(a["length"])
+			var len := float(a["_natural"]) if a.has("_natural") else (Motions.UNDER_GUESS if bool(a["under"]) else float(a["length"]))
 			for ch in _channels_of(a):
 				t = maxf(t, float(rests.get(ch, -INF)))
 			out.append({"i": i, "t0": t, "t1": t + len})
@@ -1531,6 +1581,8 @@ func rehearse(from: float) -> Dictionary:
 		return times
 	runs = out
 	_plan_key = key
+	if assembly != null:
+		assembly.lay(runs, acts, -INF)
 	_timelines()
 	return times
 
@@ -3049,6 +3101,8 @@ static func _rebuilt(r: Basis, p: Vector3, q0: Vector3, x0: Transform3D) -> Tran
 ## EVERYTHING THE WORK MOVES, at show time [param t]: whole things, then their parts, then what smokes and
 ## pours and bursts, and every liquid's surface.
 func tick(t: float) -> void:
+	if assembly != null:
+		assembly.tick(t)
 	if things.is_empty():
 		return
 	var c := Time.get_ticks_usec() if profiling else 0
@@ -3747,6 +3801,8 @@ func parts_report() -> String:
 		if physics != null:
 			for c in physics.contents_of(ti):
 				lines.append("    - %s" % c)
+	if assembly != null:
+		lines.append(assembly.report())
 	return "\n".join(lines)
 
 
@@ -3805,7 +3861,10 @@ func check(name: String) -> Dictionary:
 				"from": physics.solids_of_mover(int(td.get("_ti", -1)), int(td.get("_wi", -1))), "into": String(td.get("into", ""))})
 	var physics_said := physics.report(t0, t1, pours) if physics != null else PackedStringArray()
 	if movers.is_empty():
-		lines.append("Nothing in it moves from its place: it changes what things are (their fill, size, color, glow).")
+		if assembly != null and TableAssembly._has_ops(act):
+			lines.append_array(assembly.log.report_of(name))
+		else:
+			lines.append("Nothing in it moves from its place: it changes what things are (their fill, size, color, glow).")
 		lines.append_array(physics_said)
 		tick(t1)
 		_planned = false

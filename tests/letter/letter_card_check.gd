@@ -259,51 +259,50 @@ func _steps() -> void:
 	ed.note_path = _scratch.path_join("notes/A Letter.md")
 	ed._text.text = LETTER
 	var card = load("res://src/letter/letter_card.gd").for_note({"workspace": ed})
+	ed._add_block(card)
 	ed._attach("youtube")
 	var up = ed._note_upload
+	var pipe = ed.pipeline()
 	var step = ed._youtube.episode_steps()[0]
-	_check(ed.steps_by == "the Letter card" and up != null and not up.hosting(),
-		"the card hands the reading how it goes out, so it lists the steps - the note its own episode")
-	_tick_steps(card, up)
-	_check(not card._added_rows.has_row(step.key) and not up._added_rows.has_row(step.key) and step.host.is_empty(),
-		"control: with the box clear, no row anywhere")
+	_check(up != null and ed.episode_feed() == up.feed(), "the note is its own episode")
+	_tick_steps(card, up, pipe)
+	_check(pipe.row(step.key).is_empty() and step.shown == null, "control: with the box clear, no row")
+	_check(not pipe.row("ink").is_empty() and not pipe.names().is_empty(), "the letter's own rows are on the Pipeline card: a sketch's, and the ink")
 	ed._youtube._write_tags.button_pressed = true
-	_tick_steps(card, up)
+	_tick_steps(card, up, pipe)
 	var feed = up.feed()
-	_check(step.host == "the Letter card" and step.shown == feed and card._added_rows.has_row(step.key)
-		and not up._added_rows.has_row(step.key), "ticked: its row is on the Letter card, and the YouTube card draws none")
-	var at: int = card._added_rows.get_index()
-	_check(at > (card._ink_state as Control).get_parent().get_index() and at < (card._gen_btn as Control).get_parent().get_index(),
-		"the row stands under the Ink, above Generate")
+	_check(step.shown == feed and not pipe.row(step.key, "YouTube").is_empty() and pipe.row(step.key, "Letter").is_empty(),
+		"ticked: its row is the YouTube section's, the note its episode, never the Letter's")
+	var names: Array = pipe.names()
+	_check(names.find("Ink") < names.find("Tags"), "the words' own steps stand above what is made from them (%s)" % str(names))
 	ed._youtube._refresh_tags()
 	var line: String = ed._youtube._tags_note.text
-	_check(line.contains("Tags row on the Letter card") and line.ends_with("and so does Generate, or an export that goes up."),
+	_check(line.contains("Tags row in the Pipeline") and line.ends_with("and so does Generate, or an export that goes up."),
 		"the YouTube card says where the row is and what makes it (%s)" % line)
 	# GENERATE: the sketches first, then the note's tags
 	card._sketches._jobs["held"] = {"id": "text-letter-card-check-sketch", "sketch": {}, "tries": 1}
-	card._generate()
-	_tick_steps(card, up)
-	_check(step.state(feed) == "missing" and card._gen_btn.disabled and not card._stop_btn.disabled,
+	pipe.generate()
+	_tick_steps(card, up, pipe)
+	_check(step.state(feed) == "missing" and pipe._generate.disabled and not pipe._stop.disabled,
 		"while a sketch is drawn, the tags wait for it (%s)" % step.state(feed))
 	card._sketches._jobs.erase("held")
-	_tick_steps(card, up)
-	var r: Dictionary = card._added_rows.row(step.key)
-	_check(step.state(feed) == "failed" and (r["state"] as Label).text.contains("read-only"),
-		"then Generate starts the tags - here refused, read-only, and said on the Letter card's row (%s)" % (r["state"] as Label).text)
+	_tick_steps(card, up, pipe)
+	var r: Dictionary = pipe.row(step.key)
+	_check(step.state(feed) == "failed" and (r["text"] as Label).text.contains("read-only"),
+		"then Generate starts the tags - here refused, read-only, and said on its row (%s)" % (r["text"] as Label).text)
 	# A JOB LANDED: its ✓, and the note's tags replaced
 	step._errors.clear()
 	AgentJobs._ended["text-letter-card-check"] = {"ok": true, "text": "{\"tags\": [\"handwriting\", \"a cross\", \"a dot\"]}"}
 	step._jobs[feed.folder()] = {"id": "text-letter-card-check", "feed": feed, "stamp": feed.stamp()}
-	card._refresh()
-	_check(card._added.busy(feed) and card._gen_btn.disabled and (r["redo"] as Button).disabled,
-		"while its job runs, Generate and its ⟳ wait")
-	_tick_steps(card, up)
-	_check((r["state"] as Label).text == "✓ 3 tags: handwriting, a cross, a dot" and ed._doc.field("tags") == "handwriting, a cross, a dot"
-		and not card._gen_btn.disabled, "landed: its ✓ on the Letter card, and the note's tags replaced (%s)" % (r["state"] as Label).text)
+	_check(pipe.busy(), "while its job runs, Generate waits")
+	_tick_steps(card, up, pipe)
+	r = pipe.row(step.key)
+	_check((r["glyph"] as Label).text == "✓" and (r["text"] as Label).text == "3 tags: handwriting, a cross, a dot" and ed._doc.field("tags") == "handwriting, a cross, a dot",
+		"landed: its ✓, and the note's tags replaced (%s)" % (r["text"] as Label).text)
 	# STOP stops a job writing them
 	step._jobs[feed.folder()] = {"id": "text-letter-card-check-2", "feed": feed, "stamp": feed.stamp()}
-	card._stop_btn.pressed.emit()
-	_check(not step.busy(feed) and not card._added.busy(feed), "Stop stops the tags being written")
+	pipe._stop.pressed.emit()
+	_check(not step.busy(feed) and not pipe.busy(), "Stop stops the tags being written")
 	card.free()
 	ed.free()
 	note_upload.root = keep
@@ -342,10 +341,11 @@ func _reopened() -> void:
 
 
 ## A refresh of the note and the card, as their _process makes one.
-func _tick_steps(card: Object, up: Object) -> void:
+func _tick_steps(card: Object, up: Object, pipe: Object) -> void:
+	card._seen = card._body()
+	card._listed = LetterScript.sketches(card._seen)
 	up.refresh()
-	card._tick_steps()
-	card._refresh()
+	pipe.refresh()
 
 
 func _finish() -> void:

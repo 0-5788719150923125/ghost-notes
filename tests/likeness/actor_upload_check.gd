@@ -1,16 +1,14 @@
 extends SceneTree
 
-## actor_upload_check - an Actor's note as it goes up (next/likeness.md): the Actor card reads NO TITLE, and
-## LISTS THE STEPS MADE FROM THE NOTE'S WORDS UNDER ITS OWN, beside its Generate (the user, 2026-10-23: "push
-## the generate/regenerate step into the Actor card. Right now, it's buried at the bottom of the YouTube card").
+## actor_upload_check - an Actor's note as it goes up (next/likeness.md): the Actor card reads NO TITLE, and the steps made
+## from the note's words stand with the actor's on the note's Pipeline card (next/pipeline.md).
 ##
 ##   godot --headless --path . --script tests/likeness/actor_upload_check.gd
 ##
 ## NO TITLE: the walk the card hands the reading announces none, and the plan's first passage is the note's
 ## own words (THE CONTROL: the same panel before the Actor card announces it, as a reader announces a chapter).
-## THE TAGS STEP ON THE ACTOR CARD: with "Write each episode's tags" ticked its row is under the actor's steps,
-## above Generate, the YouTube card's line names the Actor card, and the YouTube card draws no row of its own
-## (THE CONTROL: the box clear, no row anywhere). GENERATE MAKES IT ONCE THE ACTOR'S OWN STEPS ARE DONE - not
+## THE TAGS STEP: with "Write each episode's tags" ticked its row is under the actor's steps on the Pipeline card, and the
+## YouTube card's line says so (THE CONTROL: the box clear, no row). GENERATE MAKES IT ONCE THE ACTOR'S OWN STEPS ARE DONE - not
 ## while they run - here refused, read-only, and said on its row; a job landed gives its ✓ and replaces the
 ## note's tags; Stop stops one. The actor's steps are made by the gate ([member ActorBuilder.make_with]): no
 ## program runs, and no agent - and a step made so is made at once, so a run still under way (as one waiting
@@ -133,71 +131,77 @@ func _check() -> void:
 	_ok(String(said["title"]).is_empty() and not opens.contains("A Reading") and opens.contains("quick brown fox"),
 		"the actor announces no title: their first words are the note's (%s)" % opens.strip_edges())
 
+	ed._add_block(card)
 	ed._attach("youtube")
 	var up = ed._note_upload
-	_ok(up != null and ed._youtube._desc.visible and not up.hosting(),
-		"the note is its own episode on the YouTube card (its description box), and the Actor card lists its steps")
+	var pipe = ed.pipeline()
+	_ok(up != null and ed._youtube._desc.visible and ed.episode_feed() == up.feed(),
+		"the note is its own episode on the YouTube card (its description box)")
 	var step = ed._youtube.episode_steps()[0]
-	_tick(card, up)
-	_ok(not card._added_rows.has_row(step.key) and not up._added_rows.has_row(step.key) and step.host.is_empty(),
-		"control: with \"Write each episode's tags\" clear, no row anywhere")
+	_tick(card, up, pipe)
+	_ok(pipe.row(step.key).is_empty() and step.shown == null, "control: with \"Write each episode's tags\" clear, no row")
 
 	ed._youtube._write_tags.button_pressed = true
-	_tick(card, up)
+	_tick(card, up, pipe)
 	var feed = up.feed()
-	_ok(step.host == "the Actor card" and step.shown == feed and card._added_rows.has_row(step.key) and not up._added_rows.has_row(step.key),
-		"ticked: its row is on the Actor card, the note its episode, and the YouTube card draws none")
-	_ok(card._added_rows.get_parent() == card._body and card._added_rows.get_index() < card._gen_btn.get_parent().get_index(),
-		"the row stands under the actor's steps, above Generate")
+	_ok(step.shown == feed and not pipe.row(step.key, "YouTube").is_empty() and pipe.row(step.key, "Actor").is_empty(),
+		"ticked: its row is the YouTube section's, the note its episode")
 	ed._youtube._refresh_tags()
 	var line: String = ed._youtube._tags_note.text
-	_ok(line.contains("Tags row on the Actor card") and line.ends_with("and so does Generate, or an export that goes up."),
+	_ok(line.contains("Tags row in the Pipeline") and line.ends_with("and so does Generate, or an export that goes up."),
 		"the YouTube card says where the row is and what makes it (%s)" % line)
 
 	# GENERATE: the actor's own steps first, then the note's tags
 	card._generate()
 	_ok(_made > 0 and not card._builder.running, "Generate makes the actor's steps (%d, by the gate)" % _made)
+	# Generate's walk, at the actor's turn: a step made here is made at once, so the run is held by hand, as one waiting
+	# for an install is
+	var first_made := _made
+	pipe._queue = [card.pipeline(), ed._youtube.pipeline()]
+	pipe._begun = true
 	card._builder.running = true
-	_tick(card, up)
-	_ok(step.state(feed) == "missing" and card._gen_btn.disabled and not card._stop_btn.disabled,
+	_tick(card, up, pipe)
+	_ok(step.state(feed) == "missing" and pipe._generate.disabled and not pipe._stop.disabled and _made == first_made,
 		"while the actor's steps run, the tags wait for them (%s)" % step.state(feed))
 	card._builder.running = false
-	_tick(card, up)
-	var r: Dictionary = card._added_rows.row(step.key)
-	_ok(step.state(feed) == "failed" and (r["state"] as Label).text.contains("read-only"),
-		"then Generate starts the tags - here refused, read-only, and said on the Actor card's row (%s)" % (r["state"] as Label).text)
+	_tick(card, up, pipe)
+	var r: Dictionary = pipe.row(step.key)
+	_ok(step.state(feed) == "failed" and (r["text"] as Label).text.contains("read-only"),
+		"then Generate starts the tags - here refused, read-only, and said on its row (%s)" % (r["text"] as Label).text)
 
 	# A JOB LANDED: its ✓, and the note's tags replaced
 	step._errors.clear()
 	AgentJobs._ended["text-actor-upload-check"] = {"ok": true, "text": "{\"tags\": [\"quick brown fox\", \"lazy dog\", \"fable\"]}"}
 	step._jobs[feed.folder()] = {"id": "text-actor-upload-check", "feed": feed, "stamp": feed.stamp()}
-	card._refresh()
-	_ok(card._added.busy(feed) and card._gen_btn.disabled and not card._stop_btn.disabled and (r["redo"] as Button).disabled,
-		"while its job runs: Generate and its ⟳ wait, Stop is offered")
-	_tick(card, up)
-	_ok((r["state"] as Label).text == "✓ 3 tags: quick brown fox, lazy dog, fable" and not (r["redo"] as Button).disabled
-		and ed._doc.field("tags") == "quick brown fox, lazy dog, fable" and not card._gen_btn.disabled,
-		"landed: its ✓ on the Actor card, and the note's tags replaced (%s)" % (r["state"] as Label).text)
+	_ok(pipe.busy() and step.busy(feed), "while its job runs, it is being made")
+	_tick(card, up, pipe)
+	r = pipe.row(step.key)
+	_ok((r["glyph"] as Label).text == "✓" and (r["text"] as Label).text == "3 tags: quick brown fox, lazy dog, fable" and not (r["redo"] as Button).disabled
+		and ed._doc.field("tags") == "quick brown fox, lazy dog, fable",
+		"landed: its ✓, and the note's tags replaced (%s)" % (r["text"] as Label).text)
 
 	# STOP stops a job writing them
 	step._jobs[feed.folder()] = {"id": "text-actor-upload-check-2", "feed": feed, "stamp": feed.stamp()}
-	card._stop_btn.pressed.emit()
-	_ok(not step.busy(feed) and not card._added.busy(feed), "Stop stops the tags being written")
+	pipe._stop.pressed.emit()
+	_ok(not step.busy(feed) and not pipe.busy(), "Stop stops the tags being written")
 
 	# WORDS WRITTEN AGAIN: stale, and the row says what makes them again
 	ed._text.text = "Words written again."
-	_tick(card, up)
-	_ok(step.state(feed) == "missing" and (r["state"] as Label).text.contains("so does Generate, or an export that goes up"),
-		"words written again make them stale, and the row says Generate makes them again (%s)" % (r["state"] as Label).text)
+	_tick(card, up, pipe)
+	r = pipe.row(step.key)
+	_ok(step.state(feed) == "missing" and (r["text"] as Label).text.contains("so does Generate, or an export that goes up"),
+		"words written again make them stale, and the row says Generate makes them again (%s)" % (r["text"] as Label).text)
+	# THE ⟳ ON THE ACTOR'S OWN STEPS ASKS: what they make is hours of the processor's time
+	_ok(not pipe.row("survey", "Actor").is_empty() and (pipe.row("survey", "Actor")["redo"] as Button).modulate == pipe.AMBER,
+		"the actor's own steps are the Actor section's, and their ⟳ goes amber: it asks, what it makes is hours of work")
 	card.free()
 	ed.free()
 
 
-## A refresh of the note and the card, as their _process makes one.
-func _tick(card: Object, up: Object) -> void:
+func _tick(card: Object, up: Object, pipe: Object) -> void:
 	up.refresh()
-	card._tick_steps()
 	card._refresh()
+	pipe.refresh()
 
 
 ## A step "made": its outputs written as made-up files - and the sets and the audit with one set.

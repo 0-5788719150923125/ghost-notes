@@ -283,14 +283,18 @@ func place(actions: Array, opening: float, lead: float, tail: float) -> Array:
 				next = st0[k]
 				break
 		var total := 0.0
+		# ...BEFORE A SILENCE ITS PASSAGE OPENS ON (`lead`, [method CardReading.quiet_at_start]): set against the next word it would wait
+		# out the whole of it, and a beat that opens in silence began as it ended
+		var quiet := 0.0
 		for a in group:
 			total += float((a as Dictionary)["dur"])
+			quiet += float((a as Dictionary).get("lead", 0.0))
 		var start := prev + lead
 		var s := 1.0
 		if next < INF:
-			var room := next - tail - start
+			var room := next - quiet - tail - start
 			if room >= total:
-				start = next - tail - total
+				start = next - quiet - tail - total
 			else:
 				s = maxf(room, total * 0.25) / total
 		var t := start

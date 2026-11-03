@@ -127,12 +127,14 @@ FOLDERS: List[Tuple[str, str, str]] = [
     ("notes", "Notes",
      "The note as a file: where notes live, a document kept in step with its file, the registry of what a note can "
      "carry (`Components`), the registry of the marks a script may carry (`ScriptMarks`), and where a note's cards "
-     "meet without naming each other: an episode one card makes (`EpisodeFeed`) and the steps the others add to it "
-     "(`EpisodeStep`)."),
+     "meet without naming each other: what each hands the note's one list of what is made for it (`PipelineSection`, "
+     "`PipelineRow`), the episode one card makes (`EpisodeFeed`) and the steps the others make from it (`EpisodeStep`, "
+     "`EpisodeSteps`)."),
     ("ui", "The panel kit",
      "What every note's panel is built from, and what it asks of the window it is in: a side panel that cannot outgrow "
      "the window and its \"+\", a component's folding card in its family's color and the chips over the cards, the "
-     "cards a note's components bring (built from the registry's rows, attached and detached), the Script card every "
+     "cards a note's components bring (built from the registry's rows, attached and detached), the one list of what is "
+     "made for a note (`PipelineCard`), the Script card every "
      "note has (its editor window and highlighter), rows drawn from a table of fields, two small controls, and `Shell` "
      "- the bottom-right row, room along the bottom edge, the way back to the notes. Above `notes/` because it is a "
      "kit for a note's components."),
@@ -1819,17 +1821,14 @@ RULES: List[Rule] = [
          "which owns the file, the debounce and the flushing",
          (("a.gd", "var c := ConfigFile.new()", 1), ("a.gd", "# ConfigFile.new() was here\nSettings.bind(x)", 0)),
          skip=("settings.gd", "*mask*")),
-    # A CARD HANDS THE READING HOW IT GOES OUT THROUGH `ReadingPanel.hand_publish`, never by setting
-    # `publish`: `hand_publish` takes the card's name with it, so handing one is listing the steps the
-    # note's other cards add (the YouTube card's tags). The Letter's set `reading.publish` itself and
-    # its steps waited out of reach of its Generate (2026-10-28: "a game of whack-a-mole").
-    Rule("publish handed", ("src/**/*",), r"\.publish\s*=(?!=)",
-         "{file}: sets a reading's publish ({text}) - a card hands it with ReadingPanel.hand_publish(publish, "
-         "its name), which lists the steps the note's other cards add under it",
-         (("a.gd", "\tcard._panel.publish = Publish.new(card)", 1),
-          ("a.gd", "\tif reading.publish == p:\n\t## reading.publish = Publish.new(self)\n"
-                   "\treading.hand_publish(Publish.new(self), host_name())", 0)),
-         skip=("reading_panel.gd",)),
+    # ONE LIST OF WHAT IS MADE FOR A NOTE (next/pipeline.md; 2026-11-02: "the pipeline is not a unified, generic card - it
+    # is multiple branching paths"): a card hands the Pipeline card a section and draws no ⟳ of its own - six lists had
+    # grown one each, and a ⟳ meant four different things. A source's ⟳ on the Actor card lists a link again and makes nothing.
+    Rule("one pipeline", ("src/**/*",), r'\.text\s*=\s*"⟳"',
+         "{file}: draws a ⟳ of its own ({text}) - what is made for a note is a row of its Pipeline card: a card answers "
+         "pipeline() with a PipelineSection (src/notes/pipeline_section.gd)",
+         (("a.gd", '\tredo.text = "⟳"', 1), ("a.gd", '\t## redo.text = "⟳"\n\tback.text = "‹"', 0)),
+         skip=("pipeline_card.gd", "actor_source_list.gd")),
     # `Films.pump()` IS CALLED FROM main's `_process`. A window cut is an ffmpeg child, and something
     # with a frame must notice it exit and promote its output out of the `.part` name. The live film
     # panel and the Generative panel polled it - the two things usually absent - so footage showed on

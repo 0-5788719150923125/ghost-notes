@@ -41,6 +41,8 @@ class_name TablePreview
 
 ## The size of every picture handed back, and how wide the studio's lens is (degrees, vertical).
 const SHEET := Vector2i(1280, 720)
+## How far off what is built the four views of it stand (meters): near enough to see each piece.
+const MODEL_NEAR := 0.5
 const STUDIO_FOV := 28.0
 ## Frames drawn before a picture is read back: the studio's shadows, and the table's reflections,
 ## settle in a few.
@@ -1038,6 +1040,45 @@ func work_watch(raw: Dictionary, acts: Variant, name: String, n := 6) -> Diction
 		img.resize(tw, th, Image.INTERPOLATE_LANCZOS)
 		sheet.blit_rect(img, Rect2i(Vector2i.ZERO, img.get_size()), Vector2i((i % cols) * (SHEET.x / cols) + 1, (i / cols) * (SHEET.y / rows) + 1))
 	return {"image": sheet, "frames": frames}
+
+
+## WHAT IS BUILT AS ACT [param name] LEAVES IT ([TableAssembly]), from four sides close to, by the table's own light - an agent cannot
+## judge a shape from the chair, and a build's far side is only ever seen when the plate is turned. A sheet: `{image}` or `{error}`.
+func model_views(raw: Dictionary, acts: Variant, name: String) -> Dictionary:
+	var err: String = await _stand(raw, acts)
+	if not err.is_empty():
+		return {"error": err}
+	var m = _medium
+	var times: Dictionary = m._work.rehearsed()
+	if not times.has(name):
+		return {"error": "no act called \"%s\" was kept" % name}
+	if m._work.assembly == null:
+		return {"error": "this table has no assembly"}
+	var t := float((times[name] as Array)[1]) + 0.05
+	if not await _bake(t):
+		return {"error": "the work's tools were closed while it was baked"}
+	_pose_spread(t)
+	m._work.tick(t)
+	m._light_part.tick_props(t)
+	var cam: Camera3D = m._cam
+	var was := cam.transform
+	var log: Assembly = m._work.assembly.log
+	var step: int = log.step_at(t)
+	var c: Vector3 = (log.base_xf(log.yaw_at(t, step)) as Transform3D).origin + Vector3(0.0, 0.03, 0.0)
+	var sheet := Image.create(SHEET.x, SHEET.y, false, Image.FORMAT_RGB8)
+	var tw := SHEET.x / 2 - 2
+	var th := SHEET.y / 2 - 2
+	for i in 4:
+		var dir := Basis(Vector3.UP, TAU * float(i) / 4.0) * Vector3(0.0, 0.62, 0.78)
+		cam.transform = Transform3D(Basis.looking_at(-dir.normalized(), Vector3.UP), c + dir.normalized() * MODEL_NEAR)
+		var img: Image = await _render(_table, TABLE_FRAMES)
+		if img == null:
+			cam.transform = was
+			return {"error": "no picture could be taken"}
+		img.resize(tw, th, Image.INTERPOLATE_LANCZOS)
+		sheet.blit_rect(img, Rect2i(Vector2i.ZERO, img.get_size()), Vector2i((i % 2) * (SHEET.x / 2) + 1, (i / 2) * (SHEET.y / 2) + 1))
+	cam.transform = was
+	return {"image": sheet}
 
 
 ## WHAT IS IN THINGS BAKED through rehearsal time [param t] ([method TablePhysics.bake_until]) on a worker, the app's own

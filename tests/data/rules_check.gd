@@ -34,7 +34,7 @@ const FixtureDeck := preload("res://tests/fixture_deck.gd")
 ## What only a kind of card's own show may say: the rules name none of them.
 const KINDS := ["tarot", "arcana", "rider-waite", "pentacle"]
 ## ...and what only a kind of work's own show may say (next/table_work.md).
-const WORKS := ["alchemy", "alchemist", "potion", "cauldron", "baking", "bakery", "jigsaw", "dragon"]
+const WORKS := ["alchemy", "alchemist", "potion", "cauldron", "baking", "bakery", "jigsaw", "dragon", "brick", "lego"]
 
 var _fails := 0
 

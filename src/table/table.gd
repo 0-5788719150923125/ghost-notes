@@ -1489,6 +1489,7 @@ func _build_table(spec: Dictionary = {}) -> void:
 	_things_part.clear(spec["layers"])
 	_work.clear()
 	_work.materials = spec["materials"]
+	_work.assembly_spec = spec.get("assembly", {}) if spec.get("assembly") is Dictionary else {}
 	_light_part._heat_cells = {}
 	# WHAT THE TABLE IS ABOARD, planned before anything stands on it: each thing's moving parts are made
 	# ready to answer it as they are put ([method TableThings.put])

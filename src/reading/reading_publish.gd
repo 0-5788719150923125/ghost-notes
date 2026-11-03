@@ -45,6 +45,12 @@ func upload_values() -> Dictionary:
 	return {}
 
 
+## THE EPISODE WHAT IS MADE FROM IT READS ([EpisodeFeed], [EpisodeSteps]): a show's picked one. Null hands it to the note,
+## which is then its own episode ([method ReadingPanel.episode_feed]).
+func feed() -> EpisodeFeed:
+	return null
+
+
 ## WHAT THE PICKED EPISODE IS CALLED, for a component that names its episodes (Cards' producer, Proof's
 ## framer): what the Script card's Episode shows and edits ([method ScriptWriter.hand_field]) - null while
 ## it has none to edit. A note that is its own episode ([method note_is_episode]) keeps its own Episode
@@ -71,7 +77,7 @@ func youtube_built(_card: YouTubeCard) -> void:
 
 ## WHETHER THE NOTE IS ITS OWN EPISODE: read as it is written, it goes up with the description written
 ## on its YouTube card and its own tags, and the steps the note's other cards add are made from its words
-## ([NoteUpload] - listed by the card that handed this, [method ReadingPanel.hand_publish]). False for a
+## ([NoteUpload]). False for a
 ## component that makes episodes and says what each goes up with.
 func note_is_episode() -> bool:
 	return true

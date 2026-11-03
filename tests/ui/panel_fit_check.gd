@@ -108,7 +108,7 @@ func _run() -> void:
 	var letter_card: Object = _letter._block_cards.get("letter")
 	if letter_card != null:
 		letter_card.set("_seen", FileAccess.get_file_as_string(_letter.note_path))
-		letter_card.call("_build_rows")
+		letter_card.set("_listed", LetterScript.sketches(String(letter_card.get("_seen"))))
 		letter_card.call("illustrations").set_script_text(LetterScript.pictures_only(String(letter_card.get("_seen"))))
 	_ok(letter_card != null, "a Letter note's panel has the Letter card")
 	# a voice list as the host fills it - its longest name is what a picker sized to its items
@@ -214,6 +214,7 @@ func _check_fits(name: String, panel: SidePanel_) -> void:
 			% [name, h, wants, vp.y] + "cannot scroll at all - those rows are unreachable")
 		# ...AND SCROLLING REALLY BRINGS THE LAST ROW IN. A scrollbar with travel on it is not
 		# the same claim: the row has to end up inside the panel's own rectangle.
+		var first_was: float = (panel.body.get_child(0) as Control).global_position.y
 		panel._scroll.scroll_vertical = int(bar.max_value)
 		await _settle()
 		var last: Control = panel.body.get_child(panel.body.get_child_count() - 1)
@@ -231,7 +232,7 @@ func _check_fits(name: String, panel: SidePanel_) -> void:
 		# a build with no gutter at all; it proved nothing. This one fails on that build.
 		# THE HEADER STAYS (asked 2026-10-07: "I have to keep scrolling to the top, to click those buttons"):
 		# scrolled to the bottom, the title row with its "⋯" and "–" is still inside the panel, above the
-		# scrolled body - and the body's first row, the control, has scrolled out of view
+		# scrolled body - and the body's first row, the control, has moved under it
 		var head: Control = panel._head.get_child(0) if panel._head.get_child_count() > 0 else null
 		_ok(head != null, "%s: no title row is pinned over the body" % name)
 		if head != null:
@@ -239,8 +240,9 @@ func _check_fits(name: String, panel: SidePanel_) -> void:
 			_ok(hr.position.y >= panel.get_global_rect().position.y - 1.0 and hr.end.y <= view.position.y + 1.0 and head.is_visible_in_tree(),
 				"%s at window %d: scrolled down, the title row is at %.0f..%.0f, not over the body at %.0f" % [name, h, hr.position.y, hr.end.y, view.position.y])
 			_ok(head.find_children("*", "MenuButton", true, false).size() > 0, "%s: the pinned row has no \"⋯\"" % name)
+		# by all there was to scroll, not out of view: a panel only a little too tall has its first row still showing at the bottom
 		var top_row: Control = panel.body.get_child(0)
-		_ok(top_row.get_global_rect().end.y < view.position.y + 1.0, "control: %s at window %d: scrolled to the bottom, the body's first row is still in view" % [name, h])
+		_ok(absf(first_was - top_row.global_position.y - hidden) < 2.0, "control: %s at window %d: scrolled to the bottom, the body's first row moved %.0f px of the %.0f there were" % [name, h, first_was - top_row.global_position.y, hidden])
 		var bar_rect: Rect2 = bar.get_global_rect()
 		var content: Rect2 = panel.body.get_global_rect()
 		_ok(bar.visible, "the control is wrong - the bar is not showing, so there is nothing "
@@ -375,7 +377,7 @@ func _check_episode_entry_follows() -> void:
 	TableEpisode.open("fit-check", 13).write_json("plan", {"episode_title": "Made While You Watched",
 		"spread": {"positions": [{"name": "Past"}]}})
 	_ok(pick.get_item_text(at).ends_with("(not made yet)"), "control: the entry is stale until the panel looks again")
-	_show._refresh_rows()
+	_show._refresh_card()
 	_ok(pick.get_item_text(at).ends_with("Made While You Watched") and pick.selected == at
 		and pick.text.ends_with("Made While You Watched"),
 		"its entry takes the title once the plan lands, shown on the button (%s)" % pick.text)
@@ -389,12 +391,15 @@ func _check_episode_entry_follows() -> void:
 ## row is there only where cards are drawn, and the work's only where there is work - and the panel keeps its width
 ## with a long word. The control: a plan that names no word has its cards' rows called Card.
 func _check_rows_named() -> void:
+	var pipe: PipelineCard = _cards.pipeline()
 	var titles := func() -> Array:
-		return _show._row_widgets.map(func(w: Dictionary) -> String: return (w["name"] as Label).text)
+		pipe.refresh()
+		return pipe.names() + pipe.group_names()
 	var text_of := func(title: String) -> String:
-		for w in _show._row_widgets:
-			if ((w as Dictionary)["name"] as Label).text == title:
-				return ((w as Dictionary)["text"] as Label).text
+		pipe.refresh()
+		for s in pipe.listed():
+			if title in (s as PipelineSection).rows().map(func(r: PipelineRow) -> String: return r.group):
+				return (s as PipelineSection).group_said(title)
 		return ""
 	var ep := TableEpisode.open("fit-check", 14)
 	ep.write_json("plan", {"episode_title": "Brewed", "beat_word": "Ingredient",
@@ -408,11 +413,9 @@ func _check_rows_named() -> void:
 	await _check_width("Cards (rows named by the plan)", _cards._panel)
 	ep.write_json("plan", {"episode_title": "Painted", "staging": {"source": "none"},
 		"spread": {"positions": [{"name": "The Base Coat", "work": "the white goes on"}]}})
-	_show._refresh_rows()
 	got = titles.call()
 	_ok(got.has("Beat 1") and got.has("Work") and not got.has("Draw"), "a show with no cards has no Draw row, and its work a Work row: %s" % str(got))
 	ep.write_json("plan", {"episode_title": "Read", "spread": {"positions": [{"name": "Past"}]}})
-	_show._refresh_rows()
 	got = titles.call()
 	_ok(got.has("Card 1") and not got.has("Ingredient 1") and not got.has("Beat 1"), "the control: a plan of cards naming no word has Card rows: %s" % str(got))
 	DirAccess.remove_absolute(ep.file_of("plan"))

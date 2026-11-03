@@ -107,6 +107,17 @@ const RINGS := {
 	"bone": {"f": 1300.0, "ratios": [1.0, 2.6], "decay": 0.05, "amp": 0.25},
 	"wood": {"f": 650.0, "ratios": [1.0, 2.6], "decay": 0.04, "amp": 0.35},
 }
+## PLASTIC ([method _plastic]): what each knock of an assembly's pieces rings with - its lowest mode for a piece 18 mm across (Hz; a
+## smaller one higher), its modes [ratio, level, share of the decay], how long it rings (seconds), its level, how much of it is a
+## tick of noise, and a low knock of the body under it.
+const PLASTIC := {
+	"click": {"f": 2600.0, "amp": 0.024, "decay": 0.018, "noise": 0.9, "modes": [[1.0, 1.0, 1.0], [2.31, 0.6, 0.7], [3.9, 0.3, 0.5]], "body": 0.5, "body_f": 520.0},
+	"clack": {"f": 2100.0, "amp": 0.02, "decay": 0.022, "noise": 0.6, "modes": [[1.0, 1.0, 1.0], [2.4, 0.5, 0.7]], "body": 0.4, "body_f": 380.0},
+	"tick": {"f": 3400.0, "amp": 0.0075, "decay": 0.009, "noise": 0.5, "modes": [[1.0, 1.0, 1.0], [2.2, 0.4, 0.6]]},
+	"knock": {"f": 3000.0, "amp": 0.0105, "decay": 0.011, "noise": 0.8, "modes": [[1.0, 1.0, 1.0], [2.5, 0.45, 0.6]]},
+	"pop": {"f": 1500.0, "amp": 0.016, "decay": 0.016, "noise": 0.7, "modes": [[1.0, 1.0, 1.0], [2.1, 0.35, 0.7]], "body": 0.3, "body_f": 300.0},
+	"scuff": {"f": 900.0, "amp": 0.0035, "decay": 0.02, "noise": 1.6, "modes": [[1.0, 0.3, 1.0]]},
+}
 ## Ticks with the show's time unmoved before the sound is held where it is.
 const STILL_TICKS := 2
 ## The most sines and noise bursts sounding at once.
@@ -339,6 +350,11 @@ func _look(t0: float, t1: float) -> Array:
 			hiss = POUR_HISS * flow
 			_hiss_pan = _ears(pour["at"])
 	_hiss_want = hiss
+	# WHAT IS BUILT: each press, knock and clatter as the assembly has it, at its own moment ([method Assembly.sounds_in])
+	if work.assembly != null:
+		for e in work.assembly.sounds_in(t0, t1):
+			var ed: Dictionary = e
+			spawn.append([clampi(int((float(ed["t"]) - t0) * float(RATE)), 0, STEP - 1), _plastic.bind(ed)])
 	spawn.sort_custom(func(a: Array, b: Array) -> bool: return int(a[0]) < int(b[0]))
 	return spawn
 
@@ -472,6 +488,26 @@ func _thud(d: Dictionary) -> void:
 
 
 ## A CRUNCH of something breaking under a grinding point, [param big] (0-1) of the loudest, around [param f] Hz.
+## HARD PLASTIC ON HARD PLASTIC ([Assembly]; the user, 2026-11-02: "a big box of bricks that we would sometimes dig through (bearing in
+## mind we might want sound there)"): a molded piece is small and stiff, so it rings high and is gone in a few milliseconds, and the
+## pitch goes up as it gets smaller - two or three modes and a tick of noise at the moment of contact. A press home is that with a
+## second, firmer knock on its heels, the studs seating; a piece pulled off, one soft pop; a rummage is many of them, none the
+## same ([constant PLASTIC]). In a long silence, this is what is heard, so it stays below the voice and never gets busier than a hand.
+func _plastic(e: Dictionary) -> void:
+	var row: Dictionary = PLASTIC.get(String(e["kind"]), PLASTIC["tick"])
+	var strength := float(e.get("strength", 1.0))
+	var size := clampf(float(e.get("size", 0.02)), 0.004, 0.08)
+	var f := float(row["f"]) * pow(0.018 / size, 0.55) * lerpf(0.85, 1.2, _rand())
+	var amp := float(row["amp"]) * strength
+	var ears := _ears(e.get("at", Vector3.ZERO))
+	for m in (row["modes"] as Array):
+		var mode: Array = m
+		_sine(minf(f * float(mode[0]), 9500.0), float(row["decay"]) * float(mode[2]), amp * float(mode[1]), ears)
+	_burst(minf(f * 1.6, 9000.0), 1.4, float(row["decay"]) * 0.5, amp * float(row["noise"]), ears)
+	if float(row.get("body", 0.0)) > 0.0:
+		_sine(float(row["body_f"]) * lerpf(0.9, 1.1, _rand()), 0.022, amp * float(row["body"]), ears)
+
+
 func _crunch(big: float, ears: Vector2, f: float) -> void:
 	_burst(f * lerpf(0.85, 1.15, _rand()), 0.9, 0.008, CRUNCH * big * lerpf(0.5, 1.0, _rand()), ears)
 

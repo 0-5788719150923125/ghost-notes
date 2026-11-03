@@ -721,6 +721,8 @@ static func sanitize_table(spec: Dictionary, look: Dictionary) -> Dictionary:
 	out["sound"] = Soundscape.sanitize(spec.get("sound"))
 	# THE RIDE: what the table is aboard, if it moves ([Rides]) - `{}` for a table standing still
 	out["ride"] = Rides.sanitize(spec.get("ride"))
+	# WHAT IS BUILT ON IT, from many small parts ([Assembly]) - `{}` for a table with none
+	out["assembly"] = Assembly.sanitize(spec.get("assembly"))
 	# THE TITLE'S COLOR, chosen to stand out from this table: kept when it is a color at all
 	var title: Dictionary = spec.get("title", {}) if spec.get("title") is Dictionary else {}
 	out["title"] = {}

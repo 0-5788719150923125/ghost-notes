@@ -353,6 +353,7 @@ static func set_dresser(title: String, brief: String, plan: Dictionary, seed: in
 		"lights": Lights.describe(), "sounds": Soundscape.describe(), "rides": Rides.describe(),
 		"title": title.strip_edges(), "byline": byline.strip_edges(),
 		"seen": ", ".join(PackedStringArray(seen)), "airs": ", ".join(PackedStringArray(airs)),
+		"assembly": plan.get("assembly") == true, "assembly_stock": Assembly.describe_stock(),
 	}
 	vars.merge(_box_size(String(CardTable.staging_of(plan)["box_style"]) == "shoebox",
 		String(CardTable.staging_of(plan)["contents"]), plan.get("look", {}) if plan.get("look") is Dictionary else {}))
@@ -394,6 +395,16 @@ static func work_lines(plan: Dictionary) -> Array:
 ## How long a word takes a voice to say, seconds - the pace measured on real exports for Proof's lessons: the
 ## words a passage needs to cover its work.
 const SAID_WORD := 0.52
+## The fewest words a passage over work runs to, however quiet the show: it still has to say something. And the most of the work
+## that may pass in silence.
+const QUIET_WORDS_LEAST := 15
+const QUIET_MOST := 0.85
+
+
+## HOW MUCH OF THE WORK PASSES WITH NOBODY TALKING, 0 to [constant QUIET_MOST]: the plan's `quiet`, the producer's from the brief.
+static func quiet_of(plan: Dictionary) -> float:
+	var q: Variant = plan.get("quiet", 0.0)
+	return clampf(float(q), 0.0, QUIET_MOST) if q is float or q is int else 0.0
 
 
 ## THE PUPPETEER, blocking the episode's work on its set table ([PuppeteerTools]): the plan's work, the cards
@@ -411,7 +422,8 @@ static func puppeteer(title: String, brief: String, plan: Dictionary, seed: int,
 	var vars := {"seed": seed, "episode_title": String(plan.get("episode_title", "")), "premise": String(plan.get("premise", "")),
 		"work": work_lines(plan), "cards": cards, "parts": parts if not parts.strip_edges().is_empty() else "(nothing on the table works yet)",
 		"laws": Motions.describe_laws(), "bursts": ", ".join(PackedStringArray(Effects.BURSTS.keys())),
-		"tools": looks > 0, "looks": looks, "cardless": CardTable.cardless(plan), "beats": CardTable.beats(plan)}
+		"tools": looks > 0, "looks": looks, "cardless": CardTable.cardless(plan), "beats": CardTable.beats(plan),
+		"assembly": plan.get("assembly") == true, "assembly_steps": Assembly.describe()}
 	return {"system": show_context(title, brief), "prompt": Rules.say("table/puppeteer.prompt", vars)}
 
 
@@ -585,9 +597,11 @@ static func reader(title: String, brief: String, plan: Dictionary, step: String,
 		var seconds := 0.0
 		for a in work:
 			var ad: Dictionary = a
+			# ...WHAT IS BUILT TAKES WHAT ITS STEPS TAKE ([Assembly]): under its words, but no guess
+			var timed: bool = ad.has("_natural")
 			acts.append({"name": String(ad.get("name", "")), "about": String(ad.get("about", "")),
-				"under": bool(ad.get("under", false)), "seconds": roundi(float(ad.get("length", 0.0)))})
-			seconds += 12.0 if bool(ad.get("under", false)) else float(ad.get("length", 0.0))
+				"under": bool(ad.get("under", false)) and not timed, "seconds": roundi(float(ad.get("length", 0.0)))})
+			seconds += 12.0 if bool(ad.get("under", false)) and not timed else float(ad.get("length", 0.0))
 		vars["work_acts"] = acts
 		vars["work_seconds"] = roundi(seconds)
 		if work_k > 0:
@@ -597,6 +611,15 @@ static func reader(title: String, brief: String, plan: Dictionary, step: String,
 			lo_hi = [maxi(30, roundi(seconds / SAID_WORD * WORK_WORDS.x)), maxi(60, roundi(seconds / SAID_WORD * WORK_WORDS.y))]
 		else:
 			lo_hi = [maxi(int(lo_hi[0]), roundi(seconds / SAID_WORD * 0.8)), maxi(int(lo_hi[1]), roundi(seconds / SAID_WORD * 1.2))]
+		# A SHOW THAT GOES QUIET ([method quiet_of]; the user, 2026-11-02: "There might be stretches where we do not talk at all"): the
+		# words cover its share of the work, and what is left is silence, said where it falls
+		var quiet := quiet_of(plan)
+		if quiet > 0.0:
+			var talk := seconds * (1.0 - quiet) / SAID_WORD
+			lo_hi = [maxi(QUIET_WORDS_LEAST, roundi(talk * 0.8)), maxi(QUIET_WORDS_LEAST * 2, roundi(talk * 1.2))]
+			vars["quiet"] = true
+			vars["quiet_seconds"] = roundi(seconds * quiet)
+			vars["quiet_most"] = roundi(CardReading.QUIET_MOST)
 	if work_k > 0:
 		vars["card"] = false
 		vars["aside"] = false

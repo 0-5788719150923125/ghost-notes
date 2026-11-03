@@ -232,6 +232,10 @@ func _drape(t: Dictionary, b: Dictionary, keep_out: Array) -> void:
 ## deck is shuffled, where a jumper lands - as rectangles on the table (x by z).
 func off_limits() -> Array:
 	var out: Array = []
+	# WHAT IS BUILT HERE ([TableAssembly]): its plate, and each pile on the table - nothing else stands there
+	var built_here: Dictionary = medium._work.assembly_spec if medium._work != null else {}
+	if not built_here.is_empty():
+		out.append_array(TableAssembly.keep_out(built_here, TableAssembly.base_center(built_here, medium._plan)))
 	# A SHOW WITH NO CARDS keeps no room for them: no spread, no deck, no jumper's landing - the middle is the work's
 	if medium._plan.cards_from == "none":
 		return out

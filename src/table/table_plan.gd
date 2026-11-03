@@ -171,6 +171,10 @@ func estimated_times(n: int) -> PackedFloat32Array:
 	for a in parse.get("actions", []):
 		var k := int((a as Dictionary)["after"])
 		rests[k] = float(rests.get(k, 0.0)) + float((a as Dictionary)["dur"]) + TableMedium.LEAD + TableMedium.TAIL
+	# ...and its silences: unheard words a silence off, they were a guess that hurried the work under them ([Assembly]), and it had begun
+	for q in parse.get("quiets", []):
+		var k := int((q as Dictionary)["si"])
+		rests[k] = float(rests.get(k, 0.0)) + float((q as Dictionary)["s"])
 	var out := PackedFloat32Array()
 	out.resize(n)
 	var t := maxf(hold, 0.0)

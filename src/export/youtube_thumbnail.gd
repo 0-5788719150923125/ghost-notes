@@ -6,9 +6,8 @@ class_name YouTubeThumbnail
 ## and relevant thumbnail. This flow might benefit from both the writer and the painter").
 ##
 ## A STEP OF THE EPISODE ([EpisodeStep]), offered by the YouTube card while its Thumbnail is Painted
-## ([constant YouTube.THUMBNAILS]): the card that makes episodes lists it under its own steps, Generate
-## makes it with them and its ⟳ paints it again - a note read as it is written, by an export that goes up
-## ([NoteUpload]). TWO AGENTS, EACH PICKED ON THE CARD: the writer reads the episode - its words, title
+## ([constant YouTube.THUMBNAILS]): the note's Pipeline card lists it, Generate makes it once the words are
+## written and its ⟳ paints it again - a note read as it is written, by an export that goes up too ([NoteUpload]). TWO AGENTS, EACH PICKED ON THE CARD: the writer reads the episode - its words, title
 ## and description, and its own pictures where it has any ([method EpisodeFeed.pictures], a show's
 ## paintings) - and writes what the painter paints, the words on it and which of those pictures the
 ## painter follows (rules/youtube/thumbnail.yaml); the painter paints it ([method _after]); the code cuts

@@ -1,17 +1,16 @@
 extends RefCounted
 class_name EpisodeStep
 
-## EpisodeStep - a step one card adds to the episodes another card makes: a row in that card's list
-## of steps, with its ✓ once made and its ⟳ to make it again, made by Generate along with the rest (the
-## user, 2026-10-18: "add an interface that would allow other cards (like the YouTube one) to hook-in to
-## that list, to add their own step - such that we could add a nice little checkmark ... and a
-## regenerate button next to that step"). The YouTube card's tags are the first ([YouTubeTags]).
+## EpisodeStep - a thing one card makes from the episode another card makes: a row of the note's Pipeline card
+## ([EpisodeSteps], [PipelineCard]), with its ✓ once made and its ⟳ to make it again, made by Generate after the words it
+## is made from (the user, 2026-10-18: "add an interface that would allow other cards (like the YouTube one) to hook-in to
+## that list, to add their own step - such that we could add a nice little checkmark ... and a regenerate button next to
+## that step"). The YouTube card's tags are the first ([YouTubeTags]).
 ##
-## THE CARDS NEVER MEET ([EpisodeFeed]). A card offers its steps (`episode_steps()`), the panel collects
-## them ([method ReadingPanel.episode_steps]), and the card that makes episodes lists the ones
-## [method wanted], hands each the episode as a feed, and calls it at its own moments: Generate
-## ([method generate]), ⟳ ([method redo]), Stop ([method stop]), and every refresh ([method tick],
-## [method listed]). It never asks what a step is, and a step never asks what made the episode.
+## THE CARDS NEVER MEET ([EpisodeFeed]). A card hands its steps as a section ([EpisodeSteps]), and the panel says which
+## episode is shown ([method ReadingPanel.episode_feed]). The section lists the ones [method wanted] and calls each at its
+## moments: Generate ([method generate]), ⟳ ([method redo]), Stop ([method stop]), and every refresh ([method tick],
+## [method listed]). A step never asks what made the episode.
 ##
 ## MADE FROM THE EPISODE'S WORDS, BY ONE AGENT JOB, once they are written: the step's prompt
 ## ([method _prompt]) goes to the maker's own writer ([method EpisodeFeed.writer]), and the answer,
@@ -45,14 +44,9 @@ var waits := "made once the episode's words are written"
 var unmade := "not made for this episode yet"
 ## The writer's tier for its job ([constant TextGen.TIERS]).
 var tier := "best"
-## THE CARD LISTING IT now, as that card names itself ("the Episode card"), and the episode it shows -
-## set at every refresh by whoever lists it ([method listed]); "" and null while nothing does. What lets
-## the card that offers the step say where it is.
-var host := ""
+## THE EPISODE IT IS LISTED FOR now - set at every refresh ([method listed]); null while it is not listed. What lets the
+## card that offers the step say how it stands for the episode shown.
 var shown: EpisodeFeed = null
-## What makes the episode there, as the card offering the step says it ("making the episode"; a note read
-## as it is written, "an export that goes up").
-var host_makes := "making the episode"
 
 var _jobs := {}      # folder -> {id, feed, stamp}: a job making it for that episode
 var _errors := {}    # folder -> why it failed, once out of tries
@@ -60,7 +54,7 @@ var _tries := {}     # folder -> runs started
 var _kept := {}      # file -> {mt, data}: what was read, read again only when the file changes
 
 
-## Of [param steps] (what the panel collected), the ones a maker lists now.
+## Of [param steps], the ones listed now.
 static func listed_of(steps: Array) -> Array:
 	return steps.filter(func(s: Variant) -> bool: return s is EpisodeStep and (s as EpisodeStep).wanted())
 
@@ -71,12 +65,9 @@ func wanted() -> bool:
 	return true
 
 
-## The card listing it says so, each refresh: its name ([param by]), the episode it shows and what makes
-## it there ([param makes]).
-func listed(by: String, feed: EpisodeFeed, makes := "making the episode") -> void:
-	host = by
+## Listed for [param feed]'s episode, said each refresh.
+func listed(feed: EpisodeFeed) -> void:
 	shown = feed
-	host_makes = makes
 
 
 ## The file it is kept in for [param feed]'s episode; "" with no episode.
@@ -113,8 +104,8 @@ func owed(feed: EpisodeFeed) -> bool:
 	return not fresh(feed)
 
 
-## Is it still to make for [param feed]'s episode - being made, failed, or [method owed]? What a card's Generate
-## and its line wait on ([method EpisodeSteps.missing]).
+## Is it still to make for [param feed]'s episode - being made, failed, or [method owed]? What Generate waits on
+## ([method EpisodeSteps.missing_on]).
 func to_make(feed: EpisodeFeed) -> bool:
 	var st := state(feed)
 	return st != "ready" and (st != "missing" or owed(feed))
@@ -145,7 +136,7 @@ func said(feed: EpisodeFeed) -> String:
 	if feed.words().is_empty():
 		return waits
 	if not made(feed).is_empty():
-		return ("made from the words before they were written again - ⟳ makes it again, and so does %s" % host_makes) \
+		return ("made from the words before they were written again - ⟳ makes it again, and so does %s" % feed.made_by()) \
 			if owed(feed) else "made from the words before they were written again, and kept - ⟳ makes another"
 	return unmade
 

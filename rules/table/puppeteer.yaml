@@ -41,6 +41,10 @@ prompt:
   - insert: laws
   - ""
   - include: acts
+  - when: assembly
+    say: ""
+  - when: assembly
+    include: assembly
   - ""
   - when: tools
     include: with_tools
@@ -215,6 +219,28 @@ acts:
       written on) takes them by `write`, written by the unseen pen as the reader says so, where the
       camera sees them - at the work's spot, before the sheet goes on its way. Nothing else on the table
       carries words.
+
+# WHAT IS BUILT OF MANY SMALL PARTS (next/assembly.md; the user, 2026-11-02: "we might pull a brick, try to fit it, put it back, try a
+# different one. We might build some structure, then destroy it and start over"): no carry per piece, which is 40 acts of a dozen
+# tracks. One law, `assemble`, and its steps say what; the hand finds where. Assembly.describe gives the parts and steps in the
+# registry's own words, so this file names no kind of part.
+assembly:
+  - >-
+      WHAT IS BUILT HERE IS BUILT OF MANY SMALL PARTS: the table's ASSEMBLY (`parts` says where its plate and stocks are). It has one
+      law, `assemble`, and an act of it is one track, {"law": "assemble", "ops": [its steps]}, naming no thing: you say which part
+      and which stud, and the hand finds the piece, moves what lies on it, lifts it over what is in its way and presses it home.
+      Leave `length` out: an act of it takes what its steps take, and `act` says how long that is.
+  - insert: assembly_steps
+  - >-
+      WHAT YOU WRITE IS HOW SOMEONE BUILDS, NOT WHAT THEY END UP WITH. The brief says how this show's work goes: follow it, in the
+      steps themselves. Say what the hands really do, in the order they do it, including what comes to nothing - what is dug for, what
+      is tried and put back, what is looked at and not used, where they stop, what comes off again. A step that is not a piece going
+      on is not wasted: it is the work. An easy pace is the steps' own, so never write a thing to make it go faster. Keep each act
+      to one stretch the reader can talk under, a few minutes or less, and write as many as the episode needs, at most as many as
+      you are allowed (when you are told an act is too long, split it).
+  - >-
+      `act` answers with what each act comes to, what it COULD NOT do, and the whole model as it leaves it, level by level: read that
+      to see what you have made, and fix what it could not do. `model` shows it from four sides.
 
 with_tools:
   - >-

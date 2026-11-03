@@ -282,7 +282,7 @@ func load_set(dir: String, sid: String, still: int, seed_in: int, renderer := "2
 	var splats := renderer == "gaussian"
 	var avatar := sd.path_join("avatar").path_join("fit")
 	if stills.is_empty() or not FileAccess.file_exists(avatar + ".json" if splats else sd.path_join("library.json")):
-		return "The actor's set in use is not built yet: Generate on the Actor card builds it."
+		return "The actor's set in use is not built yet: Generate on the Pipeline card builds it."
 	var k := clampi(still, 0, stills.size() - 1)
 	# A BODY FITTED TO ONE STILL is played on that still, until the one picked is fitted too (Generate)
 	var fitted: Variant = ActorFolder.read_json(avatar + ".json") if splats else null
@@ -296,7 +296,7 @@ func load_set(dir: String, sid: String, still: int, seed_in: int, renderer := "2
 		_renderer = renderer
 		var err := _face.load_set(sd.path_join("rig.json"), sd.path_join("library.json"), not splats)
 		if not err.is_empty():
-			return "The actor is not ready: %s. Generate on the Actor card builds it." % err
+			return "The actor is not ready: %s. Generate on the Pipeline card builds it." % err
 		_face.set_still(stills[k], k)
 		var st_k: Dictionary = stills[k]
 		# THEIR PICTURE: the still, filled from round what stands before them where something does
@@ -305,7 +305,7 @@ func load_set(dir: String, sid: String, still: int, seed_in: int, renderer := "2
 		if img == null:
 			img = Image.load_from_file(sd.path_join("stills").path_join(String(st_k["file"])))
 		if img == null:
-			return "The actor's still could not be read: Generate on the Actor card makes it again."
+			return "The actor's still could not be read: Generate on the Pipeline card makes it again."
 		img.convert(Image.FORMAT_RGBA8)
 		_still_tex = ImageTexture.create_from_image(img)
 		# THEIR ROOM AND MATTE (a still from before the third pass has neither: drawn whole, as it was)
@@ -326,7 +326,7 @@ func load_set(dir: String, sid: String, still: int, seed_in: int, renderer := "2
 	_plan.size_for(splats)
 	var err2 := _plan.setup(dir.path_join("motion.json"), _face, seed_in)
 	if not err2.is_empty():
-		return "The actor is not ready: %s. Generate on the Actor card makes it." % err2
+		return "The actor is not ready: %s. Generate on the Pipeline card makes it." % err2
 	_take_face_ways()
 	var colors := PackedColorArray()
 	for uv in _face.lay_uv:
@@ -350,7 +350,7 @@ func _load_splat(sd: String, dir: String, k: int) -> String:
 		_splat_layer.add_child(_splat)
 	var err := _splat.load_avatar(sd.path_join("avatar").path_join("fit"))
 	if not err.is_empty():
-		return "The actor's splats are not ready: %s. Generate on the Actor card makes them." % err
+		return "The actor's splats are not ready: %s. Generate on the Pipeline card makes them." % err
 	var plate := _picture(sd.path_join("avatar").path_join("fit.plate.png"))
 	if plate != null:
 		_room.tex = plate
@@ -389,7 +389,7 @@ func _load_splat(sd: String, dir: String, k: int) -> String:
 	var v: Variant = ActorFolder.read_json(dir.path_join("visemes.json"))
 	var mouths: Variant = (poses as Dictionary).get("mouths")
 	if not (v is Dictionary) or not (mouths is Dictionary) or not ((mouths as Dictionary).get("sounds") is Dictionary):
-		return "The actor's set is from before their own mouths: Generate on the Actor card makes it again."
+		return "The actor's set is from before their own mouths: Generate on the Pipeline card makes it again."
 	_still_face = _splat.face_of(_still_scores)
 	_still_expr = _splat.expr_of(_still_scores)
 	var own := own_mouths(_splat, rest_mouth(_still_scores, v), mouths, _push, top_of(v))
