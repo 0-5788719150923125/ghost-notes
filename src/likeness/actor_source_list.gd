@@ -9,7 +9,8 @@ class_name ActorSourceList
 ##
 ## A VIDEO TICKED REBUILDS NO ROW (2026-10-23: every tick held the app for seconds while all of them were made
 ## again): the rows are made again only when a video is added, fetched or measured ([method refresh]). TICK ALL
-## AND UNTICK ALL take the whole list at once.
+## AND UNTICK ALL take the whole list at once, and stand above it: the list is as long as they have videos, in the
+## panel's one scroll.
 ##
 ## A VOICE ALONE ([method ActorFolder.sound_only]) is offered no captions-only link (Hear listens to all of it)
 ## and no "head" pin, and its folders' sound files are listed beside their videos.
@@ -50,13 +51,6 @@ func _init() -> void:
 	_add_link.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_add_link.pressed.connect(_ask_link)
 	srow.add_child(_add_link)
-	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size.y = 120
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	add_child(scroll)
-	_videos_box = VBoxContainer.new()
-	_videos_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(_videos_box)
 	var trow := HBoxContainer.new()
 	trow.add_theme_constant_override("separation", 6)
 	add_child(trow)
@@ -68,6 +62,9 @@ func _init() -> void:
 		all.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		all.pressed.connect(tick_all.bind(on))
 		trow.add_child(all)
+	_videos_box = VBoxContainer.new()
+	_videos_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	add_child(_videos_box)
 	_tips()
 
 

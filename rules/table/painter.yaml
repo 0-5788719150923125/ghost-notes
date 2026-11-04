@@ -204,3 +204,31 @@ backdrop:
       hands or people: the table stands in front of this picture separately.
   - "Its colors belong to this palette: {{palette}}."
   - "FORMAT: LANDSCAPE 3:2 (1536x1024). No text, no watermark, no signature."
+
+# WHAT A GAME'S SESSION ASKED TO HAVE PAINTED (next/tabletop.md), painted after it was played, whatever it turned out to need: the table's own grid is drawn over a map by code, so that a square is exact, and none is painted.
+game_map:
+  - include: head
+  - ""
+  - >-
+      THE PICTURE: a game map of {{name}}: {{looks}}. Seen from directly above, as a map is, the whole frame filled edge to edge. Painted by the people who run this game: {{art}}
+  - >-
+      NO GRID, NO SQUARES, NO LETTERING, no compass, no legend, no border, no people or creatures: a grid is laid over it and figures stand on it. Clear shapes a person can read from across a table, in big simple areas of color. Its colors: {{palette}}.
+  - "FORMAT: LANDSCAPE 3:2 (1536x1024). No text, no watermark."
+
+game_figure:
+  - include: head
+  - ""
+  - >-
+      THE PICTURE: a paper game figure of {{name}}: {{looks}}. One figure, whole, head to foot, standing, facing the viewer, big in the frame: printed on a card to stand on a table. Painted by the people who run this game: {{art}}
+  - >-
+      A plain pale background, nothing else in the picture and no ground under it. Bold shapes and a strong outline, for it is seen small and from across a table. No text, no border.
+  - "FORMAT: PORTRAIT 2:3 (1024x1536). No text, no watermark."
+
+game_reveal:
+  - include: head
+  - ""
+  - >-
+      THE PICTURE: what a game master hands across the table: {{name}}: {{looks}}. Painted by the people who run this game: {{art}}
+  - >-
+      Fills the whole frame, edge to edge, with what it shows big and central, as a viewer sees it at a glance. Its colors: {{palette}}. No text, no border, no people at a table.
+  - "FORMAT: LANDSCAPE 3:2 (1536x1024). No text, no watermark."

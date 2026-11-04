@@ -26,6 +26,14 @@ landing in a card above pushes the list down just the same), and a turn of the w
 press brings it, its start in view. A panel that fits is at its end only trivially, so it follows its last card alone: a note's words
 filling in as it opens leave it at its top.
 
+**Nothing on a card scrolls of its own.** The user, 2026-11-03: "the inner scrolling of the YouTube card's "description" can be pretty
+annoying and unexpected. At the same time, that text is hard to read, and it's annoying that I even have to scroll it, to read it."
+A box with a scroll of its own under a panel that scrolls takes the wheel from the panel the moment the pointer crosses it. So words too
+long for a line are a `TextField` (`src/ui/text_field.gd`): a heading, their first lines as the Body card shows a note's, and a click from a window to
+write them in - the Description (a show's and a note's), the Letter's index cards, the Pictures' style. And a list grows with its rows, in the panel's
+one scroll - an actor's videos, Synthesis' Collection, a storyboard's entries. docs.py's rule "one scroll" fails a new one, and
+`panel_fit_check` walks the real panels. An actor's videos are as long as they have videos: their Tick all and Untick all stand above the list for that.
+
 **It moves.** A card slides open and shut, what is under it going with it. Pointing at a bar in a pile spreads the pile there until
 the whole bar shows - the fan. A small window closes the piles up rather than taking the room from what is being read.
 
@@ -51,7 +59,8 @@ out of the tree, with no ×. The first said so only as an engine `ERROR:`, which
 Left as they were, for the user to say:
 
 - Masking's Markers stay pinned in the footer (`SidePanel.add_footer_card`): asked for by name once ("the whole manage-markers
-  workflow stays visible together"), and they are not what was complained of. It is the only footer left.
+  workflow stays visible together"), and they are not what was complained of. It is the only footer left, and its list is the one thing on a
+  left-side card that still scrolls of its own: pinned, nothing else would scroll it. Into the deck, it needs no scroll of its own.
 - The chips under the panel's heading now say much of what the piles say. Ctrl-click on one still opens a card alone, which nothing
   else does.
 

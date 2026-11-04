@@ -22,6 +22,12 @@ class_name AssemblyWorld
 ## 600 bricks stayed awake through a small dig. So the cost of a dig is what it disturbs, however full the tub is, and since whatever moves
 ## thaws what is around it, nothing is left hanging when what held it goes.
 ##
+## A WALL HOLDS, WHATEVER IS PUSHED AT IT ([method add_vessel], [method _wall_push]; feedback 0015, the first real model's tub: "an orange brick currently clipping through the side of the bucket"). A hand
+## is kinematic, so what it shoves against a wall is being pushed by something that cannot give, and no solver can satisfy both: an 8x8 plate stood 2.5 mm into a wall 3 mm thick (the tub's 5 mm, warped
+## to 0.63 on its short side), and a wall is two faces of a surface, each pushing what is nearest it out through itself, so a plate as thin as the wall between them was held there for the whole show.
+## 41 true boxes stood so in the record's first 90 steps. So what is in a vessel stays in it as a rule of this world, kept every read and laid over the solver: what its inside is was measured from the
+## thing's own surface by rays, and a piece's corner past that, below the rim, moves the piece back. Over the rim is not through it, and what lies across a rim is left alone.
+##
 ## WHAT HAPPENED IS WRITTEN AS IT HAPPENS: each moving piece's pose, kept only where a straight line between keys would miss it
 ## ([method _record]), and each hit ([method _hits]) - how hard, what it hit, where - which is the only place a brick's sound comes from.
 
@@ -66,6 +72,17 @@ const THAW_NEAR := 0.016
 const CELL := 0.04
 ## How long the world may take to come to rest before a stop, at most (seconds): a piece still creeping then is under anything seen.
 const SETTLE_MOST := 1.6
+## WHAT IS IN A VESSEL STAYS IN IT ([method add_vessel]): how many ways round and how many heights its inside is measured at; how far past the wall a corner may stand (meters: a contact's own slop is 1 mm, and
+## a wall may be 3 mm through), where it is put back to, and past what depth it is no longer pressed into the wall but somewhere else; how far past the wall a middle is no longer in it; what a way out reads as.
+const WALL_ANGLES := 96
+const WALL_BANDS := 16
+const WALL_SLOP := 0.0012
+const WALL_LEAVE := 0.0008
+const WALL_DEEP := 0.015
+const WALL_LOST := 0.02
+const WALL_OPEN := 100.0
+## How many times over a read a piece's corners are looked at: moved off one, another may be the deepest, on a wall that curves.
+const WALL_LOOKS := 3
 ## What can be hit, for what it sounds like: anything else is a [constant Props.MATERIALS] kind.
 const PLASTIC := "plastic"
 const HAND := "hand"
@@ -99,6 +116,12 @@ var _surface := {}                # a body's id -> what it sounds like
 var _grid := {}                   # a cell -> [frozen pieces]
 var _key_last: Array = []         # a piece -> [tau, pos, quat] of its last key
 var _prev: Array = []             # a piece -> [tau, pos, quat] of its last sample
+var keep_walls := true            # a gate's control turns it off
+var _vessels: Array = []          # {middle, low, step, r, open, least, most} ([method add_vessel])
+var _in := PackedInt32Array()     # a piece -> the vessel it is in, -1 for none
+var _corners: Array = []          # a piece -> its shape's corners (meters, its own space)
+var _corners_by := {}             # a kind and size -> those corners
+var _pushed: Array[int] = []      # what a wall has moved back since what is near it was last thawed
 
 
 func _init(world_space: RID) -> void:
@@ -205,6 +228,165 @@ func add_surface(faces: PackedVector3Array, sound: String) -> RID:
 	return b
 
 
+## WHAT VESSEL [param faces] (meters) HOLDS IS KEPT IN IT, from here on: its inside measured from [param middle] (x, z) by rays, all round and at each height from [param low] up, as far out as its surface. A way
+## that finds nothing is open, and so is one that steps sharply in above the wall below it, which is a handle arching over and no wall.
+func add_vessel(faces: PackedVector3Array, middle: Vector2, low: float) -> void:
+	var high := low
+	var big := PackedVector3Array()
+	big.resize(faces.size())
+	for i in faces.size():
+		high = maxf(high, faces[i].y)
+		big[i] = faces[i] * TableWork.RAY_SCALE
+	if high - low < 0.01:
+		return
+	var tm := TriangleMesh.new()
+	tm.create_from_faces(big)
+	var r := PackedFloat32Array()
+	r.resize(WALL_ANGLES * WALL_BANDS)
+	var step := (high - low) / float(WALL_BANDS - 1)
+	var open := low
+	var least := WALL_OPEN
+	var most := 0.0
+	for j in WALL_BANDS:
+		var y := low + step * float(j) + (0.002 if j == 0 else 0.0)
+		var walled := 0
+		for i in WALL_ANGLES:
+			var a := TAU * float(i) / float(WALL_ANGLES)
+			var hit: Dictionary = tm.intersect_ray(Vector3(middle.x, y, middle.y) * TableWork.RAY_SCALE, Vector3(cos(a), 0.0, sin(a)))
+			var rr := WALL_OPEN
+			if not hit.is_empty():
+				var at: Vector3 = hit["position"]
+				rr = Vector2(at.x, at.z).distance_to(middle * TableWork.RAY_SCALE) / TableWork.RAY_SCALE
+			if j > 0 and rr < r[(j - 1) * WALL_ANGLES + i] * 0.7:
+				rr = WALL_OPEN
+			if j > 0 and r[(j - 1) * WALL_ANGLES + i] >= WALL_OPEN:
+				rr = WALL_OPEN
+			r[j * WALL_ANGLES + i] = rr
+			if rr < WALL_OPEN:
+				walled += 1
+				least = minf(least, rr)
+				most = maxf(most, rr)
+		if walled * 4 >= WALL_ANGLES * 3:
+			open = y
+	if open <= low or most <= 0.0:
+		return
+	_vessels.append({"middle": middle, "low": low, "step": step, "r": r, "open": open, "least": least, "most": most})
+
+
+## How far from its middle a vessel's wall stands, the way [param a] round and at height [param y]: [constant WALL_OPEN] where there is none.
+static func _wall_at(v: Dictionary, a: float, y: float) -> float:
+	var r: PackedFloat32Array = v["r"]
+	var fa := fposmod(a, TAU) / TAU * float(WALL_ANGLES)
+	var i0 := mini(int(fa), WALL_ANGLES - 1)
+	var i1 := (i0 + 1) % WALL_ANGLES
+	var ta := fa - float(i0)
+	var fy := maxf((y - float(v["low"])) / float(v["step"]), 0.0)
+	var j0 := mini(int(fy), WALL_BANDS - 1)
+	var j1 := mini(j0 + 1, WALL_BANDS - 1)
+	var ty := fy - float(j0)
+	var lo := lerpf(r[j0 * WALL_ANGLES + i0], r[j0 * WALL_ANGLES + i1], ta)
+	var hi := lerpf(r[j1 * WALL_ANGLES + i0], r[j1 * WALL_ANGLES + i1], ta)
+	return lerpf(lo, hi, ty)
+
+
+## HOW FAR PIECE [param id], its middle [param c] where [param at] has it, MUST MOVE TO BE IN ITS VESSEL AGAIN: nothing for what is in none, for what is clear, and for what is across the rim. It is in a
+## vessel from when its middle is, until that middle leaves over the rim: gone through the wall it is still in, and comes back.
+func _wall_push(id: int, at: Transform3D, c: Vector3) -> Vector3:
+	var vi := _in[id]
+	if vi < 0:
+		for k in _vessels.size():
+			var o: Dictionary = _vessels[k]
+			var om: Vector2 = o["middle"]
+			var ox := c.x - om.x
+			var oz := c.z - om.y
+			var most := float(o["most"])
+			if ox * ox + oz * oz < most * most and sqrt(ox * ox + oz * oz) < _wall_at(o, atan2(oz, ox), minf(c.y, float(o["open"]))):
+				vi = k
+				_in[id] = k
+				break
+		if vi < 0:
+			return Vector3.ZERO
+	var v: Dictionary = _vessels[vi]
+	var m: Vector2 = v["middle"]
+	var open := float(v["open"])
+	var dx := c.x - m.x
+	var dz := c.z - m.y
+	var d := sqrt(dx * dx + dz * dz)
+	var wall := _wall_at(v, atan2(dz, dx), minf(c.y, open))
+	if d > wall and (c.y >= open or d > wall + WALL_LOST):
+		_in[id] = -1
+		return Vector3.ZERO
+	var least := float(v["least"])
+	if d + size[id] < least:
+		return Vector3.ZERO
+	var total := Vector3.ZERO
+	# ...its middle gone through, back through first
+	if d > wall:
+		total = Vector3(-dx, 0.0, -dz) / d * (d - wall + WALL_LEAVE)
+	var corners: PackedVector3Array = _corners[id]
+	for _look in WALL_LOOKS:
+		var cc := c + total
+		var cd := Vector2(cc.x - m.x, cc.z - m.y).length()
+		var deepest := 0.0
+		var push := Vector3.ZERO
+		for p in corners:
+			var w: Vector3 = at * p + total
+			if w.y >= open:
+				continue
+			var px := w.x - m.x
+			var pz := w.z - m.y
+			var pd2 := px * px + pz * pz
+			if pd2 < least * least:
+				continue
+			var pd := sqrt(pd2)
+			var rr := _wall_at(v, atan2(pz, px), w.y)
+			var over := pd - rr
+			if over <= WALL_SLOP or over > WALL_DEEP or over <= deepest:
+				continue
+			# ...WHERE THE PIECE CROSSES THE WALL'S PLACE, ON ITS WAY TO THAT CORNER: over the rim is not through it, and a plate lying across a rim has corners far below it
+			var s := clampf((rr - cd) / maxf(pd - cd, 1e-6), 0.0, 1.0)
+			if lerpf(cc.y, w.y, s) >= open:
+				continue
+			deepest = over
+			push = Vector3(-px, 0.0, -pz) / pd * (over - WALL_LEAVE)
+		if push == Vector3.ZERO:
+			break
+		total += push
+	return total
+
+
+## A shape's corners (meters, its own space): what is furthest out of it in any direction.
+func _corners_for(kind: String, w: int, d: int) -> PackedVector3Array:
+	var key := "%s %dx%d" % [kind, w, d]
+	if _corners_by.has(key):
+		return _corners_by[key]
+	var hw := float(w) * Assembly.STUD * 0.5
+	var hd := float(d) * Assembly.STUD * 0.5
+	var row: Dictionary = Assembly.KINDS[kind]
+	var tall := float(row["h"]) * Assembly.PLATE
+	var top := tall + (Assembly.STUD_H if String(row["studs"]) != "none" else 0.0)
+	var out := PackedVector3Array()
+	match kind:
+		"slope":
+			var low := Assembly.PLATE * AssemblyMeshes.LOW_EDGE
+			var back := -hd + Assembly.STUD
+			for x in [-hw, hw]:
+				for p in [Vector3(x, 0.0, -hd), Vector3(x, 0.0, hd), Vector3(x, low, hd), Vector3(x, tall, back), Vector3(x, top, back), Vector3(x, top, -hd)]:
+					out.append(p as Vector3)
+		"round":
+			for i in 10:
+				var a := TAU * float(i) / 10.0
+				for y in [0.0, top]:
+					out.append(Vector3(cos(a) * hw, y, sin(a) * hw))
+		_:
+			for x in [-hw, hw]:
+				for y in [0.0, top]:
+					for z in [-hd, hd]:
+						out.append(Vector3(x, y, z))
+	_corners_by[key] = out
+	return out
+
+
 ## A flat box that cannot move (meters): the table, the plate.
 func add_slab(at: Transform3D, half: Vector3, sound: String) -> RID:
 	var s := PhysicsServer3D.box_shape_create()
@@ -216,6 +398,25 @@ func add_slab(at: Transform3D, half: Vector3, sound: String) -> RID:
 	PhysicsServer3D.body_set_param(b, PhysicsServer3D.BODY_PARAM_FRICTION, 0.42)
 	PhysicsServer3D.body_set_param(b, PhysicsServer3D.BODY_PARAM_BOUNCE, 0.22)
 	PhysicsServer3D.body_set_state(b, PhysicsServer3D.BODY_STATE_TRANSFORM, _big(at))
+	PhysicsServer3D.body_set_space(b, space)
+	_surface[b.get_id()] = sound
+	return b
+
+
+## A flat thing of any outline that cannot move: [param edge] (meters, x and z, going round it) from [param top] down [param deep]. What is convex holds as a whole.
+func add_prism(edge: PackedVector2Array, top: float, deep: float, sound: String) -> RID:
+	var pts := PackedVector3Array()
+	for e in edge:
+		pts.append(Vector3(e.x, top, e.y) * SIM)
+		pts.append(Vector3(e.x, top - deep, e.y) * SIM)
+	var s := PhysicsServer3D.convex_polygon_shape_create()
+	PhysicsServer3D.shape_set_data(s, pts)
+	var b := PhysicsServer3D.body_create()
+	_made.append_array([b, s])
+	PhysicsServer3D.body_set_mode(b, PhysicsServer3D.BODY_MODE_STATIC)
+	PhysicsServer3D.body_add_shape(b, s)
+	PhysicsServer3D.body_set_param(b, PhysicsServer3D.BODY_PARAM_FRICTION, 0.42)
+	PhysicsServer3D.body_set_param(b, PhysicsServer3D.BODY_PARAM_BOUNCE, 0.22)
 	PhysicsServer3D.body_set_space(b, space)
 	_surface[b.get_id()] = sound
 	return b
@@ -241,6 +442,9 @@ func make_pieces(list: Array) -> void:
 	quiet.resize(n)
 	_key_last.resize(n)
 	_prev.resize(n)
+	_in.resize(n)
+	_in.fill(-1)
+	_corners.resize(n)
 	for id in n:
 		var q: Dictionary = list[id]
 		var kind := String(q["kind"])
@@ -258,6 +462,7 @@ func make_pieces(list: Array) -> void:
 		# ...A PLATE IS THIN AND SO IS A TIN WALL: at a meter a second a plate goes nearly its own thickness in a step, and through a wall in two
 		PhysicsServer3D.body_set_enable_continuous_collision_detection(b, true)
 		bodies[id] = b
+		_corners[id] = _corners_for(kind, w, d)
 		size[id] = Vector3(float(w) * Assembly.STUD, float((Assembly.KINDS[kind] as Dictionary)["h"]) * Assembly.PLATE, float(d) * Assembly.STUD).length() * 0.5
 		xf[id] = Transform3D.IDENTITY
 		mid[id] = Vector3.ZERO
@@ -346,6 +551,9 @@ func take_up(id: int) -> void:
 
 
 func carry_to(id: int, at: Transform3D) -> void:
+	# ...and a hand drawing one out of a vessel takes it past the wall, not through it, however it turns it
+	if keep_walls and _in[id] >= 0:
+		at.origin += _wall_push(id, at, _middle(id, at))
 	PhysicsServer3D.body_set_state(bodies[id], PhysicsServer3D.BODY_STATE_TRANSFORM, _big(at))
 	xf[id] = at
 	mid[id] = _middle(id, at)
@@ -407,9 +615,27 @@ func after_step() -> void:
 			var v: Vector3 = PhysicsServer3D.body_get_state(b, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY)
 			v /= SIM
 			var w: Vector3 = PhysicsServer3D.body_get_state(b, PhysicsServer3D.BODY_STATE_ANGULAR_VELOCITY)
+			var c := _middle(id, at)
+			var pushed := false
+			if keep_walls and not _vessels.is_empty():
+				var push := _wall_push(id, at, c)
+				if push != Vector3.ZERO:
+					pushed = true
+					at.origin += push
+					c += push
+					PhysicsServer3D.body_set_state(b, PhysicsServer3D.BODY_STATE_TRANSFORM, _big(at))
+					# ...AND WHAT IT IS MOVED TOWARD CAN GIVE: a neighbor gone static would have it lying in it for good (2.45 mm, at the end of a record)
+					_pushed.append(id)
+					still[id] = 0.0
+					var out := -push.normalized()
+					var going := v.dot(out)
+					if going > 0.0:
+						v -= out * going
+						PhysicsServer3D.body_set_state(b, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY, v * SIM)
 			xf[id] = at
-			mid[id] = _middle(id, at)
-			if recording:
+			mid[id] = c
+			# ...NO SOUND OF ITS OWN: what the wall took off its speed is no hit, and what struck the wall struck it before it was this far in
+			if recording and not pushed:
 				_hits(id, b, at, v, w)
 			vel[id] = v
 			spin[id] = w
@@ -540,6 +766,9 @@ func _thaw_and_freeze() -> void:
 	var stirring: Array = sources.duplicate()
 	for id in held:
 		stirring.append([mid[id], size[id] + THAW_NEAR])
+	for id in _pushed:
+		stirring.append([mid[id], size[id] + THAW_NEAR])
+	_pushed.clear()
 	var i := loose.size() - 1
 	while i >= 0:
 		var id := loose[i]

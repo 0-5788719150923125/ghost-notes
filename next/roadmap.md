@@ -61,6 +61,9 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
 - [ ] **The APK on a phone**
       The phone shell runs on the desktop under `--handheld` and the APK builds; no device has run it yet. `scripts/build.sh --install android` puts it on a connected phone: the list, a note made, edited and kept across restarts, and nothing downloaded.
 
+- [ ] **A game played at the table**
+      First build 2026-11-04: a fantasy roleplaying show, no code naming any game; a game master agent who must ask player agents, real dice, voices over each other, a map and paper figures. To judge by ear and eye: see [tabletop.md](tabletop.md).
+
 - [ ] **The synthesized voice: the room, landmarks, the actor**
       Voice.md's open rungs: room acoustics, a murmuring crowd and the air between voice and listener, all carried in the genome; landmark labels within a reading; and the voice as a Cast kind, so a storyboard speaks. See [voice.md](voice.md).
 

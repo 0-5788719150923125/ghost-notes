@@ -4,7 +4,7 @@ class_name NoteTile
 ## NoteTile - one note on the notes list, a square card (2026-10-31, the user: "something closer to what a
 ## notes app should look like ... a Google Keep kind of look ... Literal square shapes, in different colors,
 ## perhaps keyed to the underlying, dominant components"). Every tile is the same size ([method set_side]):
-## the note's title, the first of its words ([method NoteStore.preview_of]), a chip for each component on it
+## the note's title, the first of its words ([method Manuscript.preview_of]), a chip for each component on it
 ## and when it last changed. A click opens it; on the desktop an × asks to delete it.
 ##
 ## DRAWN AS A [Card] IS ("let's emulate the card styling first, to see if we like that design"): flat, a

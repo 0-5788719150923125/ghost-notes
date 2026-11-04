@@ -23,6 +23,8 @@ const YouTube := preload("res://src/export/youtube.gd")
 ## card word in the close's, for a show that brews draws a card too.
 const INTRO_CHAPTER := "Intro"
 const CLOSE_CHAPTER := "The close"
+## What a game's session asks to have painted: a list of [method game] -> the pictures' step word.
+const GAME_PICTURES := {"maps": "map", "figures": "figure", "reveals": "reveal"}
 
 ## Where shows live. Moved aside under test, so a gate never touches the author's episodes.
 static var root := ROOT
@@ -41,6 +43,7 @@ var _swept: Array = []              # per spread position: swept out in a waterf
 var _written: Array = []            # per drawn card: a written card, nothing painted for it ([method written_card])
 var _height_stamp := "-"          # the table file the height map's wanting was last read from
 var _height_wanted := false
+var _game_cache := {}
 
 
 static func open(show_key: String, seed_value: int) -> TableEpisode:
@@ -166,6 +169,10 @@ func file_of(step: String) -> String:
 			return dir.path_join("model.json")
 		"meta":
 			return dir.path_join("meta.json")
+		"prep":
+			return dir.path_join("prep.json")
+		"game":
+			return dir.path_join("game.json")
 		"upload":
 			return dir.path_join("upload.md")
 		"youtube":
@@ -272,6 +279,8 @@ func beat_count() -> int:
 ## is done.
 func steps() -> Array:
 	var out := ["plan", "draw"]
+	if wants_game():
+		return _game_steps(out)
 	if wants_model():
 		out.append("model")
 	if cardless():
@@ -316,6 +325,62 @@ func steps() -> Array:
 	return out
 
 
+## A GAME PLAYED AT THE TABLE (next/tabletop.md): the secret preparation, the table, the session played a stretch at a time, THEN what it turned out to need painted - a map of a boat, if there came to be a
+## boat. Its dice are thrown as the table first stands ([TableGame]).
+func _game_steps(out: Array) -> Array:
+	out.append_array(["prep", "image:surface", "image:backdrop", "table", "say:intro"])
+	for k in range(1, beat_count() + 1):
+		out.append("say:%d" % k)
+	out.append_array(["say:close", "script"])
+	var g := game()
+	for key in GAME_PICTURES:
+		for k in range(1, (g.get(key, []) as Array).size() + 1):
+			out.append("image:%s:%d" % [String(GAME_PICTURES[key]), k])
+	return out
+
+
+## THE PLAN MAKES THIS A GAME ([method CardTable.game_of]).
+func wants_game() -> bool:
+	var p: Variant = read_json("plan")
+	return p is Dictionary and CardTable.game_of(p as Dictionary)
+
+
+## WHAT THE SESSION CAME TO, once played (`game.json`, [method TableProducer._make_script]): `{events, people, seats, dice, maps, figures, reveals}`, `{}` before. Read once for each time it is written.
+func game() -> Dictionary:
+	var p := file_of("game")
+	if not FileAccess.file_exists(p):
+		_game_cache = {}
+		return {}
+	var mt := FileAccess.get_modified_time(p)
+	if int(_game_cache.get("at", -1)) != mt:
+		var got: Variant = read_json("game")
+		_game_cache = {"at": mt, "data": got if got is Dictionary else {}}
+	return _game_cache["data"]
+
+
+## The file a scene's events are kept in, beside its words ([param say] `say:K`): written first, so words that are there have their events.
+func events_file(say: String) -> String:
+	return dir.path_join("events_%s.json" % say.trim_prefix("say:"))
+
+
+## EVERY EVENT OF THE SCENES BEFORE [param say], in order: what a [GameLedger] stands from.
+func events_before(say: String) -> Array:
+	var out: Array = []
+	var order := ["say:intro"]
+	for k in range(1, beat_count() + 1):
+		order.append("say:%d" % k)
+	order.append("say:close")
+	for s in order:
+		if String(s) == say:
+			break
+		if not has(String(s)) or not FileAccess.file_exists(events_file(String(s))):
+			continue
+		var got: Variant = JSON.parse_string(FileAccess.get_file_as_string(events_file(String(s))))
+		if got is Array:
+			out = got
+	return out
+
+
 ## WHAT THE PLAN HAS DONE AT THE TABLE (next/table_work.md): beat ("intro", "close", or a card's place) ->
 ## the work, in the producer's words - empty for a plan with none, as every plan before the work was.
 func work_plan() -> Dictionary:
@@ -348,6 +413,10 @@ func checks(k: int) -> bool:
 func needs(step: String) -> Array:
 	var parts := step.split(":")
 	var n := card_count()
+	if wants_game():
+		var made := _game_needs(parts)
+		if not made.is_empty():
+			return made
 	match String(parts[0]):
 		"plan":
 			return []
@@ -430,6 +499,25 @@ func needs(step: String) -> Array:
 				for k in range(1, n + 1):
 					out.append("design:%d" % k)
 			return out
+	return []
+
+
+## WHAT A GAME'S OWN STEPS ARE MADE FROM: the session is played in order on the table as set, and what it needed is painted after. [] for a step no different from any other's.
+func _game_needs(parts: PackedStringArray) -> Array:
+	match String(parts[0]):
+		"prep":
+			return ["plan"]
+		"image":
+			if parts.size() == 3 and GAME_PICTURES.values().has(String(parts[1])):
+				return ["script"]
+		"say":
+			var who := String(parts[1])
+			if who == "intro":
+				return ["prep", "table"]
+			var n := beat_count()
+			if who == "close":
+				return ["say:%d" % n] if n > 0 else ["say:intro"]
+			return ["say:intro"] if int(who) <= 1 else ["say:%d" % (int(who) - 1)]
 	return []
 
 
@@ -544,7 +632,8 @@ func invalidate(step: String, keep_sent := false) -> Array:
 			var fs := String(f)
 			if fs.begins_with("design_") or fs.begins_with("card_") or fs.begins_with("say_") \
 					or fs.begins_with("check_") or fs.begins_with("sent_back_") \
-					or fs == "script.md" or fs == "acts.json" or (step == "plan" and (fs in ["draw.json", "back.png", "surface.png",
+					or fs == "script.md" or fs == "acts.json" or fs == "game.json" or fs == "prep.json" or fs.begins_with("events_") \
+					or fs.begins_with("map_") or fs.begins_with("figure_") or fs.begins_with("reveal_") or (step == "plan" and (fs in ["draw.json", "back.png", "surface.png",
 					"backdrop.png", "height.png", "height.json"] or fs.begins_with("back_"))):
 				DirAccess.remove_absolute(dir.path_join(fs))
 	for s in gone:
@@ -828,6 +917,9 @@ func document() -> Dictionary:
 	for k in ["back", "surface", "backdrop"]:
 		if has("image:" + k):
 			out["images"][k] = file_of("image:" + k)
+	# WHAT THE SESSION CAME TO: the table's to stage ([TableGame])
+	if has("game"):
+		out["game"] = game()
 	if draw is Dictionary:
 		var spread: Array = (((out["plan"] as Dictionary).get("spread", {}) as Dictionary)
 			.get("positions", [])) as Array

@@ -17,6 +17,15 @@ class_name ReadingJoin
 ## a long reading's subtitles cannot drift from its audio a seam at a time, as a running total of
 ## seconds did. What is appended is the caller's to hold - the live window's queue for the ring, the
 ## export's buffer - and the room's [member marks] are the caller's to consume.
+##
+## VOICES OVER EACH OTHER (next/tabletop.md; [constant Manuscript.OVER], [constant Manuscript.TOGETHER]): the take is one line and its chain one voice at a time, so a turn that comes in over the last goes on
+## a SIDE TRACK of its own ([member side]): its audio, the frame it starts at, whose it is. What it runs past the line's end is silence on the line, so whatever is said next waits for it. Whoever holds the
+## take asks [method side_between] for the side voices of the frames it is about to hand the chain, placed in the ears where each sits ([method VoiceFX.lean_gains]), and the chain mixes them past its lean - the
+## room hears everyone and each voice stays where it sits ([member VoiceFX.side]). A LIVE WINDOW MUST HOLD a turn until whatever overlaps it has been made ([method ReadingStream._drain_ready]).
+
+## How long after the line's last start a table's turn together comes in (seconds), each by its own: nobody reacts at the same instant.
+const TOGETHER_LEAST := 0.05
+const TOGETHER_MOST := 0.26
 
 ## The take's sample rate.
 var sr := 22050
@@ -39,6 +48,8 @@ var chunk_at := {}
 var fade_at := -1
 ## What the log calls these takes when a word comes back with no timing.
 var label := "chunk"
+## THE VOICES OVER THE LINE, in order: `{at, pcm, speaker}`, `at` in frames of the take.
+var side: Array = []
 
 # A chunk is in: the next rests a seam before it, and the opening voice's mark is written. NOT
 # `marks.is_empty()`: whoever plays the take consumes the list as it goes, so mid-reading it is empty
@@ -47,6 +58,10 @@ var label := "chunk"
 var _opened := false
 var _voice := ""           # the voice the last room mark dialed
 var _near := {}            # the distance the last near mark set
+var _last_at := 0          # where the last chunk joined, line or side, begins and ends
+var _last_end := 0
+var _group_at := 0         # where the last on the line began: what a table's turns together come in after
+var _side_read := 0        # the first of [member side] still wanted by what asks in order
 
 
 ## A take at [param sample_rate] whose words go into [param into], opening on [param lead] frames of
@@ -70,6 +85,8 @@ func add(chunks: Array, idx: int, pcm: PackedFloat32Array, spans: Array, s: Dict
 	# time it returned is in the take's own seconds (`play_ratio`), so there is no ratio to apply.
 	var spliced := Splice.chunk(pcm, ch.get("holds", []), spans, 1.0, sr)
 	var take: PackedFloat32Array = spliced["pcm"]
+	if _opened and overlaps(ch):
+		return _add_over(ch, idx, who, spliced, spans, said)
 	var near: Dictionary = ch.get("near", {})
 	var opening := not _opened
 	var out := PackedFloat32Array()
@@ -111,7 +128,86 @@ func add(chunks: Array, idx: int, pcm: PackedFloat32Array, spans: Array, s: Dict
 	if fade_at < 0 and bool(ch.get("fade", false)):
 		fade_at = frames
 	out.append_array(take)
+	_last_at = frames
+	_group_at = frames
 	frames += take.size()
+	_last_end = frames
+	return out
+
+
+## A chunk that comes in over the one before ([member side]), rather than after it?
+static func overlaps(ch: Dictionary) -> bool:
+	return float(ch.get("over", -1.0)) >= 0.0 or bool(ch.get("together", false))
+
+
+## Is everything that comes in over chunk [param idx] here, among [param ready] (`{index}`)? Once it is on a live stream its frames are gone, and a voice arriving late for them has nowhere to go ([method ReadingStream._drain_ready]).
+static func overlaps_ready(chunks: Array, idx: int, ready: Array) -> bool:
+	var k := idx + 1
+	while k < chunks.size() and overlaps(chunks[k]):
+		var here := false
+		for t in ready:
+			if int((t as Dictionary)["index"]) == k:
+				here = true
+				break
+		if not here:
+			return false
+		k += 1
+	return true
+
+
+## A TURN OVER THE LAST: where it comes in - before the last chunk's end, never before its start ([constant Manuscript.OVER]), or just after the line's last start, a person's reaction apart ([constant
+## Manuscript.TOGETHER]); its words on the take's clock, its audio on the side track. What the line gets back is only the silence of what it runs past its end.
+func _add_over(ch: Dictionary, idx: int, who: String, spliced: Dictionary, spans: Array, said: Array) -> PackedFloat32Array:
+	var take: PackedFloat32Array = spliced["pcm"]
+	var at: int
+	if bool(ch.get("together", false)):
+		var after := TOGETHER_LEAST + (TOGETHER_MOST - TOGETHER_LEAST) * fposmod(float(hash([idx, who])) * 0.000317, 1.0)
+		at = _group_at + int(after * float(sr))
+	else:
+		at = maxi(_last_at, _last_end - int(float(ch.get("over", 0.0)) * float(sr)))
+	side.append({"at": at, "pcm": take, "speaker": who})
+	var t0 := float(at) / float(sr)
+	for w in ReadingPlan.words_for(ch, spans, "%s %d" % [label, idx]):
+		var d: Dictionary = w
+		d["t0"] = Splice.shifted(float(d["t0"]), spliced["cuts"], 1.0, true) + t0
+		d["t1"] = Splice.shifted(float(d["t1"]), spliced["cuts"], 1.0, false) + t0
+		words.append(d)
+	for ph in said:
+		var p: Dictionary = ph
+		phones.append({"p": String(p.get("p", "")),
+			"t0": Splice.shifted(float(p.get("t0", 0.0)), spliced["cuts"], 1.0, true) + t0,
+			"t1": Splice.shifted(float(p.get("t1", 0.0)), spliced["cuts"], 1.0, false) + t0})
+	chunk_at[idx] = at
+	_last_at = at
+	_last_end = at + take.size()
+	var out := PackedFloat32Array()
+	if _last_end > frames:
+		out.resize(_last_end - frames)
+		frames = _last_end
+	return out
+
+
+## THE VOICES OVER THE LINE FROM FRAME [param a] TO [param b], left and right, each placed where it sits: [param seat_of] takes a name and says where, as a pan from -1 to 1. Empty when there is nothing there. Asked in order, as a take goes out.
+func side_between(a: int, b: int, seat_of: Callable) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	if side.is_empty() or b <= a:
+		return out
+	while _side_read < side.size() and int((side[_side_read] as Dictionary)["at"]) + ((side[_side_read] as Dictionary)["pcm"] as PackedFloat32Array).size() <= a:
+		_side_read += 1
+	for i in range(_side_read, side.size()):
+		var v: Dictionary = side[i]
+		var at := int(v["at"])
+		if at >= b:
+			# (a later one may start earlier than this by a little, so one more look would not hurt, but [method add] keeps them nearly in order and the next call has it)
+			continue
+		var pcm: PackedFloat32Array = v["pcm"]
+		if at + pcm.size() <= a:
+			continue
+		if out.is_empty():
+			out.resize(b - a)
+		var g := VoiceFX.lean_gains(float(seat_of.call(String(v["speaker"]))))
+		for f in range(maxi(a, at), mini(b, at + pcm.size())):
+			out[f - a] += Vector2(g.x, g.y) * pcm[f - at]
 	return out
 
 
@@ -128,6 +224,9 @@ func end_at(end: int) -> int:
 	var over := frames - end
 	frames = end
 	var cut := float(end) / float(sr)
+	for i in range(side.size() - 1, -1, -1):
+		if int((side[i] as Dictionary)["at"]) >= end:
+			side.remove_at(i)
 	for i in range(words.size() - 1, -1, -1):
 		if float((words[i] as Dictionary).get("t0", 0.0)) >= cut:
 			words.remove_at(i)

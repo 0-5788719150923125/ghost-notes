@@ -63,6 +63,7 @@ var _fx_res: HSlider
 var _fx_room: HSlider
 var _fx_presence: HSlider
 var _fx_lean: HSlider
+var _fx_seat: HSlider
 var _fx_near: HSlider
 var _fx_pad: HSlider
 var _tone: OptionButton
@@ -469,6 +470,12 @@ func build_voice(box: VBoxContainer) -> void:
 		+ "With Lean up too, an approach often goes toward one side, and a lean reaches furthest "
 		+ "up close. The softer voice is chosen when a sentence is made, so a move takes effect "
 		+ "from the sentences not yet made.")
+	_fx_seat = _fx_slider(box, "Seat", 0.0,
+		"Where this voice sits, in degrees round the table: 0 at the far side, 90 at its right, -90 at its left, 180 at your elbow. It "
+		+ "says which ear the voice is heard in, and, in a game played at a table, where its dice come from. The room stays where it is.")
+	_fx_seat.min_value = -180.0
+	_fx_seat.max_value = 180.0
+	_fx_seat.step = 5.0
 	_fx_pad = _fx_slider(box, "Ambience", 0.0,
 		"A sustained ambient bed underneath, in the reader's own key - long tones that keep "
 		+ "sounding through the pauses, rather than reverb of the voice. It ducks under speech and "
@@ -804,6 +811,11 @@ func slot_cfg(i: int) -> Dictionary:
 ## The settings of the voice NAMED [param who] - which is how a chunk asks, because a tab's
 ## index moves whenever the script gains or loses a speaker, and a reading in flight must
 ## not change voice because someone typed a new name further down.
+## Which ear [param who] is heard in ([method Delivery.pan_of_seat]): what a voice over the line is placed by ([method ReadingJoin.side_between]).
+func pan_of(who: String) -> float:
+	return Delivery.pan_of_seat(float(cfg_of(who).get("seat", 0.0)))
+
+
 func cfg_of(who: String) -> Dictionary:
 	who = _who(who)
 	var i := _names.find(who)
@@ -838,7 +850,7 @@ func capture_slot() -> void:
 		"dynamics": _dynamics.value, "arc": _arc.value, "effort": _effort.value,
 		"echo": _fx_echo.value, "room": _fx_room.value, "resonance": _fx_res.value,
 		"presence": _fx_presence.value, "ambience": _fx_pad.value, "lean": _fx_lean.value,
-		"near": _fx_near.value,
+		"near": _fx_near.value, "seat": _fx_seat.value,
 		"ink": _ink_value(),
 	}
 	_refresh_tab_labels()
@@ -869,6 +881,7 @@ func _apply_slot(i: int) -> void:
 	_fx_pad.value = float(s["ambience"])
 	_fx_lean.value = float(s["lean"])
 	_fx_near.value = float(s["near"])
+	_fx_seat.value = float(s.get("seat", 0.0))
 	_show_ink(String(s["ink"]))
 	# After the voice, because it is what sets the Speaker row's range - and a
 	# speaker id is only meaningful against the model that holds it.

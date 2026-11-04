@@ -446,22 +446,17 @@ func _build_panel() -> void:
 	_sampler.seed_ready.connect(_add_recorded_seed)
 
 	# --- The Collection: your seeds, ALWAYS last. Click a seed to cast from it
-	# (slot it in), click it again to release. Count shown by the title; the list
-	# scrolls once it outgrows its box, so nothing is hidden. ---
+	# (slot it in), click it again to release. Count shown by the title. ---
 	box = _panel.add_card("collection", "Collection", &"voice")
 	_coll_title = Label.new()
 	_coll_title.text = "Collection"
 	_coll_title.add_theme_font_size_override("font_size", 13)
 	_coll_title.add_theme_color_override("font_color", Color(0.55, 0.95, 0.75, 0.85))
 	box.add_child(_coll_title)
-	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(0, 300)      # ~10 rows tall, then scroll
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	box.add_child(scroll)
 	_belt_rows = VBoxContainer.new()
 	_belt_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_belt_rows.add_theme_constant_override("separation", 4)
-	scroll.add_child(_belt_rows)
+	box.add_child(_belt_rows)
 	# THE NOTE'S OWN CARDS, after the lab's (see NoteCards), and where the video goes
 	_block_cards = NoteCards.build(_panel, _attached, {"only": HOSTED})
 	for key in _block_cards:

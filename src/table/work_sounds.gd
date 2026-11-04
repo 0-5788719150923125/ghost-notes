@@ -368,6 +368,11 @@ func _look(t0: float, t1: float) -> Array:
 		for e in work.assembly.sounds_in(t0, t1):
 			var ed: Dictionary = e
 			spawn.append([clampi(int((float(ed["t"]) - t0) * float(RATE)), 0, STEP - 1), _plastic.bind(ed)])
+	# ...AND DICE ([TableGame]): each hit as the record has it, and the rattle in a hand
+	if work.game != null:
+		for e in work.game.sounds_in(t0, t1):
+			var ed: Dictionary = e
+			spawn.append([clampi(int((float(ed["t"]) - t0) * float(RATE)), 0, STEP - 1), _plastic.bind(ed)])
 	spawn.sort_custom(func(a: Array, b: Array) -> bool: return int(a[0]) < int(b[0]))
 	return spawn
 

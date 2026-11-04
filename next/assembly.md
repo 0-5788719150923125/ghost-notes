@@ -138,6 +138,31 @@ on it, nothing is left hanging. Jolt alone wakes everything touching what is awa
 measured: Godot's contact reports were more than half of a record's time, so what a piece hit is asked once, when it has hit something (`_against`); thin plates went through thin walls until continuous collision was on; a piece in hand
 filed twice in the thaw grid was set loose while held, and went at 7 m/s.
 
+## Walls, and what falls
+
+Feedback 0015 on 462684, the first episode a real modeler designed: "There is an orange brick currently clipping through the side of the bucket." And the user on the spill: "people do make messes - just so long as those fallen bricks still remain usable, if we need them."
+
+**The clip was the first dig's, not the pour's.** An 8x8 plate, piece 361, stood on edge in the tub's short wall from the first dig to the end of the show, 2.5 mm into its inner face and 1.8 mm out of its outer one. Three things meet there. A hand is kinematic, so what it shoves against a wall is pushed by something that cannot give, and no solver satisfies both. A wall of a thing is two faces of a surface, each pushing what is nearest it out through itself, so a plate as thin as the wall sits between them. And the wall was thin: 5 mm on the tub's long axis and 3.3 mm on its short one, warped by 0.63. 41 true boxes stood in a solid in the record's first 90 steps. `assembly_bake_check` never saw it, because it asks where a piece's origin goes, and that plate's origin was well inside.
+
+**So a vessel's inside is a rule of the world** (`AssemblyWorld.add_vessel`, `_wall_push`), laid over the solver at every read. Its inside is measured from the thing's own surface by rays, 96 ways round at 16 heights (a warped lathe to within 0.1 mm of its profile), and a corner of a piece past that, below the rim, moves the piece back along that way, up to three corners a read since moved off one another may be deepest on a wall that curves. A piece is in a vessel from when its middle is until its middle leaves over the rim; gone through the wall it is still in, and comes back. Over the rim is not through it: what lies across a rim has corners far below it, and the test is the height where the piece crosses the wall's place. A hand drawing one out goes by the same rule. A test shove of an 8x8 plate on edge: 91 mm through the tub without it, 0.8 mm with it.
+
+The top 5 mm of a rolled rim is above the highest height measured: a plate lying on the lip can still stand a couple of millimeters into it. It is a piece lying on a rim, not one through a wall.
+
+**A fallen brick is still a brick.** It keeps its stock wherever it lands and `_find` goes on finding it, last of its kind since it takes the highest. Nothing about using them needed changing. 462684 baked whole on a copy with all of this, 930 pieces and 1,139 steps: 808 of 808 parts stand at the end, no part went unfound, and of its 945 presses 674 came from a stock, 246 from what lay fallen on the table, 20 from another stock's place and 5 off the plate. 2,770 s of record in 998 s, the machine busy. Piece 398, an 8x8 plate, went off the table a quarter of an hour in and is in the model at the end.
+
+| through the tub's outer face, at rest | the record as it was, first 93 steps | whole show, 1,139 steps |
+|---|---|---|
+| over 0.5 mm | 50 bricks | 11 |
+| over 1 mm | 36 | 2 |
+| over 2 mm | 25 | 0 |
+| over 3 mm | 8 | 0 |
+
+**Two things did.** The physics' table was a slab 16 m wide, so a brick past the drawn edge rested on air, one 14 cm past it in 462684. The top is now its real outline (`add_prism`, from `Tables.edge_points`), and past it a brick drops 72 cm to a floor, from where a hand fetches it when nothing nearer of its kind is left: out from under the table first if it rolled there, then up beside it, never through the top (`_off_the_floor`). And a stray on the plate was shoved about by every part laid over it, 9 of them by step 87 and the model's first section covers the whole plate, so the hand now moves what lies where a part is about to go (`_clear_spot`), to `aside`, where it can still be had. Only what is in the way: the rest of the mess stays.
+
+Jolt says once a bake that its job system ran out of jobs and is waiting: it did before any of this, and it is the size of the heap.
+
+A first dig still spills about 30% of an overfull tub. The tub in 462684 holds 863 pieces in about 18 x 28 cm. The user has said that is fine.
+
 ## Slow, by stopping
 
 A step has a **natural** time (`Assembly.OPS`) and its moves take what they take on the record. `lay` fits a stretch of steps to the time its words leave:
@@ -223,15 +248,15 @@ Kept here because the code says what it does now, and not what it did:
 ## Open
 
 - **By ear, and by eye in the app.** Whether a flip reads as a hand with no hand to see, whether the clatter sounds like plastic. The render of 563019 to judge it by was stopped for lack of memory: `dist/brick3/motion_final_silent.mp4` is its first 18 s with no sound, `with_sound_earlier.mp4` 12 s with sound, from just before continuous collision went on.
-- **The full suite has not run on this version.** `scripts/check.sh --for src/table`, 73 gates, passes; the GPU gates and the folders below `table` have not reported since these changes.
+- **The full suite has not run on this version.** `scripts/check.sh --for src/table`, 81 gates, has passed gate by gate with another session's work in the tree, not all in one run; the GPU gates and the folders below `table` have not reported since these changes.
 - **A frame in a dig** has not been measured since its lookup was narrowed.
 - **Seeing the hand?** The show has never drawn one, and the brief says no figures. It is the first thing to try if digging still reads as telekinesis.
-- **A real modeler.** No agent has run the model step. The test design was written by hand, by the same model an agent would be, so it should do at least that: whether it does, and how it spends its looks, is the first thing to see.
+- **The first real modeler.** 462684, "A stilt house on a teal bay": 808 parts, 40 x 40, nothing floating, a two-hour episode. Its model, staged, has not been judged whole by the user yet.
 - **A first play catches up.** The opening digs of a record bake slower than real time on a busy machine (see The model), so a show played the moment it is generated says "catching up" early on. It is cached after that.
-- **Pieces out of the tub.** 63178's table ended with about half its tub lying beside it: a flip really throws them over the rim, and a large model's stock overflows a tub as it is poured. The user has not objected, and the hand finds a piece wherever it lies.
+- **Pieces out of the tub.** See Walls, and what falls. A large model's stock still overflows its tub as it is poured, and the set dresser is not told how much a tub holds.
 - **A chunk comes apart as it is let go,** not as it lands. A joined pair stays joined in real life.
 - **The tub on the table.** Its top is often half out of the picture, which is where the digging is. The set dresser is told, not held to it.
-- **A thing that moves meets no brick.** A thing an act moves is `TablePhysics`'s, the bricks are in another process. A mug carried over the plate would go through a tower. The puppeteer has no reason to yet, since the rest of the table sits still.
+- **A thing that moves meets no brick.** A thing an act moves is `TablePhysics`'s, the bricks are in another process. A `drink` goes over all that will ever be built (`TableWork.lift_over`, `TableAssembly.built_reach`); a `carry` over the plate would still go through a tower, and the puppeteer has had no reason to write one.
 - **Limits a real episode may hit.** 40 acts (`Motions.MAX_ACTS`) at a few minutes each is about two hours; 120 steps an act; 1,800 pieces.
 - **Clear parts.** The old brief's see-through pieces: a second instanced material, not built. No figures, by the brief.
 - **A phone.** It cannot start a second process. A note made on the desktop plays from a record moved with it, if that is ever wanted; a phone does not make one.

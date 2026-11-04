@@ -231,6 +231,8 @@ func _pump_fx() -> void:
 		n = mini(n, int((marks[0] as Dictionary)["at"]) - _dry_at)
 	var piece := _dry.slice(0, n)
 	_dry = _dry.slice(n)
+	# ...the voices over this line, as the reading and the export have them ([ReadingJoin])
+	var over := _join.side_between(_dry_at, _dry_at + n, panel._cast.pan_of)
 	_dry_at += n
 	var fx := _fx
 	var cfg := panel._cast.cfg_of(voice)
@@ -239,6 +241,7 @@ func _pump_fx() -> void:
 		Delivery.apply_fx(fx, cfg)
 		if not near.is_empty():
 			Delivery.near_to(fx, near)
+		fx.side = over
 		box[0] = fx.process_stereo(piece))}
 	_start_playback()
 

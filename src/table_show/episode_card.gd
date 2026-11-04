@@ -36,10 +36,10 @@ const KEY := "table"
 ## says what its episodes draw and the producer plans that many, or none ([method TableProducer._land_plan]).
 const KNOBS := {"show": "", "seed": 1, "environment": 0.5,
 	"writer": "claude", "writer_model": "", "writer_effort": "", "painter": "codex", "painter_model": "",
-	"painter_effort": ""}
+	"painter_effort": "", "players": "", "players_model": "", "players_effort": ""}
 ## Who makes each kind of step (a step's name up to its first ":"), as a row's status names them.
 const MAKERS := {"plan": "producer", "design": "designer", "image": "painter", "check": "art director",
-	"table": "set dresser", "say": "reader", "acts": "puppeteer", "model": "modeler"}
+	"table": "set dresser", "say": "reader", "acts": "puppeteer", "model": "modeler", "prep": "game master"}
 ## EVERY STEP AS ITS ROW SAYS IT, "K" each card or beat: what it is called, and what its ⟳ does ("" for a step with no ⟳ of
 ## its own - the draw is a function of the seed, so dealing again deals the same cards, and a different deal is a different
 ## episode; a check and the depth come with their painting; the script with its readings). A ROW IS WHAT THE EPISODE HAS
@@ -54,7 +54,11 @@ const STEPS := {
 	"image:surface": {"label": "Cloth", "again": "Paint a new cloth"},
 	"image:backdrop": {"label": "Room", "again": "Paint a new room"},
 	"model": {"label": "Model", "again": "Design the model again"},
+	"prep": {"label": "Preparation", "again": "Prepare the game again"},
 	"table": {"label": "Set", "again": "Set the table again"},
+	"image:map:K": {"label": "Map", "again": "Paint this map again"},
+	"image:figure:K": {"label": "Figure", "again": "Paint this figure again"},
+	"image:reveal:K": {"label": "Picture", "again": "Paint this picture again"},
 	"image:height": {"label": "Depth", "again": ""},
 	"acts": {"label": "Work", "again": "Block the work again"},
 	"say:intro": {"label": "Intro", "again": "Rewrite the intro"},
@@ -84,6 +88,7 @@ var _new_btn: Button
 var _del_btn: Button
 var _writer: AgentPick
 var _painter: AgentPick
+var _players: AgentPick
 var _environment_dial: HSlider
 var _row_t := 0.0
 ## WHAT IT HANDS THE NOTE'S PIPELINE CARD ([method pipeline]).
@@ -108,7 +113,7 @@ var _taken := {}
 ## picked episode's title is the Script card's Episode ([method episode_title], edited in its plan).
 ## The picked episode, as what other cards make from it reads it ([method ReadingPanel.episode_feed]).
 var _feed: Feed = null
-var _yt_desc: TextEdit
+var _yt_desc: TextField
 var _yt_tags: TagField
 var _yt_note: Label
 var _yt_dirty := 0.0       # seconds until the description's edit is kept; 0 = nothing waiting
@@ -537,15 +542,19 @@ func _spec() -> Dictionary:
 	var body := Manuscript.strip_frontmatter(_doc.pull())
 	return {"title": _show_title(), "byline": _show_byline(), "uploads_as": _uploads_as(),
 		"brief": TablePrompts.brief(body), "deck": CardDeck.of(body),
-		"chooses": CardDeck.chooses(body), "voices": reading.cast_names(),
+		"chooses": CardDeck.chooses(body), "voices": reading.cast_names(), "seats": reading.cast_seats(),
 		"writer": _knobs["writer"], "writer_model": _knobs["writer_model"], "writer_effort": _knobs["writer_effort"],
-		"painter": _knobs["painter"], "painter_model": _knobs["painter_model"], "painter_effort": _knobs["painter_effort"]}
+		"painter": _knobs["painter"], "painter_model": _knobs["painter_model"], "painter_effort": _knobs["painter_effort"],
+		"players": _knobs["players"] if not String(_knobs["players"]).is_empty() else _knobs["writer"], "players_model": _knobs["players_model"], "players_effort": _knobs["players_effort"]}
 
 
 ## The show's own block: the knobs, and its YouTube title and description.
 func capture() -> Dictionary:
 	var t := {}
 	for k in KNOBS:
+		# (who plays the players is written only where someone chose: every other show's block stays as it was)
+		if String(k).begins_with("players") and String(_knobs[k]).is_empty():
+			continue
 		t[k] = _knobs[k]
 	# THE SHOW'S YOUTUBE DESCRIPTION: a global value (each episode's title is its plan's)
 	if not _cur_desc.is_empty():
@@ -705,6 +714,13 @@ func _build() -> void:
 		+ "low for Codex (its job is to call one tool); Bedrock's painter takes no setting."))
 	_painter.changed.connect(_agents_chosen.bind(_painter, "painter"))
 	box.add_child(_painter)
+	# ...AND WHO PLAYS THE PLAYERS, in a game (next/tabletop.md): seen only where the episode is one
+	_players = AgentPick.players("Who plays the players at the table: each is asked what they do as the game is played, knowing only what they know. Takes effect at the next Generate.",
+		"The model that plays them. Default is the writer's own, on its quicker tier: they are asked a hundred questions a night.",
+		"How hard a player thinks before they answer. Default is what the CLI does unasked: a player is not meant to think long.")
+	_players.changed.connect(_agents_chosen.bind(_players, "players"))
+	_players.visible = false
+	box.add_child(_players)
 
 	var grow := HBoxContainer.new()
 	grow.add_theme_constant_override("separation", 6)
@@ -758,6 +774,8 @@ func _show_knobs() -> void:
 	_environment_dial.value = float(_knobs["environment"])
 	_writer.set_choice(String(_knobs["writer"]), String(_knobs["writer_model"]), String(_knobs["writer_effort"]))
 	_painter.set_choice(String(_knobs["painter"]), String(_knobs["painter_model"]), String(_knobs["painter_effort"]))
+	var who_plays := String(_knobs["players"]) if not String(_knobs["players"]).is_empty() else String(_knobs["writer"])
+	_players.set_choice(who_plays, String(_knobs["players_model"]), String(_knobs["players_effort"]))
 	_syncing = false
 
 
@@ -1006,6 +1024,10 @@ func _step_rows() -> Array:
 	var out: Array = [_row_of("plan", "plan", "", busy, f)]
 	if not bool(f["cardless"]):
 		out.append(_row_of("draw", "draw", "", busy, f))
+	if _players != null:
+		_players.visible = has.has("prep")
+	if has.has("prep"):
+		out.append(_row_of("prep", "prep", "", busy, f))
 	# THE TABLE: a back only where cards are drawn, and a back per printing the drawn cards are in (TableEpisode.printings)
 	if has.has("image:back"):
 		out.append(_row_of("image:back", "image:back", "Table", busy, f))
@@ -1034,6 +1056,15 @@ func _step_rows() -> Array:
 		out.append(_row_of("say:%d" % k, "beat:K", "", busy, f, "%s %d" % [word, k]))
 	out.append(_row_of("say:close", "say:close", "", busy, f))
 	out.append(_row_of("script", "script", "", busy, f))
+	# ...WHAT THE SESSION TURNED OUT TO NEED, each named, painted after it was played (next/tabletop.md)
+	var played: Dictionary = _episode.game()
+	for key in TableEpisode.GAME_PICTURES:
+		var word2 := String(TableEpisode.GAME_PICTURES[key])
+		var list: Array = played.get(key, [])
+		for k in list.size():
+			var st := "image:%s:%d" % [word2, k + 1]
+			if has.has(st):
+				out.append(_row_of(st, "image:%s:K" % word2, "Pictures", busy, f, String((list[k] as Dictionary).get("name", "%s %d" % [word2, k + 1]))))
 	return out
 
 
@@ -1110,7 +1141,7 @@ func _doing_of(step: String) -> String:
 	if a.is_empty():
 		return ""
 	var piece := "%s %s" % [String(MAKERS.get(step.get_slice(":", 0), "agent")), a]
-	var calls := _tools_progress(step) if step in ["model", "table", "acts"] else ""
+	var calls := _tools_progress(step) if step in ["model", "table", "acts", "prep"] or (step.begins_with("say:") and _episode.wants_game()) else ""
 	if not calls.is_empty():
 		# THE BUDGET IN VIEW: a run with no clock ends at its last picture, and the row says how near that is
 		var looked: Array = _producer.looks_of(step)
@@ -1285,12 +1316,9 @@ func youtube_built(card: YouTubeCard) -> void:
 
 
 func _build_upload_fields(box: VBoxContainer) -> void:
-	_yt_desc = TextEdit.new()
-	_yt_desc.placeholder_text = "Description"
-	_yt_desc.tooltip_text = ("The video's description. The chapters its readers named, timed from the export "
+	_yt_desc = TextField.new("Description", "No description yet - click to write one",
+		"The video's description. The chapters its readers named, timed from the export "
 		+ "itself, are added under it as the video goes up.")
-	_yt_desc.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
-	_yt_desc.custom_minimum_size = Vector2(0, 120)
 	_yt_desc.text_changed.connect(_upload_edited)
 	box.add_child(_yt_desc)
 	_yt_tags = TagField.new()
@@ -1315,7 +1343,7 @@ func _upload_edited() -> void:
 
 
 func _upload_focused() -> bool:
-	return _yt_desc != null and _yt_desc.has_focus()
+	return _yt_desc != null and _yt_desc.editing()
 
 
 static func _mtime(path: String) -> int:
@@ -1370,7 +1398,7 @@ func _seed_from_plan() -> void:
 	# the description and tags are the YouTube card's: a note without one is not given them
 	if _episode == null or not _episode.has("plan") or _doc == null or _yt_desc == null:
 		return
-	if _cur_desc.is_empty() and _yt_dirty <= 0.0 and not _yt_desc.has_focus():
+	if _cur_desc.is_empty() and _yt_dirty <= 0.0 and not _yt_desc.editing():
 		var d := String(_episode.upload_notes()["description"]).strip_edges()
 		if not d.is_empty():
 			_cur_desc = d

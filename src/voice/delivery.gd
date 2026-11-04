@@ -526,9 +526,15 @@ static func apply_fx(fx: VoiceFX, s: Dictionary) -> void:
 	fx.presence = presence_of(s)
 	fx.pad = pad_level_of(s)
 	fx.lean = clampf(float(s["lean"]), 0.0, 1.0)
+	fx.seat = pan_of_seat(float(s.get("seat", 0.0)))
 	# One dial, so [RoomFX] does the collapsing: size and wet open together, and
 	# Resonance colors the tail the same way it does on Masking's bus.
 	fx.room.from_dial(float(s["room"]), float(s["resonance"]))
+
+
+## WHICH EAR A VOICE IS HEARD IN, from where it sits (degrees round a table: 0 the far side, 90 its right, -90 its left, 180 at the viewer's elbow): -1 left to 1 right.
+static func pan_of_seat(degrees: float) -> float:
+	return sin(deg_to_rad(degrees))
 
 
 ## A distance mark at frame [param at], unless it is where the reader already is ([param last],

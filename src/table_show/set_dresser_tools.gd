@@ -705,7 +705,7 @@ func _model_cut() -> float:
 		return 0.0
 	var ready := _assembly.duplicate()
 	ready["model"] = designed
-	var lay := CardTable.layout_of(episode.seed)
+	var lay := CardTable.layout_of(episode.seed, CardTable.game_of(plan))
 	return TableAssembly.model_cut_by(Assembly.sanitize(ready), lay["camera"], float(lay["fov"]))
 
 
@@ -714,7 +714,7 @@ func _model_cut() -> float:
 func _room_at(t: Dictionary) -> float:
 	if not t.has("at"):
 		return INF
-	var lay := CardTable.layout_of(episode.seed)
+	var lay := CardTable.layout_of(episode.seed, CardTable.game_of(plan))
 	return CardTable.headroom_at(lay["camera"], float(lay["fov"]), Tables.ORIGIN + Vector2(float(t["at"][0]), float(t["at"][1])) * 0.01)
 
 
@@ -1030,7 +1030,7 @@ func _describe_light() -> PackedStringArray:
 	for n in notes:
 		out.append("  - " + n)
 	var seed := hash([episode.seed, "light"])
-	var lay := CardTable.layout_of(episode.seed)
+	var lay := CardTable.layout_of(episode.seed, CardTable.game_of(plan))
 	var cam: Transform3D = lay["camera"]
 	var fov := float(lay["fov"])
 	var middle := Vector3(Tables.ORIGIN.x, 0.0, Tables.ORIGIN.y)
@@ -1076,7 +1076,7 @@ func _describe_shadows(light: Dictionary, lamps_at: Dictionary, in_shot: Callabl
 	var casters: Array = light.get("shadows", [])
 	if casters.is_empty():
 		return out
-	var lay := CardTable.layout_of(episode.seed)
+	var lay := CardTable.layout_of(episode.seed, CardTable.game_of(plan))
 	var seen := CardTable.seen_points(lay["camera"], float(lay["fov"]), _safe()["top"])
 	var cards := CardTable.card_points()
 	var middle := Vector3(Tables.ORIGIN.x, 0.0, Tables.ORIGIN.y)

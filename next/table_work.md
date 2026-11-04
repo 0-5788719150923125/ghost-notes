@@ -780,6 +780,20 @@ its steps are the plan, a draw of none, the cloth, the room, the table, the acts
 puppeteer are told of beats (`cardless` in their rules); the Episode card lists a row a beat. Gates:
 `tests/table_show/cardless_check.gd`, `tests/table/table_cardless_check.gd`. Not yet run with real agents.
 
+## Heat and a drink
+
+The user, of a coffee steaming through a two-hour episode: "that steaming coffee is going to go cold ... implemented as temperature of the liquid, since that would make sense: I think many hot liquids would produce steam, and all of them would cool down eventually." And: "pick up the mug, and bring it close (close enough to leave the camera's viewport), as if to take a drink. Then, when it returns, some of the liquid would be gone ... worth considering as a general option."
+
+**What steams cools** (`Motions.temperature`, `steam_share`, `TableWork._plume_heat`). Newton's law, a pure function of show time, so a scrub lands where it should: 85 C at the start, toward a 21 C room, losing all but a third of what it has over the room in 34 minutes for something a cup across. That puts coffee in a stoneware mug at 41 C at 40 minutes, which is about what real ones do. What is larger holds its heat longer, by how far across it is: a pot 30 cm across takes two hours to fall as far. Steam is whole down to 72 C and gone at 44 C, so a mug thins from about 8 minutes and stops at about 35, by itself, on every table already made. As it cools the trail is fainter, slower, shorter-lived and smaller, and never broken into tufts.
+
+An `emits` may say `hot` (its degrees as the video starts) and `kept_hot` (something is keeping it so, as a flame under it does). What boils stays hot while it boils, whatever the clock says. Smoke and fumes are not heat and go on. `parts` tells the puppeteer when each thing will have gone cold, so a reader can notice it. Nothing yet warms a thing again: a cup refilled at minute 60 would not steam.
+
+**`drink` is a law on any vessel** (`TableWork._drink_at`, `_to_the_mouth`, `_drunk_from`). The agent says `drink` and how much, and the hand knows where the mouth is: close under the lens, 18 cm along its axis, every corner of the thing past the frame's foot however big it is, worked out from the lens's own field. A third of its stretch up, a third held out of sight, a third back to exactly where it stood. What is drunk goes while it is out of sight, by a `to` on each named liquid's `fill`, which the bake already honored. So a drink of 0.2 leaves 0.800 of what was there, one of 0.5 after it leaves 0.400, and nothing spills: it tips 9 degrees, under a full cup's brink. A stretch under six seconds is made six. Its steam fades within 55 cm of the lens, or it would cross the whole picture.
+
+It goes over what is built (`lift_over`), since the bricks are in another world from what an act moves and a cup taken up late in a show would otherwise go through the model.
+
+**Open:** it has been looked at, as stills a second apart on 462684's table, with an act of my own. No puppeteer has written one and none has been played in the app or heard. The reader is told only through the act's `about`, which the rule asks to say so, that nobody talks while they drink: there is no mark that stops the voice for it.
+
 ## Decisions for the user
 
 - **No hands** - the tools move on their own (recommended, and Proof's choice).

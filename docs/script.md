@@ -11,13 +11,15 @@ AN ENTRY DOES NOT IMPLEMENT ITS MARK. The parsers of record stay where they are 
 
 A CARDS BRIEF IS NOT A SCRIPT, AND HAS MARKS OF ITS OWN (2026-10-12, the user: "why are all of the supported macros and features missing from 'cards' editor mode? I would expect that most if not all of the features from generative mode should also work here"). The palette was empty there because no entry named the mode: a show's document is the BRIEF its agents work from, never read aloud, so a mark in it does something only where the code reads it out of the brief or an agent is told to honor it. Those are offered ("table" in `modes`), each saying what it does THERE (`blurbs`): a speaker cue gives the show another voice, a `## Cards` section is its deck, a macro reads as its default and a note to self is taken out before any agent sees the brief (`TablePrompts.brief`), and a hesitation, a delivery or a stressed word stands in a line the brief gives the host word for word (rules/table/reader.yaml, `spoken`). The marks of a page or a tablet (pictures, scene lines, web pages) and the inline pronunciation are not: the table is the only medium there, its pictures are the painter's, and a reader's passage keeps no bracket (`TableProducer.clean_spoken`).
 
-Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/script_marks.gd) (44 entries). Each one is proven against the parser that reads it by `tests/notes/script_marks_check.gd`.
+Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/script_marks.gd) (46 entries). Each one is proven against the parser that reads it by `tests/notes/script_marks_check.gd`.
 
 ## Voices
 
 | Mark | Example | Panels | What it does |
 |---|---|---|---|
 | Speaker cue | `<!-- speaker: Name -->` | Generative, Table | Hands everything after it to the named voice, until the next cue. The panel's voices list follows the names the script uses. Must be a line of its own, or it is only a note. **In a Table brief:** Gives the show another voice by this name: a tab of its own on the Voice card, and the reader writes its lines and hands them over. Say in the brief who it is and when it speaks. Must be a line of its own. |
+| Talk over | `<!-- over: 0.6 -->` | Generative, Table | At the top of a speaker's turn: this turn comes in before the last one has ended, on its last words, by a third of a second or the seconds given. Each voice stays where it sits, and both are heard. **In a Table brief:** In a line the brief gives word for word, on the line after a speaker's cue: this turn comes in over the last. Elsewhere a game's master writes these with its tools. |
+| All at once | `<!-- together -->` | Generative, Table | At the top of a speaker's turn: this turn comes in with the last one, just after it began, as a table reacts as one. Several in a row all come in together. **In a Table brief:** In a line the brief gives word for word, on the line after a speaker's cue: this turn comes in with the last. Elsewhere a game's master writes these with its tools. |
 
 ## Timing
 

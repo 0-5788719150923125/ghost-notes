@@ -197,7 +197,7 @@ static func parse(body: String) -> Dictionary:
 				showing = true
 			elif TableActions.ends(kind) or (showing and TableActions.REGISTRY[kind]["lays"]):
 				showing = false
-			if TableActions.takes_card(kind) and not TableActions.names_beat(kind):
+			if TableActions.takes_card(kind) and not TableActions.names_beat(kind) and not TableActions.names_event(kind):
 				cards = maxi(cards, last)
 		if kind.is_empty() and text.is_empty():
 			continue
@@ -210,7 +210,7 @@ static func parse(body: String) -> Dictionary:
 					spoken.append(n)
 		if not text.is_empty():
 			# after the rest, so the rest stays on a word of the voice that spoke last
-			if who != Manuscript.NARRATOR and Manuscript.speaker_of_line(voiced.get_slice("\n", 0)).is_empty():
+			if who != Manuscript.NARRATOR and Manuscript.speaker_of_line(voiced.get_slice("\n", 0)).is_empty() and not TableActions.names_event(kind):
 				speak.append("<!-- speaker: %s -->" % Manuscript.NARRATOR)
 			speak.append(voiced)
 			who = Manuscript.NARRATOR
@@ -355,6 +355,8 @@ static func _voice_marks(text: String) -> String:
 	var hes := _rx(Manuscript.HESITATION)
 	var cue := _rx(Manuscript.SPEAKER)
 	var quiet := _rx(QUIET_MARK)
+	var over := _rx(Manuscript.OVER)
+	var together := _rx(Manuscript.TOGETHER)
 	var out := ""
 	var at := 0
 	for m in _rx(Manuscript.COMMENT).search_all(text):
@@ -364,7 +366,7 @@ static func _voice_marks(text: String) -> String:
 		if q != null:
 			# a table's rest, as a move's is ([constant QUIET_MARK])
 			out += "<!-- action-hold: %s -->" % String.num(minf(float(q.get_string(1)), QUIET_MOST), 2)
-		elif lean.search(m.get_string()) != null or hes.search(m.get_string()) != null:
+		elif lean.search(m.get_string()) != null or hes.search(m.get_string()) != null or over.search(m.get_string()) != null or together.search(m.get_string()) != null:
 			out += m.get_string()
 		elif cue.search(m.get_string()) != null:
 			out = out.rstrip(" \t") + "\n" + m.get_string().strip_edges() + "\n"

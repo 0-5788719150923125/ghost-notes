@@ -624,6 +624,9 @@ func _drain_ready() -> void:
 				break
 		if found < 0:
 			return
+		# ...AND WHATEVER COMES IN OVER IT IS IN HAND (next/tabletop.md): once a chunk is on the stream its frames are gone, and a voice arriving late for them has nowhere to go
+		if not ReadingJoin.overlaps_ready(chunks, _next_to_play, _ready_takes):
+			return
 		var take: Dictionary = _ready_takes[found]
 		_ready_takes.remove_at(found)
 		var idx := int(take["index"])
@@ -773,6 +776,8 @@ func tick(delta: float) -> void:
 		return
 	# the ambience runs HERE rather than in the host: it is stateful across
 	# chunk boundaries, so a seam must not reset the echo tail or the ring
+	# ...the voices over this line, each where it sits ([ReadingJoin])
+	fx.side = _join.side_between(_pushed, _pushed + n, panel._cast.pan_of)
 	var buf: PackedVector2Array = fx.process_stereo(_pending.slice(_read, _read + n))
 	# ...and the place after it, so the room and the bed are the voice's and the wind is not
 	if _env != null:

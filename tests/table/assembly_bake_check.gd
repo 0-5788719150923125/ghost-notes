@@ -125,7 +125,7 @@ func _bake(name: String, acts: Array, seed_value: int, keep := false) -> Diction
 			DirAccess.remove_absolute(dir.path_join(f))
 	DirAccess.make_dir_recursive_absolute(dir)
 	var names := a.step_names(hash([seed_value, "check"]))
-	var req := TableAssembly.request_of(a, a.spec, [{"faces": _tub_faces(), "sound": "metal"}], dir, names)
+	var req := TableAssembly.request_of(a, a.spec, [{"faces": _tub_faces(), "sound": "metal", "thing": "the tub"}], dir, names)
 	var path := dir.path_join("request.bin")
 	var f := FileAccess.open(path, FileAccess.WRITE)
 	f.store_buffer(var_to_bytes(req))
@@ -404,7 +404,8 @@ func _heard(log: Assembly, track: AssemblyTrack) -> void:
 		for id in track.moved_between(tau - 0.05, tau + 0.05):
 			var p0 := track.pose_of(int(id), tau - 0.05, plate).origin
 			var p1 := track.pose_of(int(id), tau + 0.05, plate).origin
-			if p0.distance_to(at) < 0.1 and p0.distance_to(p1) > 1e-4:
+			# ...where it is at that moment: a brick falling at 2 m/s was 10 cm from where it landed a twentieth of a second before
+			if track.pose_of(int(id), tau, plate).origin.distance_to(at) < 0.1 and p0.distance_to(p1) > 1e-4:
 				moving = true
 				break
 		if not moving:

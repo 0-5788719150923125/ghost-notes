@@ -57,6 +57,11 @@ const COMMENT := "<!--[\\s\\S]*?-->"
 const DELIVERY := "<!--\\s*delivery\\s*(?::\\s*([^>]*?))?\\s*-->"
 ## Text before the first cue belongs to this voice. A chapter that opens on a cue never has one.
 const NARRATOR := "Narrator"
+## VOICES OVER EACH OTHER (next/tabletop.md; the user, 2026-11-04: "we might need the ability for voices to talk over each other (for example, if something happened and the entire table exclaimed to it in response)"). `<!-- over -->`, at the top of a
+## speaker's turn: the turn comes in before the last one has ended, by [constant OVER_BARE] or the seconds given: group 1. `<!-- together -->`: it comes in just after the last one began, as a table reacts as one. [ReadingPlan], [ReadingJoin].
+const OVER := "<!--\\s*over\\s*(?::\\s*([0-9]*\\.?[0-9]+)\\s*(?:s|secs?|seconds)?)?\\s*-->"
+const TOGETHER := "<!--\\s*together\\s*-->"
+const OVER_BARE := 0.35
 
 static var _re := {}
 
@@ -415,3 +420,23 @@ static func is_scene_line(text: String) -> bool:
 		and t.count("*") == 2
 	var under := t.begins_with("_") and t.ends_with("_") and t.count("_") == 2
 	return single or under
+
+
+## THE FIRST WORDS OF [param plain], for a note's tile and a card's preview: its paragraphs one to a line, blank
+## lines and runs of spaces closed up, cut at a word near [param most] characters.
+static func preview_of(plain: String, most := 600) -> String:
+	var lines: Array = []
+	var n := 0
+	for line in plain.split("\n"):
+		var l := RegEx.create_from_string("\\s+").sub(String(line), " ", true).strip_edges()
+		if l.is_empty():
+			continue
+		lines.append(l)
+		n += l.length() + 1
+		if n >= most:
+			break
+	var out := "\n".join(lines)
+	if out.length() > most:
+		var cut := out.rfind(" ", most)
+		out = out.substr(0, cut if cut > most / 2 else most).strip_edges() + "…"
+	return out

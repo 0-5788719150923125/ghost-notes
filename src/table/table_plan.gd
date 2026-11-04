@@ -94,6 +94,9 @@ static func make(document: Dictionary, table_json: Variant, intro_hold: float) -
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([p.seed_value, "tarot-table"])
 	var lay := CardTable.sample_layout(rng)
+	# ...A GAME IS SEEN FROM HIGHER UP, past nobody ([method CardTable.game_camera]): drawn after the layout's own draws, so they land as they do
+	if CardTable.game_of(p.pay.get("plan", {}) if p.pay.get("plan") is Dictionary else {}):
+		lay.merge(CardTable.game_camera(p.seed_value), true)
 	# THE CAMERA: the reader's eye, a little different every episode
 	p.pitch = float(lay["pitch"])
 	p.cam_base = lay["camera"]

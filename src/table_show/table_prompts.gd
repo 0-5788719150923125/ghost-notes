@@ -354,6 +354,8 @@ static func set_dresser(title: String, brief: String, plan: Dictionary, seed: in
 		"title": title.strip_edges(), "byline": byline.strip_edges(),
 		"seen": ", ".join(PackedStringArray(seen)), "airs": ", ".join(PackedStringArray(airs)),
 		"assembly": plan.get("assembly") == true, "assembly_stock": Assembly.describe_stock(), "model_words": String(plan.get("model_words", "")),
+		"game": CardTable.game_of(plan), "game_top_x": roundi(GameBoard.TOP_LEAST.x), "game_top_z": roundi(GameBoard.TOP_LEAST.y),
+		"game_keep_x": roundi(GameBoard.MAP_MOST.x * 100.0), "game_keep_z": roundi(GameBoard.MAP_MOST.y * 100.0), "game_mid_z": roundi((GameBoard.MIDDLE.y - Tables.ORIGIN.y) * 100.0),
 	}
 	vars.merge(_box_size(String(CardTable.staging_of(plan)["box_style"]) == "shoebox",
 		String(CardTable.staging_of(plan)["contents"]), plan.get("look", {}) if plan.get("look") is Dictionary else {}))
@@ -395,6 +397,9 @@ static func work_lines(plan: Dictionary) -> Array:
 ## How long a word takes a voice to say, seconds - the pace measured on real exports for Proof's lessons: the
 ## words a passage needs to cover its work.
 const SAID_WORD := 0.52
+## A game's session at its longest (minutes), and how many words its opening and its close each run to.
+const GAME_MINUTES := 40
+const GAME_END_WORDS := Vector2i(350, 700)
 ## The fewest words a passage over work runs to, however quiet the show: it still has to say something. And the most of the work
 ## that may pass in silence.
 const QUIET_WORDS_LEAST := 15
@@ -439,6 +444,64 @@ static func modeler(title: String, brief: String, plan: Dictionary, seed: int, e
 	vars["tall_cm"] = roundi(minf(seen, float(AssemblyModel.TALL_MOST) * Assembly.PLATE) * 100.0)
 	vars["tall_levels"] = int(minf(seen, float(AssemblyModel.TALL_MOST) * Assembly.PLATE) / Assembly.PLATE)
 	return {"system": show_context(title, brief), "prompt": Rules.say("table/modeler.prompt", vars)}
+
+
+## THE GAME MASTER'S PREPARATION (next/tabletop.md): tonight's world and every player's sheet, made alone, secret from everyone else at the table.
+static func game_prep(title: String, brief: String, plan: Dictionary, people: PackedStringArray, past: Array) -> Dictionary:
+	var vars := _game_vars(title, plan, people)
+	var earlier := PackedStringArray()
+	for e in past:
+		var d: Dictionary = e if e is Dictionary else {}
+		var line := String(d.get("episode_title", d.get("title", "")))
+		if not line.is_empty():
+			earlier.append(line)
+	vars.merge({"premise": String(plan.get("premise", "")), "has_past": not earlier.is_empty(), "past": "; ".join(earlier),
+		"submit_format": Rules.say("table/game_master.prep_format", {"materials": " | ".join(PackedStringArray(Dice.MATERIALS.keys()))})})
+	return {"system": show_context(title, brief), "prompt": Rules.say("table/game_master.prep", vars)}
+
+
+## ONE STRETCH OF THE GAME, as its master is told it: everything said so far, its own preparation and the table as it stands. [param step] is "intro", "close" or a number.
+static func game_master(title: String, brief: String, plan: Dictionary, people: PackedStringArray, step: String, n: int, prep: Dictionary, ledger: GameLedger, before: String, aim: Vector2i) -> Dictionary:
+	var vars := _game_vars(title, plan, people)
+	vars.merge({"prep": JSON.stringify(prep, "  "), "state": ledger.describe(), "said": not before.is_empty(), "before": before,
+		"intro": step == "intro", "close": step == "close", "scene": step != "intro" and step != "close", "k": step, "n": n,
+		"lo": aim.x, "hi": aim.y, "minutes": roundi(float(aim.y + aim.x) * 0.5 * SAID_WORD / 60.0), "hidden": true})
+	return {"system": show_context(title, brief), "prompt": Rules.say("table/game_master.prompt", vars)}
+
+
+## A PLAYER, ASKED ([GameTools]): only their sheet, their want, what was said aloud and what they were just asked.
+static func game_player(title: String, brief: String, plan: Dictionary, who: String, people: PackedStringArray, sheet: Dictionary, want: String, heard_so_far: String, asked: Array, question: String) -> Dictionary:
+	var others := PackedStringArray()
+	for p in people.slice(1):
+		if p != who:
+			others.append(p)
+	var fields := PackedStringArray()
+	for k in sheet:
+		fields.append("%s: %s" % [k, GameLedger._plain(sheet[k])])
+	var vars := {"name": who, "gm": people[0] if not people.is_empty() else "", "others": ", ".join(others), "sheet": "\n".join(fields),
+		"has_want": not want.is_empty(), "want": want, "heard_any": not heard_so_far.is_empty(), "heard": heard_so_far,
+		"asked_any": not asked.is_empty(), "asked": asked, "question": question, "table_note": String(plan.get("table_note", ""))}
+	return {"system": show_context(title, brief), "prompt": Rules.say("table/game_player.prompt", vars)}
+
+
+## How many words a stretch of the session runs to: an opening and a close are shorter than the night's middle, and a night is as long as its parts make it. [constant GAME_MINUTES] is the show's most: the brief may say less.
+static func game_words(step: String, scenes: int) -> Vector2i:
+	if step == "intro" or step == "close":
+		return GAME_END_WORDS
+	var share := roundi(float(GAME_MINUTES) * 60.0 / SAID_WORD / float(maxi(scenes, 1)))
+	return Vector2i(roundi(float(share) * 0.6), share)
+
+
+## WHAT A GAME'S SESSION ASKED TO HAVE PAINTED: a map seen from straight above, a figure on the card it stands on, or a picture handed across a table.
+static func game_image(look: Dictionary, kind: String, thing: Dictionary, target: String) -> String:
+	var vars := _look_vars(look, target)
+	vars.merge({"name": String(thing.get("name", "")), "looks": String(thing.get("looks", "")), "art": String(look.get("art", ""))}, true)
+	return Rules.say("table/painter.game_%s" % kind, vars)
+
+
+static func _game_vars(title: String, plan: Dictionary, people: PackedStringArray) -> Dictionary:
+	return {"show_title": title.strip_edges(), "episode_title": String(plan.get("episode_title", "")), "table_note": String(plan.get("table_note", "")),
+		"gm": people[0] if not people.is_empty() else "", "players": ", ".join(people.slice(1))}
 
 
 ## The thing a set dresser is shown as the shape to copy ([method set_dresser]) - written where it stands

@@ -86,6 +86,10 @@ const LAWS := {
 			["material", "a material of the table's (its look, how heavy it is, whether it dissolves)"],
 			["grain", "a grain's size in centimeters (0.1 a powder, drawn as small clumps, to 1)"], ["amount", "how many grains fall (up to 120)"],
 			["spread", "how wide it falls, centimeters (left out: 1)"], ["between", "[u0, u1]: when they fall"]]},
+	# DRUNK FROM (the user: "pick up the mug, and bring it close (close enough to leave the camera's viewport), as if to take a drink. Then, when it returns, some of the liquid would be gone")
+	"drink": {"label": "Drink", "on": ["pose"],
+		"blurb": "a vessel taken up and drunk from, as a person at the table drinks: lifted toward the lens until it has left the picture by its foot, held there out of sight, and set back exactly where it stood with that much less in it - give it a stretch of at least six seconds, with the words stopped for it, as nobody talks while they drink",
+		"fields": [["sip", "the share of what is in it that is drunk (left out: 0.15)"], ["between", "[u0, u1]: the stretch of the act it goes on for - the first third to the mouth, the last third back"]]},
 	# A THING BUILT OF MANY SMALL PARTS (next/assembly.md): a law over no one part - the steps are [Assembly]'s, each a hand's pick, try
 	# or press, and they say what they take. It runs "under" its words whatever it says: its length comes out of what its steps do
 	"assemble": {"label": "Assemble", "on": [],
@@ -138,10 +142,20 @@ const REACH := 200.0
 ## THE KINDS OF SMOKE a part may emit, and how each looks: color, puffs a second, how fast they rise
 ## (m/s), how long they live (s), how big they are born (mm) and how much they grow.
 const EMITS := {
-	"steam": {"about": "white steam rising off something hot - a brew, a cup, a kettle's spout", "color": "#eef0f2", "rate": 7.0, "rise": 0.09, "life": 2.6, "size": 22.0, "grow": 2.6},
+	"steam": {"about": "white steam rising off something hot - a brew, a cup, a kettle's spout", "color": "#eef0f2", "rate": 7.0, "rise": 0.09, "life": 2.6, "size": 22.0, "grow": 2.6, "cools": true},
 	"smoke": {"about": "a thread of gray smoke - incense, a snuffed wick, smoldering herbs", "color": "#b9b4ad", "rate": 4.0, "rise": 0.05, "life": 4.2, "size": 9.0, "grow": 3.2},
 	"fumes": {"about": "a colored vapor curling off a brew or a flask", "color": "#9fe0b0", "rate": 5.0, "rise": 0.06, "life": 3.4, "size": 18.0, "grow": 2.4},
 }
+## WHAT STEAMS IS HOT, AND WHAT IS HOT COOLS (the user, of a coffee steaming through a two-hour build: "that steaming coffee is going to go cold ... implemented as temperature of the liquid, since that would
+## make sense: I think many hot liquids would produce steam, and all of them would cool down eventually"). Newton's cooling, a pure function of show time: what it starts at, the room it falls toward, and how
+## long a cup takes to lose all but a third of what it has over the room (34 minutes: coffee in a stoneware mug, 85 degrees C at the start, 41 at 40 minutes). A larger thing holds its heat for longer, as its
+## volume does against its surface, so by how far across it is. Its steam is thick down to one heat and gone at another.
+const HOT_AT := 85.0
+const ROOM_AT := 21.0
+const CUP_COOLS := 2040.0
+const CUP_ACROSS := 0.084
+const STEAM_FULL := 72.0
+const STEAM_GONE := 44.0
 ## The most puffs one emitter keeps in the air at once: a thread of smoke's trail ([method TableWork._plume]) for
 ## as long as its longest puff lives.
 const MAX_PUFFS := 64
@@ -246,6 +260,7 @@ static func describe_parts() -> String:
 		lines.append("  - %s: %s. %s." % [k, String(row["blurb"]), "; ".join(fields)])
 	lines.append("  (a running `to` takes its `between` in seconds of the video.)")
 	lines.append("- `emits`: {\"kind\": %s, \"at\": a point's name, \"rate\" (how thick it rises, in puffs a second: fewer than its kind's own is a fainter trail, never a broken one), \"color\"} - smoke or steam rising from it all the time, carried by the table's wind." % " or ".join(PackedStringArray(EMITS.keys())))
+	lines.append("  STEAM IS HEAT: what steams starts at `hot` (its degrees C as the video starts; left out, %d) and cools by itself as anything does, thinning and rising slower until it stops: a cup is done within about %d minutes, a large pot in hours. Leave a thing to cool unless something is keeping it hot, as a flame or a hot plate under it does: then write `kept_hot`: true. What boils stays hot while it boils." % [int(HOT_AT), roundi(log((HOT_AT - ROOM_AT) / (STEAM_GONE - ROOM_AT)) * CUP_COOLS / 60.0)])
 	for k in EMITS:
 		lines.append("  - %s: %s" % [k, String((EMITS[k] as Dictionary)["about"])])
 	lines.append("- material \"liquid\": what is IN a vessel - a brew, ink, oil, wine, water - as its own part filling the vessel's inside from its floor to the liquid's surface (a hollow part: its profile comes back down inside it); give it a `name` so the work can tint and light it. It is REAL: its surface stays level however its vessel is turned, it slops when its vessel is carried and turns when it is stirred, it pours over the rim once it is tipped far enough, and things that fall into it ring it, splash it, sink in it or float on it. A vessel's inside is as deep as the vessel is: draw it full only as far as it is full. A stopper across its mouth (a part of the same thing there) keeps it in, until the work takes the stopper away (`shown` 0).")
@@ -376,6 +391,10 @@ static func sanitize_work(p: Dictionary, notes: PackedStringArray = PackedString
 			out["emits"] = {"kind": kind, "at": Props._text(e.get("at", ""), 40),
 				"rate": Props._num(e.get("rate"), float(base["rate"]), 0.2, 20.0),
 				"color": Props._color(e.get("color", ""), String(base["color"]))}
+			if bool(base.get("cools", false)):
+				out["emits"]["hot"] = Props._num(e.get("hot"), HOT_AT, ROOM_AT, 100.0)
+				if e.get("kept_hot") == true:
+					out["emits"]["kept_hot"] = true
 	# LOOSE ([Particles]): not fixed to its thing - it lies where it is, falls, slides and tumbles when nothing holds it,
 	# and is picked up as a free part is (a strand's own `loose` is a number, how unkempt it lies: [method Props._sanitize_part])
 	var lv: Variant = p.get("loose")
@@ -594,6 +613,9 @@ static func sanitize_law(raw: Variant, notes: PackedStringArray, running := fals
 				return {}
 			out["into"] = into_d
 			out["between"] = _between(d.get("between"))
+		"drink":
+			out["sip"] = Props._num(d.get("sip"), 0.15, 0.02, 1.0)
+			out["between"] = _between(d.get("between"))
 		"assemble":
 			out["ops"] = Assembly.sanitize_ops(d.get("ops"), notes)
 		"sprinkle":
@@ -630,6 +652,29 @@ static func hand_degrees(hand: String, hours: float) -> float:
 		"minute":
 			return fposmod(hours * 60.0, 60.0) * 6.0
 	return fposmod(hours * 3600.0, 60.0) * 6.0
+
+
+## HOW HOT WHAT [param e] (an `emits`) RISES FROM IS, [param across] meters across, [param t] seconds into the video (degrees C): as it was written while something keeps it so.
+static func temperature(e: Dictionary, across: float, t: float) -> float:
+	var hot := float(e.get("hot", HOT_AT))
+	if bool(e.get("kept_hot", false)):
+		return hot
+	return ROOM_AT + (hot - ROOM_AT) * exp(-maxf(t, 0.0) / (CUP_COOLS * maxf(across, 0.01) / CUP_ACROSS))
+
+
+## HOW MUCH STEAM A THING AT [param temp] GIVES, as a share of all it can: none under [constant STEAM_GONE].
+static func steam_share(temp: float) -> float:
+	return smoothstep(STEAM_GONE, STEAM_FULL, temp)
+
+
+## HOW LONG INTO THE VIDEO WHAT [param e] RISES FROM STOPS STEAMING, left alone (seconds): INF for what never cools, or does not steam.
+static func steam_stops_at(e: Dictionary, across: float) -> float:
+	if not bool((EMITS.get(String(e.get("kind", "")), {}) as Dictionary).get("cools", false)) or bool(e.get("kept_hot", false)):
+		return INF
+	var hot := float(e.get("hot", HOT_AT))
+	if hot <= STEAM_GONE:
+		return 0.0
+	return log((hot - ROOM_AT) / (STEAM_GONE - ROOM_AT)) * CUP_COOLS * maxf(across, 0.01) / CUP_ACROSS
 
 
 ## THE WAY A POINT GOES ([param d], a circle's or an aim's end): `at` a fixed place, round `around`, or

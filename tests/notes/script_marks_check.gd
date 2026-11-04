@@ -125,6 +125,11 @@ func _parsers_agree() -> void:
 				_ok(ps.size() == 2 and String(ps[1]["speaker"]) == fill
 						and String(ps[1]["text"]).strip_edges() == "After.",
 					"a speaker cue did not hand the text after it over")
+			"over", "together":
+				var seen := ReadingPlan.make("<!-- speaker: Narrator -->\nOne thing said.\n\n<!-- speaker: Bea -->\n%s\nAnother thing said." % ex, "", {"reader": "Dell", "hesitate": true, "bare": 1.0, "outro": 0.0})["chunks"] as Array
+				_ok(seen.size() == 2 and ReadingJoin.overlaps(seen[1]), "%s does not bring its turn in over the last" % k)
+				if k == "over" and seen.size() == 2:
+					_ok(is_equal_approx(float((seen[1] as Dictionary)["over"]), float(fill)), "an over's seconds are not the ones it says")
 			"hesitation", "hesitation_timed":
 				var h := Manuscript.hesitations("Wait %s for it." % ex)
 				_ok(h.size() == 1, "%s is not a hesitation" % k)

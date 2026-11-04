@@ -1829,6 +1829,18 @@ RULES: List[Rule] = [
          "pipeline() with a PipelineSection (src/notes/pipeline_section.gd)",
          (("a.gd", '\tredo.text = "⟳"', 1), ("a.gd", '\t## redo.text = "⟳"\n\tback.text = "‹"', 0)),
          skip=("pipeline_card.gd", "actor_source_list.gd")),
+    # NOTHING ON A CARD SCROLLS OF ITS OWN (the user, 2026-11-03: "the inner scrolling of the YouTube card's "description"
+    # can be pretty annoying and unexpected"): it takes the wheel from the panel as the pointer crosses it. What is left
+    # out is the panel's one scroll, what stands in a window of its own, and what is on no card; Masking's Markers
+    # are pinned under the scroll, so nothing else would scroll them.
+    Rule("one scroll", ("src/**/*",), r"\b(?:ScrollContainer|TextEdit|CodeEdit|ItemList|Tree)\.new\(\)",
+         "{file}: makes a {hit} - nothing on a side panel's card scrolls of its own: a list grows with its rows in the "
+         "panel's one scroll, and words too long for a line are a TextField (src/ui/text_field.gd), their first lines and "
+         "a click from a window. In a window of its own, or on no card, add it to this rule's skip",
+         (("a.gd", "\tvar box := TextEdit.new()", 1), ("a.gd", "\tvar list := ScrollContainer.new()", 1),
+          ("a.gd", "\tvar t := SceneTree.new()\n\tvar f := TextField.new()", 0)),
+         skip=("side_panel.gd", "text_field.gd", "script_writer.gd", "reading_cast.gd", "mask_editor.gd",
+               "storyboard_editor.gd", "note_grid.gd", "assistant.gd")),
     # `Films.pump()` IS CALLED FROM main's `_process`. A window cut is an ffmpeg child, and something
     # with a frame must notice it exit and promote its output out of the `.part` name. The live film
     # panel and the Generative panel polled it - the two things usually absent - so footage showed on

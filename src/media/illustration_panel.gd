@@ -32,7 +32,7 @@ var _images: Array = []            # [Manuscript.images] rows for the current te
 var _list: VBoxContainer
 var _refs: HFlowContainer
 var _refs_none: Label              # what stands in for the references while there are none
-var _style: TextEdit
+var _style: TextField
 var _style_kind := "image"        # which of Illustrations.STYLE_KINDS the box is editing
 var _kind_pick: OptionButton
 var _self_ref: CheckBox
@@ -100,11 +100,8 @@ func _ready() -> void:
 		Illustrations.set_self_reference(on, _style_kind)
 		_refresh_refs())
 	srow.add_child(_self_ref)
-	_style = TextEdit.new()
-	_style.custom_minimum_size = Vector2(0, 72)
-	_style.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
-	_style.placeholder_text = "e.g. muted watercolor and ink, like a mid-century storybook plate"
-	_style.tooltip_text = ("How every picture of the chosen kind should look - medium, palette, "
+	_style = TextField.new("Style", "e.g. muted watercolor and ink, like a mid-century storybook plate",
+		"How every picture of the chosen kind should look - medium, palette, "
 		+ "linework, mood. Added to each one's own description. Changing it does not "
 		+ "throw away pictures already made: they are marked stale and kept until you regenerate them.")
 	_style.text = Illustrations.style(_style_kind)

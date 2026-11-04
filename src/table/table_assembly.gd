@@ -645,8 +645,25 @@ func _request() -> Dictionary:
 			var faces := tm.get_faces()
 			for i in faces.size():
 				faces[i] = faces[i] / TableWork.RAY_SCALE
-			solids.append({"faces": faces, "sound": _sound_of(ti)})
-	return request_of(log, spec, solids, _dir, _names)
+			solids.append({"faces": faces, "sound": _sound_of(ti), "thing": String((work.things[ti] as Dictionary)["name"])})
+	var out := request_of(log, spec, solids, _dir, _names)
+	# THE TABLE AS IT IS DRAWN: what goes past its edge falls off it
+	if work.medium != null and work.medium._top is Dictionary and not (work.medium._top as Dictionary).is_empty():
+		out["top"] = Tables.top_outline(work.medium._top)
+	return out
+
+
+## WHERE WHAT IS BUILT HERE EVER STANDS: the middle of the plate (x, z), how far round it the plate reaches however it is turned, and how high anything on it comes (meters). A thing an act moves is [TablePhysics]'s
+## and the bricks are not, so this is all such a thing can know of them.
+func built_reach() -> Dictionary:
+	var size: Array = (spec["base"] as Dictionary)["size"]
+	var at: Vector3 = log.world["base_at"]
+	var most := 0.0
+	for st in log.steps:
+		var q: Dictionary = st
+		if String(q["do"]) == "put":
+			most = maxf(most, float(int(q["l"]) + int((Assembly.KINDS[String(q["key"]).get_slice(" ", 0)] as Dictionary)["h"])) * Assembly.PLATE)
+	return {"at": Vector2(at.x, at.z), "reach": Vector2(float(size[0]), float(size[1])).length() * Assembly.STUD * 0.5, "top": Assembly.BASE_T + most + Assembly.STUD_H}
 
 
 ## What thing [param ti] sounds like when something hits it: what it is made of ([constant Props.MATERIALS]).

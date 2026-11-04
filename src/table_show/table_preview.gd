@@ -149,7 +149,7 @@ func _init(ep: TableEpisode, episode_plan: Dictionary, dir: String, name := "", 
 	_dir = dir
 	show_name = name
 	byline = line
-	_pitch = float(CardTable.layout_of(ep.seed)["pitch"])
+	_pitch = float(CardTable.layout_of(ep.seed, CardTable.game_of(episode_plan))["pitch"])
 
 
 ## Whether this process can take a picture at all.

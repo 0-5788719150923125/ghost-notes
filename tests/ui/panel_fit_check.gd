@@ -38,6 +38,10 @@ extends Node
 ## every panel, the Cards one holding real long titles; its control is that list sized to its
 ## items again, which must blow the width out or the titles were never in it.
 ##
+## NOTHING ON A CARD SCROLLS OF ITS OWN (the user, 2026-11-03; [TextField]), on these real panels: what would take the
+## wheel from the panel, found by walking what is on their cards. A window is a place of its own. Its control is a box
+## planted on a panel, which must be found.
+##
 ## THE CONTROL is the retired arrangement, built here from the same content: a bare
 ## PanelContainer holding the same VBox. It must overflow at a height where the SidePanel does
 ## not, or this gate is measuring a window that was always big enough.
@@ -138,6 +142,14 @@ func _run() -> void:
 	await _check_short_panel_is_not_stretched()
 	await _check_the_old_arrangement_overflows()
 	await _check_wheel_skips_sliders(_ed._panel)
+	for pair in [["Generative", _ed._panel], ["Synthesis", _synth._panel], ["Cards", _cards._panel],
+			["Proof", _proof._panel], ["Letter", _letter._panel]]:
+		var found := _scrollers_in((pair[1] as SidePanel).body)
+		_ok(found.is_empty(), "the %s panel has %d thing(s) scrolling on a card: %s" % [pair[0], found.size(), found.slice(0, 5)])
+	var planted := TextEdit.new()
+	(_ed._panel as SidePanel).body.add_child(planted)
+	_ok(_scrollers_in((_ed._panel as SidePanel).body) == [planted], "CONTROL: a box planted on a panel was not found")
+	planted.free()
 
 	_synth._panel.queue_free()
 	_ed._panel.queue_free()
@@ -183,6 +195,19 @@ func _check_wheel_skips_sliders(panel: SidePanel_) -> void:
 			loose.append((sl as Slider).name)
 	_ok(loose.is_empty(), "%d slider(s) still take the wheel: %s" % [loose.size(), loose.slice(0, 5)])
 	late.queue_free()
+
+
+## What would scroll of its own under [param root], a window of its own left out.
+func _scrollers_in(root: Node) -> Array:
+	var out: Array = []
+	for c in root.get_children():
+		if c is Window:
+			continue
+		if c is ScrollContainer or c is TextEdit or c is ItemList or c is Tree \
+				or (c is RichTextLabel and (c as RichTextLabel).scroll_active and not (c as RichTextLabel).fit_content):
+			out.append(c)
+		out.append_array(_scrollers_in(c))
+	return out
 
 
 func _settle() -> void:

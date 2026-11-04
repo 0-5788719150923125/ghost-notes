@@ -125,6 +125,12 @@ func _check_title_renames() -> void:
 	_ok(body.size() == 1 and (body[0] as Card).title == "Body", "its words are on a card called Body")
 	panel._writer._refresh()        # (recounted 0.4 s after the words change, as the card does)
 	_ok(panel._writer._preview.text.begins_with("Words for the plan."), "which shows their first lines (%s)" % JSON.stringify(panel._writer._preview.text))
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	panel._writer._preview.gui_input.emit(click)
+	_ok(panel._writer._window.visible, "and a click on them opens the editor")
+	panel._writer._window.hide()
 	var e: LineEdit = panel._writer._field_edits["title"]
 	e.text = "Plan for Sunday"
 	panel._writer._commit_field("title")

@@ -42,7 +42,6 @@ var _timeline: Button
 var _start: MenuButton
 var _take: Button
 var _list: VBoxContainer
-var _scroll: ScrollContainer
 var _editor: StoryboardEditor = null
 var _settle := -1.0
 var _poll := 0.0
@@ -94,13 +93,10 @@ func _init() -> void:
 		+ "exactly as it is.")
 	_take.pressed.connect(func() -> void: _become(_data, "Taken into this note."))
 	add_child(_take)
-	_scroll = ScrollContainer.new()
-	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	add_child(_scroll)
 	_list = VBoxContainer.new()
 	_list.add_theme_constant_override("separation", 1)
 	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_scroll.add_child(_list)
+	add_child(_list)
 	_show()
 
 
@@ -418,9 +414,7 @@ func _show() -> void:
 			b.pressed.connect(show_entry.bind(i))
 			_list.add_child(b)
 			i += 1
-	# a long storyboard scrolls inside the card; a short one is as tall as it is
-	_scroll.custom_minimum_size.y = minf(float(i) * 25.0, 176.0)
-	_scroll.visible = i > 0
+	_list.visible = i > 0
 	_shown_entry = -2
 	_mark_playing()
 

@@ -233,6 +233,8 @@ const KEY_HEARD := 36
 ## far ear always hears the reader (about 7.4 dB apart at the limit).
 const LEAN_SHARE := 0.7
 const LEAN_DEPTH_MIN := 0.55            # a lean goes at least this far toward the limit
+## How much of a voice over this one reaches the room as this one's does; the rest goes straight to the ears, where it sits.
+const SIDE_ROOM := 0.35
 const LEAN_TRAVEL_MIN := 1.4            # seconds per move, eased at both ends
 const LEAN_TRAVEL_MAX := 3.2
 const LEAN_HOLD_MIN := 0.8              # how long a lean is held, at the bottom of the dial
@@ -316,6 +318,10 @@ var pad_seed := 0              # same text, same music
 var pad_level := 0.022
 var pad_duck := PAD_DUCK       # how far the bed steps back under speech
 var lean := 0.0                # 0..1 how often the reader leans to one side (see LEAN_SHARE)
+## WHERE THIS VOICE SITS: -1 the left ear to 1 the right ([method Delivery.pan_of_seat]). A lean moves from here. Heard only in the direct voice, as a lean is: the room is everyone's.
+var seat := 0.0
+## THE VOICES OVER THIS ONE, for the buffer about to be run ([method ReadingJoin.side_between]): left and right, already where they sit. Taken once.
+var side := PackedVector2Array()
 
 var _echo := PackedFloat32Array()
 var _echo_i := 0
@@ -604,6 +610,9 @@ func process_stereo(buf: PackedFloat32Array) -> PackedVector2Array:
 func _run(buf: PackedFloat32Array, stereo: bool) -> Array:
 	if _echo.is_empty():
 		setup(sample_rate)
+	var over := side
+	side = PackedVector2Array()
+	var has_over := not over.is_empty()
 	_resolve_echo()
 	# Same discipline as _resolve_echo: the dial is live, so the room's settings
 	# are resolved once here rather than per sample.
@@ -636,6 +645,7 @@ func _run(buf: PackedFloat32Array, stereo: bool) -> Array:
 				_near_n = NEAR_STEP
 				_near_gains()
 		var dry := buf[i] * _near_vg if near_on else buf[i]
+		var sv := over[i] if has_over and i < over.size() else Vector2.ZERO
 
 		# --- pitch tracking, at TRACK_HZ rather than per sample ---
 		_track[_track_n] = dry
@@ -655,7 +665,8 @@ func _run(buf: PackedFloat32Array, stereo: bool) -> Array:
 				_level_pad()
 			_track_e = 0.0
 
-		var wet := dry
+		# ...THE ROOM HEARS THE VOICES OVER THIS ONE too: it is one room
+		var wet := dry + (sv.x + sv.y) * 0.5 * SIDE_ROOM
 
 		# --- resonance: a chord excited by the voice's own energy ---
 		if resonance > 0.0 and _pitch > 0.0:
@@ -768,20 +779,20 @@ func _run(buf: PackedFloat32Array, stereo: bool) -> Array:
 			wet += shaped - direct
 			direct = shaped
 
-		buf[i] = clampf(wet, -1.0, 1.0)
+		buf[i] = clampf(wet + (sv.x + sv.y) * 0.5 * (1.0 - SIDE_ROOM), -1.0, 1.0)
 
 		# --- lean: the direct voice, moved between the ears ---
 		if stereo:
 			var p := _tick_lean()
-			if p == 0.0:
-				out[i] = Vector2(buf[i], buf[i])
+			if p == 0.0 and seat == 0.0:
+				out[i] = Vector2(clampf(wet + sv.x * (1.0 - SIDE_ROOM), -1.0, 1.0), clampf(wet + sv.y * (1.0 - SIDE_ROOM), -1.0, 1.0))
 			else:
 				var c := _near_b.x
 				var reach := lerpf(LEAN_REACH_HOME, 1.0, c) if c >= 0.0 \
 					else lerpf(LEAN_REACH_HOME, LEAN_REACH_BACK, -c)
-				var g := lean_gains(p * reach)
-				out[i] = Vector2(clampf(wet + direct * (g.x - 1.0), -1.0, 1.0),
-					clampf(wet + direct * (g.y - 1.0), -1.0, 1.0))
+				var g := lean_gains(clampf(seat + p * reach, -1.0, 1.0))
+				out[i] = Vector2(clampf(wet + direct * (g.x - 1.0) + sv.x * (1.0 - SIDE_ROOM), -1.0, 1.0),
+					clampf(wet + direct * (g.y - 1.0) + sv.y * (1.0 - SIDE_ROOM), -1.0, 1.0))
 	return [buf, out]
 
 

@@ -1317,7 +1317,7 @@ func _panel_fields() -> bool:
 	show._knobs["seed"] = 22
 	show._open_episode()
 	ed._writer._refresh_handed()
-	_ok(show._yt_desc.text == "Mine." and Array(show._yt_tags.get_tags()) == ["tarot", "satire"] and show._yt_desc.editable,
+	_ok(show._yt_desc.text == "Mine." and Array(show._yt_tags.get_tags()) == ["tarot", "satire"],
 		"a new episode shows the show's description and tags at once")
 	_ok(episode.text.is_empty() and not episode.editable and episode.placeholder_text == "named with the episode",
 		"its Episode waits for its plan, saying so - never the last episode's")

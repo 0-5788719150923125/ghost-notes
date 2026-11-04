@@ -128,7 +128,7 @@ var _client: Button
 var _resume: Button
 var _state: Label
 var _write_tags: CheckBox
-var _desc: TextEdit
+var _desc: TextField
 var _tags_note: Label
 ## The step that writes each episode's tags, while the box is ticked.
 var _tags: YouTubeTags
@@ -283,12 +283,9 @@ func _init() -> void:
 	_row("Playlist", prow)
 	_fill_playlists()
 	_build_thumbnail()
-	_desc = TextEdit.new()
-	_desc.placeholder_text = "Description"
-	_desc.tooltip_text = ("The video's description, as it goes up. The playlist it joins is named and linked "
+	_desc = TextField.new("Description", "No description yet - click to write one",
+		"The video's description, as it goes up. The playlist it joins is named and linked "
 		+ "under it, and what the note's cards add (an actor's likeness, said) between the two.")
-	_desc.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
-	_desc.custom_minimum_size = Vector2(0, 120)
 	_desc.visible = false
 	add_child(_desc)
 	extra = VBoxContainer.new()

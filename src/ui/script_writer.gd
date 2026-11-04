@@ -73,8 +73,6 @@ const WORDING := {
 
 ## How long typing must pause before the card's summary is recounted.
 const SUMMARY_MS := 0.4
-## How many lines of the words the card shows.
-const PREVIEW_LINES := 6
 
 ## Where the words come from (the file they are saved in, or none), built into the window's top bar.
 var doc: DocSource
@@ -265,28 +263,11 @@ func _build_fields() -> void:
 
 ## THE WORDS' FIRST LINES, A CLICK FROM THE EDITOR (2026-10-31, the user: "on desktop, where projects are going to
 ## be a lot more complex, I don't think we want to render a giant script text like that ... the body should be more
-## like a preview on desktop"): the body as it reads, its marks left out ([method NoteStore.preview_of]), a few
+## like a preview on desktop"): the body as it reads, its marks left out ([method Manuscript.preview_of]), a few
 ## lines of it; clicked, the editor opens, as Edit opens it. A note of words alone is written in its own card on
 ## the notes list ([NoteEditor]), the phone's every note too - this is the card of a note that is more than that.
 func _build_preview() -> void:
-	_preview = Label.new()
-	_preview.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_preview.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	_preview.max_lines_visible = PREVIEW_LINES
-	_preview.add_theme_font_size_override("font_size", 12)
-	_preview.add_theme_color_override("font_color", Color(0.78, 0.8, 0.84))
-	_preview.mouse_filter = Control.MOUSE_FILTER_STOP
-	_preview.mouse_default_cursor_shape = Control.CURSOR_IBEAM
-	_preview.tooltip_text = "Click to edit."
-	var box := StyleBoxFlat.new()
-	box.bg_color = Color(1, 1, 1, 0.035)
-	box.set_corner_radius_all(3)
-	box.set_content_margin_all(6)
-	_preview.add_theme_stylebox_override("normal", box)
-	_preview.gui_input.connect(func(e: InputEvent) -> void:
-		var mb := e as InputEventMouseButton
-		if mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
-			open_editor())
+	_preview = TextField.preview_label(open_editor)
 	add_child(_preview)
 
 
@@ -397,15 +378,7 @@ func _recount_soon() -> void:
 ## Show the editor, centered and sized to the window it opens over.
 func open_editor() -> void:
 	_refresh()
-	var host := get_tree().root.get_visible_rect().size if is_inside_tree() \
-		else Vector2(1600, 900)
-	var want := Vector2i(int(host.x * 0.82), int(host.y * 0.82))
-	want = want.max(_window.min_size)
-	# THE SIZE IS SET AGAIN AFTER THE POPUP: measured, popup() and popup_centered() both
-	# came back 1280 wide whatever was asked for (1574 on a 1080p window), which also left
-	# popup_centered's window left of center.
-	_window.popup(Rect2i((Vector2i(host) - want) / 2, want))
-	_window.size = want
+	TextField.pop_up(_window, self, Vector2(0.82, 0.82))
 	text_edit.grab_focus()
 
 
@@ -598,9 +571,7 @@ func _refresh() -> void:
 			_speaker_names = names
 			_rebuild_speakers()
 	_summary.text = " · ".join(parts)
-	var shown := NoteStore.preview_of(NoteStore.plain_of(text), 480)
-	_preview.text = shown if not shown.is_empty() else _wording("placeholder", "Take a note…")
-	_preview.modulate = Color(1, 1, 1, 1.0 if not shown.is_empty() else 0.5)
+	TextField.show_words(_preview, NoteStore.plain_of(text), _wording("placeholder", "Take a note…"))
 
 
 func _rebuild_speakers() -> void:

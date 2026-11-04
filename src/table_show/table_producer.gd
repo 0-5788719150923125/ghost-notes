@@ -24,6 +24,9 @@ class_name TableProducer
 ##              set table with the cards as drawn - through [PuppeteerTools] when its writer takes tools
 ##   say:work:K the reader talks card K's work through as it is done, told its acts and no later beat's
 ##   script     the passages and the marks between them, ready for the voice
+##   prep       A GAME (next/tabletop.md): the game master prepares, in secret: the world, and every player's sheet and want
+##   say:K      ...and in a game each is a stretch of the session, played live through [GameTools], the players asked as it goes, the words and the dice written as they happen
+##   image:map:K, image:figure:K, image:reveal:K     ...painted after it is played: whatever it turned out to need
 ##
 ## HOW MANY CARDS, AND WHETHER ANY, ARE THE PRODUCER'S (the user, 2026-10-26: "The 'draw' option is confusing
 ## ... leave it up to the agents to calculate the number of cards to draw (if they are even using cards at all).
@@ -194,6 +197,8 @@ func _make(step: String) -> void:
 			_make_table()
 		"acts":
 			_make_acts()
+		"prep":
+			_make_prep()
 
 
 ## [param extra]: more of the job's spec - its tools and their timeout (see [method _make_table]).
@@ -421,6 +426,14 @@ func _make_image(step: String) -> void:
 		_submit_image(step, TablePrompts.back_image(CardTable.look_of(look, {"series": name}), target,
 			CardTable.reads_reversed(_plan()), printed), [])
 		return
+	# WHAT THE SESSION ASKED TO HAVE PAINTED ([method TableEpisode.game]), the map's own in its look, a figure's on the card it stands on
+	if parts.size() == 3 and TableEpisode.GAME_PICTURES.values().has(String(parts[1])):
+		var key := String(TableEpisode.GAME_PICTURES.find_key(String(parts[1])))
+		var list: Array = episode.game().get(key, [])
+		var k := int(parts[2]) - 1
+		var thing: Dictionary = list[k] if k >= 0 and k < list.size() and list[k] is Dictionary else {}
+		_submit_image(step, TablePrompts.game_image(look, String(parts[1]), thing, target), [])
+		return
 	match String(parts[1]):
 		"back":
 			_submit_image(step, TablePrompts.back_image(look, target, CardTable.reads_reversed(_plan()), printed), [])
@@ -439,6 +452,126 @@ func _make_image(step: String) -> void:
 				f.close()
 				DirAccess.rename_absolute(view + ".part", view)
 			_submit_image(step, TablePrompts.backdrop_image(look, target), [])
+
+
+# --- a game played at the table (next/tabletop.md) ---------------------------------------------------------------------------------------------------
+
+## Everyone at the table, the game master first: the show's voices, as its document spells them.
+func _people() -> PackedStringArray:
+	return PackedStringArray((spec.get("voices", []) as Array).map(func(v: Variant) -> String: return String(v)))
+
+
+func _make_prep() -> void:
+	_close_tools("prep")
+	var people := _people()
+	if people.size() < 2:
+		_errors["prep"] = "a game needs a game master and a player: give the show at least two voices"
+		return
+	if not TextGen.make(String(spec.get("writer", "claude"))).takes_tools():
+		_errors["prep"] = "its writer cannot use tools, and a game is played with them: pick another"
+		return
+	var toolset := GamePrepTools.new(episode.job_dir("prep"), episode.seed, people.slice(1))
+	var url := AgentTools.open(episode.job_dir("prep"), toolset)
+	if url.is_empty():
+		_errors["prep"] = "no tools can be served here"
+		return
+	_tools["prep"] = {"url": url, "set": toolset}
+	_submit_text("prep", TablePrompts.game_prep(String(spec.get("title", "")), String(spec.get("brief", "")), _plan(), people, TableEpisode.archive(episode.show, episode.seed)), "best", {"tools_url": url})
+
+
+func _land_prep(text: String) -> String:
+	var got: Variant = JSON.parse_string(text)
+	var wrong := GamePrepTools.problems(got, _people().slice(1))
+	if not wrong.is_empty():
+		return "; ".join(wrong)
+	return episode.write_json("prep", got)
+
+
+## THE SHEETS AS THE PREPARATION WROTE THEM, by each person as the table spells them.
+static func sheets_of(prep: Dictionary, people: PackedStringArray) -> Dictionary:
+	var out := {}
+	var all: Dictionary = prep.get("people", {}) if prep.get("people") is Dictionary else {}
+	for who in people:
+		var got: Variant = GamePrepTools._named(all, who)
+		if got is Dictionary and (got as Dictionary).get("sheet") is Dictionary:
+			out[who] = ((got as Dictionary)["sheet"] as Dictionary).duplicate(true)
+	return out
+
+
+## ONE STRETCH OF THE SESSION: its tools hold the table as the last one left it, and the stretch is what they write. Once the game is over, a stretch is nothing: it was never played.
+func _make_scene(who: String) -> void:
+	var step := "say:" + who
+	_close_tools(step)
+	var prep: Variant = episode.read_json("prep")
+	var prep_d: Dictionary = prep if prep is Dictionary else {}
+	var people := _people()
+	var past := episode.events_before(step)
+	var ledger := GameLedger.from(sheets_of(prep_d, people), past)
+	if ledger.over and who != "close":
+		_finish(step, episode.write_text(step, ""))
+		return
+	var title := String(spec.get("title", ""))
+	var plan := _plan().duplicate()
+	plan["_show_title"] = title
+	plan["_brief"] = String(spec.get("brief", ""))
+	var before := _heard_so_far(step)
+	var toolset := GameTools.new(episode, who, plan, prep_d, people, ledger, episode.job_dir(step), before)
+	toolset.players = {"backend": String(spec.get("players", spec.get("writer", "claude"))), "model": String(spec.get("players_model", "")), "effort": String(spec.get("players_effort", ""))}
+	toolset.words_aim = TablePrompts.game_words(who, episode.beat_count())
+	var url := AgentTools.open(episode.job_dir(step), toolset)
+	if url.is_empty():
+		_errors[step] = "no tools can be served here"
+		return
+	_tools[step] = {"url": url, "set": toolset}
+	_submit_text(step, TablePrompts.game_master(title, String(spec.get("brief", "")), _plan(), people, who, episode.beat_count(), prep_d, ledger, before, toolset.words_aim), "best", {"tools_url": url})
+
+
+## WHAT WAS SAID TONIGHT, before [param step]: with names and rolls, as anyone at the table heard it.
+func _heard_so_far(step: String) -> String:
+	var out := PackedStringArray()
+	var order := ["say:intro"]
+	for k in range(1, episode.beat_count() + 1):
+		order.append("say:%d" % k)
+	order.append("say:close")
+	for s in order:
+		if String(s) == step:
+			break
+		var heard := FileAccess.get_file_as_string(_heard_file(String(s)))
+		if not heard.is_empty():
+			out.append(heard)
+	return "\n".join(out)
+
+
+func _heard_file(say: String) -> String:
+	return episode.dir.path_join("heard_%s.txt" % say.trim_prefix("say:"))
+
+
+## A STRETCH HANDED IN: its events first, so words that are there have their events; what was heard, for those at the table next time; then its words.
+func _land_scene(step: String, handed: String) -> String:
+	var got: Variant = JSON.parse_string(handed)
+	if not (got is Dictionary) or String((got as Dictionary).get("text", "")).strip_edges().is_empty():
+		return "the scene handed in has nothing in it"
+	var d: Dictionary = got
+	var events: Array = d.get("events", []) if d.get("events") is Array else []
+	var f := FileAccess.open(episode.events_file(step), FileAccess.WRITE)
+	if f == null:
+		return "could not write its events"
+	f.store_string(JSON.stringify(events))
+	f.close()
+	var h := FileAccess.open(_heard_file(step), FileAccess.WRITE)
+	if h != null:
+		h.store_string(GameTools.transcript(d.get("items", []) if d.get("items") is Array else [], events))
+		h.close()
+	return episode.write_text(step, own_voices(String(d["text"]), _voices(), _reader_name()))
+
+
+## THE SESSION, gathered for the table and the painter (`game.json`): everything that happened, who sits where with which dice, and each thing it asked to be painted, once.
+func _write_game() -> String:
+	var people := _people()
+	var prep: Variant = episode.read_json("prep")
+	var prep_d: Dictionary = prep if prep is Dictionary else {}
+	var game := GameBoard.gather(episode.events_before(""), people, prep_d, spec.get("seats", {}) if spec.get("seats") is Dictionary else {})
+	return episode.write_json("game", game)
 
 
 ## THE ART DIRECTOR looks at card [param k]'s painting before the reader does: shown the painting, the
@@ -590,6 +723,9 @@ func _handed_in(step: String) -> String:
 
 
 func _make_say(who: String) -> void:
+	if episode.wants_game():
+		_make_scene(who)
+		return
 	if who.is_valid_int():
 		var positions: Array = ((_plan().get("spread", {}) as Dictionary).get("positions", []) as Array)
 		var k := int(who) - 1
@@ -708,11 +844,18 @@ func _acts_of(beat: String) -> Array:
 
 
 func _make_script() -> String:
+	if episode.wants_game():
+		var wrong := _write_game()
+		if not wrong.is_empty():
+			return wrong
 	var n := episode.card_count()
 	var passages: Array = []
 	for m in choreography(_plan(), _drawn(n)):
 		var mv: Dictionary = m
 		var text := episode.read_text(String(mv["say"])) if not String(mv.get("say", "")).is_empty() else ""
+		# (A STRETCH THE GAME ENDED BEFORE was never played: no mark, no chapter)
+		if episode.wants_game() and text.is_empty() and String(mv["kind"]) == "work":
+			continue
 		passages.append({"kind": mv["kind"], "card": mv.get("card", 0), "last": mv.get("last", mv.get("card", 0)), "text": text})
 	return episode.write_text("script", CardReading.compose(passages))
 
@@ -789,7 +932,19 @@ func _land(step: String, res: Dictionary) -> void:
 	var handed := _handed_in(step) if had_tools else ""
 	_close_tools(step)
 	if not handed.is_empty():
-		err = _land_acts(handed) if step == "acts" else (_land_model(handed) if step == "model" else _land_table(handed))
+		match String(step.split(":")[0]):
+			"acts":
+				err = _land_acts(handed)
+			"model":
+				err = _land_model(handed)
+			"prep":
+				err = _land_prep(handed)
+			"say":
+				err = _land_scene(step, handed)
+			_:
+				err = _land_table(handed)
+	elif episode.wants_game() and (step == "prep" or step.begins_with("say:")):
+		err = String(res.get("error", "")) if not bool(res.get("ok", false)) else "it stopped without handing its work in"
 	elif not bool(res.get("ok", false)):
 		err = String(res.get("error", "the job failed"))
 	else:
@@ -867,8 +1022,8 @@ func _land_plan(text: String) -> String:
 	if not (d is Dictionary):
 		return "the plan was not JSON"
 	var plan: Dictionary = d
-	# A PLAN OF BEATS DRAWS NO CARDS: the producer's own choice, read off the brief
-	if plan.get("beats") is Array and not (plan.get("beats") as Array).is_empty():
+	# A PLAN OF BEATS DRAWS NO CARDS: the producer's own choice, read off the brief. A GAME IS ONE THAT HAS NONE: it plans no beats, for nobody knows what they will be (next/tabletop.md)
+	if plan.get("game") == true or (plan.get("beats") is Array and not (plan.get("beats") as Array).is_empty()):
 		return _land_beats(plan)
 	var spread: Dictionary = plan.get("spread", {}) if plan.get("spread") is Dictionary else {}
 	# EVERY FIELD IN THE SHAPE ITS READERS EXPECT: a position given as a bare name, tags as one
@@ -889,6 +1044,8 @@ func _land_plan(text: String) -> String:
 	spread["name"] = _str(spread.get("name", ""))
 	for k in ["episode_title", "description", "audience", "topic", "premise", "reader_mood", "running_bit", "work_intro", "work_close", "build"]:
 		plan[k] = _str(plan.get(k, ""))
+	plan["game"] = plan.get("game") == true
+	plan["table_note"] = _str(plan.get("table_note", ""))
 	plan["beat_word"] = beat_word_of(plan.get("beat_word", ""))
 	for k in ["tags", "habits"]:
 		plan[k] = Array(DataPath.strings(plan.get(k, [])))
@@ -950,6 +1107,11 @@ func _land_plan(text: String) -> String:
 func _land_beats(plan: Dictionary) -> String:
 	var raw: Variant = plan.get("beats")
 	var pos: Array = []
+	# A GAME'S SCENES ARE A CEILING, AND NOTHING MORE (next/tabletop.md): nobody knows what they will turn out to be, and a chapter is named as it is played
+	if plan.get("game") == true:
+		raw = []
+		for k in clampi(int(plan.get("scenes", 6)), 1, BEATS_MOST):
+			raw.append({"name": "Part %d" % (k + 1), "asks": ""})
 	for q in raw if raw is Array else []:
 		if pos.size() >= BEATS_MOST:
 			break
@@ -967,7 +1129,9 @@ func _land_beats(plan: Dictionary) -> String:
 	plan["spread"] = {"name": "", "positions": pos}
 	for k in ["episode_title", "description", "audience", "topic", "premise", "reader_mood", "running_bit", "work_intro", "work_close", "build"]:
 		plan[k] = _str(plan.get(k, ""))
-	plan["beat_word"] = beat_word_of(plan.get("beat_word", ""))
+	plan["game"] = plan.get("game") == true
+	plan["table_note"] = _str(plan.get("table_note", ""))
+	plan["beat_word"] = "Part" if plan["game"] else beat_word_of(plan.get("beat_word", ""))
 	# WHAT THE EPISODE IS MADE OF: built from many small parts ([Assembly]) or not, and how much of it nobody talks through
 	plan["assembly"] = plan.get("assembly") == true
 	plan["quiet"] = TablePrompts.quiet_of(plan)

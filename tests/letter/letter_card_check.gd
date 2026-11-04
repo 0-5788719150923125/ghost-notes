@@ -222,12 +222,11 @@ func _desk() -> void:
 		and odd.call("desk_mood") == String(DeskLook.of(other)["mood"]),
 		"the block round trips through the note's frontmatter, an empty desk too; a thing or a light it does not know is dropped")
 	# WHAT IS WRITTEN ON THE INDEX CARDS
-	var cards_row: Control = card.get("_card_row")
-	var cards_box: TextEdit = card.get("_card_box")
+	var cards_box: TextField = card.get("_card_box")
 	(bank["cards"] as CheckBox).button_pressed = false
-	var hidden := not cards_row.visible
+	var hidden := not cards_box.visible
 	(bank["cards"] as CheckBox).button_pressed = true
-	var shown := cards_row.visible
+	var shown := cards_box.visible
 	var address := "Send letters to:\nRyan Brooks\n1500 Southwest Chandler Avenue\nBend, OR 97702"
 	cards_box.text = address
 	cards_box.text_changed.emit()
@@ -239,7 +238,7 @@ func _desk() -> void:
 	reread.apply(back)
 	_check(hidden and shown and String(block["card_text"]) == address and String(doc["card_text"]) == address
 		and String(picks.get("card_text", "")) == address and String(picks.get("hand", "")) == String(doc["hand"])
-		and String(reread.capture()["card_text"]) == address and (reread.get("_card_box") as TextEdit).text == address,
+		and String(reread.capture()["card_text"]) == address and (reread.get("_card_box") as TextField).text == address,
 		"the cards' box is shown with the cards ticked - the control, without them, hidden - and what is typed in it is kept in the block, carried by the document to the desk with the letter's hand, and round trips through the frontmatter, its lines and all")
 	for c in [card, again, none, odd, reread]:
 		(c as Node).free()

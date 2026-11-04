@@ -679,6 +679,8 @@ func advance(_features, delta: float, _bookend: float) -> void:
 	var behind := feed != null and _work.physics != null and _work.physics.behind(_now)
 	if feed != null and _work.assembly != null and _work.assembly.behind(_now):
 		behind = true
+	if feed != null and _work.game != null and _work.game.behind(_now):
+		behind = true
 	if behind != _waiting:
 		_waiting = behind
 		feed.wait_for(WAIT_FOR, behind)
@@ -1496,6 +1498,10 @@ func _build_table(spec: Dictionary = {}) -> void:
 	_work.clear()
 	_work.materials = spec["materials"]
 	_work.assembly_spec = spec.get("assembly", {}) if spec.get("assembly") is Dictionary else {}
+	# A GAME PLAYED HERE ([TableGame]): what its session came to, and where what it had painted is
+	_work.game_spec = _plan.pay.get("game", {}) if _plan.pay.get("game") is Dictionary else {}
+	_work.game_dir = String(_plan.pay.get("dir", ""))
+	_work.game_seed = _plan.seed_value
 	_light_part._heat_cells = {}
 	# WHAT THE TABLE IS ABOARD, planned before anything stands on it: each thing's moving parts are made
 	# ready to answer it as they are put ([method TableThings.put])
@@ -1608,7 +1614,8 @@ func _tick_camera(t: float) -> void:
 	# at a jolt (Rides.camera) - turned about the lens, so what is posed from the camera's place
 	# (a card held up, its page) is where it was
 	var give := Rides.camera(_ride, t)
-	_cam.transform = _plan.cam_base if give == Vector3.ZERO else _plan.cam_base * Transform3D(Basis.from_euler(give), Vector3.ZERO)
+	var base := _plan.cam_base if _work.game == null else _work.game.shot_at(t, _plan.cam_base)
+	_cam.transform = base if give == Vector3.ZERO else base * Transform3D(Basis.from_euler(give), Vector3.ZERO)
 
 
 # --- what moves ----------------------------------------------------------------------------------------

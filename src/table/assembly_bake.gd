@@ -18,6 +18,11 @@ extends SceneTree
 ## WHAT IS IN HAND IS LEFT TO [Fingers]: the record says where the hand takes a piece, and how much room it has at each point of the way ([method _room]). What it does with the
 ## piece there is laid over this on the show's clock, for a stop's length is the reading's, and it touches nothing.
 ##
+## WHAT FALLS IS STILL THERE TO BE USED (the user, of a tub spilling as soon as it was dug in: "people do make messes - just so long as those fallen bricks still remain usable, if we need them"): a piece
+## keeps its stock wherever it lands and [method _find] goes on finding it, on the table, on another's pile, or on the floor. THE TABLE HAS AN EDGE ([method _begin]): past the top as it is drawn it had rested on
+## air, 14 cm past it in 462684, and now it drops to the floor, where a hand fetches it from when nothing nearer is left ([method _off_the_floor]). WHAT HAS FALLEN WHERE A PART GOES IS MOVED OFF FIRST
+## ([method _clear_spot]), as anyone would: pressed on regardless it was shoved about by every part laid over it.
+##
 ## WRITTEN IN STRETCHES ([constant STRETCH]), each ending at a step and holding where everything then is, under a name made from everything it
 ## depends on: a show can begin playing what has landed, and a new act or a new sentence never redoes what came before it.
 
@@ -80,6 +85,12 @@ const STOP_HELD := 2.0
 ## How often a pour is laid in, while a stock is filled.
 const POUR_BATCH := 14
 const POUR_WAIT := 0.8
+## THE FLOOR, under the top (meters; [constant Tables.DROP_MOST] is what a cloth may hang to reach it); how far past a table's edge a hand comes up from it, and how far over the top it brings a piece.
+const FLOOR_DROP := 0.72
+const PAST_THE_EDGE := 0.04
+const OVER_THE_TOP := 0.03
+## How far over a part's own height something fallen is still in its way (meters).
+const IN_THE_WAY_OVER := 0.008
 ## What a hand reaches, for thawing what is near it (meters).
 const HAND_REACH := 0.085
 ## How far over a floor a hand goes at its lowest (meters): room for a plate under it.
@@ -165,13 +176,27 @@ func _begin() -> void:
 	yaw = float(req["yaw"])
 	stocks = req["stocks"]
 	# THE TABLE, WHAT STANDS ON IT, AND THE PLATE
-	world.add_slab(Transform3D(Basis.IDENTITY, Vector3(0.0, -0.25, 0.0)), Vector3(8.0, 0.25, 8.0), "wood")
+	# ...AS FAR AS THE TOP GOES: a table with no outline to hand is as wide as anything falls
+	if req.has("top"):
+		var edge := Tables.edge_points(req["top"] as Dictionary, 64)
+		for i in edge.size():
+			edge[i] += (req["top"] as Dictionary)["center"] as Vector2
+		world.add_prism(edge, 0.0, 0.5, "wood")
+		world.add_slab(Transform3D(Basis.IDENTITY, Vector3(0.0, -FLOOR_DROP - 0.25, 0.0)), Vector3(8.0, 0.25, 8.0), "wood")
+	else:
+		world.add_slab(Transform3D(Basis.IDENTITY, Vector3(0.0, -0.25, 0.0)), Vector3(8.0, 0.25, 8.0), "wood")
 	for s in req["solids"]:
 		world.add_surface((s as Dictionary)["faces"], String((s as Dictionary)["sound"]))
 	for nm in stocks:
 		var sd: Dictionary = stocks[nm]
 		if sd.has("bed_faces"):
 			world.add_surface(sd["bed_faces"], "plastic")
+	# WHAT A HOLLOW THING HOLDS STAYS IN IT ([method AssemblyWorld.add_vessel])
+	for nm in stocks:
+		var sd: Dictionary = stocks[nm]
+		for s in req["solids"]:
+			if not String(sd["thing"]).is_empty() and String((s as Dictionary).get("thing", "")) == String(sd["thing"]):
+				world.add_vessel((s as Dictionary)["faces"], sd["middle"], float(sd["floor"]))
 	var size: Array = req["base_size"]
 	var half := Vector3(float(size[0]) * Assembly.STUD * 0.5, (Assembly.BASE_T + Assembly.STUD_H) * 0.5, float(size[1]) * Assembly.STUD * 0.5)
 	var plate := log.base_xf(yaw)
@@ -273,10 +298,12 @@ func _lay_batch(batch: Array, sd: Dictionary) -> void:
 			if clear:
 				placed = true
 				break
-		# ...no room at this height: the next ones go a little over these
+		# ...no room at this height: the next ones go a little over these, and this one in the middle, never where its last try had it across the wall
 		if not placed:
 			y += 0.012
 			taken = []
+			if not pile:
+				at = middle
 		taken.append([at, r])
 		var basis := Basis.from_euler(Vector3(_rng.randf() * TAU, _rng.randf() * TAU, _rng.randf() * TAU))
 		if pile:
@@ -739,13 +766,14 @@ func _fetch(key: String, stock: String, seed: int, brisk: bool) -> int:
 		return -1
 	await _wait(lerpf(0.2, 0.4, Hands.share(seed, 50)) * (0.6 if brisk else 1.0))
 	var sd: Dictionary = stocks.get(stock_of[id], {})
-	if world.on_top_of(id) >= BURIED and not sd.is_empty():
+	if world.on_top_of(id) >= BURIED and not sd.is_empty() and world.xf[id].origin.y >= 0.0:
 		var s := world.top_near(Vector2(world.mid[id].x, world.mid[id].z), 0.04)
 		var at := Vector3(world.mid[id].x, 0.0, world.mid[id].z)
 		_hand_floor = float(sd["floor"])
 		await _stir(at, s, minf(s - world.mid[id].y + 0.005, IN_DEEP * 1.4), seed)
 		await _settle(0.5)
 	var was := world.xf[id]
+	var fallen := was.origin.y < -0.02
 	var top := world.top_near(Vector2(was.origin.x, was.origin.z), world.size[id] + 0.01)
 	var out_y := maxf(top if not is_nan(top) else was.origin.y, was.origin.y) + world.size[id] + 0.006
 	if not sd.is_empty() and not String(sd["thing"]).is_empty():
@@ -753,9 +781,66 @@ func _fetch(key: String, stock: String, seed: int, brisk: bool) -> int:
 	world.say("tick", world.mid[id], 0.3, world.size[id])
 	world.take_up(id)
 	_in_hand(id)
+	if fallen:
+		await _off_the_floor(id, was, seed, brisk)
+		was = world.xf[id]
+		out_y = OVER_THE_TOP + world.size[id]
+		sd = {}
 	await _pull(id, was, out_y - was.origin.y, sd, seed, brisk)
 	_room(Fingers.ROOM_DRAWN)
 	return id
+
+
+## WHAT HAS GONE OFF THE TABLE IS FETCHED UP FROM THE FLOOR: if it rolled in under, a hand brings it out past the edge first, so that it comes up beside the table and never through it. Nobody sees this much of it.
+func _off_the_floor(id: int, was: Transform3D, seed: int, brisk: bool) -> void:
+	if not req.has("top"):
+		return
+	var o: Dictionary = req["top"]
+	var at := Vector2(was.origin.x, was.origin.z)
+	var past := Tables.sdf(o, at) - (PAST_THE_EDGE + world.size[id])
+	if past >= 0.0:
+		return
+	var out := at + Tables.normal(o, at) * -past
+	var to := Transform3D(was.basis, Vector3(out.x, was.origin.y + 0.02, out.y))
+	await _held_move([id], was, to, clampf(-past / CARRY_SPEED, CARRY_LEAST * 0.5, CARRY_MOST) * (0.7 if brisk else 1.0), seed)
+
+
+## WHAT HAS FALLEN WHERE PART [param seat] GOES, moved off first: taken up, and let lie beside the plate, where it can still be had. A part pressed on regardless shoves it about, and every part laid over it
+## after that. What lies clear of the place is left: people make messes.
+func _clear_spot(st: Dictionary, seat: Transform3D, seed: int) -> void:
+	var half := Vector3(float(st["w"]) * Assembly.STUD * 0.5, 0.0, float(st["d"]) * Assembly.STUD * 0.5)
+	var row: Dictionary = Assembly.KINDS[String(st["key"]).get_slice(" ", 0)]
+	var tall := float(row["h"]) * Assembly.PLATE + Assembly.STUD_H + IN_THE_WAY_OVER
+	var inv := seat.affine_inverse()
+	var reach := half.length()
+	for id in world.pieces.size():
+		if world.state[id] != AssemblyWorld.FROZEN and world.state[id] != AssemblyWorld.LOOSE:
+			continue
+		if world.mid[id].distance_to(seat.origin) > reach + world.size[id] + tall:
+			continue
+		if not _lies_in(id, inv, half, tall):
+			continue
+		var was := world.xf[id]
+		var s := hash([seed, id])
+		world.say("tick", world.mid[id], 0.25, world.size[id])
+		world.take_up(id)
+		await _pull(id, was, world.size[id] + 0.015, {}, s, true)
+		await _let_go_over([id], "aside" if stocks.has("aside") else stock_of[id], Vector2(was.origin.x, was.origin.z), s, ASIDE_FROM)
+
+
+## Whether what stands at piece [param id] reaches into the box of half [param half] and height [param tall] that [param inv] takes the world into.
+func _lies_in(id: int, inv: Transform3D, half: Vector3, tall: float) -> bool:
+	var q: Dictionary = world.pieces[id]
+	var hw := float(q["w"]) * Assembly.STUD * 0.5
+	var hd := float(q["d"]) * Assembly.STUD * 0.5
+	var h := float((Assembly.KINDS[String(q["kind"])] as Dictionary)["h"]) * Assembly.PLATE
+	var at := world.xf[id]
+	for u in [-1.0, -0.5, 0.0, 0.5, 1.0]:
+		for v in [-1.0, -0.5, 0.0, 0.5, 1.0]:
+			var p: Vector3 = inv * (at * Vector3(hw * float(u), h * 0.5, hd * float(v)))
+			if absf(p.x) < half.x and absf(p.z) < half.z and p.y > -0.002 and p.y < tall:
+				return true
+	return false
 
 
 ## DRAWN OUT AS FINGERS DRAW ONE, not lifted on a wire: the grip tips one end of it up, and it comes on up and turning, toward the middle of what it is in, what it meets riding up on it as a
@@ -960,13 +1045,14 @@ func _let_go_over(ids: Array, stock: String, from: Vector2, seed: int, height: f
 func _put(st: Dictionary, seed: int) -> void:
 	var brisk: bool = st["brisk"]
 	_stop(STOP_THINK * 0.6)
+	var local := log.place_xf(int(st["x"]), int(st["z"]), int(st["l"]), int(st["w"]), int(st["d"]), int(st["turn"]))
+	var plate := log.base_xf(yaw)
+	var seat := plate * local
+	await _clear_spot(st, seat, seed)
 	var id := await _fetch(String(st["key"]), String(st["stock"]), seed, brisk)
 	if id < 0:
 		push_warning("assembly_bake: no %s for step" % String(st["key"]))
 		return
-	var local := log.place_xf(int(st["x"]), int(st["z"]), int(st["l"]), int(st["w"]), int(st["d"]), int(st["turn"]))
-	var plate := log.base_xf(yaw)
-	var seat := plate * local
 	var over := Transform3D(seat.basis, seat.origin + Vector3(0.0, HOVER, 0.0))
 	var near := Transform3D(seat.basis, seat.origin + Vector3(0.0, PRESS_FROM, 0.0))
 	var here := world.xf[id]

@@ -236,6 +236,9 @@ func off_limits() -> Array:
 	var built_here: Dictionary = medium._work.assembly_spec if medium._work != null else {}
 	if not built_here.is_empty():
 		out.append_array(TableAssembly.keep_out(built_here, TableAssembly.base_center(built_here, medium._plan)))
+	# A GAME'S BOARD ([GameBoard]): nothing stands where a map goes down
+	if CardTable.game_of(medium._plan.pay.get("plan", {}) if medium._plan.pay.get("plan") is Dictionary else {}):
+		out.append_array(GameBoard.keep_out())
 	# A SHOW WITH NO CARDS keeps no room for them: no spread, no deck, no jumper's landing - the middle is the work's
 	if medium._plan.cards_from == "none":
 		return out

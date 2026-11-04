@@ -36,7 +36,9 @@ class_name AgentJobs
 
 ## How many runs of each kind at once. Each mostly waits on a network round trip, so more than
 ## one is cheap; more than a couple is a burst against the author's quota.
-const LIMITS := {"text": 2, "image": 2}
+const LIMITS := {"text": 2, "image": 2, "aside": 4}
+## A JOB ANOTHER JOB IS WAITING ON ([GameTools]: a player asked what they do, while the game master's job runs) takes a `slot` of its own, for a parent job waiting on its children must not be
+## holding the place they would start in.
 ## NO RUN HAS A TIME LIMIT BY DEFAULT. A writer that is still running is still working - a long
 ## plan, a set dresser looking at its own pictures - and killing it for the clock threw away work
 ## the person was waiting for (a cards plan was cut at 420 s). The person ends a run with [method
@@ -221,7 +223,7 @@ static func _next_startable() -> int:
 	var counts := {}
 	var busy_lanes := {}
 	for j in _running.values():
-		var k := String((j as Dictionary)["kind"])
+		var k := String((j as Dictionary).get("slot", (j as Dictionary)["kind"]))
 		counts[k] = int(counts.get(k, 0)) + 1
 		var lane := String((j as Dictionary).get("lane", ""))
 		if not lane.is_empty():
@@ -234,7 +236,8 @@ static func _next_startable() -> int:
 			busy_lanes[lane] = true          # later jobs in this lane wait behind this one
 		if blocked:
 			continue
-		if int(counts.get(String(q["kind"]), 0)) >= int(LIMITS[String(q["kind"])]):
+		var slot := String(q.get("slot", q["kind"]))
+		if int(counts.get(slot, 0)) >= int(LIMITS[slot]):
 			continue
 		return i
 	return -1

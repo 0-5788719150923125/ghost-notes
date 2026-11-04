@@ -104,6 +104,18 @@ static func make(body: String, title: String, ask: Dictionary, from_sentence := 
 		# paragraphs - so measuring it against the whole chapter would hand the
 		# second voice the contour of a paragraph it is not in.
 		place(chunks, text)
+		# ...THE TURN COMES IN OVER THE ONE BEFORE: its first sentence is that one's on the screen too, so they read as one line, each word lit in its own voice's color ([ReadingJoin])
+		if not out.is_empty() and (float((seg as Dictionary).get("over", -1.0)) >= 0.0 or bool((seg as Dictionary).get("together", false))):
+			var head: Dictionary = chunks[0]
+			if bool((seg as Dictionary).get("together", false)):
+				head["together"] = true
+			else:
+				head["over"] = float((seg as Dictionary)["over"])
+			var with_prev: Array = ((out.back() as Dictionary).get("words", [])) as Array
+			var prev_sentence := int((with_prev[0] as Dictionary).get("sentence", -1)) if not with_prev.is_empty() else -1
+			if prev_sentence >= 0:
+				for w in head.get("words", []):
+					(w as Dictionary)["sentence"] = prev_sentence
 		var fade := bool((seg as Dictionary).get("fade", false))
 		var leans: Array = (seg as Dictionary).get("leans", [])
 		var cursor := 0
@@ -184,12 +196,20 @@ static func passages(body: String, title: String, ask: Dictionary) -> Array:
 		for k in parts.size():
 			if k == 1:
 				fading = true
+			# VOICES OVER EACH OTHER: a turn's own mark, which a later piece of it does not take up
+			var over := -1.0
+			var together := false
+			if k == 0:
+				var om2 := Manuscript._rx(Manuscript.OVER).search(String(parts[k]))
+				if om2 != null:
+					over = float(om2.get_string(1)) if not om2.get_string(1).is_empty() else Manuscript.OVER_BARE
+				together = Manuscript._rx(Manuscript.TOGETHER).search(String(parts[k])) != null
 			var res := resolve_marks(String(parts[k]), on, bare)
 			var out := String(res["text"])
 			# A passage of nothing but hesitations: its rests would have no word to sit on.
 			if not out.replace(TextNorm.HOLD_MARK, "").strip_edges().is_empty():
 				kept.append({"speaker": reader if name == Manuscript.NARRATOR else name, "text": out,
-					"fade": fading, "leans": res["leans"], "holds": res["holds"]})
+					"fade": fading, "leans": res["leans"], "holds": res["holds"], "over": over, "together": together})
 	# A TABLET'S OPENING RUN (wake, open the browser, type) comes AFTER the intro, end to end:
 	# the intro is the tablet lying dark on the desk, and its rest is the run's own, whole
 	return kept

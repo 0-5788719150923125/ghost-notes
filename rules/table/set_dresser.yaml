@@ -373,6 +373,15 @@ prompt:
     insert: assembly_stock
   - when: assembly
     say: ""
+  # A GAME IS PLAYED HERE (next/tabletop.md): seen from high up (CardTable.game_camera), with a board in the middle the table draws itself, and dice coming from every side. Nothing here names a game: that is the brief's
+  - when: game
+    say: >-
+          A GAME IS PLAYED AT THIS TABLE, seen from high over its near edge. Its top is at least {{game_top_x}} by {{game_top_z}} cm: a real table, big enough for everyone. The board is laid by the show itself, {{game_keep_x}} by
+          {{game_keep_z}} cm in the middle (around [0, {{game_mid_z}}]): build nothing there, and nothing tall near it that would stand between the eye and the board. Dice are thrown across the open table from every side and bounce off what is really there,
+          so what stands on it is what a table has after some hours of a game and nothing that blocks the view: low, and toward the edges. What the brief says is at each person's place goes there: in the corners and along the sides, near the edge. Anything tall
+          stands at the far side. Nobody is seen, and no one sits at the near edge.
+  - when: game
+    say: ""
   # THE RIDE: the user, 2026-10-19 - "the script will mention that we are on a moving thing ... there was
   # no clear indication that the train was moving"; the camera is mounted, so the ride shows in what moves
   # on the table (Rides). No example: one would be copied onto tables that stand still

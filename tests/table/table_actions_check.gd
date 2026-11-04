@@ -38,8 +38,12 @@ func _initialize() -> void:
 	for m in CardTable.MOMENTS:
 		_ok(TableActions.moments().has(m), "the air's '%s' is made by some verb" % m)
 	print("-- the marks")
-	_ok(TableActions.written() == ["shuffle", "open", "begin", "draw", "jumper", "spread", "deal", "fan", "show", "rummage", "linger", "tap", "untap", "flip", "work"],
-		"the written verbs include searching, a silent hold, a card's work and a show with no cards (%s)" % str(TableActions.written()))
+	_ok(TableActions.written() == ["shuffle", "open", "begin", "draw", "jumper", "spread", "deal", "fan", "show", "rummage", "linger", "tap", "untap", "flip", "work", "roll", "move", "place", "fall", "rise", "remove", "map", "reveal"],
+		"the written verbs include searching, a silent hold, a card's work, a show with no cards and what happens at a game's table (%s)" % str(TableActions.written()))
+	# A GAME'S MARK NAMES WHAT HAPPENED, neither a card nor a beat (next/tabletop.md): and every one of them is a thing the ledger says a viewer sees
+	for k in GameLedger.KINDS:
+		_ok(bool((GameLedger.KINDS[k] as Dictionary)["table"]) == TableActions.names_event(k), "the ledger and the table agree whether a viewer sees '%s'" % k)
+	_ok(not TableActions.names_event("draw") and not TableActions.names_event("work"), "the control: a card's and a beat's marks are no events")
 	_ok(CardReading.rest_of("linger", true) == TableActions.LINGER and
 		CardReading.rest_of("rummage", true) == TableActions.LAY + TableActions.RUMMAGE,
 		"a silent hold preserves the shown card, while a search puts it down first")

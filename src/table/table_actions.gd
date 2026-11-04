@@ -71,6 +71,11 @@ const FLIP := 1.2
 const WORK_LEAD := 0.4
 ## A SHOW WITH NO CARDS BEGINS: only the moment it takes, as the shuffle's.
 const BEGIN_LEAD := 0.4
+## A GAME'S TABLE ([TableGame], next/tabletop.md): dice in the hand and thrown, for the voice to wait on; a figure moved, set down, knocked or taken off, and talked over; a map laid; a picture held up.
+const ROLL := 2.2
+const MOVE := 0.25
+const NEW_MAP := 1.5
+const REVEAL := 1.1
 
 ## THE VERBS. `written`: a reading's mark names it (`<!-- table: draw 3 -->`); `args`: what the mark
 ## takes after the verb; `rest`: the seconds the voice holds for it; `first`: added when it brings up
@@ -127,6 +132,23 @@ const REGISTRY := {
 	"work": {"written": true, "args": ["card"], "rest": WORK_LEAD, "shows": false, "lays": true,
 		"ends": false, "moments": ["lay"], "beat": true,
 		"about": "the card on display goes down (if one is up), then the work of the named beat begins at the table, under the words that follow - in a show with no cards, every beat opens with it"},
+	# A GAME'S TABLE: each mark's number names something that happened in the session ([GameLedger]), written by the tools that made it so, never a card
+	"roll": {"written": true, "args": ["card"], "rest": ROLL, "shows": false, "lays": false, "ends": false, "moments": [], "event": true,
+		"about": "the dice of the named event are shaken and thrown from where their person sits"},
+	"move": {"written": true, "args": ["card"], "rest": MOVE, "shows": false, "lays": false, "ends": false, "moments": [], "event": true,
+		"about": "a figure hops to another place on the map"},
+	"place": {"written": true, "args": ["card"], "rest": MOVE, "shows": false, "lays": false, "ends": false, "moments": [], "event": true,
+		"about": "a new figure is set down on the map"},
+	"fall": {"written": true, "args": ["card"], "rest": MOVE, "shows": false, "lays": false, "ends": false, "moments": [], "event": true,
+		"about": "a figure falls flat where it stands"},
+	"rise": {"written": true, "args": ["card"], "rest": MOVE, "shows": false, "lays": false, "ends": false, "moments": [], "event": true,
+		"about": "a fallen figure is stood up again"},
+	"remove": {"written": true, "args": ["card"], "rest": MOVE, "shows": false, "lays": false, "ends": false, "moments": [], "event": true,
+		"about": "a figure is taken off the map"},
+	"map": {"written": true, "args": ["card"], "rest": NEW_MAP, "shows": false, "lays": false, "ends": false, "moments": [], "event": true,
+		"about": "another map goes down, and what stood on the last comes off"},
+	"reveal": {"written": true, "args": ["card"], "rest": REVEAL, "shows": false, "lays": false, "ends": false, "moments": [], "event": true,
+		"about": "a painted picture is held up for the table to see"},
 	# performed between the written ones, never written
 	"push": {"written": false, "args": [], "rest": PUSH, "shows": false, "lays": false, "ends": false,
 		"moments": [], "about": "the shuffled deck is squared and pushed to its side before the first card"},
@@ -165,6 +187,11 @@ static func takes_range(kind: String) -> bool:
 ## Does [param kind]'s number name a beat of the reading rather than a card ([constant REGISTRY] `beat`)?
 static func names_beat(kind: String) -> bool:
 	return bool(REGISTRY.get(kind, {}).get("beat", false))
+
+
+## Does [param kind]'s number name something that happened in a game's session ([constant REGISTRY] `event`), neither a card nor a beat?
+static func names_event(kind: String) -> bool:
+	return bool(REGISTRY.get(kind, {}).get("event", false))
 
 
 ## Does [param kind] take cards from the source (the deck, the box)?

@@ -288,6 +288,29 @@ static func cloth_crop(picture: Vector2, cloth: Vector2) -> Rect2:
 	return Rect2((Vector2.ONE - size) * 0.5, size)
 
 
+## THE PLAN IS OF A GAME PLAYED AT THE TABLE (next/tabletop.md): its session is played live, its table is seen from higher up, and it has a board, figures and dice.
+static func game_of(plan: Dictionary) -> bool:
+	return plan.get("game") == true
+
+
+## The lens over a game (degrees, up the frame): about 54 mm on a 35 mm camera.
+const GAME_FOV := 29.0
+
+
+## THE CAMERA OVER A GAME (the user, 2026-11-04: "more top-down, so that we can't see that the person on the far side is invisible"): high over the near edge, looking well down, so that the whole board and what is round it are in the picture, a little different every episode.
+static func game_camera(seed: int) -> Dictionary:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([seed, "game-camera"])
+	var pitch := rng.randf_range(60.0, 66.0)
+	# ...A LONG LENS, FROM FAR OFF: at this angle a short one leans whatever stands at the table's edges out of the picture, and a mug looked as though it had fallen over (the first look)
+	var dist := rng.randf_range(1.22, 1.3)
+	var yaw := deg_to_rad(rng.randf_range(-2.5, 2.5))
+	var target := Vector3(rng.randf_range(-0.01, 0.01), 0.0, GameBoard.MIDDLE.y + 0.01)
+	var p := deg_to_rad(pitch)
+	var eye := target + Vector3(sin(yaw) * cos(p), sin(p), cos(yaw) * cos(p)) * dist
+	return {"pitch": pitch, "camera": Transform3D(Basis.looking_at(target - eye, Vector3.UP), eye), "fov": GAME_FOV + rng.randf_range(-0.8, 0.8)}
+
+
 ## THE EPISODE'S LAYOUT, drawn from [param rng] in a fixed order: the camera (`camera`, `fov`,
 ## `pitch`), the lamp (`lamp`, `lamp_energy`), where the deck is kept (`deck`) and shuffled
 ## (`mid`). The table draws it as it is built; [method layout_of] lets a prompt know it first.
@@ -342,11 +365,14 @@ static func card_points() -> PackedVector3Array:
 	return out
 
 
-## Episode [param seed]'s layout (see [method sample_layout]).
-static func layout_of(seed: int) -> Dictionary:
+## Episode [param seed]'s layout (see [method sample_layout]), seen from over a game's table where [param game] says this one is.
+static func layout_of(seed: int, game := false) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([seed, "tarot-table"])
-	return sample_layout(rng)
+	var lay := sample_layout(rng)
+	if game:
+		lay.merge(game_camera(seed), true)
+	return lay
 
 
 ## The rectangle in the picture that [param corners] (a thing's box, turned and sized) cover

@@ -45,6 +45,14 @@ static func writer(what: String, model_tip := "", effort_tip := "") -> AgentPick
 	return p
 
 
+## A row for WHO PLAYS THE PLAYERS at a game's table (next/tabletop.md): writers too, asked often and briefly.
+static func players(what: String, model_tip: String, effort_tip: String) -> AgentPick:
+	var p := AgentPick.new()
+	p.role = "writer"
+	p._build("Players", TextGen.REGISTRY, what, model_tip, effort_tip)
+	return p
+
+
 ## A painter's row (an agent from [ImageGen]).
 static func painter(what: String, model_tip := "", effort_tip := "") -> AgentPick:
 	var p := AgentPick.new()

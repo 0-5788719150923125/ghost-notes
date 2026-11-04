@@ -63,8 +63,7 @@ var _section: Section = null
 var _seed_box: SpinBox
 var _light_pick: OptionButton    # the desk's light ([constant DeskLook.MOODS])
 var _bank := {}                  # a [constant DeskLook.THINGS] key -> its CheckBox
-var _card_row: VBoxContainer     # what is written on the index cards, shown while they are on the desk
-var _card_box: TextEdit
+var _card_box: TextField         # what is written on the index cards, shown while they are on the desk
 var _card_due := 0.0             # seconds till a playing letter's desk takes the cards' words, 0 for nothing waiting
 var _hand_pick: OptionButton
 var _writer: AgentPick
@@ -445,19 +444,8 @@ func _build() -> void:
 
 	# WHAT IS WRITTEN ON THE INDEX CARDS (2026-10-29, the user: "an input box - which only appears if we've selected the
 	# index cards"), the right way up from the writer's seat ([method DeskLook._write])
-	_card_row = VBoxContainer.new()
-	_card_row.add_theme_constant_override("separation", 2)
-	add_child(_card_row)
-	var cl := Label.new()
-	cl.text = "On the index cards"
-	cl.add_theme_font_size_override("font_size", 12)
-	_card_row.add_child(cl)
-	_card_box = TextEdit.new()
-	_card_box.custom_minimum_size.y = 84.0
-	_card_box.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
-	_card_box.placeholder_text = "Nothing - the cards are blank"
-	_card_box.add_theme_font_size_override("font_size", 12)
-	_card_box.tooltip_text = ("Written on the top index card or sticky note in the letter's hand and the desk's ink, line "
+	_card_box = TextField.new("On the index cards", "Nothing - the cards are blank",
+		"Written on the top index card or sticky note in the letter's hand and the desk's ink, line "
 		+ "for line as typed here - smaller where it needs the room, wrapped to the card's width. Nothing on the desk moves "
 		+ "for it: the cards lie where the desk's number put them, and the writing turns to read the nearest way up from "
 		+ "the writer's seat - down a card lying along the pad. Seen at once while the letter plays, paused or not.")
@@ -468,7 +456,7 @@ func _build() -> void:
 		_knobs["card_text"] = _card_box.text
 		_touch()
 		_card_due = CARD_SETTLE)
-	_card_row.add_child(_card_box)
+	add_child(_card_box)
 
 	# THE HAND: the journal's (the Picture card's Handwriting row has the same three)
 	var hrow := HBoxContainer.new()
@@ -549,7 +537,7 @@ func _show_desk() -> void:
 	var on := desk_things()
 	for k in _bank:
 		(_bank[k] as CheckBox).set_pressed_no_signal(k in on)
-	_card_row.visible = "cards" in on
+	_card_box.visible = "cards" in on
 	_syncing = was
 
 

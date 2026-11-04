@@ -104,7 +104,7 @@ static func blocks_of(path: String) -> Dictionary:
 
 
 ## WHAT THE NOTES LIST SHOWS OF A NOTE, from one read of its file: `title` ([method title_of]),
-## `preview` (its words as a reader sees them, [method preview_of] - less a first line that only says the
+## `preview` (its words as a reader sees them, [method Manuscript.preview_of] - less a first line that only says the
 ## title again, as a chapter's heading does), `attached` (its components,
 ## [method Components.attached_of]) and `words`, everything a search looks through - the title, the
 ## words and the components' names, lower-cased.
@@ -119,7 +119,7 @@ static func summary_of(path: String) -> Dictionary:
 	var names := " ".join(attached.map(func(k: String) -> String: return Registry.label(Components.REGISTRY, k)))
 	var lead := body.strip_edges(true, false).get_slice("\n", 0).strip_edges()
 	var shown := body.strip_edges(true, false).substr(lead.length()) if _same_words(lead, t) else body
-	return {"title": t, "preview": preview_of(shown), "attached": attached,
+	return {"title": t, "preview": Manuscript.preview_of(shown), "attached": attached,
 		"words": ("%s\n%s\n%s" % [t, body, names]).to_lower()}
 
 
@@ -148,26 +148,6 @@ const PLAIN := [
 	["[*`]{1,3}(?=\\S)|(?<=\\S)[*`]{1,3}", ""],
 	["(?<!\\w)_{1,2}(?=\\S)|(?<=\\S)_{1,2}(?!\\w)", ""],
 ]
-
-
-## THE FIRST WORDS OF [param plain] FOR A NOTE'S TILE: its paragraphs one to a line, blank lines and
-## runs of spaces closed up, cut at a word near [param most] characters.
-static func preview_of(plain: String, most := 600) -> String:
-	var lines: Array = []
-	var n := 0
-	for line in plain.split("\n"):
-		var l := RegEx.create_from_string("\\s+").sub(String(line), " ", true).strip_edges()
-		if l.is_empty():
-			continue
-		lines.append(l)
-		n += l.length() + 1
-		if n >= most:
-			break
-	var out := "\n".join(lines)
-	if out.length() > most:
-		var cut := out.rfind(" ", most)
-		out = out.substr(0, cut if cut > most / 2 else most).strip_edges() + "…"
-	return out
 
 
 ## A NEW NOTE in the default folder: its `title:`, [param body] and nothing attached - or

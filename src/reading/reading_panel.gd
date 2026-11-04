@@ -63,7 +63,7 @@ const SLOT_DEFAULTS := {
 	"voice": DEFAULT_VOICE, "speaker": 0, "tone": 0, "pace": 1.0, "pause": 1.0,
 	"dynamics": 0.5, "arc": 0.4, "effort": 0.35,
 	"echo": 0.0, "room": 0.0, "resonance": 0.0, "presence": 1.0, "ambience": 0.0,
-	"lean": 0.0, "near": 0.0,
+	"lean": 0.0, "near": 0.0, "seat": 0.0,
 	# the pen this voice writes in, in a medium that writes by hand - a name from
 	# NotebookLayout.INKS or a hex color; "" is the default black
 	"ink": "",
@@ -651,6 +651,14 @@ func cast_names() -> Array:
 	return _cast.cast_dict().keys()
 
 
+## Where each voice sits, by name, in degrees round a table ([member VoiceFX.seat]): what a game's dice are thrown from.
+func cast_seats() -> Dictionary:
+	var out := {}
+	for who in cast_names():
+		out[who] = float(_cast.cfg_of(String(who)).get("seat", 0.0))
+	return out
+
+
 # --- what is handed: what the reading reads -------------------------------------------------------
 
 ## WHAT THIS READING READS ([TextWalk]): the note's own words, unless the mode hands another - Cards
@@ -1112,13 +1120,16 @@ func _render_take() -> String:
 		# voice can change at the same frame
 		if m.has("speaker"):
 			cfg = _cast.cfg_of(String(m["speaker"]))
-			leans = leans or float(cfg["lean"]) > 0.0
+			leans = leans or float(cfg["lean"]) > 0.0 or absf(float(cfg.get("seat", 0.0))) > 0.5
 			Delivery.apply_fx(fx, cfg)
 		if m.has("near"):
 			Delivery.near_to(fx, m["near"])
 		var a := int(m["at"])
 		var b := pcm.size() if k == marks.size() - 1 else int((marks[k + 1] as Dictionary)["at"])
 		if b > a:
+			# ...the voices over this line, each where it sits ([ReadingJoin])
+			fx.side = join.side_between(a, b, _cast.pan_of)
+			leans = leans or not fx.side.is_empty()
 			wet.append_array(fx.process_stereo(pcm.slice(a, b)))
 	# THE PLACE, under the whole take - its first sample at show time 0, since the take carries its own
 	# bookend - so the export hears the gusts the render shows. Rendered on a worker: minutes of take are

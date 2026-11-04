@@ -27,6 +27,11 @@ var medium: TableMedium
 ## What is built on this table ([TableAssembly]; null where the table has no `assembly`), and what the table wrote of it.
 var assembly: TableAssembly
 var assembly_spec := {}
+## A game played on this table ([TableGame]; null where there is none), what it was handed and where its pictures are.
+var game: TableGame
+var game_spec := {}
+var game_dir := ""
+var game_seed := 0
 
 ## A FRAME POSES ONLY WHAT CAN HAVE CHANGED ([method _settled]): every part after a jump in show time longer than QUIET_JUMP
 ## (seconds - a scrub, a seek), and a part from QUIET_EDGE before a move of it to twice that after it, so its last value is drawn.
@@ -142,6 +147,22 @@ const ROOM_POINTS := 60
 const ROOM_DEEP := 0.002
 ## ...and set this much further out than the first place clear (meters).
 const ROOM_SPARE := 0.005
+## A DRINK ([method _drink_at]): the share of its stretch each way, how far from the lens it is held along the lens's axis (meters), how far clear of the frame's foot all of it then is (meters), how far it is
+## tipped toward the lens (degrees: under a full cup's brink), how high it rises at the least on its way (meters), and the least its stretch takes (seconds).
+const DRINK_UP := 0.36
+const DRINK_FAR := 0.18
+const DRINK_CLEAR := 0.02
+const DRINK_TIP := 9.0
+const DRINK_LIFT := 0.07
+const DRINK_LEAST := 6.0
+## ...how far over what is built it passes, whatever it is (meters).
+const DRINK_OVER := 0.04
+## WHAT RISES FROM WHAT IS AT THE LENS IS NOT SEEN (a cup at the mouth: its steam would cross the whole picture): from how near it fades, and to how near it is gone (meters).
+const PLUME_LENS := Vector2(0.55, 0.3)
+## ...AND COOLER STEAM RISES SLOWER, LIVES LESS AND IS SMALLER, at the least by these shares of its own ([method _tick_plume]).
+const STEAM_COOL_RISE := 0.55
+const STEAM_COOL_LIFE := 0.6
+const STEAM_COOL_SIZE := 0.7
 ## A POUR ([method _pour_at]): the share of its stretch that brings the vessel over the mouth, and the share at its end that
 ## turns it back level; the shares of its inside its brink is found at ([method _pour_plan]); the least it is
 ## lifted on its way there (meters); how far a vessel's pivot must be from its opening to be a handle turned away (meters);
@@ -201,6 +222,7 @@ var _rest := {}               # channel -> its value before anything acts on it
 var _runs_of := {}            # channel -> the laws its part follows all the time
 var _plumes: Array = []
 var _writing := {}            # work -> the words written on it, as its last `write` says, and once drawn their skin
+var _drunk := {}              # a liquid's work -> how full the drinks so far leave it ([method _drunk_from])
 var _aloft_of := {}           # a channel and where a move left it -> whether it touches nothing there ([method _held_up])
 var _parent_work := {}        # work index -> the work it is a part of, or -1 ([method _within])
 ## WHAT POSING FOUND IN THE LAST PLAN ([method _timelines]): an entry's name ([method _found_key]) -> [its run's t0, t1, what it
@@ -284,6 +306,10 @@ func clear() -> void:
 		assembly.clear()
 	assembly = null
 	assembly_spec = {}
+	if game != null:
+		game.clear()
+	game = null
+	game_spec = {}
 	assembly_notes = PackedStringArray()
 	_group_of = {}
 	acts = []
@@ -380,6 +406,9 @@ func build(raw: Variant, beats: int, sound: Dictionary = {}) -> void:
 		assembly = TableAssembly.new(self, assembly_spec)
 		assembly.stand()
 		assembly_notes = notes.slice(noted)
+	if not game_spec.is_empty():
+		game = TableGame.new(self, game_spec, game_dir, game_seed)
+		game.stand()
 	_take_acts(raw, beats)
 	if assembly != null:
 		assembly.perform(acts)
@@ -511,11 +540,16 @@ func _take_acts(raw: Variant, beats: int) -> void:
 		notes.append_array(assembly_notes)
 	_writing = {}
 	_aloft_of = {}
+	_drunk = {}
 	acts = []
 	for a in made["acts"]:
 		var act: Dictionary = (a as Dictionary).duplicate(true)
 		var kept: Array = []
-		for t in act["tracks"]:
+		var tracks_of: Array = act["tracks"]
+		for t in (act["tracks"] as Array).duplicate():
+			if String((t as Dictionary)["law"]) == "drink":
+				_drunk_from(act, t as Dictionary, tracks_of)
+		for t in tracks_of:
 			var tr: Dictionary = t
 			var why := _resolve(tr)
 			if not why.is_empty():
@@ -538,6 +572,36 @@ func _take_acts(raw: Variant, beats: int) -> void:
 		for tr in kept:
 			if String((tr as Dictionary)["law"]) == "write":
 				_writing[int(tr["_wi"])] = {"text": tr["text"], "hand": tr["hand"], "ink": tr["ink"]}
+
+
+## WHAT DRINK [param tr] OF ACT [param act] TAKES: as much of what is in it as it says goes while it is out of sight, by a `to` on each liquid's fill, added to [param tracks], one drink after another. A stretch too
+## short for a hand to get there and back is made long enough, if the act has a length of its own.
+func _drunk_from(act: Dictionary, tr: Dictionary, tracks: Array) -> void:
+	var w: Vector2 = tr["between"]
+	if act.get("length") is float and float(act["length"]) * (w.y - w.x) < DRINK_LEAST:
+		act["length"] = DRINK_LEAST / (w.y - w.x)
+	var ti := _thing_named(String(tr.get("thing", "")))
+	if ti < 0:
+		return
+	var liquid := int(Props.MATERIALS["liquid"]["code"])
+	var found := false
+	for wv in (things[ti] as Dictionary)["works"]:
+		var wi := int(wv)
+		var w_d: Dictionary = (works[wi] as Dictionary)["w"]
+		var is_liquid := false
+		for m in (works[wi] as Dictionary)["mats"]:
+			var kd: Variant = (m as ShaderMaterial).get_shader_parameter("kind")
+			if kd != null and int(kd) == liquid:
+				is_liquid = true
+		if not is_liquid or String(w_d.get("name", "")).is_empty():
+			continue
+		found = true
+		var now: float = float(_drunk.get(wi, float((w_d.get("start", {}) as Dictionary).get("fill", 1.0))))
+		_drunk[wi] = now * (1.0 - float(tr["sip"]))
+		tracks.append({"thing": tr["thing"], "part": String(w_d["name"]), "law": "to", "state": "fill", "value": float(_drunk[wi]), "ease": "both",
+			"between": Vector2(lerpf(w.x, w.y, DRINK_UP + 0.03), lerpf(w.x, w.y, 1.0 - DRINK_UP - 0.03))})
+	if not found:
+		notes.append("%s: \"%s\" has no liquid with a `name` in it: it is drunk from, and nothing goes down" % [String(act["name"]), String(tr.get("thing", ""))])
 
 
 ## WHAT THE ACTS COME TO on this table: a part that runs never turned again, each move its own hand, what the work moves.
@@ -633,7 +697,7 @@ func _resolve(track: Dictionary) -> String:
 	if ti < 0:
 		return "no thing on the table is called \"%s\"" % String(track["thing"])
 	var part := String(track.get("part", ""))
-	var pose := law in ["circle", "aim", "carry", "pour", "dip"] or (law == "path" and _path_moves(track))
+	var pose := law in ["circle", "aim", "carry", "pour", "dip", "drink"] or (law == "path" and _path_moves(track))
 	if pose and part.is_empty() and assembly != null and assembly.holds_stock(String((things[ti] as Dictionary)["name"])):
 		return "\"%s\" holds the assembly's pieces, which are not its parts: it stays where it stands" % String(track["thing"])
 	var state := String(track.get("state", ""))
@@ -1309,6 +1373,8 @@ static func _ray(tm: TriangleMesh, from: Vector3, dir: Vector3) -> Dictionary:
 ## permission to bypass an earlier act (opening a jar must finish before taking a pinch from it).
 func schedule(sched: Array, parse: Dictionary, said0: PackedFloat32Array, said1: PackedFloat32Array,
 		est: PackedFloat32Array, now: float) -> void:
+	if game != null:
+		game.schedule(sched)
 	if acts.is_empty():
 		return
 	var c0 := Time.get_ticks_usec() if profiling else 0
@@ -2064,6 +2130,8 @@ func _pose(e: Dictionary, tau: float, d: float, T: float) -> Transform3D:
 			var win := _window(tr)
 			var dr: Array = Hands.drift(T, seed, Hands.held((u - win.x) / maxf(win.y - win.x, 1e-6)))
 			out = _rebuilt((dr[1] as Basis) * r, p + (dr[0] as Vector3), q0, x0)
+		"drink":
+			out = _drink_at(e, tr, u, d, T, from, x0, q0)
 		"pour":
 			out = _pour_at(e, tr, u, d, T, from, x0, q0)
 		"dip":
@@ -2215,6 +2283,84 @@ func _pivot(tr: Dictionary) -> Vector3:
 		var w: Dictionary = (works[wi] as Dictionary)["w"]
 		pivot_local = (w["joint"] as Dictionary).get("pivot", w.get("middle", Vector3.ZERO)) if w.get("joint") is Dictionary else w.get("middle", Vector3.ZERO)
 	return x0 * pivot_local
+
+
+## A DRINK AT [param u] OF ITS ACT, [param d] seconds long: up off the table and toward the lens until all of it has left the frame, held there while what is drunk goes, and back exactly where it stood, turned as it
+## was. It is the hand that knows where the mouth is ([method _to_the_mouth]): nothing written says, so a drink is the same one word on any table under any lens.
+func _drink_at(e: Dictionary, tr: Dictionary, u: float, d: float, T: float, from: Transform3D, x0: Transform3D, q0: Vector3) -> Transform3D:
+	var w: Vector2 = tr["between"]
+	var lin := clampf((u - w.x) / maxf(w.y - w.x, 1e-6), 0.0, 1.0)
+	var rel := from * x0.affine_inverse()
+	var p_from := rel * q0
+	var r_from := rel.basis.orthonormalized()
+	var seed := int(tr.get("_hand", 0))
+	var mouth := _to_the_mouth(tr, x0, q0)
+	var r_at := Basis(medium._plan.cam_base.basis.x.normalized(), deg_to_rad(DRINK_TIP)) * r_from
+	# ...OVER WHAT STANDS IN ITS WAY ([method _clearance]), as a carry goes
+	if lin > 0.0 and lin < 1.0 and not e.has("_clear"):
+		e["_clear"] = _clearance(tr, p_from, mouth, Vector3.ZERO, Vector3.ZERO, r_from, r_at, q0, x0, seed, float(e["t0"]) + (w.x + w.y) * 0.5 * d)
+		# ...AND OVER WHAT HAS BEEN BUILT: the bricks are in another world from what an act moves, and a cup taken up late in the show would go through the model
+		if assembly != null and assembly.log != null:
+			e["_clear"] = maxf(float(e["_clear"]), lift_over(p_from, mouth, seed, assembly.built_reach(), q0.y - _lowest_under(tr, x0)))
+	var lift := maxf(DRINK_LIFT, float(e.get("_clear", 0.0)))
+	var p := mouth
+	var s := 1.0
+	if lin < DRINK_UP:
+		var x := lin / DRINK_UP
+		p = Hands.carried(p_from, mouth, Vector3.ZERO, Vector3.ZERO, lift, x, seed)
+		s = Hands.timing(x)
+	elif lin > 1.0 - DRINK_UP:
+		var x := (lin - (1.0 - DRINK_UP)) / DRINK_UP
+		p = Hands.carried(mouth, p_from, Vector3.ZERO, Vector3.ZERO, lift, x, seed + 1)
+		s = 1.0 - Hands.timing(x)
+	var r := Basis(Quaternion(r_from).slerp(Quaternion(r_at.orthonormalized()), s))
+	var dr: Array = Hands.drift(T, seed, Hands.held(lin))
+	return _rebuilt((dr[1] as Basis) * r, p + (dr[0] as Vector3), q0, x0)
+
+
+## HOW HIGH THE FOOT OF WHAT TRACK [param tr] MOVES STANDS, where [param x0] builds it (meters).
+func _lowest_under(tr: Dictionary, x0: Transform3D) -> float:
+	var box: AABB
+	if tr.has("_ti"):
+		box = _world_rest_thing(int(tr["_ti"])) * ((things[int(tr["_ti"])] as Dictionary)["box"] as AABB)
+	else:
+		box = x0 * (((works[int(tr["_wi"])] as Dictionary)["w"] as Dictionary)["box"] as AABB)
+	return box.position.y
+
+
+## THE LEAST LIFT THAT TAKES A MOVE FROM [param a] TO [param b] OVER WHAT [param built] SAYS STANDS THERE ([method TableAssembly.built_reach]), the thing's foot [param foot] under the point moved. Looked at along the way,
+## with a little more each time until it clears: none, for a way that never comes over it.
+static func lift_over(a: Vector3, b: Vector3, seed: int, built: Dictionary, foot: float) -> float:
+	var at: Vector2 = built["at"]
+	var reach := float(built["reach"]) + DRINK_OVER
+	var need := float(built["top"]) + DRINK_OVER
+	var lift := 0.0
+	for _try in 24:
+		var clear := true
+		for k in range(1, 40):
+			var p := Hands.carried(a, b, Vector3.ZERO, Vector3.ZERO, lift, float(k) / 40.0, seed)
+			if Vector2(p.x, p.z).distance_to(at) < reach and p.y - foot < need:
+				clear = false
+				break
+		if clear:
+			return lift
+		lift += 0.02
+	return lift
+
+
+## WHERE WHAT IS DRUNK FROM IS HELD, its pivot [param q0] being where [param x0] builds it: close under the lens, all of it past the frame's foot however big it is. The lens sees as far down as its field does, so
+## at [constant DRINK_FAR] along its axis the thing's middle goes as far below that as it reaches, measured square to the frame's edge.
+func _to_the_mouth(tr: Dictionary, x0: Transform3D, q0: Vector3) -> Vector3:
+	var box: AABB
+	if tr.has("_ti"):
+		box = _world_rest_thing(int(tr["_ti"])) * ((things[int(tr["_ti"])] as Dictionary)["box"] as AABB)
+	else:
+		box = x0 * (((works[int(tr["_wi"])] as Dictionary)["w"] as Dictionary)["box"] as AABB)
+	var cam: Transform3D = medium._plan.cam_base
+	var k := tan(deg_to_rad(medium._plan.fov * 0.5))
+	var reach := box.size.length() * 0.5 + DRINK_CLEAR
+	var at := cam.origin + cam.basis * Vector3(0.0, -(DRINK_FAR * k + reach * sqrt(1.0 + k * k)), -DRINK_FAR)
+	return at - (box.get_center() - q0)
 
 
 ## Where carry [param tr] takes its pivot [param q0] (show time [param T]): its `to`, `by` past it - or by that much
@@ -3105,6 +3251,8 @@ static func _rebuilt(r: Basis, p: Vector3, q0: Vector3, x0: Transform3D) -> Tran
 func tick(t: float) -> void:
 	if assembly != null:
 		assembly.tick(t)
+	if game != null:
+		game.tick(t)
 	if things.is_empty():
 		return
 	var c := Time.get_ticks_usec() if profiling else 0
@@ -3629,10 +3777,30 @@ func _plume(wi: int, e: Dictionary) -> Dictionary:
 		lives[i] = Vector2(-1.0e6, 0.01)
 		mm.set_instance_custom_data(i, Color(-1.0e6, 0.01, 0.0, 0.0))
 	var at := String(e.get("at", ""))
+	var box_w: AABB = (works[wi] as Dictionary)["w"]["box"]
 	return {"wi": wi, "e": e, "look": look, "layer": layer, "rate": rate, "thick": thick, "life": life, "n": n, "slots": slots, "lives": lives,
+		"across": maxf(box_w.size.x, box_w.size.z), "kin": _works_of_thing_with(wi),
 		"point": _point_local(wi, at) if not at.is_empty() else Vector3(((works[wi] as Dictionary)["w"]["box"] as AABB).get_center().x,
 			((works[wi] as Dictionary)["w"]["box"] as AABB).end.y, ((works[wi] as Dictionary)["w"]["box"] as AABB).get_center().z),
 		"color": Color.html(String(e["color"])).srgb_to_linear()}
+
+
+## The works of the thing that work [param wi] is part of.
+func _works_of_thing_with(wi: int) -> Array:
+	for th in things:
+		if ((th as Dictionary)["works"] as Array).has(wi):
+			return (th as Dictionary)["works"]
+	return [wi]
+
+
+## HOW MUCH OF ITS STEAM A PLUME GIVES AT [param t], by how hot what it rises from is ([method Motions.temperature]): all of it while that boils, and all of what does not cool.
+func _plume_heat(p: Dictionary, t: float) -> float:
+	if not bool((p["look"] as Dictionary).get("cools", false)):
+		return 1.0
+	for wi in p["kin"]:
+		if float(value("w%d:boil" % int(wi), t)) > 0.01:
+			return 1.0
+	return Motions.steam_share(Motions.temperature(p["e"], float(p["across"]), t + since))
 
 
 func _tick_plume(p: Dictionary, t: float) -> void:
@@ -3652,8 +3820,12 @@ func _tick_plume(p: Dictionary, t: float) -> void:
 	var lives: PackedVector2Array = p["lives"]
 	var wi := int(p["wi"])
 	var hidden := not ((works[wi] as Dictionary)["node"] as Node3D).visible
-	var strength := float(value("w%d:emit" % wi, t))
+	var heat := _plume_heat(p, t)
+	var strength := float(value("w%d:emit" % wi, t)) * heat
 	var from := _world_of((works[wi] as Dictionary)["node"]) * (p["point"] as Vector3)
+	if medium._plan.cam_base.origin != Vector3.ZERO:
+		strength *= smoothstep(PLUME_LENS.y, PLUME_LENS.x, from.distance_to(medium._plan.cam_base.origin))
+	p["strength"] = strength
 	var k_hi := int(floor(t * rate))
 	var k_lo := maxi(int(ceil((t - life * 1.2) * rate)), k_hi - n + 1)
 	var look: Dictionary = p["look"]
@@ -3668,15 +3840,15 @@ func _tick_plume(p: Dictionary, t: float) -> void:
 			continue
 		var born := float(k) / rate
 		var side := Vector3(_hash01(k, 2) - 0.5, 0.0, _hash01(k, 3) - 0.5) * 0.02
-		var vel := Vector3(side.x, float(look["rise"]) * lerpf(0.7, 1.25, _hash01(k, 4)), side.z)
+		var vel := Vector3(side.x, float(look["rise"]) * lerpf(0.7, 1.25, _hash01(k, 4)) * lerpf(STEAM_COOL_RISE, 1.0, heat), side.z)
 		var particle := {"born": born, "pos": from + Vector3(_hash01(k, 5) - 0.5, 0.0, _hash01(k, 6) - 0.5) * 0.01, "vel": vel}
 		mm.set_instance_transform(slot, Effects.particle_xform(particle, wind))
 		# as thick as it smokes when it is born: the sprite fades by its color's alpha
 		var c: Color = p["color"]
 		mm.set_instance_color(slot, Color(c.r, c.g, c.b, clampf(strength, 0.0, 1.0) * float(p["thick"])))
-		lives[slot] = Vector2(born, life * lerpf(0.75, 1.2, _hash01(k, 7)))
+		lives[slot] = Vector2(born, life * lerpf(0.75, 1.2, _hash01(k, 7)) * lerpf(STEAM_COOL_LIFE, 1.0, heat))
 		mm.set_instance_custom_data(slot, Color(lives[slot].x, lives[slot].y, _hash01(k, 8),
-			float(look["size"]) * 0.001 * lerpf(0.7, 1.3, _hash01(k, 9))))
+			float(look["size"]) * 0.001 * lerpf(0.7, 1.3, _hash01(k, 9)) * lerpf(STEAM_COOL_SIZE, 1.0, heat)))
 	p["slots"] = slots
 	p["lives"] = lives
 
@@ -3780,6 +3952,9 @@ func parts_report() -> String:
 				bits.append("runs " + ", ".join(PackedStringArray((w["runs"] as Array).map(func(l: Dictionary) -> String: return String(l["law"])))))
 			if w.has("emits"):
 				bits.append("emits " + String((w["emits"] as Dictionary)["kind"]))
+				var cold := Motions.steam_stops_at(w["emits"], maxf((w["box"] as AABB).size.x, (w["box"] as AABB).size.z))
+				if not is_inf(cold):
+					bits.append("left alone it has gone cold and stopped about %d minutes into the video" % roundi(cold / 60.0))
 			if w.has("sheet"):
 				bits.append("a sheet, blank: words can be written on it (`write`)")
 			if bool(w.get("edge", false)):
