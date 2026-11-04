@@ -31,6 +31,43 @@ VOICES TRAINED HERE (2026-10-26, next/voice_engines.md "Training Kokoro"): a che
 (hosts/voice_train/kokoro_export.py), its tokenizer, ONE pack (`voices/voice.bin`, the taught style in every row)
 and `voice.json` ({name, license, chain, british}) - listed beside the stock checkpoints (`_family`), never fetched.
 
+THE OPENING: THE FIRST PAD KEEPS ITS OWN LENGTH AT EVERY PACE (2026-11-03, the user, of Heart's "Hello, my loves":
+"almost like a record skipping, like several clicks in a row, 'h-h-h-ello'", others "Uh-hello"; of "A mind does not
+film the world", 2026-10-27, "the 'A' is dropped entirely"; of Emma's "Ha." at Pace 0.85, 2026-10-30, "He-sah-vah").
+They are one thing. Kokoro stays silent for a fixed stretch from the start of the sequence, 8 to 14 frames by the voice,
+and voices whatever comes after it, word or not. Its first pad's own plan at speed 1.0 lands the first word just there:
+Puck plans 10 frames and wakes at 9, Heart 14 to 16 and wakes at 12 to 14. But `speed` divides the pad with the words.
+Measured on the raw graph, Puck's "A mind...", the pad's frames set by hand (the same at either speed):
+
+    pad frames   sound starts at frame   sound before the first phone   "A" against the rest
+        1                8.0             none: the word is in the silence      -104 dB
+        4                8.2                                                   -136
+        8                8.4                                                     -8
+       10 (its plan)     8.8              30 ms (PLAN_LEAD: the word itself)     -1
+       14                9.0             125 ms                                  +5
+       30                9.8             505 ms                                  +5
+
+So a fast pace shortens the pad and swallows the word, and a slow one lengthens it and voices a phantom before it.
+Word-spaces after the pad (4 of them, 2026-10-27 to 2026-11-03, chosen at Pace 1.6 alone) brought the word out of the
+silence and each rendered as a click or a voiced syllable. No lead-in now: the ids are the model's own, and the pad is
+planned at speed 1.0 whatever the pace (`dur_scale` = speed on it). 12 voices, 7 sentences each:
+
+                     pace   sound before the first phone   its level   2+ sharp rises there   first word, worst
+    4 word-spaces    0.85           185 ms                  -2.6 dB          76 of 84              -8 dB
+                     1.00           110                     -4.8             70                    -5
+                     1.60             0                    -56               15                   -65
+    its own pad      0.85             0                    -60                9                   -12
+                     1.00             0                    -57               14                   -12
+                     1.60            15                    -33               30                   -11
+
+More pad than its plan is the phantom coming back (x1.15: 35 ms at -21 dB at Pace 1; x1.3: 90 ms at -7 dB). An
+unpatched graph takes no `dur_scale`, and its pad follows the speed. Whisper medium.en on delivered takes: "A mind..."
+and "It does not..." at Pace 1.6 in 10 voices, first word heard 19 of 20 before, 20 of 20 now; "Guilty.", "Corked." and
+"Ha." at Pace 0.85 in 4 voices, extra words before them in all 12 before ("They're cooked", "a guilty"), in none now -
+though "Ha." alone is still misheard ("Huh", "Kong"), which is not its head. The lead-in had also stretched the words
+after it 5 to 10% against the stock plan; they now keep it (median 1.00 at Pace 1 and 1.6, 1.035 at 0.85). A voice's
+speaking level moved at most 0.23 dB, so levels.json stands.
+
 NOT HERE: `noise_scale` and `noise_w` (the Tone's `noise` columns do nothing on these voices), F0 as an
 input (the arc and the Tone still resample), Kokoro's own dwell at a mark (the pause figures are Piper's
 measurements), the vowel probe.
@@ -74,29 +111,6 @@ SR = 24000
 HOP = 600
 OUT_RATE = 22050
 MAX_TOKENS = 510
-# THE OPENING WORD IS SAID: the graph is sent LEAD_IN word-spaces after its first pad, ahead of the
-# sentence (2026-10-27, the user: in "A mind does not film the world." "the 'A' is dropped entirely. You
-# can't hear it at all"). Started on its first phoneme, Kokoro lays its onset ON that phoneme, as Piper's
-# VITS did (LEAD_IN_SPACES): measured over 22 sentences opening on short words in Puck at Pace 1.6, the
-# first word against the sentence's speech was "A" -167 dB (digital silence, in both "A"s), "At" -107,
-# "Of" -66, "If" -56, "It" -55, "In" -50, "An" -42, "The" -32, and Whisper medium.en lost the first word
-# of 6 ("Mine does not film the world", "9 the rain at east", "Ringing us up"). With the lead-in:
-#
-#   lead   first word lost   opening "A"   words after the first   head before the first sound
-#     0         6 of 22        -167 dB             -                     75 ms
-#     2         1               -17               +1.4%                  82
-#     3         0               -10               +2.5%                  97
-#     4         0                -5               +2.8%                 105
-#     4, the head trimmed through it:  0  -6     -0.9%                  45 (SEAM_LEAD is 44)
-#
-# Four meets the criterion Piper's two was chosen by - the opening word no weaker than the same word
-# later in a sentence (a mid-sentence "a" is -4 dB) - and the first word keeps its length (82 ms at
-# 2, 3 and 4: no drawl). Nothing sounds in the lead-in (the head before the word stays 50 dB under the
-# peak). It is the render's, not the sentence's: the style is the pack's row for the sentence's own
-# symbols (counted, the lead-in moved it two rows at two, and the words after the first ran 2.4% long
-# where they run 1.4%), `ids_of` - what a voice is taught on - is the sentence's own, and the head is
-# trimmed through it (`_trim_ends`).
-LEAD_IN = 4
 # A floor that says a plan entry is a take's trimmed end (`_nominal`): fixed seconds, at any scale.
 HELD = float("inf")
 # ITS AUDIO RUNS AHEAD OF ITS PLAN (2026-10-25, the user: "the 'h' from 'happy' STARTS on the left side
@@ -482,9 +496,8 @@ class KokoroBackend(PiperBackend):
     def ids_of(self, tokens: list, family: str = "kokoro", british: bool = False, phonemizer: str = "espeak") -> list:
         """THE IDS THE GRAPH IS SENT FOR `tokens` (`_run`, `_render_symbols`): its homographs, eSpeak's reading in
         misaki's symbols, a pad at each end - what a voice is taught on here (hosts/voice/utterances.py), so it
-        learns exactly what it will be asked. What the plan is told (floors, stretches) is the plan's, not the ids',
-        and so is the lead-in the render puts after the first pad (LEAD_IN): it opens the utterance, it is not
-        the sentence, and the predictor it acts on is Kokoro's own in a voice taught here."""
+        learns exactly what it will be asked. What the plan is told (floors, stretches, the first pad's length) is the
+        plan's, not the ids'."""
         espeak = "en-gb" if british else "en-us"
         if phonemizer == "espeak":
             self._homographs.annotate(tokens, espeak)
@@ -690,8 +703,8 @@ class KokoroBackend(PiperBackend):
 
     def _symbols(self, tokens: list, phonemizer: str, espeak_voice: str = "en-us", voice: str = "") -> list:
         """Piper's, without its lead-in spaces (LEAD_IN_SPACES) or its last word-space: the sentence's own
-        symbols. Kokoro's lead-in is its render's (LEAD_IN, `_render_symbols`), so what a voice is taught
-        on (`ids_of`) and the style row it is read in count the sentence alone."""
+        symbols. Kokoro has no lead-in (the module's header, THE OPENING), so what a voice is taught on
+        (`ids_of`), what it is sent and the style row it is read in are the sentence alone."""
         out = super()._symbols(tokens, phonemizer, espeak_voice, voice)
         k = 0
         while k < len(out) and out[k] == (" ", 0):
@@ -720,7 +733,7 @@ class KokoroBackend(PiperBackend):
         (`PiperBackend._render_symbols`), on Kokoro's ids: one id a symbol, a pad at each end, no
         blanks between. What the plan is told: a stretch on a source's nucleus, a hold on its final
         rime and its last vowel floored at HOLD_LEAST (shared with its length mark), the opening vowel
-        floored - and no rest (below).
+        floored, the first pad held at its own length (the module's header, THE OPENING) - and no rest (below).
 
         A sentence over MAX_TOKENS is read in pieces cut at a word-space - after a mark where one
         is in reach - each with its own pads and its own style, the pieces' plans laid end to end.
@@ -804,28 +817,26 @@ class KokoroBackend(PiperBackend):
         audio_parts: list = []
         frames_parts: list = []
         fed_floor = any(floor)
-        fed_scale = any(m != 1.0 for m in scale)
         takes = {i.name for i in getattr(sess, "get_overridable_initializers", list)()}
         speed = 1.0 / max(ls, 1e-3)
+        fed_scale = speed != 1.0 or any(m != 1.0 for m in scale)
         lay_owner: list[int] = []
         lay_rest: list[int] = []
         lay_sound: list[bool] = []
         lay_unit: list[int] = []
         lay_floor: list[float] = []
-        # each piece opens on the lead-in (LEAD_IN), a pad's in every way but its id: no word's, no sound
-        lead = [int(vocab[" "])] * LEAD_IN if " " in vocab else []
-        opens = [-1] * (1 + len(lead))
-        for a, b in _pieces(ids, units, unit_of, MAX_TOKENS - len(lead)):
+        for a, b in _pieces(ids, units, unit_of):
             body = ids[a:b]
             n = max(1, len(body))
             pack = kk["pack"]
             feeds = {
-                "input_ids": np.array([[PAD_ID, *lead, *body, PAD_ID]], dtype=np.int64),
+                "input_ids": np.array([[PAD_ID, *body, PAD_ID]], dtype=np.int64),
                 "style": np.asarray(pack[min(n, pack.shape[0]) - 1], dtype=np.float32).reshape(1, STYLE),
                 "speed": np.array([speed], dtype=np.float32),
             }
-            fl = [0.0] * len(opens) + [*floor[a:b], 0.0]
-            sc = [1.0] * len(opens) + [*scale[a:b], 1.0]
+            fl = [0.0, *floor[a:b], 0.0]
+            # the first pad undoes `speed`: it is planned as at speed 1.0, where the first word meets the voice waking
+            sc = [speed, *scale[a:b], 1.0]
             if fed_floor and REST_FLOOR_INPUT in takes:
                 feeds[REST_FLOOR_INPUT] = np.array(fl, dtype=np.float32)
             if fed_scale and DUR_SCALE_INPUT in takes:
@@ -835,10 +846,10 @@ class KokoroBackend(PiperBackend):
             planned = np.asarray(out[1]).reshape(-1).astype(np.float64)
             # an unpatched graph hands back the plan before its Round and Clip: done here as there
             frames_parts.append(planned if REST_FLOOR_INPUT in takes else np.maximum(np.round(planned), 1.0))
-            lay_owner += [*opens, *owner[a:b], -1]
-            lay_rest += [-2] * len(opens) + [*rest_of[a:b], -2]
-            lay_sound += [False] * len(opens) + [*sound[a:b], False]
-            lay_unit += [*opens, *unit_of[a:b], -1]
+            lay_owner += [-1, *owner[a:b], -1]
+            lay_rest += [-2, *rest_of[a:b], -2]
+            lay_sound += [False, *sound[a:b], False]
+            lay_unit += [-1, *unit_of[a:b], -1]
             lay_floor += fl
         audio = np.concatenate(audio_parts) if audio_parts else np.zeros(1, dtype=np.float32)
         frames = np.concatenate(frames_parts) if frames_parts else np.zeros(0)
@@ -858,9 +869,8 @@ class KokoroBackend(PiperBackend):
             return audio, spans
         self._last_frames = frames
         floors = np.array(lay_floor if fed_floor and REST_FLOOR_INPUT in takes else [0.0] * frames.size, np.float64)
-        # what `_trim_ends` left at the ends is seconds, not plan: counted by `_nominal` as whole frames, the
-        # pad and the lead-in cut to slivers made a pitch move resample the words 5.3% long (22 sentences;
-        # counted as they stand, 0.9% short of the takes before the lead-in, whose pad was counted whole too)
+        # what `_trim_ends` left at the ends is seconds, not plan: counted by `_nominal` as whole frames, a pad
+        # cut to a sliver made a pitch move resample the words long (5.3% over 22 sentences, 2026-10-27)
         heard = [k for k, s in enumerate(lay_sound) if s]
         if heard:
             floors[: heard[0]] = HELD
@@ -1026,9 +1036,9 @@ def _quiet_tail(audio, last: str):
 
 def _trim_ends(audio, frames, sound: list, frame_s: float):
     """(audio, frames) with the take's head cut to SEAM_LEAD before its first sound and its tail to
-    SEAM_TAIL after its last - each cut only where the plan holds no sound (the first pad's and the
-    lead-in's frames at the head, told PLAN_LEAD early as every plan time is; the marks, word-space and
-    pad after the last sounding token at the tail) and only where the waveform is quiet. The frames are
+    SEAM_TAIL after its last - each cut only where the plan holds no sound (the first pad's frames at the
+    head, told PLAN_LEAD early as every plan time is; the marks, word-space and pad after the last
+    sounding token at the tail) and only where the waveform is quiet. The frames are
     cut with the audio, so they still add up to it and every time read off them stays exact."""
     import numpy as np
 

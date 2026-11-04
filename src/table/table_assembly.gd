@@ -1,32 +1,49 @@
 extends RefCounted
 class_name TableAssembly
 
-## TableAssembly - THE PARTS OF A THING BUILT ON THE TABLE, drawn ([Assembly] is what they do, this is where it is seen): a part of
-## [TableWork]. The table's `assembly` stands here over the things as they stood - its plate, each stock's place found on the table
-## and what it holds - and every frame the piece in hand is moved. Instanced by kind and size: a tub of a thousand costs what one
-## thing costs, and only what moved this frame is written ([method tick]).
+## TableAssembly - THE PARTS OF A THING BUILT ON THE TABLE, drawn: a part of [TableWork]. The table's `assembly` stands here over the things as
+## they stood - its plate, each stock's place found on the table and what it holds. Instanced by kind and size: a tub of a thousand costs what
+## one thing costs, and only what moved is written ([method tick]).
+##
+## WHAT THE BRICKS DO IS RECORDED, THEN PLAYED ([method behind]): real bodies in a second process ([AssemblyBake]), which starts when a show
+## first wants them and whose stretches land here as they are written ([AssemblyTrack]); a show waits only for what it has reached, as it waits
+## for what is in things. A record is named by everything it depends on and kept ([method _start_bake]), so a note opened again costs nothing,
+## a new act costs what comes after it, and a preview asks for none at all: it sees where things rest ([method Assembly.pose_of]).
 ##
 ## A STOCK IN A THING takes its inside from the thing itself, by rays straight down from over it: any open container the set dresser
 ## built (a tub, a crate, a dish, a tray) holds bricks without being told how it is shaped, and they lie on what is really there. A
-## deep one is filled over a false floor, its top few layers all anyone can see ([constant SHOWN_DEEP]) - a tub a dozen layers deep
-## would be most of its pieces unseen and every one of them drawn.
+## deep one is filled over a false floor, deep enough to be dug in ([constant Assembly.IN_DEEP]) - a tub a dozen layers deep would be most of its
+## pieces unseen, and every one of them a body.
 
 ## The most a stock's inside looks like, in cells a side, and what a surface must be under its thing's rim to be inside it (meters).
 const INSIDE_MOST := 170
 const UNDER_RIM := 0.008
 ## How many cells make an inside at all: fewer, and what was named has no hollow in it.
 const INSIDE_LEAST := 12
-## How deep a full container's pieces are drawn, under where they reach (meters).
-const SHOWN_DEEP := 0.03
 ## The bed under them, against a mean of what is in it.
 const BED_DARK := 0.22
-## How far in front of the lens a piece is held up (meters), and how far below the lens's middle.
-const VIEW_AHEAD := 0.2
-const VIEW_LOW := 0.02
 ## `aside`: a place on the table beside the plate for what was put down for later (meters).
 const ASIDE_R := 0.05
 ## A camera's distance, for the instances' bounds: they are never culled while anything stands on the table.
 const BOUNDS := Vector3(4.0, 3.0, 4.0)
+## A record's name changes when this does: what the world does is the same given the same of everything else ([method _world_key]).
+const BAKE_VERSION := 1
+## How many records are kept, the oldest gone first ([method _start_bake]).
+const BAKES_KEPT := 24
+## How far ahead of the show the record must be, for it not to wait (seconds), and for it to go on once it has waited; and how long between looks at
+## what has landed (ms).
+const WAIT_UNDER := 1.0
+const WAIT_AHEAD := 6.0
+const LOOK_EVERY := 250
+## A window of sound never holds more hits than this, the hardest kept: past a few at once nobody hears another.
+const HITS_AT_ONCE := 6
+## Where records are kept in a process that may not write the user's things. A gate may set its own ([member bake_root]).
+const PROBE_BAKES := "res://dist/assembly_bakes"
+static var bake_root := ""
+## A gate's way to a show that plays while its record is made: everything else that runs from tests/ waits for all of it.
+static var live_in_tests := false
+## A probe's way to where the plan has things, with no record made at all, as a preview sees them: for what is built as it stands, in moments.
+static var plan_only := false
 
 var work: TableWork
 var spec := {}
@@ -38,8 +55,24 @@ var _slot: Array = []             # a piece -> [group's key, instance]
 var _material: ShaderMaterial
 var _last_k := -2
 var _last_t := NAN
-var _in_step := {}                # pieces the step going last frame was moving
+var _last_tau := NAN
 var _built := false
+var track: AssemblyTrack          # what has landed of the record ([method behind]; null until a show asks)
+var _dir := ""
+var _names := PackedInt64Array()
+var _next := 0                    # the first step not yet on [member track]
+var _pid := -1
+var _bake_started := false
+var _bake_whole := false
+var _bake_failed := false
+var _behind := false
+var _looked := 0
+var _landing := -1
+var _landed: Variant = null
+var _mutex := Mutex.new()
+var _runs: Array = []
+var _acts: Array = []
+var _in_hand := -1                # the piece [Fingers] drew last frame, or -1
 
 
 func _init(owner: TableWork, table_spec: Dictionary) -> void:
@@ -69,12 +102,35 @@ static func keep_out(table_spec: Dictionary, at_base: Vector2) -> Array:
 
 ## Where the plate's middle stands, written or in the middle of the picture a little toward the reader (on the table, meters).
 static func base_center(table_spec: Dictionary, plan: TablePlan) -> Vector2:
+	return base_center_under(table_spec, plan.cam_base)
+
+
+## ...for a lens at [param cam].
+static func base_center_under(table_spec: Dictionary, cam: Transform3D) -> Vector2:
 	var b: Dictionary = table_spec.get("base", {})
 	if b.has("at"):
 		return Vector2(float((b["at"] as Array)[0]), float((b["at"] as Array)[1])) * 0.01 + Tables.ORIGIN
-	var fwd := -plan.cam_base.basis.z
-	var aim := plan.cam_base.origin + fwd * (-plan.cam_base.origin.y / minf(fwd.y, -0.05))
+	var fwd := -cam.basis.z
+	var aim := cam.origin + fwd * (-cam.origin.y / minf(fwd.y, -0.05))
 	return Vector2(aim.x, aim.z + TablePlan.WORK_AHEAD)
+
+
+## HOW FAR THE TOP OF THE MODEL RISES PAST WHAT THE LENS SEES WHOLE, where the plate stands (meters; 0 or less: all of it is seen), part by part: a tower at the far end of a plate is cut where the same tower at its near end is not.
+static func model_cut_by(table_spec: Dictionary, cam: Transform3D, fov: float) -> float:
+	var m: Dictionary = table_spec.get("model", {}) if table_spec.get("model") is Dictionary else {}
+	if m.is_empty():
+		return 0.0
+	var at := base_center_under(table_spec, cam)
+	var yaw := deg_to_rad(float((table_spec["base"] as Dictionary).get("turn", 0.0)))
+	var size: Array = m["size"]
+	var most := -INF
+	for p in m["parts"]:
+		var q: Dictionary = p
+		var l := Vector3((float(q["x"]) - float(size[0]) * 0.5) * Assembly.STUD, 0.0, (float(q["z"]) - float(size[1]) * 0.5) * Assembly.STUD)
+		var w := Basis(Vector3.UP, yaw) * l
+		var top := float(int(q["l"]) + int((Assembly.KINDS[String(q["kind"])] as Dictionary)["h"])) * Assembly.PLATE
+		most = maxf(most, top - CardTable.headroom_at(cam, fov, at + Vector2(w.x, w.z)))
+	return most
 
 
 ## STOOD OVER THE THINGS AS THEY ARE: the plate, each stock's place. The pieces come with the acts ([method perform]).
@@ -108,14 +164,12 @@ func stand() -> void:
 		if not heap.thing.is_empty():
 			holders[heap.thing] = true
 	spec["stock"] = kept
-	heaps["aside"] = _aside_heap(at, size, yaw)
 	for ti in work.things.size():
 		var th: Dictionary = work.things[ti]
 		var box: AABB = work._world_rest_thing(ti) * (th["box"] as AABB)
 		obstacles.append({"box": box, "name": String(th["name"])})
-	var fwd := -plan.cam_base.basis.z
-	var view := plan.cam_base.origin + fwd * VIEW_AHEAD + plan.cam_base.basis.y * -VIEW_LOW
-	var w := {"base_at": Vector3(at.x, 0.0, at.y), "yaw": yaw, "heaps": heaps, "obstacles": obstacles, "view": view}
+	heaps["aside"] = _aside_heap(at, size, yaw, obstacles, heaps)
+	var w := {"base_at": Vector3(at.x, 0.0, at.y), "yaw": yaw, "heaps": heaps, "obstacles": obstacles, "lens": plan.cam_base, "fov": plan.fov}
 	log = Assembly.new()
 	log.spec = spec
 	log.seed_value = hash([plan.seed_value, "assembly"])
@@ -209,13 +263,16 @@ func _heap_of(sd: Dictionary) -> AssemblyHeap:
 	var floor_mean := sum / float(seen.size())
 	var fill := float(sd.get("fill", 0.85))
 	var reach_to := lerpf(floor_mean, rim_y, fill)
-	var bed := reach_to - SHOWN_DEEP
+	var area := float(seen.size()) * cell * cell
+	var holds := int(sd.get("count", Assembly.count_for(area, true, reach_to - floor_mean)))
+	var bed := reach_to - float(holds) / (area * Assembly.PER_M3)
 	var heap := AssemblyHeap.inside(name, from, cols, rows, ground, rim_y)
+	heap.thing = thing_name
+	heap.deep = reach_to - floor_mean
 	if bed > floor_mean + 0.004:
 		heap.bed = bed
 		for c in seen:
 			heap.ground[int(c)] = maxf(heap.ground[int(c)], bed)
-	heap.thing = thing_name
 	return heap
 
 
@@ -228,36 +285,42 @@ func _down_on(ti: int, p: Vector3) -> float:
 	return NAN if hit.is_empty() else float((hit["position"] as Vector3).y)
 
 
-## `aside`: a small pile on the table beside the plate, on the reader's right unless the plate is hard against that side.
-func _aside_heap(at: Vector2, size: Array, yaw: float) -> AssemblyHeap:
+## `aside`: a small pile on the table beside the plate, where the table is clear of what stands on it: on the reader's right, else their left, else nearer them. What
+## is put aside really falls and lies there, and against a tub written beside the plate it had leaned on the wall (a 563019 washtub).
+func _aside_heap(at: Vector2, size: Array, yaw: float, obstacles: Array, heaps: Dictionary) -> AssemblyHeap:
 	var half := Vector2(float(size[0]), float(size[1])) * Assembly.STUD * 0.5
-	var out := (absf(cos(yaw)) * half.x + absf(sin(yaw)) * half.y) + ASIDE_R + 0.015
-	var c := at + Vector2(out, 0.02)
-	return AssemblyHeap.pile("aside", c, ASIDE_R)
+	var across := absf(cos(yaw)) * half.x + absf(sin(yaw)) * half.y + ASIDE_R + 0.015
+	var deep := absf(sin(yaw)) * half.x + absf(cos(yaw)) * half.y + ASIDE_R + 0.015
+	var places: Array[Vector2] = [at + Vector2(across, 0.02), at + Vector2(-across, 0.02), at + Vector2(0.0, deep), at + Vector2(across, deep), at + Vector2(-across, deep)]
+	for c in places:
+		var clear := true
+		for ob in obstacles:
+			var box: AABB = (ob as Dictionary)["box"]
+			var r := ASIDE_R + 0.012
+			if c.x > box.position.x - r and c.x < box.end.x + r and c.y > box.position.z - r and c.y < box.end.z + r:
+				clear = false
+				break
+		for k in heaps:
+			var other: AssemblyHeap = heaps[k]
+			if other.thing.is_empty() and c.distance_to(other.middle) < other.reach + ASIDE_R:
+				clear = false
+		if clear:
+			return AssemblyHeap.pile("aside", c, ASIDE_R)
+	return AssemblyHeap.pile("aside", places[0], ASIDE_R)
 
 
-## THE FALSE FLOORS, drawn: a dark surface under the pieces, in what the pieces leave showing. Cell by cell over what is inside.
+## THE FALSE FLOORS, drawn: a dark surface under the pieces, in what the pieces leave showing.
 func _beds(heaps: Dictionary) -> void:
 	for k in heaps:
 		var heap: AssemblyHeap = heaps[k]
 		if is_nan(heap.bed):
 			continue
-		var verts := PackedVector3Array()
-		var norms := PackedVector3Array()
-		var cell := AssemblyHeap.CELL
-		for j in heap.nz:
-			for i in heap.nx:
-				if is_nan(heap.ground[j * heap.nx + i]):
-					continue
-				var c := heap.origin + Vector2(i, j) * cell
-				var h := cell * 0.5
-				var y := heap.bed - 0.0005
-				for q in [Vector3(c.x - h, y, c.y - h), Vector3(c.x + h, y, c.y - h), Vector3(c.x - h, y, c.y + h),
-						Vector3(c.x + h, y, c.y - h), Vector3(c.x + h, y, c.y + h), Vector3(c.x - h, y, c.y + h)]:
-					verts.append(q)
-					norms.append(Vector3.UP)
+		var verts := _bed_faces(heap)
 		if verts.is_empty():
 			continue
+		var norms := PackedVector3Array()
+		norms.resize(verts.size())
+		norms.fill(Vector3.UP)
 		var arrays := []
 		arrays.resize(Mesh.ARRAY_MAX)
 		arrays[Mesh.ARRAY_VERTEX] = verts
@@ -272,6 +335,23 @@ func _beds(heaps: Dictionary) -> void:
 		mi.material_override = mat
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		root.add_child(mi)
+
+
+## A false floor as triangles, cell by cell over what is inside: what is drawn, and what the pieces land on.
+static func _bed_faces(heap: AssemblyHeap) -> PackedVector3Array:
+	var verts := PackedVector3Array()
+	var cell := AssemblyHeap.CELL
+	for j in heap.nz:
+		for i in heap.nx:
+			if is_nan(heap.ground[j * heap.nx + i]):
+				continue
+			var c := heap.origin + Vector2(i, j) * cell
+			var h := cell * 0.5
+			var y := heap.bed - 0.0005
+			for q in [Vector3(c.x - h, y, c.y - h), Vector3(c.x + h, y, c.y - h), Vector3(c.x - h, y, c.y + h),
+					Vector3(c.x + h, y, c.y - h), Vector3(c.x + h, y, c.y + h), Vector3(c.x - h, y, c.y + h)]:
+				verts.append(q)
+	return verts
 
 
 func _mean_color() -> Color:
@@ -295,6 +375,7 @@ func perform(acts: Array) -> void:
 	var script: Array = []
 	for a in order:
 		script.append({"name": String((a as Dictionary)["name"]), "ops": _ops_of(a as Dictionary)})
+	_stop_bake()
 	log.perform(script)
 	for a in acts:
 		var ad: Dictionary = a
@@ -307,6 +388,16 @@ func perform(acts: Array) -> void:
 	_draw_pieces()
 	_last_k = -2
 	_last_t = NAN
+	_last_tau = NAN
+	track = null
+	_next = 0
+	_names = PackedInt64Array()
+	_bake_whole = false
+	_bake_failed = false
+	# ...a show already playing goes on from whatever of it is the same
+	if _bake_started:
+		_bake_started = false
+		_start_bake()
 
 
 static func _has_ops(a: Dictionary) -> bool:
@@ -390,50 +481,382 @@ func _draw_pieces() -> void:
 func lay(runs: Array, acts: Array, now: float) -> void:
 	if log == null:
 		return
+	_runs = runs
+	_acts = acts
 	log.lay(runs, acts, now)
 	_last_k = -2
 
 
-## THE FRAME AT [param t]: only what the going step moves, and when the step changes what the last one left - every piece after a
-## jump in time, and while the plate turns, every piece on it.
+# --- the record -----------------------------------------------------------------------------------------------------
+
+## WHETHER THE SHOW MUST WAIT FOR THE BRICKS at [param t]: asking starts the record. In a render it is waited for here, whole: a render's frames
+## must be the show's. Called only by a table on the stage, so a preview never starts one.
+func behind(t: float) -> bool:
+	if plan_only or log == null or not _built or log.pieces.is_empty():
+		return false
+	if not _bake_started:
+		_start_bake()
+	if _sync():
+		_wait_whole()
+		return false
+	_pump()
+	if _bake_failed or _bake_whole:
+		return false
+	if track == null or not track.stock_ready:
+		_behind = true
+		return true
+	var ahead := log.step_at(t + (WAIT_AHEAD if _behind else WAIT_UNDER))
+	_behind = ahead >= track.baked_to and track.baked_to < log.steps.size()
+	return _behind
+
+
+## How far ahead of [param t] the record reaches (seconds).
+func ready_to(t: float) -> float:
+	if log == null or track == null or not _bake_started:
+		return t
+	if track.baked_to >= log.steps.size():
+		return INF
+	return log._t0[track.baked_to] if track.baked_to >= 0 and track.baked_to < log._t0.size() else t
+
+
+func _sync() -> bool:
+	if live_in_tests:
+		return false
+	return work.medium == null or not work.medium.is_inside_tree() or TablePhysics.render_waits()
+
+
+## WHAT THE RECORD IS CALLED: everything it depends on, the table it stands on, the pieces it has, the seed - and what it does, the code.
+func _world_key() -> int:
+	var parts: Array = [BAKE_VERSION, log.seed_value, var_to_str(spec), var_to_str(log.world["base_at"]), var_to_str(log.world["yaw"]), var_to_str(log.world["lens"]), var_to_str(log.world["fov"])]
+	for path in ["res://src/table/assembly_bake.gd", "res://src/table/assembly_world.gd"]:
+		var sc := load(path) as Script
+		parts.append(sc.source_code.hash() if sc != null else 0)
+	for ti in work.things.size():
+		var tm: TriangleMesh = work._mesh_of(ti)
+		parts.append(hash(tm.get_faces().to_byte_array()) if tm != null else 0)
+	for p in log.pieces:
+		parts.append(Assembly.part_key(p as Dictionary))
+		parts.append(String((p as Dictionary)["stock"]))
+	return hash(parts) & 0x7FFFFFFFFFFFFFFF
+
+
+static func _root_of_bakes() -> String:
+	if not bake_root.is_empty():
+		return bake_root
+	# ...a test's own, as [method TablePhysics.render_waits] knows one, and named without the autoload a gate's first compile has not got yet
+	var probe := false
+	for a in OS.get_cmdline_args():
+		if a.trim_prefix("res://").begins_with("tests/"):
+			probe = true
+	return ProjectSettings.globalize_path(PROBE_BAKES if probe else "user://assembly_bakes")
+
+
+## THE RECORD BEGUN, or gone on from: a process of its own, handed the table's shapes and every step. What is already there is simply read.
+func _start_bake() -> void:
+	_bake_started = true
+	_bake_failed = false
+	track = AssemblyTrack.new(log.pieces.size())
+	var key := _world_key()
+	_names = log.step_names(key)
+	var root_dir := _root_of_bakes()
+	_dir = root_dir.path_join("%016x" % key)
+	DirAccess.make_dir_recursive_absolute(_dir)
+	_prune(root_dir)
+	_next = 0
+	while _land_next(true):
+		pass
+	if track.stock_ready and _next >= log.steps.size():
+		_bake_whole = true
+		_after_landing()
+		return
+	_after_landing()
+	var req_path := _dir.path_join("request.bin")
+	var f := FileAccess.open(req_path, FileAccess.WRITE)
+	if f == null:
+		push_warning("assembly: cannot write %s" % req_path)
+		_bake_failed = true
+		return
+	f.store_buffer(var_to_bytes(_request()))
+	f.close()
+	var args: PackedStringArray = Subprocess.own_log("assembly_bake") + _project_args() + PackedStringArray(["--headless", "--fixed-fps", str(AssemblyWorld.TICKS),
+		"--script", "res://src/table/assembly_bake.gd", "--", req_path])
+	_pid = Subprocess.start(OS.get_executable_path(), args, "bricks")
+	if _pid <= 0:
+		push_warning("assembly: the record could not be started")
+		_bake_failed = true
+
+
+## Where a second ghost finds this project: as [method Boot.project_args] says, in a script a gate may compile before that autoload stands.
+static func _project_args() -> PackedStringArray:
+	return PackedStringArray(["--path", ProjectSettings.globalize_path("res://")]) if OS.has_feature("editor") else PackedStringArray()
+
+
+## Only so many records stay: each a show's whole hour of motion.
+static func _prune(root_dir: String) -> void:
+	var dirs := DirAccess.get_directories_at(root_dir)
+	if dirs.size() <= BAKES_KEPT:
+		return
+	var by_age: Array = []
+	for d in dirs:
+		by_age.append([FileAccess.get_modified_time(root_dir.path_join(d).path_join("request.bin")), d])
+	by_age.sort_custom(func(a: Array, b: Array) -> bool: return int(a[0]) < int(b[0]))
+	for i in by_age.size() - BAKES_KEPT:
+		var old := root_dir.path_join(String((by_age[i] as Array)[1]))
+		for f in DirAccess.get_files_at(old):
+			DirAccess.remove_absolute(old.path_join(f))
+		DirAccess.remove_absolute(old)
+
+
+## WHAT THE RECORD NEEDS, all of it plain data: no node crosses to the other process. [param solids] each `{faces (meters), sound}`, what stands on the table.
+static func request_of(log: Assembly, table_spec: Dictionary, solids: Array, dir: String, names: PackedInt64Array) -> Dictionary:
+	var pieces: Array = []
+	var stock_of := PackedStringArray()
+	for p in log.pieces:
+		var q: Dictionary = p
+		pieces.append({"kind": String(q["kind"]), "w": int(q["w"]), "d": int(q["d"]), "color": String(q["color"])})
+		stock_of.append(String(q["stock"]))
+	var stocks := {}
+	var heaps: Dictionary = log.world["heaps"]
+	for k in heaps:
+		var heap: AssemblyHeap = heaps[k]
+		var inside := not heap.thing.is_empty()
+		var area := float(heap.area_cells()) * AssemblyHeap.CELL * AssemblyHeap.CELL
+		var low := INF
+		for v in heap.ground:
+			if not is_nan(v):
+				low = minf(low, v)
+		var sd := {"middle": heap.middle, "thing": heap.thing, "radius": sqrt(area / PI) if inside else heap.reach, "floor": low if low < INF else 0.0,
+			"origin": heap.origin, "nx": heap.nx, "nz": heap.nz, "ground": heap.ground}
+		if not is_nan(heap.bed):
+			sd["bed_faces"] = _bed_faces(heap)
+		stocks[String(k)] = sd
+	var obstacles: Array = []
+	for ob in log.world.get("obstacles", []):
+		obstacles.append((ob as Dictionary)["box"])
+	return {"dir": dir, "seed": log.seed_value, "base_at": log.world["base_at"], "yaw": log.world["yaw"], "base_size": (table_spec["base"] as Dictionary)["size"], "lens": log.world["lens"], "fov": log.world["fov"],
+		"pieces": pieces, "stock_of": stock_of, "stocks": stocks, "solids": solids, "obstacles": obstacles, "steps": log.steps, "keys": names}
+
+
+func _request() -> Dictionary:
+	var solids: Array = []
+	for ti in work.things.size():
+		var tm: TriangleMesh = work._mesh_of(ti)
+		if tm != null:
+			var faces := tm.get_faces()
+			for i in faces.size():
+				faces[i] = faces[i] / TableWork.RAY_SCALE
+			solids.append({"faces": faces, "sound": _sound_of(ti)})
+	return request_of(log, spec, solids, _dir, _names)
+
+
+## What thing [param ti] sounds like when something hits it: what it is made of ([constant Props.MATERIALS]).
+func _sound_of(ti: int) -> String:
+	for m in (work.things[ti] as Dictionary)["meshes"]:
+		var mat := (m as MeshInstance3D).material_override as ShaderMaterial if m is MeshInstance3D else null
+		if mat != null and mat.get_shader_parameter("kind") != null:
+			var code := int(mat.get_shader_parameter("kind"))
+			for k in Props.MATERIALS:
+				if int((Props.MATERIALS[k] as Dictionary)["code"]) == code:
+					return String(k)
+	return "painted"
+
+
+## THE NEXT STRETCH THERE IS, read and added: false when there is none. [param now]: on this thread, as a record is first opened and in a render;
+## otherwise on a worker ([method _pump]), and a frame only pays for adding it.
+func _land_next(now: bool) -> bool:
+	if not track.stock_ready:
+		var f := _dir.path_join("stock.seg")
+		if not FileAccess.file_exists(f):
+			return false
+		var d: Variant = bytes_to_var(FileAccess.get_file_as_bytes(f))
+		track.add_stock((d as Dictionary)["rest"])
+		_last_tau = NAN
+		return true
+	if not now:
+		return false
+	var path := _next_file()
+	if path.is_empty():
+		return false
+	_take_stretch(bytes_to_var(FileAccess.get_file_as_bytes(path)))
+	return true
+
+
+## Where the next stretch is, if it is there. A stretch is named by the step it reached, so the steps after the last are looked at in turn.
+func _next_file() -> String:
+	if _next >= _names.size():
+		return ""
+	var have := DirAccess.get_files_at(_dir)
+	var names := {}
+	for f in have:
+		names[f] = true
+	for k in range(_next, _names.size()):
+		var name := "%016x.seg" % _names[k]
+		if names.has(name):
+			return _dir.path_join(name)
+	return ""
+
+
+func _take_stretch(seg: Variant) -> void:
+	if not (seg is Dictionary):
+		return
+	var d: Dictionary = seg
+	track.add_stretch(d)
+	for st in d["steps"]:
+		log.take_record(int((st as Dictionary)["k"]), st as Dictionary)
+	_next = int(d["to"])
+	if _next >= log.steps.size():
+		_bake_whole = true
+
+
+func _after_landing() -> void:
+	if not _acts.is_empty():
+		var now := _last_t if not is_nan(_last_t) else -INF
+		log.lay(_runs, _acts, now)
+	_last_tau = NAN
+
+
+## WHAT HAS LANDED SINCE, read on a worker and added here. The app never waits on a disk.
+func _pump() -> void:
+	if not _bake_started or _bake_whole or _bake_failed or track == null:
+		return
+	_mutex.lock()
+	var got: Variant = _landed
+	_landed = null
+	_mutex.unlock()
+	if got != null:
+		WorkerThreadPool.wait_for_task_completion(_landing)
+		_landing = -1
+		_take_stretch(got)
+		_after_landing()
+	var clock := Time.get_ticks_msec()
+	if _landing >= 0 or clock - _looked < LOOK_EVERY:
+		return
+	_looked = clock
+	if not track.stock_ready:
+		if _land_next(false):
+			_after_landing()
+	else:
+		var path := _next_file()
+		if not path.is_empty():
+			_landing = WorkerThreadPool.add_task(_read_stretch.bind(path), false, "a stretch of the bricks' record")
+			return
+	if _pid > 0 and not Subprocess.alive(_pid) and not _bake_whole and _next_file().is_empty() and _landing < 0:
+		if track.stock_ready and _next >= log.steps.size():
+			_bake_whole = true
+		else:
+			push_warning("assembly: the record stopped at step %d of %d (user://logs/assembly_bake.log)" % [_next, log.steps.size()])
+			_bake_failed = true
+
+
+func _read_stretch(path: String) -> void:
+	var v: Variant = bytes_to_var(FileAccess.get_file_as_bytes(path))
+	_mutex.lock()
+	_landed = v
+	_mutex.unlock()
+
+
+## ALL OF IT, here and now: a render, and a gate.
+func _wait_whole() -> void:
+	if _bake_whole or _bake_failed:
+		return
+	while true:
+		while _land_next(true):
+			pass
+		if track.stock_ready and _next >= log.steps.size():
+			_bake_whole = true
+			break
+		if _pid <= 0 or not Subprocess.alive(_pid):
+			while _land_next(true):
+				pass
+			_bake_whole = track.stock_ready and _next >= log.steps.size()
+			_bake_failed = not _bake_whole
+			if _bake_failed:
+				push_warning("assembly: the record stopped at step %d of %d" % [_next, log.steps.size()])
+			break
+		OS.delay_msec(100)
+	_after_landing()
+
+
+func _stop_bake() -> void:
+	if _landing >= 0:
+		WorkerThreadPool.wait_for_task_completion(_landing)
+		_landing = -1
+		_landed = null
+	if _pid > 0 and Subprocess.alive(_pid):
+		Subprocess.stop(_pid)
+	_pid = -1
+
+
+## The table gone: so is what was working for it. What it wrote stays, for when it is opened again.
+func clear() -> void:
+	_stop_bake()
+
+
+# --- a frame --------------------------------------------------------------------------------------------------------
+
+## THE FRAME AT [param t]: what the record has moved since the last frame, every piece after a jump in time, and while the plate turns, what is on it. With
+## no record (a preview), where the plan has things at rest.
 func tick(t: float) -> void:
 	if log == null or not _built or log.steps.is_empty():
+		_pump_only()
 		return
-	var k := log.step_at(t)
-	var yaw := log.yaw_at(t, k)
-	var jumped := _last_k == -2 or is_nan(_last_t) or absf(t - _last_t) > 0.5 or k < _last_k or k > _last_k + 12
-	if jumped:
-		_pose_all(t, k, yaw)
+	_pump()
+	if track != null and track.stock_ready:
+		_tick_recorded(t)
 	else:
-		# what the steps since the last frame moved, where they left it
-		for done in range(maxi(_last_k, 0), k):
-			_pose_moved(done, t, k, yaw)
-		if k >= 0:
-			_pose_moved(k, t, k, yaw)
-			if (log.steps[k] as Dictionary).has("yaw") and t <= log._t1[k] + 0.1:
-				_pose_on_plate(t, k, yaw)
-	_base.transform = log.base_xf(yaw)
-	_last_k = k
+		_tick_planned(t)
 	_last_t = t
 
 
-func _pose_moved(step: int, t: float, k: int, yaw: float) -> void:
-	for mv in (log.steps[step] as Dictionary)["moves"]:
-		var id := int((mv as Dictionary)["id"])
-		_write(id, log.pose_of(id, t, k, yaw))
+func _pump_only() -> void:
+	if log != null and _built:
+		_pump()
 
 
-func _pose_on_plate(t: float, k: int, yaw: float) -> void:
-	for id in log.pieces.size():
-		var rests: Array = (log.pieces[id] as Dictionary)["rests"]
-		if rests.is_empty():
-			continue
-		_write(id, log.pose_of(id, t, k, yaw))
-
-
-func _pose_all(t: float, k: int, yaw: float) -> void:
+func _tick_planned(t: float) -> void:
+	var k := log.step_at(t)
+	if k == _last_k:
+		return
+	var yaw := log.yaw_at(t, k)
 	for id in log.pieces.size():
 		_write(id, log.pose_of(id, t, k, yaw))
+	_base.transform = log.base_xf(yaw)
+	_last_k = k
+
+
+func _tick_recorded(t: float) -> void:
+	var tau := log.tau_at(t)
+	if is_nan(tau):
+		# ...not on the record yet: what stands, stands, and the show is told to wait for it ([method behind])
+		return
+	tau = maxf(tau, 0.0)
+	var yaw := track.yaw_at(tau, float(log.world.get("yaw", 0.0)))
+	var plate := log.base_xf(yaw)
+	var jumped := is_nan(_last_tau) or is_nan(_last_t) or absf(t - _last_t) > 0.5 or tau < _last_tau - 1e-4
+	if jumped:
+		for id in log.pieces.size():
+			_write(id, track.pose_of(id, tau, plate))
+	elif tau != _last_tau:
+		for id in track.moved_between(_last_tau, tau):
+			_write(int(id), track.pose_of(int(id), tau, plate))
+		if track.turning(tau) or track.turning(_last_tau):
+			for id in log.pieces.size():
+				if not (track.seats[id] as Array).is_empty():
+					_write(id, track.pose_of(id, tau, plate))
+	_base.transform = plate
+	_held_up(t, tau, plate)
+	_last_tau = tau
+
+
+## WHAT IS IN HAND IS DONE SOMETHING WITH ([Fingers]), the record going or stopped: it is only the record that stops.
+func _held_up(t: float, tau: float, plate: Transform3D) -> void:
+	var held := log.held_at(t)
+	var id := int(held.get("id", -1))
+	if _in_hand >= 0 and _in_hand != id:
+		_write(_in_hand, track.pose_of(_in_hand, tau, plate))
+	_in_hand = id
+	if id >= 0:
+		_write(id, Fingers.on(track.pose_of(id, tau, plate), held, log.pieces[id]))
 
 
 func _write(id: int, xf: Transform3D) -> void:
@@ -465,6 +888,24 @@ func report() -> String:
 	return "\n".join(lines)
 
 
-## What is heard between [param t0] and [param t1] ([method Assembly.sounds_in]).
+## WHAT IS HEARD between [param t0] and [param t1]: what really happened then, on the record - `[{t, kind, against, at, size, strength, weight}]`. A stop has
+## no record, so a stop has no sound. The hardest few of a crowded moment: past that nobody hears another.
 func sounds_in(t0: float, t1: float) -> Array:
-	return [] if log == null or not _built else log.sounds_in(t0, t1)
+	if log == null or not _built or track == null or not track.stock_ready:
+		return []
+	var a := log.tau_at(t0)
+	var b := log.tau_at(t1)
+	if is_nan(a) or is_nan(b):
+		return []
+	a = maxf(a, 0.0)
+	var picked := track.events_between(a, b)
+	var out: Array = []
+	for i in picked:
+		var j := i * 6
+		var words := track.ev_kind[i].split("/")
+		out.append({"t": t0 + (track.ev_t[i] - a), "kind": words[0], "against": words[1], "at": Vector3(track.ev[j], track.ev[j + 1], track.ev[j + 2]),
+			"strength": track.ev[j + 3], "size": track.ev[j + 4], "weight": track.ev[j + 5]})
+	if out.size() > HITS_AT_ONCE:
+		out.sort_custom(func(x: Dictionary, y: Dictionary) -> bool: return float(x["strength"]) > float(y["strength"]))
+		out.resize(HITS_AT_ONCE)
+	return out

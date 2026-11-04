@@ -252,6 +252,27 @@ func _prompts() -> bool:
 		"the set dresser is told the plan's work (and, the control, not when there is none)")
 	for looks in [0, 30]:
 		texts.append(TablePrompts.puppeteer("Show", "a brief", worked, 7, [card, card, card], "- \"a cup\": stands at [0, 0] cm", looks)["prompt"])
+	# WHAT IS BUILT, DESIGNED FIRST ([AssemblyModel]): the modeler told how a model is written and what this one is; and whoever comes after told what it is
+	var building := worked.duplicate(true)
+	building["assembly"] = true
+	building["build"] = "a tall thing with a door"
+	for looks in [0, 24]:
+		var words: String = TablePrompts.modeler("Show", "a brief", building, 7, ["a barn"] if looks > 0 else [], looks)["prompt"]
+		texts.append(words)
+		_ok(words.contains("a tall thing with a door") and words.contains("THE SHAPES") and words.contains("land:"), "the modeler is told what to design and how it is written")
+		_ok(words.contains("`shape`") == (looks > 0), "and its tools only if it has them")
+	_ok(String(texts[texts.size() - 1]).contains("a barn") and not String(texts[texts.size() - 2]).contains("a barn"), "and what earlier episodes built, where there are any")
+	building["model_words"] = "THE MODEL: a tall thing. 500 parts."
+	var staged: String = TablePrompts.puppeteer("Show", "a brief", building, 7, [], "- \"a cup\": stands at [0, 0] cm", 30)["prompt"]
+	texts.append(staged)
+	_ok(staged.contains("THE MODEL: a tall thing") and staged.contains("ALREADY DESIGNED") and staged.contains("- build (") and not staged.contains("- put ("), "a puppeteer with a model stages it, and is not asked to design it")
+	building.erase("model_words")
+	var undesigned: String = TablePrompts.puppeteer("Show", "a brief", building, 7, [], "- \"a cup\": stands at [0, 0] cm", 30)["prompt"]
+	_ok(undesigned.contains("- put (") and not undesigned.contains("ALREADY DESIGNED"), "control: one with no model writes what goes where")
+	building["model_words"] = "THE MODEL: a tall thing. 500 parts."
+	var saying: String = TablePrompts.reader("Show", "a brief", building, "intro", [], [], 0, false, [], [], [], true, false, [], [])["prompt"]
+	texts.append(saying)
+	_ok(saying.contains("THE MODEL: a tall thing"), "and the reader is told what the viewer is watching come together")
 	texts.append(TablePrompts.reader("Show", "a brief", worked, "work:2", ["hello"], [card, card], 3, false, [], [], ["Moth"],
 		true, false, [], acts)["prompt"])
 	var work_words := String(texts[texts.size() - 1])

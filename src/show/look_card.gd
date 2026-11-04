@@ -23,7 +23,7 @@ class_name LookCard
 const KEY := "look"
 
 var _filter_summary: Label
-var _filter_rows := {}     # filter key -> {box: CheckBox, slider: HSlider}
+var _filter_rows := {}     # filter key -> {box: CheckBox, slider: HSlider, readout: Label}
 var _reveal: OptionButton  # how the subtitles reveal a line ([constant Subtitles.REVEALS])
 
 
@@ -89,7 +89,7 @@ func _init() -> void:
 				return          # a grayed dial keeps its value and changes nothing
 			Director.set_filter(k, v)
 			refresh())
-		_filter_rows[k] = {"box": cb, "slider": sl}
+		_filter_rows[k] = {"box": cb, "slider": sl, "readout": readout}
 	# THE SUBTITLES: how a line's words appear - over the look, never under it
 	var srow := HBoxContainer.new()
 	srow.add_theme_constant_override("separation", 8)
@@ -126,7 +126,9 @@ func refresh() -> void:
 		+ "mode and of an export render.\n\nOn now: " + text)
 
 
-## The rows, back from the Director - after a document set the filters.
+## The rows, back from the Director - after a document set the filters. The number beside a dial comes
+## back with it: a note opened from nothing builds this card at the registry's defaults, and the block
+## that arrives next moved the dial alone (2026-11-03).
 func sync_rows() -> void:
 	for k in _filter_rows:
 		var row: Dictionary = _filter_rows[k]
@@ -136,7 +138,7 @@ func sync_rows() -> void:
 		cb.set_pressed_no_signal(amt > 0.0)
 		sl.editable = amt > 0.0
 		if amt > 0.0:
-			sl.set_value_no_signal(amt)
+			Card.put_slider(sl, row["readout"], amt)
 	if _reveal != null:
 		_reveal.select(Subtitles.REVEALS.keys().find(Director.subtitle_reveal))
 	refresh()

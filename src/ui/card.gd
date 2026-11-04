@@ -151,6 +151,11 @@ func expand() -> void:
 	_go(false)
 
 
+## Whether it is sliding open or shut now: its height is changing because it was told to, not because of what is in it.
+func sliding() -> bool:
+	return _slide != null and _slide.is_running()
+
+
 func _go(to: bool) -> void:
 	if to == _folded:
 		return

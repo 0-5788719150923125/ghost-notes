@@ -24,7 +24,7 @@ const CONSTANTS := {"pi": PI, "tau": TAU, "e": 2.718281828459045}
 const FUNCS := {"sin": 1, "cos": 1, "tan": 1, "asin": 1, "acos": 1, "atan": 1, "atan2": 2, "abs": 1,
 	"min": 2, "max": 2, "clamp": 3, "lerp": 3, "smoothstep": 3, "ease": 1, "pingpong": 2, "fract": 1,
 	"floor": 1, "ceil": 1, "round": 1, "sqrt": 1, "pow": 2, "exp": 1, "log": 1, "sign": 1, "step": 2,
-	"mod": 2, "noise": 1, "deg": 1, "rad": 1}
+	"mod": 2, "noise": 1, "noise2": 2, "deg": 1, "rad": 1}
 ## The operators, by how tightly each binds, and whether it binds right to left.
 const OPS := {"+": [1, false], "-": [1, false], "*": [2, false], "/": [2, false], "%": [2, false],
 	"^": [4, true], "neg": [3, true]}
@@ -212,9 +212,25 @@ static func _call(f: String, a: PackedFloat64Array) -> float:
 		"step": return 1.0 if a[1] >= a[0] else 0.0
 		"mod": return fposmod(a[0], a[1]) if a[1] != 0.0 else 0.0
 		"noise": return noise1(a[0])
+		"noise2": return noise2(a[0], a[1])
 		"deg": return rad_to_deg(a[0])
 		"rad": return deg_to_rad(a[0])
 	return 0.0
+
+
+## A SMOOTH NOISE of two numbers, -1..1, as [method noise1] is of one: ground, rock, a shoreline ([AssemblyModel]).
+static func noise2(x: float, y: float) -> float:
+	var ix := floorf(x)
+	var iy := floorf(y)
+	var fx := x - ix
+	var fy := y - iy
+	var ux := fx * fx * (3.0 - 2.0 * fx)
+	var uy := fy * fy * (3.0 - 2.0 * fy)
+	var a := _hash1(ix + iy * 57.0)
+	var b := _hash1(ix + 1.0 + iy * 57.0)
+	var c := _hash1(ix + (iy + 1.0) * 57.0)
+	var d := _hash1(ix + 1.0 + (iy + 1.0) * 57.0)
+	return lerpf(lerpf(a, b, ux), lerpf(c, d, ux), uy) * 2.0 - 1.0
 
 
 ## A SMOOTH NOISE of one number, -1..1: the same everywhere it is asked (no state, no seed beyond the

@@ -353,7 +353,7 @@ static func set_dresser(title: String, brief: String, plan: Dictionary, seed: in
 		"lights": Lights.describe(), "sounds": Soundscape.describe(), "rides": Rides.describe(),
 		"title": title.strip_edges(), "byline": byline.strip_edges(),
 		"seen": ", ".join(PackedStringArray(seen)), "airs": ", ".join(PackedStringArray(airs)),
-		"assembly": plan.get("assembly") == true, "assembly_stock": Assembly.describe_stock(),
+		"assembly": plan.get("assembly") == true, "assembly_stock": Assembly.describe_stock(), "model_words": String(plan.get("model_words", "")),
 	}
 	vars.merge(_box_size(String(CardTable.staging_of(plan)["box_style"]) == "shoebox",
 		String(CardTable.staging_of(plan)["contents"]), plan.get("look", {}) if plan.get("look") is Dictionary else {}))
@@ -398,6 +398,7 @@ const SAID_WORD := 0.52
 ## The fewest words a passage over work runs to, however quiet the show: it still has to say something. And the most of the work
 ## that may pass in silence.
 const QUIET_WORDS_LEAST := 15
+const QUIET_OPENING_WORDS := 150.0
 const QUIET_MOST := 0.85
 
 
@@ -423,8 +424,21 @@ static func puppeteer(title: String, brief: String, plan: Dictionary, seed: int,
 		"work": work_lines(plan), "cards": cards, "parts": parts if not parts.strip_edges().is_empty() else "(nothing on the table works yet)",
 		"laws": Motions.describe_laws(), "bursts": ", ".join(PackedStringArray(Effects.BURSTS.keys())),
 		"tools": looks > 0, "looks": looks, "cardless": CardTable.cardless(plan), "beats": CardTable.beats(plan),
-		"assembly": plan.get("assembly") == true, "assembly_steps": Assembly.describe()}
+		"assembly": plan.get("assembly") == true, "assembly_steps": Assembly.describe(plan.has("model_words")), "model_words": String(plan.get("model_words", "")), "designed": plan.has("model_words")}
 	return {"system": show_context(title, brief), "prompt": Rules.say("table/puppeteer.prompt", vars)}
+
+
+## THE MODELER, designing what this episode builds ([AssemblyModel], [ModelTools]): what the plan says it is, what earlier episodes built, how it is written, and - with [param looks] - its tools.
+static func modeler(title: String, brief: String, plan: Dictionary, seed: int, earlier: Array, looks := 0) -> Dictionary:
+	var vars := {"seed": seed, "episode_title": String(plan.get("episode_title", "")), "premise": String(plan.get("premise", "")), "build": String(plan.get("build", "")),
+		"language": AssemblyModel.describe(), "earlier": ", ".join(PackedStringArray(earlier)), "has_earlier": not earlier.is_empty(), "tools": looks > 0, "looks": looks,
+		"lo": AssemblyModel.PARTS_AIM.x, "hi": AssemblyModel.PARTS_AIM.y}
+	# ...HOW TALL THIS EPISODE'S LENS SEES, at a plate in the middle of the picture: what is cut off by the frame is no model
+	var lay := CardTable.layout_of(seed)
+	var seen := CardTable.headroom_at(lay["camera"], float(lay["fov"]), TableAssembly.base_center_under({}, lay["camera"]))
+	vars["tall_cm"] = roundi(minf(seen, float(AssemblyModel.TALL_MOST) * Assembly.PLATE) * 100.0)
+	vars["tall_levels"] = int(minf(seen, float(AssemblyModel.TALL_MOST) * Assembly.PLATE) / Assembly.PLATE)
+	return {"system": show_context(title, brief), "prompt": Rules.say("table/modeler.prompt", vars)}
 
 
 ## The thing a set dresser is shown as the shape to copy ([method set_dresser]) - written where it stands
@@ -586,6 +600,8 @@ static func reader(title: String, brief: String, plan: Dictionary, step: String,
 			lo_hi = [35, 75]
 	var kind := step if step == "intro" or step == "close" \
 		else ("beat" if bare else ("jumper" if not drawn.is_empty() and bool((drawn[drawn.size() - 1] as Dictionary).get("jumper", false)) else "card"))
+	# WHAT IS BEING BUILT WHILE IT IS SAID ([AssemblyModel]), so the words are about what the viewer will see become it
+	vars["model_words"] = String(plan.get("model_words", ""))
 	var heard_before := _heard_before(history, kind, brief, names)
 	vars["heard"] = "\n".join(heard_before)
 	vars["heard_" + kind] = not heard_before.is_empty()
@@ -616,9 +632,14 @@ static func reader(title: String, brief: String, plan: Dictionary, step: String,
 		var quiet := quiet_of(plan)
 		if quiet > 0.0:
 			var talk := seconds * (1.0 - quiet) / SAID_WORD
+			# ...BUT IT OPENS TALKING ([method CardReading.opens_talking]): about a minute of it, whatever the work under it takes
+			var opening := step == "intro"
+			if opening:
+				talk = maxf(talk, QUIET_OPENING_WORDS)
 			lo_hi = [maxi(QUIET_WORDS_LEAST, roundi(talk * 0.8)), maxi(QUIET_WORDS_LEAST * 2, roundi(talk * 1.2))]
 			vars["quiet"] = true
-			vars["quiet_seconds"] = roundi(seconds * quiet)
+			vars["quiet_opening"] = opening
+			vars["quiet_seconds"] = maxi(roundi(seconds - talk * SAID_WORD), 0)
 			vars["quiet_most"] = roundi(CardReading.QUIET_MOST)
 	if work_k > 0:
 		vars["card"] = false

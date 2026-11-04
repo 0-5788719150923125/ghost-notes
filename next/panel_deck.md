@@ -19,6 +19,13 @@ is scrolled - what pinning the Pipeline card was for, without a second panel. A 
 **A press.** On a bar where its card is, it folds or opens the card. On a bar in a pile, it brings the card into view, opening it if
 it is folded; an open card in a pile is never folded by that press. A card opened any other way (a chip) comes into view too.
 
+**A view at the end stays there.** The user, 2026-11-03: "If I'm scrolled all the way down, looking at the pipeline, and I click on
+"Generate" - that process can insert new steps into the pipeline card, which causes it to start overflowing, requiring me to scroll
+again". So whatever grows while the view is at the end of the scroll keeps it at the end, in the last card or above it (a picture
+landing in a card above pushes the list down just the same), and a turn of the wheel lets go. What the viewer opens is not followed: it comes as a
+press brings it, its start in view. A panel that fits is at its end only trivially, so it follows its last card alone: a note's words
+filling in as it opens leave it at its top.
+
 **It moves.** A card slides open and shut, what is under it going with it. Pointing at a bar in a pile spreads the pile there until
 the whole bar shows - the fan. A small window closes the piles up rather than taking the room from what is being read.
 

@@ -8,7 +8,9 @@ extends SceneTree
 ##
 ## ONE PLACE: it stands last among a panel's cards, in the one scroll (THE CONTROL: the footer, which holds Masking's markers
 ## alone, stays empty), its list scrolling with the panel however long it grows, with no scroll of its own (THE CONTROL: the
-## list really is longer than the window); with nothing to list it is gone and takes no room.
+## list really is longer than the window); with nothing to list it is gone and takes no room. NEW STEPS IN THE LIST LEAVE A VIEW AT
+## THE END AT THE END, the last of them in sight (the user: Generate "can insert new steps ... requiring me to scroll again";
+## THE CONTROL: a view anywhere else stays where it is).
 ## ONE ⟳: a plain Button, never a menu (THE CONTROL: a MenuButton is what the walk would find). Pressed, it does its one
 ## thing at once, and opens nothing. WHAT THROWS OTHER WORK AWAY SAYS SO BEFORE IT IS PRESSED: amber, the tooltip saying what,
 ## and it asks a yes or a no - nothing runs until yes, and no runs nothing. A row with no ⟳ keeps its place and takes no
@@ -100,6 +102,28 @@ func _one_place() -> void:
 	_ok(card.find_children("*", "ScrollContainer", true, false).is_empty(), "a long list has no scroll of its own")
 	_ok(card._list.get_combined_minimum_size().y > root.get_visible_rect().size.y and panel._scroll.get_v_scroll_bar().max_value > panel._scroll.size.y,
 		"the control: the list is longer than the window, and the panel's one scroll takes it (%d px)" % int(card._list.get_combined_minimum_size().y))
+	var bar: ScrollBar = panel._scroll.get_v_scroll_bar()
+	bar.value = 100.0
+	await process_frame
+	for i in range(200, 220):
+		rows.append(_row("r%d" % i))
+	s.listed = rows.duplicate()
+	card.refresh()
+	await process_frame
+	await process_frame
+	_ok(is_equal_approx(bar.value, 100.0), "the control: new steps in the list leave a view short of the end where it is")
+	bar.value = bar.max_value
+	await process_frame
+	var was: float = bar.value
+	for i in range(220, 240):
+		rows.append(_row("r%d" % i))
+	s.listed = rows.duplicate()
+	card.refresh()
+	await process_frame
+	await process_frame
+	var foot: Control = card.row("r239")["line"]
+	_ok(bar.value > was and bar.value >= bar.max_value - bar.page - 1.0 and foot.get_global_rect().end.y <= panel._scroll.global_position.y + panel._scroll.size.y + 1.0,
+		"at the end, new steps in the list: it stays at the end, the last of them in sight (%d to %d)" % [int(was), int(bar.value)])
 	s.listed = []
 	card.refresh()
 	_ok(not card.card.visible, "nothing left to list: gone again")

@@ -1,5 +1,5 @@
 {
-	"digest": "9f2240869d676329e0f8c5ec03f534cf509482ffd3fcc9b5a38c5dda5c96c536",
+	"digest": "db4a021d6e801e5d97aa7d4d1134b645f48e0fc6cca55ae38277d784b0e7f86b",
 	"files": [
 		"res://project.godot",
 		"res://scenes/main.tscn",
@@ -237,6 +237,7 @@
 		"res://src/table/card_table.gd",
 		"res://src/table/drifts.gd",
 		"res://src/table/effects.gd",
+		"res://src/table/fingers.gd",
 		"res://src/table/formula.gd",
 		"res://src/table/hands.gd",
 		"res://src/table/lights.gd",
@@ -263,6 +264,7 @@
 		"res://src/ui/note_editor.gd",
 		"res://src/ui/note_grid.gd",
 		"res://src/ui/note_tile.gd",
+		"res://src/ui/panel_deck.gd",
 		"res://src/ui/pipeline_card.gd",
 		"res://src/ui/schema_form.gd",
 		"res://src/ui/script_highlighter.gd",

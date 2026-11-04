@@ -1,15 +1,10 @@
 extends RefCounted
 class_name AssemblyHeap
 
-## AssemblyHeap - WHERE AN ASSEMBLY'S PARTS WAIT: a tub, a tray or a pile on the table, as a height field they are let fall
-## onto one at a time. Pure data, no node ([Assembly] asks it for places; a gate stands one with no table).
-##
-## NOT THE PHYSICS, on purpose (next/assembly.md): a thousand bricks lying on one another as bodies would be a thousand sets of
-## surface points and a bake that never settles (next/framework_audit.md), and nothing here needs one. A heap is what falling
-## leaves behind - each piece lands on what is already there, in a few tries at the lowest place it can find, tilted by the
-## ground it lands on - and it is enough to know, for each piece, WHAT LIES ON IT: a cell keeps its pieces in the order they
-## landed, so whatever came after one in a cell it shares lies on it. A piece is only ever taken once nothing lies on it, which
-## is why digging has to move things (the point of digging), and no piece is ever left lying on air.
+## AssemblyHeap - WHERE AN ASSEMBLY'S PARTS WAIT, as the plan knows it: a tub, a tray or a pile on the table, as a height field. Pure data, no node ([Assembly] asks it for places; a
+## gate stands one with no table). It says what a stock's inside is ([method TableAssembly._heap_of]: which [AssemblyBake] pours real pieces into), and where things seem to lie in a
+## preview, where a puppeteer or a set dresser asks for no record: each lands on what is already there, in a few tries at the lowest place it can find, tilted by the ground it lands on.
+## What the pieces really do is the record's ([AssemblyWorld]). A cell keeps its pieces in the order they landed, so whatever came after one in a cell it shares lies on it.
 
 ## A cell of the height field (meters): under the narrowest piece, a stud across.
 const CELL := 0.006
@@ -34,6 +29,7 @@ var rim := INF                    # a container's rim: heaped past it, a piece s
 var middle := Vector2.ZERO
 var reach := 0.1                  # how far from the middle a pile lands (a container fills evenly: 0)
 var thing := ""                   # the table's thing that holds it, "" for a pile on the table
+var deep := 0.0                   # how deep what lies in a container may lie (meters), up to how full it was written
 var bed := NAN                    # the false floor a deep container is filled over ([method TableAssembly._surface_of])
 var _stacks := {}                 # a cell -> [[top, id], ...] in the order they landed
 var _of := {}                     # id -> {"cells": PackedInt32Array, "top": float, "at": Vector2}

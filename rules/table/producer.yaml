@@ -224,6 +224,7 @@ reply_beats: |-
     "work_intro": "what is done at the table while the intro is said - optional",
     "work_close": "what is done at the table during the close - optional",
     "assembly": "true only when the work is building something out of many small parts that fit together on a grid",
+    "build": "where `assembly` is true: the one thing this episode builds, so it can be designed before anything is picked up, in a sentence or two - what it is, what is in it, what makes it this one and no other",
     "quiet": "how much of the work nobody talks through, as the brief has it, a share from 0 to 0.8 - 0 when the voice goes on throughout",
     "look": {
       "palette": ["#rrggbb", "four to six colors"],
@@ -398,8 +399,9 @@ work:
   - >-
       An episode that draws no cards says how it goes in two more fields. `assembly`, true when what
       is done is building something from many small parts that fit together on a grid, so the table
-      keeps a stock of them and the moves are worked out from which part goes where - and in each
-      beat's `work`, say then what the hands are after and what comes of it, what was tried and given
-      up and what comes down again as well as what goes on, not a list of what is finished. And
+      keeps a stock of them and the moves are worked out from which part goes where. Then `build` says
+      the one thing the episode builds, something a stranger would name at a glance, and the title
+      and the beats keep to it: it is finished by the end of the video. And in each beat's `work`, say
+      which stretch of it goes up, and what goes wrong on the way and what comes down and goes up again. And
       `quiet`, how much of the work nobody talks through, as the brief has it. A beat's words are only
       as many as the part of it that is talked through.

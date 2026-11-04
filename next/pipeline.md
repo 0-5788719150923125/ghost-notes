@@ -81,4 +81,4 @@ Open, not built:
 
 - An undo for a thrown-away step (`invalidate` deletes). With one, the amber question could go.
 - Which group to scroll to when a long Generate moves past the list's view: the tally says where it is, the list stays
-  where it was left.
+  where it was left - or, left at its end, stays at its end as steps are added (`PanelDeck`, next/panel_deck.md).

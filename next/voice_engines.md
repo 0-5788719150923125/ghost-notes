@@ -751,6 +751,35 @@ semicolon's trail are as they were. A colon announces what follows - the voice h
 word one so often follows ("were:", "said:") lost its end to the fade. Gate: hosts/voice/test_trail.py
 `test_a_colon_is_not_faded`.
 
+### The head of a take (2026-11-03): ours, not the model's
+
+The user, of Heart's "Hello, my loves": "almost like a record skipping, like several clicks in a row, 'h-h-h-ello'"; other
+voices "Uh-hello"; "I'm inclined to think we're doing something wrong with our own processing". They were right. It was
+LEAD_IN, the four word-spaces added on 2026-10-27 for a swallowed "A", each rendered as a click or a voiced syllable.
+
+**The cause under all three reports** (the swallowed "A", the 10-30 "Ha." heard "He-sah-vah", these clicks): Kokoro is
+silent for a fixed stretch from the start of the sequence, 8 to 14 frames by the voice, and voices whatever follows, word
+or not, pad included. Its first pad's plan at speed 1.0 lands the first word just there. `speed` divides the pad with the
+words, so a fast pace puts the word in the silence and a slow one voices a phantom before it. The lead-in was measured at
+Pace 1.6 alone, where it looked harmless; the default Pace is 1.0. The table is in the backend's header.
+
+**Built:** no lead-in, the model's own ids, `dur_scale` = speed on the first pad, so it is planned at speed 1.0 at any
+pace. It needs no constant per voice: the plan is the voice's own, in trained voices too (Manzanita's head -4 dB to -169).
+Tried and not taken: other lead-ins (pads, `.`, `,`, `…`, `“`, `—`: all voice a head by the same dose), a pad 1.15 or 1.3
+times its plan (the phantom back).
+
+**A side effect to hear for:** the lead-in stretched the words after it 5 to 10% against the stock plan. They now keep it,
+so Kokoro reads about 5% quicker than it has since 10-27.
+
+**Open:** "Ha." alone at Pace 0.85 is still misheard ("Huh", "Kong", "Run!"), one word now and no phantom. Not traced; a
+one-word sentence reads on a pack's weakest row. Not traced either: where in the model the silent stretch comes from.
+Files for the ear: `dist/voice_ab/kokoro_head/listen/`, each with a `_before` and an `_after`.
+
+**The user's ear (2026-11-03), on those files:** "Hands-down, the 'after' examples sound a LOT better. Let's definitely
+get this approach integrated." Kept. Checked after through `host.py`'s own protocol (Heart, Sarah and Michael at Pace 1,
+Puck at 1.6, Emma at 0.85): the first word 42 ms in and the head 39 to 166 dB under the peak, but for Emma's "Guilty." at
+0.85, the largest left - about 40 ms ahead of the word at -16 dB, heard right by Whisper.
+
 ### Not in the trial, and what would be lost
 
 - **`noise_scale` and `noise_w`** have no meaning: Kokoro's prosody is fixed for a text and a voice.

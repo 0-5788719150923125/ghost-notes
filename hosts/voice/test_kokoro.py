@@ -11,8 +11,9 @@ What is held, each with the case that must not change:
   1. eSpeak's reading is written in misaki's symbols (A for eɪ, T for the flap, ᵊ for a syllabic
      consonant, ː dropped in American and kept in British) - and a pair is merged only inside one
      word;
-  2. the ids are one a symbol with a pad at each end, no blanks, LEAD_IN word-spaces after the first pad
-     (the opening word is said), and the style is the pack's row for the sentence's own tokens;
+  2. the ids are one a symbol with a pad at each end, no blanks and nothing before the sentence, and the
+     style is the pack's row for its tokens; the first pad keeps its own length at every pace, the words
+     alone following the pace (a graph that takes no scale is the control);
   3. no rest is floored; the word before a rest has its last vowel held at HOLD_LEAST ("uː" sharing it),
      less at a weaker boundary, none without the trail; a rest is cut in its window, after a stop's
      release, never in its closure; the trail fades a vowel held into the next word whole and comes back
@@ -20,7 +21,7 @@ What is held, each with the case that must not change:
   4. a leaned-on word scales its stressed syllable alone, and an unmarked one feeds no scale;
   5. the spans and phones are the plan's frames of 600 samples at 24 kHz, the phones in eSpeak's
      symbols (A's time shared by e and ɪ), and the take is handed back at 22,050 with its seconds kept;
-     its head is trimmed through the pad and the lead-in to SEAM_LEAD before the first sound;
+     its head is trimmed through the pad to SEAM_LEAD before the first sound;
   6. a sentence over 510 tokens is read in pieces cut after a mark, each with its own pads;
   7. the length a pitch move is measured against is the ROUNDED plan's, exact at ratio 1, a take's
      trimmed ends counted as they stand;
@@ -120,6 +121,7 @@ class _Session:
                 frames = np.maximum(frames, floor)
             frames = np.maximum(frames, 1.0)
         whole = np.maximum(np.round(frames), 1.0).astype(int)
+        self.fed[-1]["frames"] = whole
         t = np.arange(int(whole.sum()) * 600, dtype=np.float64)
         audio = 0.5 * np.sin(2.0 * np.pi * t / 96.0)
         at = 0
@@ -269,13 +271,35 @@ def test_ids_one_a_symbol():
     ids = fed["ids"]
     eq((ids[0], ids[-1]), (0, 0), "a pad at each end")
     ok(0 not in ids[1:-1], "no pads between the symbols")
-    from backends.kokoro import LEAD_IN
+    body = "".join(VOCAB[i] for i in ids[1:-1])
+    eq(body, "ˈɪt, wʌz nˈɛvəɹ sˈO.", "the sentence as Kokoro reads it, nothing before it, ending on its mark")
+    eq(float(np.asarray(fed["style"]).ravel()[0]), float(len(ids) - 3),
+       "the style is the pack's row for the sentence's own token count")
 
-    eq(ids[1 : 1 + LEAD_IN], [SPACE] * LEAD_IN, "LEAD_IN word-spaces open the utterance, after the pad")
-    body = "".join(VOCAB[i] for i in ids[1 + LEAD_IN : -1])
-    eq(body, "ˈɪt, wʌz nˈɛvəɹ sˈO.", "the sentence as Kokoro reads it, ending on its mark - no word-space after")
-    eq(float(np.asarray(fed["style"]).ravel()[0]), float(len(ids) - 3 - LEAD_IN),
-       "the style is the pack's row for the sentence's own token count, the lead-in not counted")
+
+@check
+def test_first_pad_keeps_its_length_at_every_pace():
+    """Kokoro is silent for a fixed stretch from the start of the sequence and voices what follows, and its pad's own
+    plan at speed 1.0 lands the first word there (the backend's header, THE OPENING). So at any pace the pad is that
+    plan, and only the words follow the pace. The control is a graph that takes no scale: the speed divides its pad."""
+    import numpy as np
+
+    words = {}
+    for pace in (0.85, 1.0, 1.6):
+        _res, sess, _rate, _n = _render(SENTENCE, {"length_scale": 1.0 / pace}, sess=_Session(lead=14.0))
+        fed = sess.fed[0]
+        eq(int(fed["frames"][0]), 14, f"at Pace {pace} the first pad is its own 14 frames")
+        words[pace] = int(np.sum(fed["frames"][1:-1]))
+    ok(words[1.6] < words[1.0] < words[0.85], "and the words follow the pace", str(words))
+    long = [_tok("word%d" % i, "wˈɜːd", "," if i % 9 == 8 else "") for i in range(120)]
+    long[-1]["punct"] = "."
+    _res, sess, _rate, _n = _render(long, {"length_scale": 1.0 / 1.6}, sess=_Session(lead=14.0))
+    ok(len(sess.fed) > 1 and all(int(fed["frames"][0]) == 14 for fed in sess.fed), "and so does each piece's",
+       "%d pieces" % len(sess.fed))
+    _res, sess, _rate, _n = _render(SENTENCE, {"length_scale": 1.0}, sess=_Session(lead=14.0))
+    eq(sess.fed[0]["scale"], None, "at speed 1.0 nothing is fed: the stock graph's plan, sample for sample")
+    _res, sess, _rate, _n = _render(SENTENCE, {"length_scale": 1.0 / 1.6}, sess=_Session(takes=(), lead=14.0))
+    eq(int(sess.fed[0]["frames"][0]), 9, "the control: where no scale is taken, Pace 1.6 divides the pad")
 
 
 # -- 3. the comma's floor ------------------------------------------------------
@@ -475,7 +499,7 @@ def test_stress_scales_its_syllable():
 @check
 def test_times_phones_and_rate():
     import numpy as np
-    from backends.kokoro import HOP, LEAD_IN, OUT_RATE, PLAN_LEAD, SR
+    from backends.kokoro import HOP, OUT_RATE, PLAN_LEAD, SR
 
     toks = [_tok("say", "sˈeɪ"), _tok("it", "ˈɪt", ".")]
     res, sess, rate, n = _render(toks)
@@ -499,24 +523,23 @@ def test_times_phones_and_rate():
     ok(abs(phones[1]["t1"] - mid) < 1e-3 and abs(phones[2]["t0"] - mid) < 1e-3,
        "A's time is shared by e and ɪ")
     spans = {row["index"]: (row["t0"], row["t1"]) for row in res["tokens"]}
-    ok(abs(spans[0][0] - t[1 + LEAD_IN]) < 1e-3,
-       "the first word starts after the pad's and the lead-in's frames, PLAN_LEAD earlier")
+    ok(abs(spans[0][0] - t[1]) < 1e-3, "the first word starts after the pad's frames, PLAN_LEAD earlier")
 
 
 @check
 def test_ends_trimmed_to_the_seam():
-    """Kokoro's 14-frame first pad, the lead-in and its silent marks at the end are cut to the silence the
+    """Kokoro's 14-frame first pad and its silent marks at the end are cut to the silence the
     seam was measured on; the plain fake, which sounds through its pad, is the control (nothing cut above).
     The fake's audio does not run ahead of its plan, so the head keeps SEAM_LEAD before where the plan, told
     PLAN_LEAD early, puts the first sound - never nearer it - and the first word is told SEAM_LEAD in."""
     import numpy as np
-    from backends.kokoro import LEAD_IN, OUT_RATE, PLAN_LEAD, SEAM_LEAD, SEAM_TAIL
+    from backends.kokoro import OUT_RATE, PLAN_LEAD, SEAM_LEAD, SEAM_TAIL
 
     sess = _Session(lead=14.0, tail=10.0, quiet_marks=True)
     res, sess, rate, n = _render([_tok("say", "sˈeɪ"), _tok("so", "sˈoʊ", ".")], sess=sess)
     spans = {row["index"]: (row["t0"], row["t1"]) for row in res["tokens"]}
     first = SEAM_LEAD
-    ok(abs(spans[0][0] - first) < 2e-3, "the first word starts SEAM_LEAD in, not 450 ms (pad and lead-in)",
+    ok(abs(spans[0][0] - first) < 2e-3, "the first word starts SEAM_LEAD in, not 350 ms (the pad)",
        "%.3f s" % spans[0][0])
     ok(abs(res["phones"][0]["t0"] - first) < 2e-3, "and its first phone with it")
     fed = sess.fed[0]
@@ -525,7 +548,7 @@ def test_ends_trimmed_to_the_seam():
     ok(float(plan[max(k for k, i in enumerate(ids) if i not in sess.quiet) + 1 :].sum()) * 0.025 > SEAM_TAIL,
        "the fake's ends hold more silence than the seam allows")
     last = max(k for k, i in enumerate(ids) if i not in sess.quiet)
-    said_to = float(plan[: last + 1].sum()) * 0.025 - ((14.0 + LEAD_IN) * 0.025 - PLAN_LEAD - SEAM_LEAD)
+    said_to = float(plan[: last + 1].sum()) * 0.025 - (14.0 * 0.025 - PLAN_LEAD - SEAM_LEAD)
     ok(abs(res["duration"] - (said_to + SEAM_TAIL)) < 2e-3, "SEAM_TAIL kept after the last sound",
        "%.3f s" % (res["duration"] - said_to))
     ok(abs(n - res["duration"] * OUT_RATE) <= 1, "the take is as long as its times say")
@@ -807,16 +830,12 @@ def test_a_voice_taught_here():
 @check
 def test_ids_of_are_what_the_graph_is_sent():
     """What a voice is taught on is what it is sent (`ids_of`, utterances.py): the same ids `_render_symbols` fed the
-    graph for the same words - pads at both ends, no word-space after the last word - less the render's
-    lead-in (LEAD_IN), which opens the utterance and is not the sentence."""
-    from backends.kokoro import LEAD_IN
-
+    graph for the same words - pads at both ends, no word-space after the last word."""
     k, cfg = _backend()
     k._vocabs["kokoro"] = cfg["kokoro"]["vocab"]
     _res, sess, _rate, _n = _render(SENTENCE)
     fed = sess.fed[0]["ids"]
-    eq(k.ids_of([dict(t) for t in SENTENCE], phonemizer="ghost"), [fed[0], *fed[1 + LEAD_IN :]],
-       "taught on what it is sent, the lead-in aside")
+    eq(k.ids_of([dict(t) for t in SENTENCE], phonemizer="ghost"), fed, "taught on what it is sent")
 
 
 @check

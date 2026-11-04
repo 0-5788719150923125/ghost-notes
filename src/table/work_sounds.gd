@@ -107,17 +107,30 @@ const RINGS := {
 	"bone": {"f": 1300.0, "ratios": [1.0, 2.6], "decay": 0.05, "amp": 0.25},
 	"wood": {"f": 650.0, "ratios": [1.0, 2.6], "decay": 0.04, "amp": 0.35},
 }
-## PLASTIC ([method _plastic]): what each knock of an assembly's pieces rings with - its lowest mode for a piece 18 mm across (Hz; a
-## smaller one higher), its modes [ratio, level, share of the decay], how long it rings (seconds), its level, how much of it is a
-## tick of noise, and a low knock of the body under it.
+## PLASTIC ([method _plastic]): what a press home, a piece pulled off and a plate dragged ring with - its lowest mode for a piece 18 mm across (Hz; a
+## smaller one higher), its modes [ratio, level, share of the decay], how long it rings (seconds), its level, how much of it is a tick of noise, and a low
+## knock of the body under it. A PIECE THAT HITS SOMETHING is not here: how it sounds is how hard it hit ([method _hit]).
 const PLASTIC := {
 	"click": {"f": 2600.0, "amp": 0.024, "decay": 0.018, "noise": 0.9, "modes": [[1.0, 1.0, 1.0], [2.31, 0.6, 0.7], [3.9, 0.3, 0.5]], "body": 0.5, "body_f": 520.0},
-	"clack": {"f": 2100.0, "amp": 0.02, "decay": 0.022, "noise": 0.6, "modes": [[1.0, 1.0, 1.0], [2.4, 0.5, 0.7]], "body": 0.4, "body_f": 380.0},
-	"tick": {"f": 3400.0, "amp": 0.0075, "decay": 0.009, "noise": 0.5, "modes": [[1.0, 1.0, 1.0], [2.2, 0.4, 0.6]]},
-	"knock": {"f": 3000.0, "amp": 0.0105, "decay": 0.011, "noise": 0.8, "modes": [[1.0, 1.0, 1.0], [2.5, 0.45, 0.6]]},
+	"tick": {"f": 3400.0, "amp": 0.0045, "decay": 0.009, "noise": 0.5, "modes": [[1.0, 1.0, 1.0], [2.2, 0.4, 0.6]]},
 	"pop": {"f": 1500.0, "amp": 0.016, "decay": 0.016, "noise": 0.7, "modes": [[1.0, 1.0, 1.0], [2.1, 0.35, 0.7]], "body": 0.3, "body_f": 300.0},
 	"scuff": {"f": 900.0, "amp": 0.0035, "decay": 0.02, "noise": 1.6, "modes": [[1.0, 0.3, 1.0]]},
 }
+## A HIT ([method _hit]; the user, 2026-11-03: "gentle motions to make no sound (or quiet sound), while collisions with more force to make more sound"). How
+## fast a piece's speed changed is the only thing it is heard by: at [constant HIT_FULL] m/s - a fall of about 8 cm - it is at [constant HIT_AMP], and its level goes
+## by this power of that; softer hits are not only quieter but duller, their higher modes come in only past their own speed. A heavier piece is lower and fuller.
+const HIT_FULL := 1.25
+const HIT_POWER := 1.1
+const HIT_AMP := 0.016
+const HIT_F := 2500.0
+const HIT_DECAY := 0.016
+const HIT_LEAST := 0.0003
+## ...its modes [ratio, level, the hit's speed it takes to be heard at all (m/s), share of the decay]: a molded box's, not quite in tune.
+const HIT_MODES := [[1.0, 1.0, 0.0, 1.0], [1.83, 0.55, 0.12, 0.75], [2.71, 0.5, 0.3, 0.6], [4.15, 0.32, 0.65, 0.45]]
+## ...and what it hit rings too, by what that is made of ([constant RINGS]), this share of it, as a thing this size does; the hand gives only its soft touch.
+const HIT_THING_SHARE := 0.55
+const HIT_HAND := 0.22
+const HIT_THING_SIZE := 0.25
 ## Ticks with the show's time unmoved before the sound is held where it is.
 const STILL_TICKS := 2
 ## The most sines and noise bursts sounding at once.
@@ -488,12 +501,13 @@ func _thud(d: Dictionary) -> void:
 
 
 ## A CRUNCH of something breaking under a grinding point, [param big] (0-1) of the loudest, around [param f] Hz.
-## HARD PLASTIC ON HARD PLASTIC ([Assembly]; the user, 2026-11-02: "a big box of bricks that we would sometimes dig through (bearing in
-## mind we might want sound there)"): a molded piece is small and stiff, so it rings high and is gone in a few milliseconds, and the
-## pitch goes up as it gets smaller - two or three modes and a tick of noise at the moment of contact. A press home is that with a
-## second, firmer knock on its heels, the studs seating; a piece pulled off, one soft pop; a rummage is many of them, none the
-## same ([constant PLASTIC]). In a long silence, this is what is heard, so it stays below the voice and never gets busier than a hand.
+## HARD PLASTIC ([Assembly]; the user, 2026-11-02: "a big box of bricks that we would sometimes dig through (bearing in mind we might want sound there)"): a molded
+## piece is small and stiff, so it rings high and is gone in a few milliseconds, and the pitch goes up as it gets smaller. What is not a hit: a press home, a piece
+## pulled off, a plate dragged ([constant PLASTIC]).
 func _plastic(e: Dictionary) -> void:
+	if String(e["kind"]) == "hit":
+		_hit(e)
+		return
 	var row: Dictionary = PLASTIC.get(String(e["kind"]), PLASTIC["tick"])
 	var strength := float(e.get("strength", 1.0))
 	var size := clampf(float(e.get("size", 0.02)), 0.004, 0.08)
@@ -506,6 +520,40 @@ func _plastic(e: Dictionary) -> void:
 	_burst(minf(f * 1.6, 9000.0), 1.4, float(row["decay"]) * 0.5, amp * float(row["noise"]), ears)
 	if float(row.get("body", 0.0)) > 0.0:
 		_sine(float(row["body_f"]) * lerpf(0.9, 1.1, _rand()), 0.022, amp * float(row["body"]), ears)
+
+
+## How loud a hit is: [param v] m/s of a change in a piece's speed, a piece of [param weight], against [param against].
+static func hit_level(v: float, weight: float, against: String) -> float:
+	var amp := HIT_AMP * pow(minf(v / HIT_FULL, 1.6), HIT_POWER) * clampf(pow(weight / 1.5, 0.3), 0.55, 1.4)
+	return amp * HIT_HAND if against == "hand" else amp
+
+
+## A PIECE HITTING SOMETHING, EXACTLY AS HARD AS IT DID ([method AssemblyWorld._hits]): its speed changed by `strength` m/s on the record, at this moment. Gentle is quiet
+## and dull, hard is loud and bright; a bigger piece is lower; what it struck rings as what it is made of - a tin wall under a brick, a table under one. Nothing here is
+## drawn at a rate, or made up: no hit, no sound.
+func _hit(e: Dictionary) -> void:
+	var v := float(e.get("strength", 0.0))
+	var against := String(e.get("against", "plastic"))
+	var amp := hit_level(v, float(e.get("weight", 1.0)), against)
+	if amp < HIT_LEAST:
+		return
+	var size := clampf(float(e.get("size", 0.02)), 0.004, 0.08)
+	var f := HIT_F * pow(0.018 / size, 0.6) * lerpf(0.88, 1.14, _rand())
+	var ears := _ears(e.get("at", Vector3.ZERO))
+	for m in HIT_MODES:
+		var mode: Array = m
+		if v >= float(mode[2]):
+			_sine(minf(f * float(mode[0]) * lerpf(0.97, 1.03, _rand()), 9800.0), HIT_DECAY * float(mode[3]), amp * float(mode[1]), ears)
+	# ...the moment of contact itself, sharper the harder it was
+	_burst(minf(f * 1.7, 9000.0), 1.3, 0.0045, amp * clampf(v / HIT_FULL, 0.15, 1.0) * 0.9, ears)
+	var row: Variant = RINGS.get(against)
+	if row is Dictionary:
+		var f0 := float(row["f"]) * pow(RING_SIZE / HIT_THING_SIZE, 0.6)
+		var ratios: Array = row["ratios"]
+		for k in ratios.size():
+			var fk := f0 * float(ratios[k])
+			if fk < float(RATE) * 0.45:
+				_sine(fk, float(row["decay"]) / (1.0 + 0.5 * k), amp * HIT_THING_SHARE * float(row["amp"]) / (1.0 + k), ears)
 
 
 func _crunch(big: float, ears: Vector2, f: float) -> void:

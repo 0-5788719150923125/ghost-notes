@@ -1,9 +1,9 @@
 extends SceneTree
 
-## assembly_check: A THING BUILT OF MANY SMALL PARTS ([Assembly], next/assembly.md), with no table under it: a part goes where the
-## lattice lets it, a heap leaves nothing on air, a build's places are the same whenever it is played, and it stretches by stopping,
-## never by slowing. Its controls: a part in a taken cell, a part resting on nothing, a tile holding nothing up, a removal that
-## would leave a part on air.
+## assembly_check: A THING BUILT OF MANY SMALL PARTS ([Assembly], next/assembly.md), with no table under it and no bodies: a part goes where the
+## lattice lets it, what is said of a build is the same whenever it is played, an episode opens talking, and it stretches by stopping, never by
+## slowing. What the pieces really do is assembly_bake_check's. Its controls: a part in a taken cell, a part resting on nothing, a tile holding
+## nothing up, a removal that would leave a part on air.
 ##
 ## Run: godot --headless --path . --script tests/table/assembly_check.gd
 
@@ -21,7 +21,7 @@ func _ok(cond: bool, what: String) -> void:
 
 
 func _run() -> void:
-	for check in [_parts, _lattice, _heap, _digging, _log, _hanging, _time, _scrub, _sounds, _runs, _start_over, _reading, _whole_episode, _no_snaps, _always_there, _fill_stays_in, _steps_in_order, _room_to_turn]:
+	for check in [_parts, _lattice, _heap, _digging, _log, _hanging, _time, _scrub, _runs, _start_over, _reading, _opens_talking, _whole_episode, _always_there, _fill_stays_in, _steps_in_order, _room_to_turn]:
 		var done: Variant = (check as Callable).call()
 		_ok(done == true, "%s stopped part way (a script error - see above)" % (check as Callable).get_method())
 	print("assembly_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
@@ -141,14 +141,9 @@ func _heap() -> bool:
 
 func _digging() -> bool:
 	var a := _make(200)
-	a.perform([{"name": "dig-it", "ops": [{"do": "dig", "in": "left", "seconds": 8.0}]}])
+	a.perform([{"name": "dig-it", "ops": [{"do": "dig", "in": "left", "seconds": 8.0, "for": "brick 2x4 red"}]}])
 	var st: Dictionary = a.steps[0]
-	_ok((st["moves"] as Array).size() >= 4, "a dig moves what is on top aside: %d" % (st["moves"] as Array).size())
-	var heard := false
-	for s in st["sounds"]:
-		if String((s as Dictionary)["kind"]) == "rummage":
-			heard = true
-	_ok(heard, "and it is heard")
+	_ok(String(st["stock"]) == "left" and float(st["seconds"]) == 8.0 and String(st["part_key"]) == "brick 2x4 red", "a dig says where, how long and what for: %s" % str(st))
 	# and whatever was asked for comes out, whatever lay on it
 	var b := _make(200)
 	b.perform([{"name": "n", "ops": [{"do": "put", "part": "brick 2x4 red", "at": [0, 0], "from": "left"}]}])
@@ -240,16 +235,72 @@ func _time() -> bool:
 	var nat := a.natural_of("n")
 	var flo := a.floor_of("n")
 	_ok(flo < nat, "hurried is quicker than easy: %.1f, %.1f" % [flo, nat])
-	# GIVEN JUST ENOUGH, each move at its easy pace
+	# GIVEN JUST ENOUGH, each step at its easy pace
 	a.lay([{"i": 0, "t0": 100.0, "t1": 100.0 + nat}], acts, -INF)
 	var put_d := a._t1[0] - a._t0[0]
 	_ok(absf(put_d - float((a.steps[0] as Dictionary)["natural"])) < 1e-3, "given its time, a piece takes its natural time: %.2f" % put_d)
-	# GIVEN FAR MORE, A MOVE IS NO SLOWER: the time falls between moves, most into the pause
+	# GIVEN FAR MORE, A MOVE IS NO SLOWER: its record runs at one speed or stands still, and the time goes into stops, most into the pause
 	a.lay([{"i": 0, "t0": 100.0, "t1": 100.0 + nat * 4.0}], acts, -INF)
-	_ok(absf((a._t1[0] - a._t0[0]) - float((a.steps[0] as Dictionary)["natural"])) < 1e-3, "given more, a move is no slower (it stops, never slows)")
-	_ok((a._t1[1] - a._t0[1]) > float((a.steps[1] as Dictionary)["natural"]) * 2.0, "...and a pause takes up the time: %.1f" % (a._t1[1] - a._t0[1]))
+	_ok((a._t1[1] - a._t0[1]) > float((a.steps[1] as Dictionary)["natural"]) * 2.0, "given more, a pause takes up the time: %.1f" % (a._t1[1] - a._t0[1]))
 	_ok(a._t1[2] <= 100.0 + nat * 4.0 + 1e-3, "...and it is done by the end of its time")
-	# GIVEN TOO LITTLE: hurried to its floor, and no further
+	# ...WITH THE RECORD'S OWN STOPS IN IT, as many as it wrote and where
+	a.take_record(0, {"t0": 0.0, "t1": 4.0, "stops": [[0.0, 2.0, 0.0, 1.0], [2.5, 3.0, 0.0, 2.0], [4.0, 1.0, 0.0, 1.0]],
+		"hand": {"id": 7, "from": 1.0, "to": 3.5, "knots": [[1.0, 0.0], [1.5, 0.2], [2.2, 1.0], [2.6, 1.0], [3.5, 0.0]]}})
+	a.lay([{"i": 0, "t0": 100.0, "t1": 100.0 + nat * 4.0}], acts, -INF)
+	var rates := {}
+	var moved := 0.0
+	var t := a._t0[0]
+	var last := a.tau_at(t)
+	while t + 0.05 < a._t1[0]:
+		t += 0.05
+		var now := a.tau_at(t)
+		var rate := (now - last) / 0.05
+		_ok(rate > -1e-3 and rate < 1.0 + 1e-3, "the record runs or stands: %.3f at %.2f" % [rate, t])
+		rates[int(round(rate))] = true
+		moved += now - last
+		last = now
+	_ok(rates.has(0) and rates.has(1), "it does both: %s" % str(rates.keys()))
+	_ok(absf(moved - 4.0) < 0.1, "and all of it is played: %.2f of 4" % moved)
+	# ...WHAT IS IN HAND IS SAID TO BE, from the grip until it leaves, the record going or stopped
+	var d0 := float((a._stop_d[0] as PackedFloat32Array)[0])
+	var d1 := float((a._stop_d[0] as PackedFloat32Array)[1])
+	var in_stop := a._t0[0] + d0 + 2.5 + d1 * 0.5
+	var mid_stop := a.held_at(in_stop)
+	_ok(int(mid_stop.get("id", -1)) == 7, "what is in hand through a stop is known: %s" % str(mid_stop))
+	_ok(a.held_at(a._t0[0] + 0.1).is_empty(), "control: and in a stop with nothing in hand, nothing is")
+	_ok(int(a.held_at(a._t0[0] + d0 + 1.8).get("id", -1)) == 7, "and while the record moves it, it is in hand too")
+	_ok(a.held_at(a._t0[0] + d0 + d1 + 3.6).is_empty(), "and once it has left the hand, it is not")
+	var a_little := a.held_at(in_stop + 0.1)
+	_ok(absf(float(a_little["h"]) - float(mid_stop["h"]) - 0.1) < 1e-3 and absf(float(mid_stop["left"]) - float(a_little["left"]) - 0.1) < 1e-3, "its time in hand runs on through a stop, where the record stands still")
+	_ok(absf(float(mid_stop["h"]) + float(mid_stop["left"]) - (2.5 + d1)) < 1e-3, "and it is in hand for its moves and the whole of the stop: %.2f" % (float(mid_stop["h"]) + float(mid_stop["left"])))
+	_ok(float(mid_stop["room"]) >= 1.0 and float(a.held_at(a._t0[0] + d0 + 1.2)["room"]) < 0.2, "it has room in the air and little near where it was picked up")
+	var free_at := float(mid_stop["free"])
+	_ok(absf(free_at - (0.3 + d1 * 0.5)) < 1e-2, "its fingers have had all of the stop so far, and the moves while it was free: %.2f" % free_at)
+	_ok(absf(float(a_little["free"]) - free_at - 0.1) < 1e-3, "...and they go on having it")
+	var leaving := a.held_at(a._t0[0] + d0 + d1 + 3.0)
+	_ok(absf(float(leaving["free"]) - (0.4 + d1)) < 1e-2, "control: as room runs out their clock stops, so what they have done is undone along one path: %.2f" % float(leaving["free"]))
+	# ...A HAND KEPT WAITING OVER THE MODEL DRAWS BACK, and only that
+	var waits := _make()
+	waits.perform([{"name": "n", "ops": ops}])
+	waits.take_record(0, {"t0": 0.0, "t1": 2.0, "stops": [[1.0, 8.0, 0.0, 1.0]],
+		"hand": {"id": 3, "from": 0.5, "to": 1.8, "knots": [[0.5, 0.0], [1.0, Fingers.ROOM_HOVER], [1.2, 0.0], [1.8, 0.0]]}})
+	waits.lay([{"i": 0, "t0": 100.0, "t1": 100.0 + nat * 4.0}], acts, -INF)
+	var long_stop := float((waits._stop_d[0] as PackedFloat32Array)[0])
+	var over := waits.held_at(waits._t0[0] + 1.0 + long_stop * 0.5)
+	_ok(float(over["back"]) >= 0.999 and float(over["room"]) >= 0.999, "kept waiting over a place, it is drawn back and has room: %s" % str(over))
+	_ok(float(over["free"]) > 0.0, "...and its fingers use it")
+	_ok(float(waits.held_at(waits._t0[0] + 1.0 + long_stop + 0.1)["back"]) == 0.0, "control: and it comes back before it goes on")
+	var pressed := _make()
+	pressed.perform([{"name": "n", "ops": ops}])
+	pressed.take_record(0, {"t0": 0.0, "t1": 2.0, "stops": [[1.0, 8.0, 0.0, 1.0]],
+		"hand": {"id": 3, "from": 0.5, "to": 1.8, "knots": [[0.5, 0.0], [1.0, 0.0], [1.2, 0.0], [1.8, 0.0]]}})
+	pressed.lay([{"i": 0, "t0": 100.0, "t1": 100.0 + nat * 4.0}], acts, -INF)
+	var on_studs := pressed.held_at(pressed._t0[0] + 1.0 + float((pressed._stop_d[0] as PackedFloat32Array)[0]) * 0.5)
+	_ok(float(on_studs["back"]) == 0.0 and float(on_studs["room"]) == 0.0, "control: pressed home it does not draw back")
+	_ok(is_nan(a.tau_at(a._t0[1] + 0.01 if a._t0[1] != INF else 0.0)) or a.step_at(a._t0[1] + 0.01) == 0, "a step the record does not hold has no place on it")
+	# GIVEN TOO LITTLE: it takes what its moves take, and no less
+	a = _make()
+	a.perform([{"name": "n", "ops": ops}])
 	a.lay([{"i": 0, "t0": 100.0, "t1": 100.5}], acts, -INF)
 	_ok(absf((a._t1[2] - a._t0[0]) - flo) < 1e-3, "given too little, it takes its floor and overruns: %.2f, %.2f" % [a._t1[2] - a._t0[0], flo])
 	# WHAT HAS BEGUN STAYS WHERE IT IS: a live reading places acts again every sentence, and a piece in the air must not jump
@@ -257,10 +308,8 @@ func _time() -> bool:
 	var began := a._t0[0]
 	var ended := a._t1[0]
 	var mid := began + (ended - began) * 0.5
-	var was := a.pose_of(int(((a.steps[0] as Dictionary)["moves"] as Array)[0]["id"]), mid)
 	a.lay([{"i": 0, "t0": 100.0, "t1": 100.0 + nat * 3.0}], acts, mid)
 	_ok(a._t0[0] == began and a._t1[0] == ended, "a step begun is not laid again")
-	_ok(a.pose_of(int(((a.steps[0] as Dictionary)["moves"] as Array)[0]["id"]), mid).is_equal_approx(was), "and the piece in the air is where it was")
 	_ok(a._t0[2] > began + nat * 1.5, "...and what has not begun takes the new time")
 	return true
 
@@ -292,61 +341,6 @@ func _scrub() -> bool:
 			var one := a.pose_of(int(id), float(t))
 			a.pose_of(int(id), float(t) + 3.0)
 			_ok(a.pose_of(int(id), float(t)).is_equal_approx(one), "a piece at %.1f is where it was asked to be the first time" % float(t))
-	# a piece never jumps: nowhere in a whole build does a piece move further in a frame than a hand can
-	var worst := 0.0
-	var dt := 1.0 / 30.0
-	var t := 10.0
-	var last := {}
-	while t < 200.0:
-		var k := a.step_at(t)
-		if k >= 0:
-			for mv in (a.steps[k] as Dictionary)["moves"]:
-				var id := int((mv as Dictionary)["id"])
-				var p := a.pose_of(id, t, k).origin
-				if last.has(id):
-					worst = maxf(worst, (p - (last[id] as Vector3)).length())
-				last[id] = p
-		t += dt
-	_ok(worst < 0.12, "nothing jumps in a frame: the most any piece moved was %.3f m" % worst)
-	# ...AND NOTHING FLIES (a piece's lift had counted it rising out of its own heap, and every carry went out of the top of the frame)
-	var high := 0.0
-	var t2 := 10.0
-	while t2 < 200.0:
-		var k2 := a.step_at(t2)
-		if k2 >= 0:
-			for mv in (a.steps[k2] as Dictionary)["moves"]:
-				high = maxf(high, a.pose_of(int((mv as Dictionary)["id"]), t2, k2).origin.y)
-		t2 += 0.1
-	_ok(high < 0.2, "a piece goes no higher than a hand lifts it: %.3f m" % high)
-	return true
-
-
-func _sounds() -> bool:
-	var a := _make(120)
-	a.perform([{"name": "n", "ops": [
-		{"do": "dig", "in": "left", "seconds": 6.0},
-		{"do": "put", "part": "brick 2x4 red", "at": [0, 0]},
-	]}])
-	a.lay([{"i": 0, "t0": 10.0, "t1": 10.0 + a.natural_of("n")}], [{"name": "n"}], -INF)
-	var all := a.sounds_in(0.0, 1000.0)
-	var kinds := {}
-	for e in all:
-		kinds[String((e as Dictionary)["kind"])] = true
-	_ok(kinds.has("knock"), "a dig is heard as knocks: %s" % str(kinds.keys()))
-	_ok(kinds.has("click"), "a piece pressed home is heard as a click")
-	# the same moments however it is cut into frames
-	var cut: Array = []
-	var t := 0.0
-	while t < 200.0:
-		cut.append_array(a.sounds_in(t, t + 0.0116))
-		t += 0.0116
-	_ok(cut.size() == all.size(), "cut into frames it says the same: %d, %d" % [cut.size(), all.size()])
-	# a click lands as the piece does
-	for s in all:
-		if String((s as Dictionary)["kind"]) == "click":
-			var snd: Dictionary = ((a.steps[1] as Dictionary)["sounds"] as Array).filter(func(q: Dictionary) -> bool: return String(q["kind"]) == "click")[0]
-			var seated: float = a._t0[1] + float(snd["u"]) * (a._t1[1] - a._t0[1])
-			_ok(absf(float((s as Dictionary)["t"]) - seated) < 0.02, "the click is at the press's end")
 	return true
 
 
@@ -399,27 +393,11 @@ func _start_over() -> bool:
 	_ok((a.problems["n"] as Array).is_empty(), "built, wrecked and built again: %s" % str(a.problems))
 	_ok(a._placed.size() == 1, "after it only the new piece stands: %d" % a._placed.size())
 	var wrecks := 0
-	var falls := 0
-	var clatter := 0
 	for st in a.steps:
 		if String((st as Dictionary)["do"]) == "wreck":
 			wrecks += 1
-			for mv in (st as Dictionary)["moves"]:
-				for s in (mv as Dictionary)["segs"]:
-					if (s as Dictionary).has("fall"):
-						falls += 1
-			for s in (st as Dictionary)["sounds"]:
-				if String((s as Dictionary)["kind"]) == "clack":
-					clatter += 1
+			_ok(not ((st as Dictionary)["slots"] as Array).is_empty(), "each chunk says what comes off")
 	_ok(wrecks >= 2, "it comes down in chunks: %d" % wrecks)
-	_ok(falls > 3 and clatter == falls, "each piece falls and is heard to land: %d falls, %d clacks" % [falls, clatter])
-	# what came down from the top of the wall came off first
-	var first_high := -1
-	for st in a.steps:
-		if String((st as Dictionary)["do"]) == "wreck":
-			first_high = 1
-			break
-	_ok(first_high == 1, "(the wreck ran)")
 	# the piece reused is one of what came down: no new one was added for it
 	var used_again := false
 	for q in a.pieces:
@@ -432,7 +410,9 @@ func _start_over() -> bool:
 
 ## A SILENCE ([CardReading]): it is a rest in what the voice reads, kept with Hesitate off, and it does not stop a cue inside it.
 func _reading() -> bool:
-	var body := "<!-- table: begin -->\n\nWords before it. <!-- act: first --> <!-- quiet: 40 --> <!-- act: second --> <!-- quiet: 20 --> And words after.\n\n<!-- table: work 1 -->\n\nMore words here. <!-- quiet: 30 -->\n\n<!-- table: spread -->\n\nThe end.\n"
+	var talk := _talk()
+	var n := CardReading.OPEN_WORDS
+	var body := "<!-- table: begin -->\n\n" + talk + " Words before it. <!-- act: first --> <!-- quiet: 40 --> <!-- act: second --> <!-- quiet: 20 --> And words after.\n\n<!-- table: work 1 -->\n\nMore words here. <!-- quiet: 30 -->\n\n<!-- table: spread -->\n\nThe end.\n"
 	var p := CardReading.parse(body)
 	var speak := String(p["speakable"])
 	_ok(speak.contains("action-hold: 40"), "a silence is a rest the voice takes: %s" % speak)
@@ -444,18 +424,25 @@ func _reading() -> bool:
 	_ok(cues.size() == 2, "two cues: %s" % str(cues))
 	_ok(float((cues[0] as Dictionary).get("quiet", -1.0)) == 0.0, "a cue at a silence's start is timed from the word before: %s" % str(cues[0]))
 	_ok(float((cues[1] as Dictionary).get("quiet", -1.0)) == 40.0, "a cue inside it, as far in as is written: %s" % str(cues[1]))
-	_ok(int((cues[0] as Dictionary)["si"]) == 3, "its word is the one after the silence: %s" % str(cues[0]))
+	_ok(int((cues[0] as Dictionary)["si"]) == n + 3, "its word is the one after the silence: %s" % str(cues[0]))
 	var actions: Array = p["actions"]
 	var work: Dictionary = actions[1]
 	_ok(float(work.get("tail", 0.0)) == 30.0, "a passage's last silence is its own: %s" % str(work))
 	_ok(float((actions[0] as Dictionary).get("tail", 0.0)) == 0.0, "control: words after its silence, a passage has no tail")
-	var opens := CardReading.parse("<!-- table: begin -->\n\n<!-- quiet: 25 --> Words <!-- quiet: 5 --> after.\n")
-	_ok(float(((opens["actions"] as Array)[0] as Dictionary).get("lead", 0.0)) == 25.0, "a passage's opening silence is known, and only that one: %s" % str(opens["actions"]))
+	var opens := CardReading.parse("<!-- table: begin -->\n\n" + talk + "\n\n<!-- table: work 1 -->\n\n<!-- quiet: 25 --> Words <!-- quiet: 5 --> after.\n")
+	var opening: Dictionary = (opens["actions"] as Array)[1]
+	_ok(float(opening.get("lead", 0.0)) == 25.0, "a later passage's opening silence is known, and only that one: %s" % str(opening))
 	var follow := ReadingFollower.new()
 	follow.reset(opens["spoken"])
-	follow.extend([{"text": "Words", "t0": 30.0, "t1": 30.4, "sentence": 0}, {"text": "after.", "t0": 36.0, "t1": 36.4, "sentence": 0}])
+	var timed: Array = []
+	for i in n:
+		timed.append({"text": (opens["spoken"] as PackedStringArray)[i], "t0": float(i) * 0.4, "t1": float(i) * 0.4 + 0.3, "sentence": 0})
+	var said_at := float(n) * 0.4 + 25.0
+	timed.append({"text": "Words", "t0": said_at, "t1": said_at + 0.4, "sentence": 1})
+	timed.append({"text": "after.", "t0": said_at + 6.0, "t1": said_at + 6.4, "sentence": 1})
+	follow.extend(timed)
 	var placed: Array = follow.place(opens["actions"], 1.0, 0.25, 0.2)
-	_ok(float((placed[0] as Dictionary)["t0"]) < 6.0, "a beat that opens in silence begins before it, never after: %.1f" % float((placed[0] as Dictionary)["t0"]))
+	_ok(float((placed[1] as Dictionary)["t0"]) < said_at - 20.0, "a beat that opens in silence begins before it, never after: %.1f, its word at %.1f" % [float((placed[1] as Dictionary)["t0"]), said_at])
 	# a cue at a word is untouched
 	var plain := CardReading.parse("<!-- table: begin -->\n\nSome <!-- act: here --> words.\n")
 	_ok(not ((plain["cues"] as Array)[0] as Dictionary).has("quiet"), "control: a cue at a word has no silence")
@@ -464,14 +451,44 @@ func _reading() -> bool:
 	_ok(kept.contains("<!-- quiet: 30 -->"), "a reader's silence is kept: %s" % kept)
 	# ...A LIVE READING ESTIMATES WHAT IT HAS NOT HEARD WITH ITS SILENCES IN IT: without them, the work under one was hurried
 	var plan := TablePlan.new()
-	plan.parse = CardReading.parse("<!-- table: begin -->\n\nOne two. <!-- quiet: 60 --> Three four.\n")
-	var est := plan.estimated_times(4)
-	_ok(est[2] - est[1] >= 60.0, "an estimate of a reading has its silences in it: %s" % str(est))
-	_ok(est[1] - est[0] < 1.0, "control: and only where they are")
-	var capped := CardReading.parse("<!-- table: begin -->\n\nWord. <!-- quiet: 9000 --> <!-- act: x --> Word.\n")
+	plan.parse = CardReading.parse("<!-- table: begin -->\n\n" + talk + " One two. <!-- quiet: 60 --> Three four.\n")
+	var est := plan.estimated_times(n + 4)
+	_ok(est[n + 2] - est[n + 1] >= 60.0, "an estimate of a reading has its silences in it: %s" % str(est.slice(n)))
+	_ok(est[n + 1] - est[n] < 1.0, "control: and only where they are")
+	var capped := CardReading.parse("<!-- table: begin -->\n\n" + talk + " Word. <!-- quiet: 9000 --> <!-- act: x --> Word.\n")
 	_ok(float(((capped["cues"] as Array)[0] as Dictionary)["quiet"]) == CardReading.QUIET_MOST, "a cue in a silence is as far in as the silence is long, and no further: %s" % str(capped["cues"]))
-	var long := CardReading.parse("<!-- table: begin -->\n\nWord. <!-- quiet: 9000 --> Word.\n")
+	var long := CardReading.parse("<!-- table: begin -->\n\n" + talk + " Word. <!-- quiet: 9000 --> Word.\n")
 	_ok(String(long["speakable"]).contains("action-hold: %s" % String.num(CardReading.QUIET_MOST, 2)), "control: a silence is held to the most")
+	return true
+
+
+## As many words as an episode opens with before any silence ([method CardReading.opens_talking]).
+static func _talk() -> String:
+	var words := PackedStringArray()
+	for i in CardReading.OPEN_WORDS:
+		words.append("word%d" % i)
+	return " ".join(words) + "."
+
+
+## AN EPISODE OPENS TALKING (the user, 2026-11-03: "a solid 45 seconds of silence at the beginning ... feels wrong"): whatever its reader wrote.
+func _opens_talking() -> bool:
+	# that very episode's opening, as its reader wrote it
+	var wrote := "<!-- table: begin -->\n\n<!-- act: first-stir --> <!-- quiet: 43 -->\nSupper's not for a while, so. No hurry on anything.\n\nI carried boxes all day and my arms are still kind of carrying them. They just hang there, waiting for the next one.\n\n<!-- quiet: 6 -->\n\nYou don't have to watch this, by the way. Have your own thing going, I won't know.\n\nGray. Sure, why not.\n\n<!-- act: second-gray --> <!-- quiet: 31 -->\nThere was this tower on the drive up. An old fire lookout, I think, way up on long legs, with a little room on top and nothing around it but trees for about an hour in any direction. I almost pulled over, and I didn't.\n\nAnd I keep thinking, somebody sat up in that room.\n\n<!-- table: work 1 -->\n\nSo that's a tower, I guess. <!-- quiet: 37 --> Two bricks of tower.\n"
+	var p := CardReading.parse(wrote)
+	var quiets: Array = p["quiets"]
+	_ok(not quiets.is_empty(), "the silence is kept: %s" % str(quiets))
+	var first: Dictionary = quiets[0]
+	_ok(int(first["si"]) >= CardReading.OPEN_WORDS, "the first silence comes after the talking has begun: at word %d" % int(first["si"]))
+	_ok(float(first["s"]) <= CardReading.OPEN_HELD, "and is no longer than it may be: %.0f s" % float(first["s"]))
+	_ok(CardReading.opens_talking(wrote).contains("and I didn't.\n\n<!-- quiet: 30 -->"), "it falls at the end of a thought, never in one: %s" % CardReading.opens_talking(wrote).substr(300, 200))
+	var cues: Array = p["cues"]
+	_ok(String((cues[0] as Dictionary)["name"]) == "first-stir" and int((cues[0] as Dictionary)["si"]) == 0, "the hands are at work from the first word: %s" % str(cues[0]))
+	_ok(String(p["speakable"]).contains("action-hold: 37"), "a silence later in the show is left where it is")
+	# ...a breath stays; a show with nothing to move is what it was
+	var breath := "<!-- table: begin -->\n\nOne. <!-- quiet: 2 --> Two.\n"
+	_ok(CardReading.opens_talking(breath) == breath, "control: a breath stays")
+	var none := "<!-- table: begin -->\n\nOne. Two.\n\n<!-- table: work 1 -->\n\n<!-- quiet: 20 --> Three.\n"
+	_ok(CardReading.opens_talking(none) == none, "control: a later passage's silence is none of its business, however short the first")
 	return true
 
 
@@ -522,32 +539,6 @@ func _whole_episode() -> bool:
 	print("assembly_check: every piece posed once, as after a scrub, in %.1f ms" % (float(Time.get_ticks_usec() - c1) / 1e3))
 	var yaw_end := a.yaw_at(t + 1.0, a.steps.size() - 1)
 	_ok(absf(yaw_end - deg_to_rad(30.0 * 40.0)) < 1e-3, "the plate's last turn is all of its turns: %.2f" % yaw_end)
-	return true
-
-
-## A STEP LEAVES EVERY PIECE WHERE ITS NEXT REST SAYS: a piece moved twice in one step (dug aside, then aside again, off what is looked for)
-## had its second move laid past the step's end, held at its first place and snapped to its second as the step ended.
-func _no_snaps() -> bool:
-	var worst := 0.0
-	var at := ""
-	for s in 8:
-		var a := _make(300)
-		a.seed_value = 100 + s
-		a.perform([{"name": "n", "ops": [
-			{"do": "dig", "in": "left", "for": "brick 2x4 red", "seconds": 6.0},
-			{"do": "put", "part": "brick 2x4 red", "at": [0, 0], "from": "left"},
-			{"do": "dig", "in": "left", "for": "plate 2x2 tan", "seconds": 4.0},
-			{"do": "try", "part": "plate 2x2 tan", "at": [4, 4], "from": "left"},
-			{"do": "dig", "in": "left", "seconds": 9.0}]}])
-		a.lay([{"i": 0, "t0": 10.0, "t1": 10.0 + a.natural_of("n")}], [{"name": "n"}], -INF)
-		for k in a.steps.size():
-			for mv in (a.steps[k] as Dictionary)["moves"]:
-				var id := int((mv as Dictionary)["id"])
-				var d := a.pose_of(id, a._t1[k] - 0.001).origin.distance_to(a.pose_of(id, a._t1[k] + 0.001).origin)
-				if d > worst:
-					worst = d
-					at = "%s, step %d, seed %d" % [String((a.steps[k] as Dictionary)["do"]), k, 100 + s]
-	_ok(worst < 0.005, "no piece snaps to its place as a step ends: the most was %.3f m (%s)" % [worst, at])
 	return true
 
 

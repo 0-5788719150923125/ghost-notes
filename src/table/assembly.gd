@@ -1,30 +1,33 @@
 extends RefCounted
 class_name Assembly
 
-## Assembly - A THING BUILT OF MANY SMALL PARTS, on a lattice (next/assembly.md): bricks on studs, from what the agents write. The
-## user, 2026-11-02, of the first brick show: "the goal is to slowly build something from nothing ... we might pull a brick, try to
-## fit it, put it back, try a different one. We might build some structure, then destroy it and start over" - hundreds of pieces,
-## each picked up, most of them more than once, over an hour.
+## Assembly - A THING BUILT OF MANY SMALL PARTS, on a lattice (next/assembly.md): bricks on studs, from what the agents write. The user,
+## 2026-11-02, of the first brick show: "the goal is to slowly build something from nothing ... we might pull a brick, try to fit it, put
+## it back, try a different one. We might build some structure, then destroy it and start over" - hundreds of pieces, over an hour.
 ##
-## A LOG, NEVER A BAKE. What a heap and a model look like after a step does not depend on when the step happens, so [method perform]
-## walks the steps once, in order, and keeps for every piece each place it comes to rest and each move that took it there. Time is
-## laid over that afterwards ([method lay]) and can be laid again every sentence of a live reading without anything being worked out
-## again: only what has not begun moves, a scrub lands exactly where the same step left it, and a render and a preview agree. A
-## part's pose is a lookup ([method pose_of]). A frame costs what changes (next/framework_audit.md's rule 5): the one piece in hand.
+## THIS IS THE PLAN AND THE CLOCK, NEVER THE MOTION. It walks the steps once ([method perform]) for what can be said without touching a
+## brick: what fits where, what could not be done, what each act comes to in words, how many of each part a stock must hold. What the
+## pieces then do is real: [AssemblyBake] runs every step on real bodies in a second process ([AssemblyWorld]) and writes it down
+## ([AssemblyTrack]). The first version of this file moved each piece along a planned path and let it drop on a curve, and the user,
+## 2026-11-03, on watching it: "bricks gently floating around in the air ... It's fake." Nothing here says where a piece is going any more.
 ##
-## NOT THE PHYSICS ([TablePhysics]): next to a heap of a thousand, a body per piece would be a thousand surface fields and a solver
-## held apart by interlocking studs. The lattice answers exactly what the solver would answer roughly - a cell is taken or it is not,
-## a stud holds or it does not - and what it refuses, it refuses in words ([method fit]).
+## A LATTICE, FOR WHAT IS BUILT: a cell is taken or it is not, a stud holds or it does not, and what it refuses it refuses in words ([method
+## fit]). Pressed home, a piece is part of the model: a solver has nothing to add to that, and would only make it tremble.
 ##
-## THE AGENT SAYS WHAT, THE HAND FINDS WHERE: a step names a part and a stud; which of the pieces in the tub it is, what has to be
-## moved to get at it, how high it goes, how far it rises to clear what is in its way are found here. There is always a piece of the
-## part asked for: what the steps need is added to the stock before anything lands ([method perform]'s dry pass).
+## THE AGENT SAYS WHAT, THE HAND FINDS WHERE: a step names a part and a stud; which of the pieces in the tub it is, what is in the way of it,
+## how high it goes and how far it rises are found when it happens. There is always a piece of the part asked for: what the steps need is
+## added to the stock before anything lands ([method perform]'s dry pass).
 ##
-## SLOW, BECAUSE BUILDING IS (the user: "building a model from LEGO is probably not fast ... we might stop, we might consider what to
-## do next"): a step has a NATURAL time and a FLOOR it can be hurried to ([constant OPS]), and only a run of the same piece goes at a
-## clip. A stretch with more time than its steps need is not played slow: the moves keep a hand's pace and the time left over falls
-## between them, where a person stops to look ([method lay]). A reader writes no times: its words and silences say how long a stretch
-## is, and the work fits itself under them.
+## SLOW BY STOPPING, NEVER BY SLOWING ([method lay]; the user: "building a model from LEGO is probably not fast ... we might stop, we might
+## consider what to do next"): the record runs at a hand's pace on its own clock and has stops in it, and a reader's words and silences say how
+## long a stretch is. More time than a step needs goes into its stops. A fall always takes the time a fall takes.
+##
+## WHAT IS BUILT IS DESIGNED FIRST ([AssemblyModel]; the user: "I just want to have a proper model built by the end of every video"): a table's `model` is every part in the order it goes on, and the steps
+## say how someone gets there - how much at a time, what goes wrong, what comes off again. What comes off is owed again, whatever took it off. A hand that leaves anything undone has it done
+## before its last act ([constant OPS] `finish`, [method with_finish]), so the last thing on the table is always the whole of it.
+##
+## A PREVIEW NEEDS NO BODIES: a puppeteer's `act` and `model`, and the set dresser's table, see where things rest by this walk alone ([method
+## pose_of]), so an act answers in a moment.
 
 ## THE LATTICE (meters): a stud's pitch, a plate's height, how high a stud stands, and how thick the baseplate is.
 const STUD := 0.008
@@ -51,10 +54,10 @@ const KINDS := {
 ## THE STEPS OF A BUILD, each what the hands do: `natural` seconds at an easy pace, `floor` hurried, its words an agent's.
 const OPS := {
 	"dig": {"label": "Dig", "natural": 7.0, "floor": 3.0,
-		"blurb": "the hands go into a heap and stir, moving what is on top aside, seen and heard. It is half of what a person does at a tub, and it is worth its time",
-		"fields": [["in", "the stock's name (left out: where the next piece comes from)"], ["for", "a part it is looking for, which then lies on top for the next step that asks for it (left out: only looking)"],
+		"blurb": "the hands really go into a heap: fingers dragged through it, a handful flipped over and falling back with a clatter, the top of it pushed aside, with stops to look at what that turned up. It is half of what a person does at a tub, it is heard, and it is worth its time",
+		"fields": [["in", "the stock's name (left out: where the next piece comes from)"], ["for", "a part it is looking for, which it digs nearer as it goes on (left out: only looking)"],
 			["seconds", "how long (left out: 7)"]]},
-	"put": {"label": "Put", "natural": 11.0, "floor": 5.0, "brisk": [5.0, 3.2],
+	"put": {"label": "Put", "natural": 11.0, "floor": 5.0, "brisk": [5.0, 3.2], "model": "none",
 		"blurb": "a piece found in the stock, brought over, lined up over its place, lowered and pressed home with a click",
 		"fields": [["part", "what it is: \"brick 2x4 red\""], ["at", "[x, z] the stud its far left corner goes on, and it comes down on whatever is there; [x, z, level] to say how high (level 0 is on the plate, in plates: a brick is 3 tall), which is how a part hangs under another"],
 			["turn", "0, 90, 180 or 270 degrees about up: 0 keeps its front (a slope's low side) toward the reader, 90 to the reader's right. A size runs across, deep: \"2x4\" at 0 is 2 wide and 4 deep, at 90 is 4 wide and 2 deep"],
@@ -75,47 +78,40 @@ const OPS := {
 		"blurb": "a piece pulled off the model and put away; what only it held up comes away with it in one chunk",
 		"fields": [["at", "[x, z] the highest piece over that stud, or [x, z, level] the piece at that height"], ["to", "the stock it goes into, or \"aside\" (left out: where it came from)"]]},
 	"wreck": {"label": "Wreck", "natural": 6.0, "floor": 3.0,
-		"blurb": "a stretch of the model pulled apart from the top down, chunk by chunk, each chunk dropped into a stock with a clatter. Six seconds a chunk at an easy pace. Written with nothing else it takes the whole model and the plate is empty again",
+		"blurb": "a stretch of the model pulled apart from the top down, chunk by chunk, each chunk let fall into a stock where it comes apart with a clatter. Six seconds a chunk at an easy pace. Written with nothing else it takes the whole model and the plate is empty again",
 		"fields": [["from", "[x, z] one corner of what comes down (left out: all of it)"], ["to", "[x, z] the other corner"], ["above", "the level it comes down to: what stands below it stays (left out: all the way)"],
 			["into", "the stock it goes into (left out: the biggest)"]]},
 	"turn": {"label": "Turn", "natural": 7.0, "floor": 4.0,
 		"blurb": "the whole plate turned on the table, to see another side of it. Studs keep their numbers: x and z are the plate's own, however it is turned",
 		"fields": [["by", "degrees (left out: 90)"]]},
-	"wall": {"label": "Wall", "natural": 5.0, "floor": 3.2,
+	"build": {"label": "Build", "natural": 5.0, "floor": 3.2, "model": "only",
+		"blurb": "the next parts of the model go on, in the order a hand would lay them: each found in the stock, brought over and pressed home, the hands in a rhythm with a hesitation here and there. About five seconds a piece. Anything that came off is laid again first",
+		"fields": [["parts", "how many, or \"rest\" for all that are left of what it is working on (left out: 10)"], ["section", "one of the model's sections to work on (left out: whatever comes next)"], ["pace", "\"easy\": about eleven seconds a piece, each considered (left out: the rhythm)"], ["from", "the stock they come from (left out: the one with most of their color)"]]},
+	"wrong": {"label": "Wrong", "natural": 9.0, "floor": 5.0, "model": "only",
+		"blurb": "the next parts go on wrong, in plain view: a stud off, turned the wrong way, or the wrong color, and they stay until they are noticed. `undo` takes them off; failing that, each comes off as soon as its proper place is wanted",
+		"fields": [["parts", "how many (left out: 1)"]]},
+	"undo": {"label": "Undo", "natural": 7.0, "floor": 3.0, "model": "only",
+		"blurb": "what went on last comes off again, the newest first, back into the stock: a mistake put right, or a stretch that was not good enough and will be done again. Whatever comes off is owed: the next `build` lays it first",
+		"fields": [["parts", "how many of the last to go on (left out: whatever is on it wrongly)"]]},
+	"finish": {"label": "Finish", "natural": 5.0, "floor": 3.2, "model": "unsaid", "blurb": "whatever of the model does not yet stand is built, and whatever is on it wrongly comes off", "fields": []},
+	"wall": {"label": "Wall", "natural": 5.0, "floor": 3.2, "model": "none",
 		"blurb": "a run of the same part along a straight line, course on course with its joints staggered, the hands in a rhythm: the shorter sizes of the same part close the ends. A long wall is many pieces and takes its time, at about five seconds each",
 		"fields": [["part", "the longest piece of it: \"brick 2x4 tan\""], ["from", "[x, z] the first stud of the line"], ["to", "[x, z] the last, straight along x or along z"], ["courses", "how many, one on another (left out: 1)"], ["level", "how high the first goes (left out: on what is there)"],
 			["stock", "the stock its pieces come from"]]},
-	"fill": {"label": "Fill", "natural": 5.0, "floor": 3.2,
+	"fill": {"label": "Fill", "natural": 5.0, "floor": 3.2, "model": "none",
 		"blurb": "a rectangle covered with one part, its rows staggered, the hands in a rhythm: a floor, a roof, a yard. At about five seconds a piece",
 		"fields": [["part", "the largest piece of it: \"plate 2x4 gray\""], ["from", "[x, z] one corner"], ["to", "[x, z] the other"], ["level", "how high (left out: on what is there)"], ["stock", "the stock its pieces come from"]]},
 }
-## A piece's way to its place: how far over it it is held, how far over its studs the press begins, how far over what is in its way
-## a piece goes (all meters), how high it lifts at most, what is ignored as too tall to go over, how many places along its way are
-## looked at, and how far above a stock a chunk is let fall from.
-const HOVER := 0.024
-const PRESS_FROM := 0.0018
-const CLEAR_OVER := 0.014
-const LIFT_MOST := 0.14
-const TALL := 0.22
-const WAY_LOOKS := 7
-const DROP_FROM := 0.05
+## How often a part of the model is hesitated over, and held up and looked at first, as they go on ([method _lay_part]).
+const HESITATES := 0.1
+const LOOKS_FIRST := 0.05
+## What those come to, on top of a part's own time.
+const BUILD_MORE := 1.08
 ## A plate's turn looked at for what it would swing into: this many places on the way, this many along each of its sides.
 const SWEEP_LOOKS := 8
 const SWEEP_EDGE := 8
-## The shares of a piece's time spent going for it (its hand on its way), and how far the time of a step varies by its seed.
-const REACH := 1.5
-const VARY := Vector2(0.8, 1.3)
-## A hand at its digging: pieces moved a second of it, the fewest and the most, how far they go (meters), and how far round the spot
-## it looks when looking for nothing.
-const DIG_MOVES := 1.4
-const DIG_LEAST := 4
-const DIG_MOST := 22
-const DIG_SPREAD := 0.06
-const DIG_NEAR := 0.07
-## The most pieces moved aside to get at one: a piece under more than this came up through them.
-const UNCOVER_MOST := 24
-## How late in a step a piece moved a second time may begin that move, a share of it: later, and the first move is cut short for it.
-const MOVED_AGAIN := 0.9
+## How far the time of a step varies by its seed.
+const VARY := Vector2(0.9, 1.2)
 ## A hand's limit on one chunk of what comes down, and how many pieces of what comes down it takes at once.
 const CHUNK := Vector2i(2, 7)
 ## The most steps an act writes (a `wall` or a `fill` is one, however many pieces), and a table's stock: places, colors, pieces
@@ -123,25 +119,30 @@ const CHUNK := Vector2i(2, 7)
 const MAX_OPS := 120
 const MAX_SOURCES := 8
 const MAX_COLORS := 24
-const MOST_IN_SOURCE := 700
+const MOST_IN_SOURCE := 800
 const MOST_PIECES := 1800
+## How much of a stock's mixed filling stays however much a model wants of it: a tub of only what is wanted is no tub to dig in.
+const FILLERS_LEAST := 0.2
 ## How big a baseplate may be, in studs; how big it is unless written.
 const BASE_SIZES := Vector2i(8, 48)
 const BASE_SIZE := 32
-## How many pieces it takes to cover a square meter of a heap, one deep (a mixed lot's mean footprint): how many a place is filled
-## with, when its count is left out, at how many deep.
+## How many pieces it takes to cover a square meter of a heap, one deep (a mixed lot's mean footprint): how many a pile on the table holds,
+## when its count is left out, at how many deep. And a container: how many a cubic meter of them comes to, lying as they fall - measured - and how
+## deep a full one is filled, over a false floor ([method TableAssembly._heap_of]): deep enough to be dug in.
 const PER_M2 := 1900.0
 const DEEP := 1.7
+const PER_M3 := 70000.0
+const IN_DEEP := 0.075
 ## How much commoner a lot's small sizes are than its big: the power its pick along a kind's sizes is drawn at.
-const LOT_SMALL := 2.3
+const LOT_SMALL := 3.2
 ## The default colors of a mixed lot, when a table names none (a share each).
 const COLORS := {"red": "#b3261e", "blue": "#1f4f9c", "yellow": "#e8b512", "white": "#ece8dc", "black": "#23252a", "gray": "#8b8d8f", "green": "#2a7a41", "tan": "#c9b185"}
 
 var spec := {}
 var seed_value := 0
-var world := {}                   # {base_at: Vector3, yaw: radians, heaps: {name: AssemblyHeap}, obstacles: [{box, name}], view: Vector3}
-var pieces: Array = []            # each {id, kind, w, d, color, rests: [[step, in_model, xf]]}
-var steps: Array = []             # each {act, do, natural, floor, moves: [...], sounds: [...], yaw: [a, b]}
+var world := {}                   # {base_at: Vector3, yaw: radians, heaps: {name: AssemblyHeap}, obstacles: [{box, name}], lens: Transform3D, fov: degrees}
+var pieces: Array = []            # each {id, kind, w, d, color, stock, rests: [[step, in_model, xf]]}
+var steps: Array = []             # each {act, do, natural, floor, and what [AssemblyBake] needs of it}
 var spans := {}                   # an act's name -> [first step, one past its last]
 var problems := {}                # an act's name -> what could not be done, in words
 var counts := {}                  # an act's name -> {put, try, ...}
@@ -155,18 +156,27 @@ var _need := {}                   # a stock -> [part, ...]: what the steps ask f
 var _fillers := {}                # a stock -> [part, ...]: what it holds to begin with
 var _by_key := {}                 # a stock -> {part's key: [ids]}
 var _home := {}                   # a piece -> the stock it last came out of
-var _left_at := {}                # a piece -> where on its heap it was taken from
-var _mtop := -INF                 # how high the model stands, -INF when it must be found again
 var _rng := RandomNumberGenerator.new()
 var _act := ""
-var _t0 := PackedFloat64Array()
+var _t0 := PackedFloat64Array()   # when in the show each step begins, INF until placed
 var _t1 := PackedFloat64Array()
+var _len := PackedFloat32Array()  # how many seconds of a step are moving
+var _stops: Array = []            # a step's stops: [[its offset, natural seconds, least, weight]...]
+var _stop_d: Array = []           # how long each of a step's stops lasts in the show
+var model := {}                   # what is being built ([AssemblyModel.make]): its parts in order, or {} where it was never designed
+var _part_index := {}             # where a part of the model goes -> which it is
+var _stand_of := {}               # a part of the model -> the piece standing as it
+var _part_of_piece := {}          # ...and back
+var _off_model := {}              # a piece on the plate that is no part of the model
+var _laid: Array = []             # what is on the plate, in the order it went on
+var _hand: Array = []             # what a step has in hand: {id, from, to, knots: [[its offset, room]...]} ([method AssemblyBake._in_hand]), or {}
+var _tau0 := PackedFloat32Array() # where a step begins on the record: NAN until it is there
 
 
 # --- the words -------------------------------------------------------------------------------------
 
 ## What can be done, as a puppeteer reads it: the kinds, the steps and their fields.
-static func describe() -> String:
+static func describe(with_model := false) -> String:
 	var lines := PackedStringArray()
 	lines.append("PARTS (a `part` is written \"<kind> <across>x<deep> <color>\": \"brick 2x4 red\", \"slope 2x3 gray\" - the colors are the table's):")
 	for k in KINDS:
@@ -179,9 +189,14 @@ static func describe() -> String:
 	lines.append("THE STEPS OF A BUILD (each {\"do\": its name, and its fields}), and about how long each takes at an easy pace:")
 	for k in OPS:
 		var row: Dictionary = OPS[k]
+		var goes := String(row.get("model", ""))
+		if goes == "unsaid" or (goes == "none" and with_model) or (goes == "only" and not with_model):
+			continue
 		lines.append("- %s (%d s): %s." % [k, roundi(float(row["natural"])), String(row["blurb"])])
 		for f in row["fields"]:
 			lines.append("    `%s`: %s" % [String(f[0]), String(f[1])])
+	if with_model:
+		lines.append("In `try` and `look`, leave out `at` and it is the place of the next part the model wants; leave out `part` and it is that part (in a `try`, a near miss for it: another size, or another color).")
 	return "\n".join(lines)
 
 
@@ -192,7 +207,7 @@ static func describe_stock() -> String:
 	lines.append("  \"colors\": {\"its name\": \"#rrggbb\", ...} - every color the pieces come in, up to %d, named as the work will name them;" % MAX_COLORS)
 	lines.append("  \"base\": {\"size\": [across, deep] studs, %d to %d (left out: %d), \"color\": a color's name, \"at\": [x, z] cm where its middle stands (left out: the middle of the picture), \"turn\": degrees} - what the build grows on;" % [BASE_SIZES.x, BASE_SIZES.y, BASE_SIZE])
 	lines.append("  \"stock\": [each place the pieces wait, up to %d - {\"name\": what the work calls it, and where it is: \"thing\": the name of a hollow thing you built, an open tub, box, crate or tray, and it is filled (\"fill\" 0-1, how full; left out: 0.85), or \"at\": [x, z] cm and \"radius\": cm, a loose pile on the table itself; \"count\": how many pieces at most (left out: as many as it takes), \"colors\": {a color's name: how common} (left out: all alike), \"kinds\": {a kind's name: how common} (left out: a mixed lot, as %s)}]" % [MAX_SOURCES, ", ".join(PackedStringArray(KINDS.keys()))])
-	lines.append("}. The pieces are drawn for you, as real as the things are: you never make a thing for a brick. A container must be really hollow, its inside wide and open (a thing with a `lathe` or walls of `box` parts, and no lid), and it stays where it stands. The plate turns: nothing stands where its corners swing, which the blueprint keeps clear. What is asked for later is added to the stock by itself, so a stock is a look and a feel: a mixed tub, a pile, a tray of one color.")
+	lines.append("}. Where the show has a model designed, its plate's size and color and its colors are already the model's and need not be written: say where the plate stands and where the pieces wait. The pieces are drawn for you, as real as the things are: you never make a thing for a brick. A container must be really hollow, its inside wide and open (a thing with a `lathe` or walls of `box` parts, and no lid), and it stays where it stands. What is dug in is half of what is watched: stand the stock it comes from so its open top is whole in the picture, near enough to see into, and if that leaves too little room for the plate, write a smaller plate. The plate turns: nothing stands where its corners swing, which the blueprint keeps clear. What is asked for later is added to the stock by itself, so a stock is a look and a feel: a mixed tub, a pile, a tray of one color.")
 	return "\n".join(lines)
 
 
@@ -205,6 +220,15 @@ static func sanitize(raw: Variant, notes: PackedStringArray = PackedStringArray(
 	var d: Dictionary = raw
 	var out := {"colors": {}, "stock": []}
 	var colors: Dictionary = d.get("colors") if d.get("colors") is Dictionary else COLORS
+	# ...A MODEL BRINGS ITS OWN COLORS AND ITS PLATE ([AssemblyModel]): the table's come after
+	var designed: Dictionary = d.get("model") if d.get("model") is Dictionary and not (d.get("model") as Dictionary).is_empty() else {}
+	if not designed.is_empty():
+		var both: Dictionary = (designed["colors"] as Dictionary).duplicate()
+		for k in colors:
+			if not both.has(String(k).strip_edges().to_lower()):
+				both[k] = colors[k]
+		colors = both
+		out["model"] = designed
 	for k in colors:
 		if (out["colors"] as Dictionary).size() >= MAX_COLORS:
 			notes.append("more than %d colors: the rest left out" % MAX_COLORS)
@@ -218,7 +242,10 @@ static func sanitize(raw: Variant, notes: PackedStringArray = PackedStringArray(
 	if (out["colors"] as Dictionary).is_empty():
 		out["colors"] = COLORS.duplicate()
 	var names: Array = (out["colors"] as Dictionary).keys()
-	var base: Dictionary = d.get("base") if d.get("base") is Dictionary else {}
+	var base: Dictionary = (d.get("base") as Dictionary).duplicate() if d.get("base") is Dictionary else {}
+	if not designed.is_empty():
+		base["size"] = designed["size"]
+		base["color"] = designed["base_color"]
 	var size: Array = base.get("size") if base.get("size") is Array and (base.get("size") as Array).size() == 2 else [BASE_SIZE, BASE_SIZE]
 	var b := {"size": [clampi(int(_num(size[0], BASE_SIZE)), BASE_SIZES.x, BASE_SIZES.y), clampi(int(_num(size[1], BASE_SIZE)), BASE_SIZES.x, BASE_SIZES.y)],
 		"turn": _num(base.get("turn"), 0.0)}
@@ -376,8 +403,72 @@ static func timing(ops: Array) -> Vector2:
 				n *= maxf(1.0, ceilf(float(_area_cells(d)) / 6.0))
 			"wreck":
 				n *= 4.0
+			"build":
+				# ...its hesitations ([constant HESITATES]) come on top of its rhythm
+				var many := 40.0 if d.get("parts") is String else _num(d.get("parts"), 10.0)
+				n *= maxf(1.0, many) * BUILD_MORE
+			"wrong", "undo":
+				n *= maxf(1.0, _num(d.get("parts"), 1.0))
+			"finish":
+				n *= _num(d.get("owed"), 0.0) * BUILD_MORE
 		out += n
 	return out
+
+
+## WHATEVER A HAND LEAVES UNDONE IS DONE BEFORE ITS LAST ACT ([constant OPS] `finish`): the acts of [param d], as an agent wrote them, handed back with that as the first step of the last act that builds, in reading order. It costs nothing where all of it stands.
+## Given the [param designed] model, it says how much is owed, so whoever times the words knows what that last act really takes: a video must not end on its last word with the model half up.
+static func with_finish(d: Dictionary, designed := {}) -> Dictionary:
+	var acts: Array = d.get("acts") if d.get("acts") is Array else []
+	var ranked: Array = []
+	for i in acts.size():
+		if not (acts[i] is Dictionary):
+			continue
+		var builds := false
+		var tracks: Variant = (acts[i] as Dictionary).get("tracks")
+		for t in (tracks if tracks is Array else []):
+			if t is Dictionary and String((t as Dictionary).get("law", "")) == "assemble":
+				builds = true
+		if not builds:
+			continue
+		var beat := str((acts[i] as Dictionary).get("beat", ""))
+		ranked.append([0 if beat == "intro" else (1000000 if beat == "close" else int(beat) if beat.is_valid_int() else 0), i])
+	if ranked.is_empty():
+		return d
+	# ...in the order they are done: by beat, and as written within one
+	ranked.sort_custom(func(a: Array, b: Array) -> bool: return int(a[0]) < int(b[0]) or (int(a[0]) == int(b[0]) and int(a[1]) < int(b[1])))
+	var last_at := int((ranked[ranked.size() - 1] as Array)[1])
+	var finish := {}
+	for t in (acts[last_at] as Dictionary)["tracks"]:
+		if t is Dictionary and String((t as Dictionary).get("law", "")) == "assemble":
+			var ops: Array = (t as Dictionary).get("ops") if (t as Dictionary).get("ops") is Array else []
+			if ops.is_empty() or not (ops[0] is Dictionary) or String((ops[0] as Dictionary).get("do", "")) != "finish":
+				ops.push_front({"do": "finish"})
+			(t as Dictionary)["ops"] = ops
+			finish = ops[0]
+			break
+	if not designed.is_empty() and not finish.is_empty():
+		var script: Array = []
+		for r in ranked:
+			var a: Dictionary = acts[int((r as Array)[1])]
+			var ops: Array = []
+			for t in a["tracks"]:
+				if t is Dictionary and String((t as Dictionary).get("law", "")) == "assemble":
+					for op in ((t as Dictionary).get("ops", []) as Array):
+						if op is Dictionary and String((op as Dictionary).get("do", "")) != "finish":
+							ops.append(op)
+			script.append({"name": str(a.get("name", "")), "ops": sanitize_ops(ops, PackedStringArray())})
+		finish["owed"] = _owed_after(script, designed)
+	return d
+
+
+## How many parts of the model [param designed] do not stand once [param script] is done: the plan's own walk over a stand-in for the table, for nothing of how it goes depends on where the table's things are.
+static func _owed_after(script: Array, designed: Dictionary) -> int:
+	var a := Assembly.new()
+	a.seed_value = 1
+	a.spec = {"colors": designed["colors"], "base": {"size": designed["size"], "color": String(designed["base_color"]), "turn": 0.0}, "stock": [{"name": "stock", "colors": {}, "kinds": {"brick": 1.0}, "count": 0}], "model": designed}
+	a.world = {"base_at": Vector3.ZERO, "yaw": 0.0, "heaps": {"stock": AssemblyHeap.pile("stock", Vector2(-0.5, 0.0), 0.1), "aside": AssemblyHeap.pile("aside", Vector2(0.5, 0.0), 0.05)}, "obstacles": []}
+	a.perform(script)
+	return (designed["parts"] as Array).size() - a._stand_of.size()
 
 
 static func _line_cells(d: Dictionary) -> int:
@@ -442,8 +533,12 @@ static func _key(x: int, z: int, l: int) -> int:
 
 ## WHERE ON THE PLATE A PIECE GOES: its pose on the model, from the plate's middle, its origin the middle of its underside.
 func place_xf(x: int, z: int, l: int, w: int, d: int, turn: int) -> Transform3D:
+	return xf_on((spec["base"] as Dictionary)["size"], x, z, l, w, d, turn)
+
+
+## ...on a plate of [param base] studs.
+static func xf_on(base: Array, x: int, z: int, l: int, w: int, d: int, turn: int) -> Transform3D:
 	var size := turned_size(w, d, turn)
-	var base: Array = (spec["base"] as Dictionary)["size"]
 	var cx := (float(x) + float(size.x) * 0.5 - float(base[0]) * 0.5) * STUD
 	var cz := (float(z) + float(size.y) * 0.5 - float(base[1]) * 0.5) * STUD
 	return Transform3D(Basis(Vector3.UP, deg_to_rad(float(turn))), Vector3(cx, BASE_T + float(l) * PLATE, cz))
@@ -586,57 +681,66 @@ func _seat(id: int, kind: String, w: int, d: int, turn: int, x: int, z: int, l: 
 	for c in cells_of(kind, w, d, turn, x, z, l):
 		_cells[_key(int(c[0]), int(c[1]), int(c[2]))] = id
 		_top_level = maxi(_top_level, int(c[2]))
-	_mtop = -INF
+	if not model.is_empty():
+		_laid.append(id)
+		var part: Variant = _part_index.get(_where_key(kind, w, d, turn, x, z, l, String((pieces[id] as Dictionary)["color"])))
+		if part != null and not _stand_of.has(part):
+			_stand_of[part] = id
+			_part_of_piece[id] = part
+		else:
+			_off_model[id] = true
+
+
+## Where a part goes, as a name: what it is and how it lies.
+static func _where_key(kind: String, w: int, d: int, turn: int, x: int, z: int, l: int, color: String) -> String:
+	return "%s %d %d %d %d %d %d %s" % [kind, w, d, posmod(turn, 360), x, z, l, color]
 
 
 func _unseat(id: int) -> void:
+	if not model.is_empty():
+		_laid.erase(id)
+		_off_model.erase(id)
+		if _part_of_piece.has(id):
+			_stand_of.erase(_part_of_piece[id])
+			_part_of_piece.erase(id)
 	var p: Dictionary = _placed[id]
 	for c in cells_of(String(p["kind"]), int(p["w"]), int(p["d"]), int(p["turn"]), int(p["x"]), int(p["z"]), int(p["l"])):
 		_cells.erase(_key(int(c[0]), int(c[1]), int(c[2])))
 	_placed.erase(id)
-	_mtop = -INF
-
-
-## How high the model stands now, on the table (meters).
-func _model_top() -> float:
-	if _mtop != -INF:
-		return _mtop
-	var base_y: float = (world["base_at"] as Vector3).y
-	var most := base_y + BASE_T
-	for id in _placed:
-		var p: Dictionary = _placed[id]
-		most = maxf(most, base_y + BASE_T + float(int(p["l"]) + int((KINDS[String(p["kind"])] as Dictionary)["h"])) * PLATE + STUD_H)
-	_mtop = most
-	return most
-
-
-## How high what is under [param x], [param z] stands (meters), for a piece [param half] meters across on its way over it: the model
-## where the plate is, a heap, and a thing it does not go round - [method _way_problem] says of one too tall to go over.
-func _top_at(x: float, z: float, half: float) -> float:
-	var out: float = (world["base_at"] as Vector3).y
-	var b: Vector3 = world["base_at"]
-	var base: Array = (spec["base"] as Dictionary)["size"]
-	var reach := Vector2(float(base[0]), float(base[1])).length() * STUD * 0.5 + half
-	if Vector2(x - b.x, z - b.z).length() <= reach:
-		out = maxf(out, _model_top())
-	for k in (world.get("heaps", {}) as Dictionary):
-		var v := ((world["heaps"] as Dictionary)[k] as AssemblyHeap).height_at(x, z)
-		if not is_nan(v):
-			out = maxf(out, v)
-	for ob in world.get("obstacles", []):
-		var box: AABB = (ob as Dictionary)["box"]
-		if x >= box.position.x - half and x <= box.end.x + half and z >= box.position.z - half and z <= box.end.z + half and box.end.y < TALL:
-			out = maxf(out, box.end.y)
-	return out
 
 
 # --- the walk ----------------------------------------------------------------------------------------
 
 ## THE BUILD: acts [param acts] ([{name, ops}], in the order they are done) walked twice. Once dry, to learn what the steps ask of each
 ## stock that it does not hold - a part asked for is always there - and once for real, the stock laid down first, with what is
-## asked for soonest on top. Every piece and every move it makes come out of this, and no time does: [method lay].
+## asked for soonest on top. What fits, what is said of it and how much of each part is wanted come out of this, and no time and no motion do: [method lay], [AssemblyBake].
 func perform(acts: Array) -> void:
+	model = spec.get("model", {}) if spec.get("model") is Dictionary else {}
+	_part_index = {}
+	for i in (model.get("parts", []) as Array).size():
+		var q: Dictionary = model["parts"][i]
+		_part_index[_where_key(String(q["kind"]), int(q["w"]), int(q["d"]), int(q["turn"]), int(q["x"]), int(q["z"]), int(q["l"]), String(q["color"]))] = i
 	_make_fillers()
+	_dry_pass(acts)
+	# ...A STOCK HOLDS WHAT IT HOLDS, and what a model wants of it takes the place of a mixed lot's filling (though a tub is never only what is wanted)
+	if not model.is_empty():
+		var trimmed := false
+		for nm in _fillers:
+			var had: Array = _fillers[nm]
+			var keep := maxi(had.size() - (_need.get(nm, []) as Array).size(), ceili(float(had.size()) * FILLERS_LEAST))
+			if keep < had.size():
+				_fillers[nm] = had.slice(0, keep)
+				trimmed = true
+		if trimmed:
+			_dry_pass(acts)
+	_dry = false
+	_rng.seed = hash([seed_value, "assembly"])
+	_lay_stock()
+	_walk(acts)
+	_plan_times()
+
+
+func _dry_pass(acts: Array) -> void:
 	_avail = {}
 	_need = {}
 	for s in spec.get("stock", []):
@@ -652,25 +756,17 @@ func perform(acts: Array) -> void:
 	_dry = true
 	_rng.seed = hash([seed_value, "assembly dry"])
 	_walk(acts)
-	_dry = false
-	_rng.seed = hash([seed_value, "assembly"])
-	_lay_stock()
-	_walk(acts)
-	_t0 = PackedFloat64Array()
-	_t1 = PackedFloat64Array()
-	_t0.resize(steps.size())
-	_t1.resize(steps.size())
-	_t0.fill(INF)
-	_t1.fill(INF)
 
 
 func _walk(acts: Array) -> void:
+	_stand_of = {}
+	_part_of_piece = {}
+	_off_model = {}
+	_laid = []
 	_cells = {}
 	_placed = {}
 	_top_level = 0
-	_mtop = -INF
 	_home = {}
-	_left_at = {}
 	_yaw = float(world.get("yaw", 0.0))
 	steps = []
 	spans = {}
@@ -695,12 +791,12 @@ func _walk(acts: Array) -> void:
 			_do(op as Dictionary)
 		spans[_act] = [k0, steps.size()]
 		if not _dry:
-			layers[_act] = model_text()
+			layers[_act] = progress_text() if not model.is_empty() else model_text()
 
 
 func _add_piece(p: Dictionary, stock: String) -> int:
 	var id := pieces.size()
-	pieces.append({"id": id, "kind": String(p["kind"]), "w": int(p["w"]), "d": int(p["d"]), "color": String(p["color"]), "rests": []})
+	pieces.append({"id": id, "kind": String(p["kind"]), "w": int(p["w"]), "d": int(p["d"]), "color": String(p["color"]), "stock": stock, "rests": []})
 	_file(id, stock)
 	return id
 
@@ -733,7 +829,7 @@ func _make_fillers() -> void:
 		var n := int(sd.get("count", -1))
 		if n < 0:
 			var area := float(heap.area_cells()) * AssemblyHeap.CELL * AssemblyHeap.CELL if heap != null else 0.05
-			n = clampi(roundi(area * PER_M2 * DEEP), 12, MOST_IN_SOURCE)
+			n = count_for(area, heap != null and not heap.thing.is_empty(), heap.deep if heap != null else 0.0)
 		for _i in n:
 			made.append(_lot_piece(sd, rng))
 		_fillers[nm] = made
@@ -745,6 +841,12 @@ func _make_fillers() -> void:
 		var keep := float(MOST_PIECES) / float(total)
 		for nm in _fillers:
 			_fillers[nm] = (_fillers[nm] as Array).slice(0, int(float((_fillers[nm] as Array).size()) * keep))
+
+
+## How many pieces fill a place of [param area] square meters: a pile, about two deep; a container, as deep as can be dug in, up to the [param deep] meters
+## its walls let it hold: a shallow tin's are many fewer than a tub's.
+static func count_for(area: float, container: bool, deep: float) -> int:
+	return clampi(roundi(area * (PER_M3 * minf(IN_DEEP, deep) if container else PER_M2 * DEEP)), 12, MOST_IN_SOURCE)
 
 
 func _lot_piece(sd: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
@@ -830,7 +932,7 @@ func _variation() -> float:
 
 func _step(what: String, natural: float, least: float) -> Dictionary:
 	var v := _variation()
-	var st := {"act": _act, "do": what, "natural": natural * v, "floor": least, "moves": [], "sounds": []}
+	var st := {"act": _act, "do": what, "natural": natural * v, "floor": least}
 	steps.append(st)
 	return st
 
@@ -860,6 +962,14 @@ func _do(op: Dictionary) -> void:
 			_wall(op)
 		"fill":
 			_fill(op)
+		"build":
+			_build(op)
+		"wrong":
+			_wrong(op)
+		"undo":
+			_undo(op)
+		"finish":
+			_finish(op)
 
 
 ## Where [param at] (`[x, z]` or `[x, z, level]`) says a piece goes - `{x, z, l}` - or `{}`.
@@ -885,161 +995,45 @@ static func _turn_of(raw: Variant, part: Dictionary) -> int:
 
 # ...the piece itself
 
-## A PIECE OF [param part] out of stock [param stock]: the one with least on it, what lies on it moved aside in the step's own time
-## (share [param until] of it) - and if there is none (asked of a stock that was given it dry and took it since), one that is laid
-## there first, as a dig would find it. Off its heap, its pose in `_from`.
-func _piece_from(part: Dictionary, stock: String, st: Dictionary, until: float) -> int:
+## A PIECE OF [param part] OUT OF STOCK [param stock], for the plan: any will do, since which it really is is found when it happens ([method
+## AssemblyBake._fetch]) and they are all alike. Short in the dry pass, it is written down to be there ([member _need]).
+func _piece_from(part: Dictionary, stock: String) -> int:
 	var key := part_key(part)
 	if not _by_key.has(stock):
 		_by_key[stock] = {}
 	var ids: Array = (_by_key[stock] as Dictionary).get(key, [])
+	if ids.is_empty():
+		if not _dry:
+			return -1
+		(_need[stock] as Array).append({"kind": String(part["kind"]), "w": int(part["w"]), "d": int(part["d"]), "color": String(part["color"])})
+		var made := pieces.size()
+		pieces.append({"id": made, "kind": String(part["kind"]), "w": int(part["w"]), "d": int(part["d"]), "color": String(part["color"]), "stock": stock, "rests": []})
+		_home[made] = stock
+		return made
+	var id: int = ids.pop_back()
+	_home[id] = stock
+	if not _dry and _heap(stock) != null:
+		_heap(stock).take(id)
+	return id
+
+
+## A PIECE GOES BACK INTO [param stock]: where the plan draws it, until the record says where it really landed.
+func _into_stock(id: int, stock: String) -> void:
+	_file(id, stock)
+	_home[id] = stock
 	if _dry:
-		if ids.is_empty():
-			(_need[stock] as Array).append({"kind": String(part["kind"]), "w": int(part["w"]), "d": int(part["d"]), "color": String(part["color"])})
-			var id := pieces.size()
-			pieces.append({"id": id, "kind": String(part["kind"]), "w": int(part["w"]), "d": int(part["d"]), "color": String(part["color"]), "rests": []})
-			_home[id] = stock
-			return id
-		var id: int = ids.pop_back()
-		_home[id] = stock
-		return id
-	var heap: AssemblyHeap = _heap(stock)
-	if ids.is_empty() or heap == null:
-		return -1
-	var best := -1
-	var least := 1 << 30
-	for i in ids:
-		var n := heap.on_it(int(i)).size()
-		if n < least:
-			least = n
-			best = int(i)
-			if n == 0:
-				break
-	ids.erase(best)
-	_uncover(best, heap, st, 0.0, until)
-	_left_at[best] = heap.where(best)
-	heap.take(best)
-	_home[best] = stock
-	return best
-
-
-## WHAT LIES ON PIECE [param id] moved aside, over shares [param a] to [param b] of step [param st], the topmost first - the hand's own
-## digging. Each goes clear of it, so it does not land back on it.
-func _uncover(id: int, heap: AssemblyHeap, st: Dictionary, a: float, b: float) -> void:
-	var on: Array = heap.on_it(id)
-	if on.is_empty():
 		return
-	var at := heap.where(id)
-	var n := on.size()
-	var done := 0
-	while not on.is_empty() and done < UNCOVER_MOST:
-		var o := int(on[on.size() - 1])
-		var u0 := lerpf(a, b, float(mini(done, n - 1)) / float(n))
-		var u1 := minf(lerpf(a, b, float(mini(done, n - 1) + 1) / float(n)) + (b - a) * 0.2, b)
-		_nudge(o, heap, st, u0, u1, at, DIG_SPREAD * 1.6)
-		done += 1
-		on = heap.on_it(id)
-	(st["sounds"] as Array).append({"kind": "rummage", "u": a, "u1": b, "at": _flat(at, heap.height_at(at.x, at.y)), "strength": 0.6})
-
-
-## PIECE [param id] moved from where it lies to a place near [param at], over shares [param a] to [param b] of [param st]: what lies on
-## it first, or it would be left on air. A piece moved twice in a step goes on from where the first left it.
-func _nudge(id: int, heap: AssemblyHeap, st: Dictionary, a: float, b: float, at: Vector2, spread: float) -> void:
+	var heap := _heap(stock)
+	if heap == null:
+		return
 	var q: Dictionary = pieces[id]
-	for o in heap.on_it(id):
-		_nudge(int(o), heap, st, a, b, at, spread)
-	var x0 := _rest_xf(id)
-	heap.take(id)
-	var x1 := heap.deposit(id, float(q["w"]) * STUD, float(q["d"]) * STUD, _tall(String(q["kind"])), _rng, at + _around(spread), spread * 0.4)
-	var seed := hash([seed_value, id, steps.size(), "nudge"])
-	var seg := {"a": a, "b": b, "x0": x0, "x1": x1, "lift": lerpf(0.012, 0.035, Hands.share(seed, 3)), "seed": seed}
-	for mv in st["moves"]:
-		if int((mv as Dictionary)["id"]) == id:
-			var segs: Array = (mv as Dictionary)["segs"]
-			var last: Dictionary = segs[segs.size() - 1]
-			var start := maxf(float(seg["a"]), float(last["b"]))
-			# ...INSIDE ITS STEP: laid past the end, a move is never played, and the piece snaps to where it left it as the step ends.
-			# With no room after it, its first move gives up the end of its time
-			if start > MOVED_AGAIN:
-				last["b"] = lerpf(float(last["a"]), float(last["b"]), 0.55)
-				start = float(last["b"])
-			seg["a"] = start
-			seg["b"] = minf(maxf(float(seg["b"]), start + 0.04), 1.0)
-			segs.append(seg)
-			(q["rests"] as Array).append([steps.size() - 1, false, x1])
-			return
-	(st["moves"] as Array).append({"id": id, "segs": [seg]})
-	(q["rests"] as Array).append([steps.size() - 1, false, x1])
+	(q["rests"] as Array).append([steps.size() - 1, false, heap.deposit(id, float(q["w"]) * STUD, float(q["d"]) * STUD, _tall(String(q["kind"])), _rng)])
 
 
-func _around(r: float) -> Vector2:
-	var a := _rng.randf() * TAU
-	return Vector2(cos(a), sin(a)) * r * _rng.randf_range(0.5, 1.0)
-
-
-func _rest_xf(id: int) -> Transform3D:
-	var rests: Array = (pieces[id] as Dictionary)["rests"]
-	var last: Array = rests[rests.size() - 1]
-	return base_xf(_yaw) * (last[2] as Transform3D) if bool(last[1]) else last[2]
-
-
-static func _flat(at: Vector2, y: float) -> Vector3:
-	return Vector3(at.x, 0.0 if is_nan(y) else y, at.y)
-
-
-func _part_half(q: Dictionary) -> float:
-	return Vector2(float(q["w"]), float(q["d"])).length() * STUD * 0.5
-
-
-## ITS WAY: `{lift, rise}`, what [method Hands.carried] needs to bring something from [param a] to [param b], clear of what stands
-## under its way: up first clear of what it leaves, down last among what it goes to.
-func _way(a: Vector3, b: Vector3, half: float, seed: int) -> Dictionary:
-	var rise := Vector2(maxf(_top_at(a.x, a.z, half) + CLEAR_OVER - a.y, 0.0), maxf(_top_at(b.x, b.z, half) + CLEAR_OVER - b.y, 0.0))
-	var lift := maxf(0.02, maxf(rise.x, rise.y) * 1.15)
-	for _pass in 2:
-		# ...looked at only where it is going across: before that it is still rising out of what it left, and after, coming down. The way
-		# worked out here as [method Hands.carried] has it, its bow aside: that finds its span again each call, and this walks every step
-		var span := Hands.across(lift, rise)
-		var raised := false
-		for k in range(1, WAY_LOOKS):
-			var lin := lerpf(span.x, span.y, float(k) / float(WAY_LOOKS))
-			var p := a.lerp(b, Hands.timing((lin - span.x) / maxf(span.y - span.x, 1e-6)))
-			var need := _top_at(p.x, p.z, half) + CLEAR_OVER - (p.y + lift * Hands.lift_at(lin))
-			if need > 0.0:
-				lift += need / maxf(Hands.lift_at(lin), 0.35)
-				raised = true
-		if not raised:
-			break
-	return {"lift": minf(lift, LIFT_MOST), "rise": rise}
-
-
-## A leg of a piece's way, a share of the step by its weight.
-static func _leg(weight: float, x0: Transform3D, x1: Transform3D, lift := 0.0, seed := 0, rise := Vector2.ZERO, hold := 0.0) -> Dictionary:
-	return {"w": weight, "x0": x0, "x1": x1, "lift": lift, "seed": seed, "rise": rise, "hold": hold}
-
-
-## THE LEGS LAID INTO STEP [param st] as piece [param id]'s way, from share [param from]: the weights made shares of what is left.
-## Each leg's sound (`sound`: its kind, at its end) goes with it.
-func _commit(st: Dictionary, id: int, legs: Array, from := 0.0) -> void:
-	var total := 0.0
-	for l in legs:
-		total += float((l as Dictionary)["w"])
-	var u := from
-	var segs: Array = []
-	for l in legs:
-		var ld: Dictionary = l
-		var u1 := u + (1.0 - from) * float(ld["w"]) / maxf(total, 1e-6)
-		if not ld.has("wait"):
-			var s := ld.duplicate()
-			s["a"] = u
-			s["b"] = u1
-			segs.append(s)
-		if ld.has("sound"):
-			var snd: Dictionary = (ld["sound"] as Dictionary).duplicate()
-			snd["u"] = u1 if not bool(ld.get("sound_early", false)) else u
-			(st["sounds"] as Array).append(snd)
-		u = u1
-	(st["moves"] as Array).append({"id": id, "segs": segs})
+## Where a piece goes after it was not used: [param to] if that is a stock, else where it came from.
+func _back_stock(to: Variant, from: String) -> String:
+	var nm := String(to).strip_edges().to_lower() if to is String else ""
+	return nm if not nm.is_empty() and _heap(nm) != null else from
 
 
 # ...the steps
@@ -1063,7 +1057,7 @@ func _put(op: Dictionary, batch := false) -> bool:
 		_problem("%s at [%d, %d] could not go on: %s" % [part_key(part), x, z, String(f["why"])])
 		return false
 	# ...a part of one stud has only the one: nothing to say of it
-	if int(f["studs"]) == 1 and w * d > 1:
+	if int(f["studs"]) == 1 and w * d > 1 and model.is_empty():
 		_problem("%s at [%d, %d] holds by a single stud (it stays, but it would swing)" % [part_key(part), x, z])
 	var brisk := String(op.get("pace", "")) == "brisk" or batch
 	var row: Dictionary = OPS["put"]
@@ -1073,107 +1067,27 @@ func _put(op: Dictionary, batch := false) -> bool:
 	var look := clampf(_num(op.get("look"), 0.0), 0.0, 60.0)
 	var first: Array = op.get("first") if op.get("first") is Array else []
 	var extra := hover + look + float(first.size()) * 2.5
-	var st := _step("put", nat + extra, least + extra * 0.4)
+	var st := _step("put", nat + extra, least + extra * 0.3)
 	var stock := _stock_for(part, op.get("from", op.get("stock")))
-	var id := _piece_from(part, stock, st, 0.14)
+	var id := _piece_from(part, stock)
 	if id < 0:
 		_problem("%s: there is none in \"%s\"" % [part_key(part), stock])
 		steps.pop_back()
 		return false
-	_seat(id, kind, w, d, turn, x, z, l)
-	_counted("put")
-	if _dry:
-		return true
-	var q: Dictionary = pieces[id]
-	var seat := place_xf(x, z, l, w, d, turn)
-	var world_seat := base_xf(_yaw) * seat
-	var x0 := _last_world(id)
-	var over := Transform3D(world_seat.basis, world_seat.origin + Vector3(0.0, HOVER, 0.0))
-	var near := Transform3D(world_seat.basis, world_seat.origin + Vector3(0.0, PRESS_FROM, 0.0))
-	var half := _part_half(q)
-	var seed := hash([seed_value, steps.size(), "put"])
-	var legs: Array = [{"w": REACH, "wait": true, "sound": {"kind": "tick", "at": x0.origin, "size": half, "strength": 0.35}}]
-	var here := x0
-	if look > 0.0:
-		var shown := _view_xf(seed)
-		var way := _way(here.origin, shown.origin, half, seed)
-		legs.append(_leg(2.2, here, shown, float(way["lift"]), seed, way["rise"]))
-		var turned := Transform3D(shown.basis * Basis(_axis(seed), deg_to_rad(lerpf(90.0, 200.0, Hands.share(seed, 21)))), shown.origin)
-		legs.append(_leg(look, shown, turned, 0.0, seed, Vector2.ZERO, 3.0))
-		here = turned
+	var elsewhere: Array = []
 	for p in first:
 		if p is Array and (p as Array).size() >= 2 and _is_num(p[0]) and _is_num(p[1]):
-			var other := base_xf(_yaw) * place_xf(int(p[0]), int(p[1]), level_for(w, d, turn, int(p[0]), int(p[1])), w, d, turn)
-			var over_it := Transform3D(other.basis, other.origin + Vector3(0.0, HOVER, 0.0))
-			var way := _way(here.origin, over_it.origin, half, seed)
-			legs.append(_leg(2.0, here, over_it, float(way["lift"]), seed, way["rise"]))
-			legs.append(_leg(1.4, over_it, over_it, 0.0, seed, Vector2.ZERO, 3.0))
-			here = over_it
-	var way := _way(here.origin, over.origin, half, seed)
-	legs.append(_leg(2.6, here, over, float(way["lift"]), seed, way["rise"]))
-	legs.append(_leg(1.8 + hover, over, over, 0.0, seed, Vector2.ZERO, 2.0 if not brisk else 0.6))
-	legs.append(_leg(1.1, over, near, 0.0, seed))
-	var press := _leg(0.28, near, world_seat, 0.0, seed)
-	press["sound"] = {"kind": "click", "at": world_seat.origin, "size": half, "strength": 1.0}
-	legs.append(press)
-	legs.append({"w": 0.4, "wait": true})
-	_commit(st, id, legs)
-	(q["rests"] as Array).append([steps.size() - 1, true, seat])
+			elsewhere.append([int(p[0]), int(p[1]), level_for(w, d, turn, int(p[0]), int(p[1]))])
+	st.merge({"key": part_key(part), "stock": stock, "slot": id, "x": x, "z": z, "l": l, "turn": turn, "w": w, "d": d, "brisk": brisk, "hover": hover, "look": look, "first": elsewhere})
+	_seat(id, kind, w, d, turn, x, z, l)
+	_counted("put")
+	if not _dry:
+		((pieces[id] as Dictionary)["rests"] as Array).append([steps.size() - 1, true, place_xf(x, z, l, w, d, turn)])
 	return true
 
 
-func _last_world(id: int) -> Transform3D:
-	return _rest_xf(id)
-
-
-## Near the lens, where a piece is held up to be looked at: facing it, at an angle of its own.
-func _view_xf(seed: int) -> Transform3D:
-	var at: Vector3 = world.get("view", (world["base_at"] as Vector3) + Vector3(0.0, 0.16, 0.08))
-	var b := Basis(Vector3.UP, TAU * Hands.share(seed, 22)) * Basis(Vector3.RIGHT, deg_to_rad(lerpf(35.0, 70.0, Hands.share(seed, 23))))
-	return Transform3D(b, at + Vector3(lerpf(-0.03, 0.03, Hands.share(seed, 24)), lerpf(-0.012, 0.012, Hands.share(seed, 25)), 0.0))
-
-
-static func _axis(seed: int) -> Vector3:
-	return Vector3(Hands.share(seed, 26) - 0.5, Hands.share(seed, 27) - 0.5, Hands.share(seed, 28) - 0.5).normalized()
-
-
-## THE WAY BACK: where a piece held over [param here] goes after it was not used - onto a stock, or `aside` - a leg down onto it, its
-## sound a small clack. In [param legs]; its place on the heap in the piece's rests.
-func _back_to(id: int, to: Variant, here: Transform3D, legs: Array, seed: int) -> void:
-	var q: Dictionary = pieces[id]
-	var stock := String(to).strip_edges().to_lower() if to is String else String(_home.get(id, ""))
-	var heap := _heap(stock)
-	if heap == null:
-		stock = String(_home.get(id, ""))
-		heap = _heap(stock)
-	if heap == null:
-		return
-	_file(id, stock)
-	_home[id] = stock
-	var aim: Vector2 = _left_at.get(id, heap.middle) if _heap_of_home_is(id, stock) else heap.middle
-	var x1 := heap.deposit(id, float(q["w"]) * STUD, float(q["d"]) * STUD, _tall(String(q["kind"])), _rng, aim, 0.03)
-	var way := _way(here.origin, x1.origin, _part_half(q), seed)
-	var back := _leg(2.4, here, x1, float(way["lift"]), seed, way["rise"])
-	back["sound"] = {"kind": "clack", "at": x1.origin, "size": _part_half(q), "strength": 0.5}
-	legs.append(back)
-	(q["rests"] as Array).append([steps.size() - 1, false, x1])
-
-
-## Whether [param stock] is the heap piece [param id] was last taken from: put back, it lands about where it lay.
-func _heap_of_home_is(id: int, stock: String) -> bool:
-	if not _left_at.has(id) or _heap(stock) == null:
-		return false
-	var at: Vector2 = _left_at[id]
-	return not is_nan(_heap(stock).height_at(at.x, at.y))
-
-
-## In the dry pass, what [method _back_to] would do with piece [param id]: filed where it goes.
-func _dry_back(id: int, to: Variant, stock: String) -> void:
-	var nm := String(to).strip_edges().to_lower() if to is String else stock
-	_file(id, nm if (_need as Dictionary).has(nm) else stock)
-
-
-func _try(op: Dictionary) -> void:
+func _try(raw_op: Dictionary) -> void:
+	var op := _toward_next(raw_op, true)
 	var part := _part_of(op.get("part"))
 	if part.is_empty():
 		return
@@ -1193,74 +1107,34 @@ func _try(op: Dictionary) -> void:
 	var row: Dictionary = OPS["try"]
 	var st := _step("try", float(row["natural"]), float(row["floor"]))
 	var stock := _stock_for(part, op.get("from"))
-	var id := _piece_from(part, stock, st, 0.11)
+	var id := _piece_from(part, stock)
 	if id < 0:
 		_problem("%s: there is none in \"%s\"" % [part_key(part), stock])
 		steps.pop_back()
 		return
+	var to := _back_stock(op.get("to"), stock)
+	st.merge({"key": part_key(part), "stock": stock, "to": to, "x": x, "z": z, "l": l, "turn": turn, "w": w, "d": d, "pressed": pressed})
 	_counted("try")
-	if _dry:
-		_dry_back(id, op.get("to"), stock)
-		return
-	var q: Dictionary = pieces[id]
-	var seat := base_xf(_yaw) * place_xf(x, z, l, w, d, turn)
-	var x0 := _last_world(id)
-	var half := _part_half(q)
-	var seed := hash([seed_value, steps.size(), "try"])
-	var over := Transform3D(seat.basis, seat.origin + Vector3(0.0, HOVER, 0.0))
-	var near := Transform3D(seat.basis, seat.origin + Vector3(0.0, PRESS_FROM, 0.0))
-	var way := _way(x0.origin, over.origin, half, seed)
-	var legs: Array = [{"w": REACH, "wait": true, "sound": {"kind": "tick", "at": x0.origin, "size": half, "strength": 0.35}}]
-	legs.append(_leg(2.4, x0, over, float(way["lift"]), seed, way["rise"]))
-	legs.append(_leg(1.4, over, over, 0.0, seed, Vector2.ZERO, 2.0))
-	legs.append(_leg(1.0, over, near, 0.0, seed))
-	if pressed:
-		var on := _leg(0.3, near, seat, 0.0, seed)
-		on["sound"] = {"kind": "click", "at": seat.origin, "size": half, "strength": 0.9}
-		legs.append(on)
-		legs.append(_leg(1.0, seat, seat, 0.0, seed))
-		var off := _leg(0.5, seat, near, 0.0, seed)
-		off["sound"] = {"kind": "pop", "at": seat.origin, "size": half, "strength": 0.6}
-		off["sound_early"] = true
-		legs.append(off)
-	else:
-		var tap := _leg(0.8, near, near, 0.0, seed, Vector2.ZERO, 0.8)
-		tap["sound"] = {"kind": "tick", "at": seat.origin, "size": half, "strength": 0.25}
-		tap["sound_early"] = true
-		legs.append(tap)
-	legs.append(_leg(0.8, near, over, 0.0, seed))
-	legs.append(_leg(1.2, over, over, 0.0, seed, Vector2.ZERO, 2.0))
-	_back_to(id, op.get("to"), over, legs, seed)
-	_commit(st, id, legs)
+	_into_stock(id, to)
 
 
-func _look_at(op: Dictionary) -> void:
+func _look_at(raw_op: Dictionary) -> void:
+	var op := _toward_next(raw_op, false)
 	var part := _part_of(op.get("part"))
 	if part.is_empty():
 		return
 	var seconds := clampf(_num(op.get("seconds"), 6.0), 1.0, 60.0)
-	var st := _step("look", seconds + 4.5, seconds * 0.5 + 2.5)
+	var st := _step("look", seconds + 4.5, 3.8)
 	var stock := _stock_for(part, op.get("from"))
-	var id := _piece_from(part, stock, st, 0.08)
+	var id := _piece_from(part, stock)
 	if id < 0:
 		_problem("%s: there is none in \"%s\"" % [part_key(part), stock])
 		steps.pop_back()
 		return
+	var to := _back_stock(op.get("to"), stock)
+	st.merge({"key": part_key(part), "stock": stock, "to": to, "seconds": seconds})
 	_counted("look")
-	if _dry:
-		_dry_back(id, op.get("to"), stock)
-		return
-	var q: Dictionary = pieces[id]
-	var x0 := _last_world(id)
-	var seed := hash([seed_value, steps.size(), "look"])
-	var shown := _view_xf(seed)
-	var turned := Transform3D(shown.basis * Basis(_axis(seed), deg_to_rad(lerpf(120.0, 260.0, Hands.share(seed, 21)))), shown.origin)
-	var way := _way(x0.origin, shown.origin, _part_half(q), seed)
-	var legs: Array = [{"w": REACH, "wait": true, "sound": {"kind": "tick", "at": x0.origin, "size": _part_half(q), "strength": 0.35}}]
-	legs.append(_leg(2.2, x0, shown, float(way["lift"]), seed, way["rise"]))
-	legs.append(_leg(seconds, shown, turned, 0.0, seed, Vector2.ZERO, 2.5))
-	_back_to(id, op.get("to"), turned, legs, seed)
-	_commit(st, id, legs)
+	_into_stock(id, to)
 
 
 func _dig(op: Dictionary) -> void:
@@ -1275,32 +1149,217 @@ func _dig(op: Dictionary) -> void:
 		stock = String(op["in"]).strip_edges().to_lower()
 	if stock.is_empty() or _heap(stock) == null:
 		stock = _stock_for(part, null) if not part.is_empty() else _biggest_stock()
-	if _dry:
-		return
-	var heap := _heap(stock)
-	if heap == null:
+	if _heap(stock) == null:
 		_problem("there is no stock to dig in")
+	st.merge({"stock": stock, "seconds": seconds, "part_key": part_key(part) if not part.is_empty() else ""})
+
+
+# ...what is designed
+
+## WHAT COMES NEXT OF THE MODEL: which part, or -1 when all of it stands.
+func _next_part(section := -1) -> int:
+	var parts: Array = model.get("parts", [])
+	for i in parts.size():
+		if not _stand_of.has(i) and (section < 0 or int((parts[i] as Dictionary)["section"]) == section):
+			return i
+	return -1
+
+
+## [param op] where it says no part or no place: the next the model wants, and for a [param miss], not quite that part.
+func _toward_next(op: Dictionary, miss: bool) -> Dictionary:
+	if model.is_empty() or (op.get("part") != null and (op.get("at") != null or not miss)):
+		return op
+	var i := _next_part()
+	if i < 0:
+		return op
+	var q: Dictionary = model["parts"][i]
+	var out := op.duplicate()
+	if out.get("at") == null:
+		out["at"] = [int(q["x"]), int(q["z"]), int(q["l"])]
+		if out.get("turn") == null:
+			out["turn"] = int(q["turn"])
+	if out.get("part") == null:
+		out["part"] = _near_miss(q, i) if miss else part_key(q)
+	return out
+
+
+## Another size of the same kind, or the same part in another color.
+func _near_miss(q: Dictionary, i: int) -> String:
+	var hs := hash([seed_value, "miss", i])
+	var sizes: Array = (KINDS[String(q["kind"])] as Dictionary)["sizes"]
+	if Hands.share(hs, 1) < 0.5 and sizes.size() > 1:
+		var s: Array = sizes[int(Hands.share(hs, 2) * float(sizes.size())) % sizes.size()]
+		if int(s[0]) != int(q["w"]) or int(s[1]) != int(q["d"]):
+			return "%s %dx%d %s" % [String(q["kind"]), int(s[0]), int(s[1]), String(q["color"])]
+	var names: Array = (spec["colors"] as Dictionary).keys()
+	var other := String(names[int(Hands.share(hs, 3) * float(names.size())) % names.size()])
+	return "%s %dx%d %s" % [String(q["kind"]), int(q["w"]), int(q["d"]), other]
+
+
+func _section_called(raw: Variant) -> int:
+	if not (raw is String):
+		return -1
+	var want := String(raw).strip_edges().to_lower()
+	var secs: Array = model.get("sections", [])
+	for i in secs.size():
+		if String((secs[i] as Dictionary)["name"]) == want:
+			return i
+	var names := PackedStringArray()
+	for s in secs:
+		names.append(String((s as Dictionary)["name"]))
+	_problem("no section is called \"%s\" (%s)" % [want, ", ".join(names)])
+	return -1
+
+
+func _build(op: Dictionary) -> void:
+	if model.is_empty():
+		_problem("there is no model to build: `put` what goes on")
 		return
-	# THE SPOT: where what it looks for lies, or anywhere; what is on top there goes aside, a few pieces a second of it
-	var spot := heap.middle + _around(minf(0.1, heap.reach if heap.reach > 0.0 else 0.09))
-	var sought := -1
-	if not part.is_empty():
-		for i in ((_by_key.get(stock, {}) as Dictionary).get(part_key(part), []) as Array):
-			if heap.holds(int(i)):
-				sought = int(i)
-				spot = heap.where(sought)
-				break
-	var n := clampi(roundi(seconds * DIG_MOVES), DIG_LEAST, DIG_MOST)
-	var moved := heap.on_top_near(spot, DIG_NEAR, n)
-	for m in moved.size():
-		if int(moved[m]) == sought:
+	var sec := _section_called(op.get("section"))
+	var rest: bool = op.get("parts") is String
+	var want := (model["parts"] as Array).size() if rest else clampi(int(_num(op.get("parts"), 10.0)), 1, 400)
+	var done := 0
+	var stuck := 0
+	var parts: Array = model["parts"]
+	for i in parts.size():
+		if done >= want:
+			break
+		if _stand_of.has(i) or (sec >= 0 and int((parts[i] as Dictionary)["section"]) != sec):
 			continue
-		var u0 := 0.05 + 0.8 * float(m) / float(maxi(moved.size(), 1))
-		var u1 := minf(u0 + 0.8 / float(maxi(moved.size(), 1)) + 0.1, 1.0)
-		_nudge(int(moved[m]), heap, st, u0, u1, spot, DIG_SPREAD)
-	if sought >= 0:
-		_uncover(sought, heap, st, 0.1, 0.9)
-	(st["sounds"] as Array).append({"kind": "rummage", "u": 0.04, "u1": 0.96, "at": _flat(spot, heap.height_at(spot.x, spot.y)), "strength": 1.0})
+		if _lay_part(i, op):
+			done += 1
+		else:
+			stuck += 1
+	_counted("build", done)
+	if stuck > 0:
+		_problem("%d parts of it have nothing to hold on to yet: what they stand on is not there" % stuck)
+
+
+## PART [param i] OF THE MODEL GOES ON: with whatever is wrongly in its place off first, and now and then a moment's hesitation, the same each time for the same part.
+func _lay_part(i: int, op: Dictionary) -> bool:
+	var q: Dictionary = model["parts"][i]
+	var kind := String(q["kind"])
+	var w := int(q["w"])
+	var d := int(q["d"])
+	var turn := int(q["turn"])
+	var x := int(q["x"])
+	var z := int(q["z"])
+	var l := int(q["l"])
+	for c in cells_of(kind, w, d, turn, x, z, l):
+		var there: Variant = _cells.get(_key(int(c[0]), int(c[1]), int(c[2])))
+		if there == null:
+			continue
+		if _part_of_piece.has(int(there)):
+			return false
+		_bring_off(_with_what_it_held([int(there)]), null, "take")
+	if not bool(fit(kind, w, d, turn, x, z, l)["ok"]):
+		return false
+	var hs := hash([seed_value, "hesitate", i])
+	var share := Hands.share(hs, 1)
+	var put := {"part": part_key(q), "at": [x, z, l], "turn": turn}
+	if op.get("from") != null:
+		put["from"] = op.get("from")
+	if share < HESITATES:
+		put["hover"] = lerpf(1.0, 3.5, Hands.share(hs, 2))
+	elif share < HESITATES + LOOKS_FIRST:
+		put["look"] = lerpf(2.0, 5.0, Hands.share(hs, 3))
+	return _put(put, String(op.get("pace", "")) != "easy")
+
+
+## THE NEXT PARTS GO ON WRONG: whichever way fits, a stud off, turned, or the wrong color in the right place. They are no part of the model, and it says so.
+func _wrong(op: Dictionary) -> void:
+	if model.is_empty():
+		_problem("there is no model to get wrong")
+		return
+	var want := clampi(int(_num(op.get("parts"), 1.0)), 1, 12)
+	var done := 0
+	var parts: Array = model["parts"]
+	for i in parts.size():
+		if done >= want:
+			break
+		if _stand_of.has(i):
+			continue
+		var way := _wrong_way(parts[i] as Dictionary, hash([seed_value, "wrong", i]))
+		if not way.is_empty() and _put(way, false):
+			done += 1
+	_counted("wrong", done)
+	if done < want:
+		_problem("only %d of them could go on wrong: nothing near would hold them" % done)
+
+
+func _wrong_way(q: Dictionary, hs: int) -> Dictionary:
+	var kind := String(q["kind"])
+	var w := int(q["w"])
+	var d := int(q["d"])
+	var turn := int(q["turn"])
+	var x := int(q["x"])
+	var z := int(q["z"])
+	var l := int(q["l"])
+	var tries: Array = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 90], [1, 1, 0], [-1, -1, 0]]
+	var from := int(Hands.share(hs, 1) * float(tries.size()))
+	for k in tries.size():
+		var t: Array = tries[(from + k) % tries.size()]
+		var turned := turn + int(t[2])
+		if int(t[2]) != 0 and w == d:
+			continue
+		if bool(fit(kind, w, d, turned, x + int(t[0]), z + int(t[1]), l)["ok"]):
+			return {"part": part_key(q), "at": [x + int(t[0]), z + int(t[1]), l], "turn": turned}
+	var names: Array = (spec["colors"] as Dictionary).keys()
+	for k in names.size():
+		var other := String(names[(int(Hands.share(hs, 2) * float(names.size())) + k) % names.size()])
+		if other != String(q["color"]) and bool(fit(kind, w, d, turn, x, z, l)["ok"]):
+			return {"part": "%s %dx%d %s" % [kind, w, d, other], "at": [x, z, l], "turn": turn}
+	return {}
+
+
+func _undo(op: Dictionary) -> void:
+	var order: Array = []
+	if op.get("parts") != null:
+		order = _laid.slice(maxi(_laid.size() - clampi(int(_num(op.get("parts"), 1.0)), 1, 400), 0))
+	else:
+		for id in _laid:
+			if _off_model.has(id):
+				order.append(id)
+	if order.is_empty():
+		_problem("there is nothing to take off")
+		return
+	order.reverse()
+	var n := 0
+	for id in order:
+		if _placed.has(int(id)):
+			_bring_off(_with_what_it_held([int(id)]), null, "take")
+			n += 1
+	_counted("undo", n)
+
+
+## WHATEVER IS WRONG COMES OFF, AND WHATEVER IS OWED GOES ON ([method with_finish]): the model stands whole after this, however the steps before it went.
+func _finish(op: Dictionary) -> void:
+	if model.is_empty():
+		return
+	var wrong: Array = _off_model.keys()
+	wrong.reverse()
+	for id in wrong:
+		if _placed.has(int(id)):
+			_bring_off(_with_what_it_held([int(id)]), null, "take")
+	if _next_part() >= 0:
+		_build({"parts": "rest", "from": op.get("from")})
+
+
+## HOW THE MODEL STANDS, for whoever is staging its build: how much of it, section by section.
+func progress_text() -> String:
+	var parts: Array = model.get("parts", [])
+	var by := {}
+	for i in _stand_of:
+		var sec := int((parts[int(i)] as Dictionary)["section"])
+		by[sec] = int(by.get(sec, 0)) + 1
+	var lines := PackedStringArray()
+	lines.append("The model now stands at %d of %d parts (%d still to go, about %d minutes at the rhythm):" % [_stand_of.size(), parts.size(), parts.size() - _stand_of.size(), roundi(float(parts.size() - _stand_of.size()) * float((OPS["build"] as Dictionary)["natural"]) / 60.0)])
+	var secs: Array = model.get("sections", [])
+	for i in secs.size():
+		lines.append("  %s: %d of %d" % [String((secs[i] as Dictionary)["name"]), int(by.get(i, 0)), int((secs[i] as Dictionary)["parts"])])
+	if not _off_model.is_empty():
+		lines.append("  and %d on it wrongly, which must come off." % _off_model.size())
+	return "\n".join(lines)
 
 
 func _biggest_stock() -> String:
@@ -1339,8 +1398,7 @@ func _take(op: Dictionary) -> void:
 	_bring_off(chunk, op.get("to"), "take")
 
 
-## THE CHUNK [param chunk] OFF THE MODEL, a step of its own: it comes up as one, is carried over the stock, and comes apart as it
-## falls in - the clatter. Each piece's place in the heap is its own.
+## THE CHUNK [param chunk] OFF THE MODEL, a step of its own: it comes up as one, is carried over the stock and let go.
 func _bring_off(chunk: Array, into: Variant, what: String) -> void:
 	var row: Dictionary = OPS[what]
 	var n := float(chunk.size())
@@ -1352,68 +1410,10 @@ func _bring_off(chunk: Array, into: Variant, what: String) -> void:
 		stock = String(_home.get(chunk[0], ""))
 		if _heap(stock) == null:
 			stock = _biggest_stock()
-	var was := {}
-	if not _dry:
-		for id in chunk:
-			var p: Dictionary = _placed[int(id)]
-			was[id] = base_xf(_yaw) * place_xf(int(p["x"]), int(p["z"]), int(p["l"]), int(p["w"]), int(p["d"]), int(p["turn"]))
+	st.merge({"slots": chunk.duplicate(), "stock": stock})
 	for id in chunk:
 		_unseat(int(id))
-		_home[id] = stock
-		_file(int(id), stock)
-	if _dry:
-		return
-	var heap := _heap(stock)
-	if heap == null:
-		_problem("there is no stock for what comes off to go into")
-		return
-	var seed := hash([seed_value, steps.size(), what])
-	# THE CHUNK AS ONE: the same way for every piece of it, kept apart by where each began
-	var box_top := -INF
-	var mid := Vector3.ZERO
-	for id in chunk:
-		box_top = maxf(box_top, (was[id] as Transform3D).origin.y)
-		mid += (was[id] as Transform3D).origin
-	mid /= n
-	var drop_at := Vector3(heap.middle.x + (mid.x - heap.middle.x) * 0.15, 0.0, heap.middle.y + (mid.z - heap.middle.y) * 0.15)
-	drop_at.y = maxf(heap.top(), _top_at(drop_at.x, drop_at.z, 0.02)) + DROP_FROM
-	var up := 0.012
-	var way := _way(mid + Vector3(0.0, up, 0.0), drop_at, 0.05, seed)
-	var delay_most := 0.12
-	var first := true
-	for id in chunk:
-		var q: Dictionary = pieces[int(id)]
-		var x0: Transform3D = was[id]
-		var off := x0.origin - mid
-		var lifted := Transform3D(x0.basis, x0.origin + Vector3(0.0, up, 0.0))
-		var over := Transform3D(x0.basis, drop_at + off)
-		var pop := _leg(0.5, x0, lifted, 0.0, seed)
-		var carry := _leg(3.0, lifted, over, float(way["lift"]), seed, way["rise"])
-		if first:
-			pop["sound"] = {"kind": "pop", "at": x0.origin, "size": _part_half(q), "strength": 0.9}
-			pop["sound_early"] = true
-		var x1 := heap.deposit(int(id), float(q["w"]) * STUD, float(q["d"]) * STUD, _tall(String(q["kind"])), _rng,
-			Vector2(over.origin.x, over.origin.z) + _around(0.035), 0.03)
-		(q["rests"] as Array).append([steps.size() - 1, false, x1])
-		var legs: Array = [pop, carry, {"w": 1.0, "wait": true}]
-		_commit(st, int(id), legs)
-		# ...LET GO, in real time: a fall takes what a fall takes, however the step is paced
-		var mv: Dictionary = (st["moves"] as Array)[(st["moves"] as Array).size() - 1]
-		var share := 3.5 / 4.5
-		var delay := Hands.share(hash([seed, id]), 31) * delay_most
-		var dy := maxf(over.origin.y - x1.origin.y, 0.005)
-		var secs := sqrt(2.0 * dy / 9.81) / FALL_SHARE
-		(mv["segs"] as Array).append({"a": share, "delay": delay, "secs": secs, "fall": true, "x0": over, "x1": x1, "seed": hash([seed, id, "fall"])})
-		(st["sounds"] as Array).append({"kind": "clack", "u": share, "after": delay + secs * FALL_SHARE, "at": x1.origin, "size": _part_half(q), "strength": lerpf(0.55, 1.0, Hands.share(hash([seed, id]), 32))})
-		first = false
-
-
-## How much of a fall's time it spends falling, the rest a small bounce and settling.
-const FALL_SHARE := 0.62
-## ...the bounce's height, against the fall's, and the most (meters); and how many turns it tumbles falling.
-const BOUNCE := 0.1
-const BOUNCE_MOST := 0.012
-const TUMBLE := 0.8
+		_into_stock(int(id), stock)
 
 
 func _wreck(op: Dictionary) -> void:
@@ -1506,8 +1506,7 @@ func _turn(op: Dictionary) -> void:
 		return
 	var row: Dictionary = OPS["turn"]
 	var st := _step("turn", float(row["natural"]), float(row["floor"]))
-	st["yaw"] = [_yaw, _yaw + by]
-	(st["sounds"] as Array).append({"kind": "slide", "u": 0.12, "u1": 0.88, "at": world["base_at"], "strength": 0.6})
+	st.merge({"y0": _yaw, "y1": _yaw + by})
 	_yaw += by
 	_counted("turn")
 
@@ -1722,14 +1721,62 @@ func floor_of(name: String) -> float:
 
 # --- time, laid over it --------------------------------------------------------------------------------
 
-## HOW LONG A STEP'S SHARE OF THE LEFTOVER IS, against another's: a pause takes it up as a person would, stopped to look; any other
-## step a little before it, a moment between pieces.
+## HOW LONG A STOP'S SHARE OF THE LEFTOVER IS, against another's: a pause takes it up as a person would, stopped to look.
 const GAP_PAUSE := 4.0
 const GAP_OTHER := 1.0
 
+## WHAT THE PLAN KNOWS OF A STEP'S TIME, before the record has it: how long its moves take at the least, and the rest one stop as it begins.
+func _plan_times() -> void:
+	var n := steps.size()
+	_t0 = PackedFloat64Array()
+	_t1 = PackedFloat64Array()
+	_t0.resize(n)
+	_t1.resize(n)
+	_t0.fill(INF)
+	_t1.fill(INF)
+	_len = PackedFloat32Array()
+	_len.resize(n)
+	_tau0 = PackedFloat32Array()
+	_tau0.resize(n)
+	_tau0.fill(NAN)
+	_stops = []
+	_stops.resize(n)
+	_stop_d = []
+	_stop_d.resize(n)
+	_hand = []
+	_hand.resize(n)
+	_hand.fill({})
+	for k in n:
+		var st: Dictionary = steps[k]
+		var floors := float(st["floor"])
+		var natural := float(st["natural"])
+		if String(st["do"]) == "pause":
+			_len[k] = 0.0
+			_stops[k] = [[0.0, natural, floors, GAP_PAUSE]]
+		else:
+			_len[k] = floors
+			_stops[k] = [[0.0, maxf(natural - floors, 0.0), 0.0, GAP_OTHER]]
+		_stop_d[k] = PackedFloat32Array([0.0])
+
+
+## WHAT THE RECORD SAYS OF STEP [param k] ([method AssemblyBake._share_stops]): it replaces what the plan guessed, and it is placed again.
+func take_record(k: int, st: Dictionary) -> void:
+	if k < 0 or k >= steps.size():
+		return
+	_len[k] = float(st["t1"]) - float(st["t0"])
+	_tau0[k] = float(st["t0"])
+	_stops[k] = st["stops"]
+	_hand[k] = st.get("hand", {})
+	var ds := PackedFloat32Array()
+	ds.resize((st["stops"] as Array).size())
+	_stop_d[k] = ds
+	_t0[k] = INF
+	_t1[k] = INF
+
+
 ## THE ACTS PLACED IN TIME: [param runs] `[{i, t0, t1}]` as [member TableWork.runs] has them, [param names] each act's name by its `i`,
 ## and what has begun by [param now] kept where it is - a live reading places acts again every sentence, and a piece in the
-## air must not jump. A stretch given less than its floor overruns ([member TableWork.schedule] keeps the next act behind it).
+## air must not jump. A stretch given less than its moves take overruns ([member TableWork.schedule] keeps the next act behind it).
 func lay(runs: Array, acts: Array, now: float) -> void:
 	if steps.is_empty():
 		return
@@ -1770,14 +1817,13 @@ func _lay_act(k0: int, k1: int, t0: float, t1: float, now: float) -> float:
 	var natural := 0.0
 	var least := 0.0
 	var weights := 0.0
-	var w := PackedFloat32Array()
 	for i in range(k, k1):
-		var st: Dictionary = steps[i]
-		natural += float(st["natural"])
-		least += float(st["floor"])
-		var g := GAP_PAUSE if String(st["do"]) == "pause" else GAP_OTHER * lerpf(0.3, 1.7, Hands.share(hash([seed_value, "gap"]), i))
-		w.append(g)
-		weights += g
+		natural += _len[i]
+		least += _len[i]
+		for s in _stops[i]:
+			natural += float((s as Array)[1])
+			least += float((s as Array)[2])
+			weights += float((s as Array)[3])
 	var left := t1 - t
 	var pace := 0.0
 	var spare := 0.0
@@ -1787,16 +1833,17 @@ func _lay_act(k0: int, k1: int, t0: float, t1: float, now: float) -> float:
 	elif natural > least:
 		pace = clampf((left - least) / (natural - least), 0.0, 1.0)
 	for i in range(k, k1):
-		var st: Dictionary = steps[i]
-		var d := lerpf(float(st["floor"]), float(st["natural"]), pace)
-		var gap := spare * float(w[i - k]) / maxf(weights, 1e-6)
-		if String(st["do"]) == "pause":
-			d += gap
-			gap = 0.0
-		t += gap
+		var ds := PackedFloat32Array()
+		var sum := 0.0
+		for s in _stops[i]:
+			var a: Array = s
+			var d := lerpf(float(a[2]), float(a[1]), pace) + spare * float(a[3]) / maxf(weights, 1e-6)
+			ds.append(d)
+			sum += d
+		_stop_d[i] = ds
 		_t0[i] = t
-		_t1[i] = t + d
-		t += d
+		_t1[i] = t + _len[i] + sum
+		t = _t1[i]
 	return t
 
 
@@ -1815,150 +1862,133 @@ func step_at(t: float) -> int:
 	return out
 
 
-## The plate's turn at [param t].
+## HOW FAR INTO ITS OWN MOVES STEP [param k] IS AT [param t]: its stops take time and no record.
+func offset_in(k: int, t: float) -> float:
+	var e := t - _t0[k]
+	var stops: Array = _stops[k]
+	var ds: PackedFloat32Array = _stop_d[k]
+	for i in stops.size():
+		var o := float((stops[i] as Array)[0])
+		if e <= o:
+			return maxf(e, 0.0)
+		var d := float(ds[i]) if i < ds.size() else 0.0
+		if e <= o + d:
+			return o
+		e -= d
+	return minf(e, _len[k])
+
+
+## WHERE ON THE RECORD [param t] FALLS: -1 before the first step, and NAN at a step the record does not hold yet.
+func tau_at(t: float) -> float:
+	var k := step_at(t)
+	if k < 0:
+		return -1.0
+	if is_nan(_tau0[k]):
+		return NAN
+	return _tau0[k] + offset_in(k, t)
+
+
+## WHAT IS IN HAND AT [param t], from the grip until it is seated or let go, stops and moves alike: `{id, h, left, room, back, free, seed}` for [method Fingers.on] - how long it
+## has been in hand and has to go, the room the hand has now, how far it has drawn back, and how long of it all its fingers have had room - or `{}`. It is only the record that stops:
+## a hand holding a thing is never still. Worked out from the stops as they are laid, so it is the same however the show got to [param t].
+func held_at(t: float) -> Dictionary:
+	var k := step_at(t)
+	if k < 0 or k >= _hand.size() or (_hand[k] as Dictionary).is_empty():
+		return {}
+	var hand: Dictionary = _hand[k]
+	var from := float(hand["from"])
+	var to := float(hand["to"])
+	var stops: Array = _stops[k]
+	var ds: PackedFloat32Array = _stop_d[k]
+	var e := t - _t0[k]
+	var shown_from := from
+	var shown_to := to
+	for i in stops.size():
+		var d := float(ds[i]) if i < ds.size() else 0.0
+		if float((stops[i] as Array)[0]) <= from:
+			shown_from += d
+		if float((stops[i] as Array)[0]) <= to:
+			shown_to += d
+	if e <= shown_from or e >= shown_to:
+		return {}
+	var knots: Array = hand["knots"]
+	var o := offset_in(k, t)
+	var room := room_at(knots, o)
+	var back := 0.0
+	var free := 0.0
+	for i in range(1, knots.size()):
+		if float((knots[i - 1] as Array)[1]) >= 1.0 and float((knots[i] as Array)[1]) >= 1.0:
+			free += clampf(o, float((knots[i - 1] as Array)[0]), float((knots[i] as Array)[0])) - float((knots[i - 1] as Array)[0])
+	var rem := e
+	for i in stops.size():
+		var oi := float((stops[i] as Array)[0])
+		var d := float(ds[i]) if i < ds.size() else 0.0
+		if rem <= oi:
+			break
+		var s := minf(rem - oi, d)
+		if oi >= from and oi <= to:
+			var r := room_at(knots, oi)
+			if r >= 1.0:
+				free += s
+			elif r >= Fingers.BACK_FROM and r < Fingers.OVER_THINGS.x:
+				free += Fingers.free_in(s, d)
+				if s < d:
+					back = Fingers.drawn_back(s, d)
+					room = maxf(room, back)
+		if s < d:
+			break
+		rem -= d
+	return {"id": int(hand["id"]), "h": e - shown_from, "left": shown_to - e, "room": room, "back": back, "free": free, "seed": hash([seed_value, k, "fingers"])}
+
+
+## The room a hand has at offset [param o] of its step, between the [param knots] the record left.
+static func room_at(knots: Array, o: float) -> float:
+	var last: Array = knots[0]
+	if o <= float(last[0]):
+		return float(last[1])
+	for kn in knots:
+		var a: Array = kn
+		if o <= float(a[0]):
+			return lerpf(float(last[1]), float(a[1]), Hands.smooth((o - float(last[0])) / maxf(float(a[0]) - float(last[0]), 1e-5)))
+		last = a
+	return float(last[1])
+
+
+## The plate's turn at [param t], for what the plan alone knows ([member AssemblyTrack.turns] has what really happened).
 func yaw_at(t: float, k: int) -> float:
 	var y := float(world.get("yaw", 0.0))
 	for i in range(mini(k, steps.size() - 1), -1, -1):
 		var st: Dictionary = steps[i]
-		if st.has("yaw"):
-			var ends: Array = st["yaw"]
+		if st.has("y1"):
 			if t >= _t1[i]:
-				return float(ends[1])
-			return lerpf(float(ends[0]), float(ends[1]), Hands.smooth((t - _t0[i]) / maxf(_t1[i] - _t0[i], 1e-4)))
+				return float(st["y1"])
+			return lerpf(float(st["y0"]), float(st["y1"]), Hands.smooth((t - _t0[i]) / maxf(_t1[i] - _t0[i], 1e-4)))
 	return y
 
 
-## PIECE [param id] AT [param t], where it is in the middle of a move or at rest: the world's pose. [param k], [param yaw]: the step
-## at [param t] and the plate's turn then, for what asks many pieces at one moment.
+## WHERE THE PLAN HAS PIECE [param id] AT [param t], with no record to say: where it last came to rest. [param k], [param yaw]: the step at
+## [param t] and the plate's turn then, for what asks many pieces at one moment.
 func pose_of(id: int, t: float, k := -2, yaw := NAN) -> Transform3D:
 	var kk := step_at(t) if k == -2 else k
 	var y := yaw_at(t, kk) if is_nan(yaw) else yaw
-	if kk >= 0:
-		var st: Dictionary = steps[kk]
-		if t < _t1[kk]:
-			for mv in st["moves"]:
-				if int((mv as Dictionary)["id"]) == id:
-					return move_pose(mv as Dictionary, kk, t)
 	var rests: Array = (pieces[id] as Dictionary)["rests"]
+	if rests.is_empty():
+		return Transform3D.IDENTITY
 	var last: Array = rests[0]
 	for r in rests:
-		var step := int((r as Array)[0])
-		if step > kk:
-			break
-		if step == kk and t < _t1[kk]:
+		if int((r as Array)[0]) > kk:
 			break
 		last = r
 	return base_xf(y) * (last[2] as Transform3D) if bool(last[1]) else last[2]
 
 
-## WHERE A PIECE IS on move [param mv] of step [param k] at [param t]: its legs in the shares of the step they were laid in; a fall
-## in real time from where it is let go, however the step is paced.
-func move_pose(mv: Dictionary, k: int, t: float) -> Transform3D:
-	var segs: Array = mv["segs"]
-	var d := maxf(_t1[k] - _t0[k], 1e-4)
-	var u := (t - _t0[k]) / d
-	if segs.is_empty():
-		return Transform3D.IDENTITY
-	var first: Dictionary = segs[0]
-	if u < float(first["a"]):
-		return first["x0"]
-	for s in segs:
-		var sd: Dictionary = s
-		if sd.has("fall"):
-			var start := float(sd["a"]) * d + float(sd.get("delay", 0.0))
-			var lin := ((t - _t0[k]) - start) / maxf(float(sd["secs"]), 1e-4)
-			if lin < 0.0:
-				return sd["x0"]
-			return _fall_pose(sd, lin)
-		if u <= float(sd["b"]):
-			return seg_pose(sd, (u - float(sd["a"])) / maxf(float(sd["b"]) - float(sd["a"]), 1e-5), t)
-	return (segs[segs.size() - 1] as Dictionary)["x1"]
-
-
-## A STRETCH OF A HAND'S MOVE at [param lin] of it ([Hands]: minimum jerk, bowed, up clear first; held, never quite still). [param T]:
-## show time, which a held thing's drift keeps.
-static func seg_pose(s: Dictionary, lin: float, T: float) -> Transform3D:
-	var x0: Transform3D = s["x0"]
-	var x1: Transform3D = s["x1"]
-	var seed := int(s.get("seed", 0))
-	var p := Hands.carried(x0.origin, x1.origin, Vector3.ZERO, Vector3.ZERO, float(s.get("lift", 0.0)), lin, seed, s.get("rise", Vector2.ZERO))
-	var q := Quaternion(x0.basis.orthonormalized()).slerp(Quaternion(x1.basis.orthonormalized()), Hands.smooth(lin))
-	var b := Basis(q)
-	var hold := float(s.get("hold", 0.0))
-	if hold > 0.0:
-		var dr: Array = Hands.drift(T, seed, hold * Hands.held(lin))
-		p += dr[0] as Vector3
-		b = (dr[1] as Basis) * b
-	return Transform3D(b, p)
-
-
-## A PIECE LET GO, at [param lin] of its fall: down under gravity, a small bounce where it lands, and turning over on the way into how
-## it comes to lie.
-static func _fall_pose(s: Dictionary, lin: float) -> Transform3D:
-	var x0: Transform3D = s["x0"]
-	var x1: Transform3D = s["x1"]
-	if lin >= 1.0:
-		return x1
-	var f := FALL_SHARE
-	var dy := x0.origin.y - x1.origin.y
-	var p := Vector3.ZERO
-	var settle := clampf(lin / (f + (1.0 - f) * 0.6), 0.0, 1.0)
-	p.x = lerpf(x0.origin.x, x1.origin.x, settle)
-	p.z = lerpf(x0.origin.z, x1.origin.z, settle)
-	if lin < f:
-		var v := lin / f
-		p.y = lerpf(x0.origin.y, x1.origin.y, v * v)
-	else:
-		var v := (lin - f) / (1.0 - f)
-		p.y = x1.origin.y + minf(absf(dy) * BOUNCE, BOUNCE_MOST) * 4.0 * v * (1.0 - v)
-	var seed := int(s.get("seed", 0))
-	var q := Quaternion(x0.basis.orthonormalized()).slerp(Quaternion(x1.basis.orthonormalized()), Hands.smooth(settle))
-	var spin := Basis(_axis(seed), TUMBLE * TAU * (1.0 - settle) * (1.0 if Hands.share(seed, 40) < 0.5 else -1.0))
-	return Transform3D(spin * Basis(q), p)
-
-
-## WHAT IS HEARD between [param t0] and [param t1]: `[{t, kind, at, size, strength}]`, in the step's own time, a dig's rummage as
-## many small knocks as it makes. The same moments every time they are asked for, so a render and a scrub hear the same.
-func sounds_in(t0: float, t1: float) -> Array:
-	var out: Array = []
-	var k := step_at(t1)
-	while k >= 0:
-		if _t1[k] + 1.5 < t0:
-			break
-		var st: Dictionary = steps[k]
-		var d := maxf(_t1[k] - _t0[k], 1e-4)
-		for s in st["sounds"]:
-			var sd: Dictionary = s
-			var at_t := _t0[k] + float(sd["u"]) * d + float(sd.get("after", 0.0))
-			if sd.has("u1"):
-				_spread_sound(sd, k, at_t, _t0[k] + float(sd["u1"]) * d, t0, t1, out)
-			elif at_t >= t0 and at_t < t1:
-				out.append({"t": at_t, "kind": String(sd["kind"]), "at": sd.get("at", Vector3.ZERO), "size": float(sd.get("size", 0.02)), "strength": float(sd.get("strength", 1.0))})
-		k -= 1
+## WHAT A RECORD DEPENDS ON, STEP BY STEP: one name for each step, made from every step up to it, so what is already written can be gone on from
+## and a change to an act redoes only what comes after it.
+func step_names(from: int) -> PackedInt64Array:
+	var out := PackedInt64Array()
+	out.resize(steps.size())
+	var h := from
+	for k in steps.size():
+		h = hash([h, var_to_str(steps[k])])
+		out[k] = h & 0x7FFFFFFFFFFFFFFF
 	return out
-
-
-## HOW OFTEN a rummage knocks (a second, at its fullest), and how many at once at most, for each second of it: not in a beat.
-const RUMMAGE_RATE := 16.0
-
-## A rummage or a slide, its knocks at moments drawn from the step's seed - a rummage in bursts as a hand goes in, stirs and comes back,
-## never a steady rattle. Those from [param from_t] to [param to_t] that fall within [param t0] and [param t1].
-func _spread_sound(sd: Dictionary, k: int, from_t: float, to_t: float, t0: float, t1: float, out: Array) -> void:
-	var a := maxf(from_t, t0)
-	var b := minf(to_t, t1)
-	if b <= a:
-		return
-	var rate := RUMMAGE_RATE * float(sd.get("strength", 1.0)) if String(sd["kind"]) == "rummage" else 6.0
-	var i0 := int(floor(a * rate))
-	var i1 := int(ceil(b * rate))
-	for i in range(i0, i1):
-		var seed := hash([seed_value, k, i])
-		var when := (float(i) + Hands.share(seed, 1)) / rate
-		if when < a or when >= b:
-			continue
-		# ...in bursts: slow waves of how busy the hand is
-		var busy := 0.5 + 0.5 * sin(when * 1.7 + float(k)) * sin(when * 0.61 + 2.0 * float(k))
-		if Hands.share(seed, 2) > busy * 0.9 + 0.1:
-			continue
-		var kind := "knock" if String(sd["kind"]) == "rummage" else "scuff"
-		out.append({"t": when, "kind": kind, "at": sd.get("at", Vector3.ZERO), "size": lerpf(0.006, 0.024, Hands.share(seed, 3)), "strength": lerpf(0.25, 1.0, pow(Hands.share(seed, 4), 2.0)) * float(sd.get("strength", 1.0))})

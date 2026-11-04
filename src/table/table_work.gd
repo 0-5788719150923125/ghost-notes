@@ -280,6 +280,8 @@ func clear() -> void:
 	things = []
 	works = []
 	groups = []
+	if assembly != null:
+		assembly.clear()
 	assembly = null
 	assembly_spec = {}
 	assembly_notes = PackedStringArray()

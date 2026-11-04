@@ -131,7 +131,7 @@ static func archive(show_key: String, except: int, most := 40) -> Array:
 		if table is Dictionary and (table as Dictionary).get("light") is Dictionary:
 			light = Lights.summary(Lights.sanitize((table as Dictionary)["light"]))
 		out.append({"seed": s, "plan": (h as Dictionary)["plan"], "cards": cards, "beats": beats, "things": things, "air": air, "furniture": furniture,
-			"light": light, "intro": ep.read_text("say:intro"), "close": ep.read_text("say:close")})
+			"light": light, "intro": ep.read_text("say:intro"), "close": ep.read_text("say:close"), "model": String(ep.model().get("name", ""))})
 	return out
 
 
@@ -162,6 +162,8 @@ func file_of(step: String) -> String:
 			return dir.path_join("script.md")
 		"table":
 			return dir.path_join("table.json")
+		"model":
+			return dir.path_join("model.json")
 		"meta":
 			return dir.path_join("meta.json")
 		"upload":
@@ -270,6 +272,8 @@ func beat_count() -> int:
 ## is done.
 func steps() -> Array:
 	var out := ["plan", "draw"]
+	if wants_model():
+		out.append("model")
 	if cardless():
 		out.append_array(["image:surface", "image:backdrop", "table"])
 		if wants_height():
@@ -410,15 +414,17 @@ func needs(step: String) -> Array:
 			return out
 		"script":
 			return ["say:close"]
+		"model":
+			return ["plan"]
 		"table":
 			# the table is set from the plan, LOOKING AT the cloth it stands on - and at the room, which
 			# its light must agree with (where the windows are, which side the sun comes from)
-			return ["plan", "image:surface", "image:backdrop"]
+			return ["plan", "image:surface", "image:backdrop"] + (["model"] if wants_model() else [])
 		"acts":
 			# the work is blocked on the table as it is set, with the cards as they were drawn (the work is
 			# made of them: an ingredient fetched and ground) - no reader sees past its own beat's - and, where
 			# a card is WRITTEN, what is written on it (a recipe's steps are the work)
-			var out := ["plan", "draw", "table"]
+			var out := ["plan", "draw", "table"] + (["model"] if wants_model() else [])
 			var p: Variant = read_json("plan")
 			if p is Dictionary and (p as Dictionary).get("look") is Dictionary and CardTable.written((p as Dictionary)["look"]):
 				for k in range(1, n + 1):
@@ -483,6 +489,47 @@ static func _soft(from: String, to: String) -> bool:
 		or (to.begins_with("design:") and from.begins_with("design:")) \
 		or (to == "table" and (from == "image:surface" or from == "image:backdrop")) \
 		or (to == "image:height" and from == "table")
+
+
+## WHETHER THIS EPISODE DESIGNS WHAT IT BUILDS FIRST ([AssemblyModel]): a plan that builds, unless its work was blocked before there were models to build to - a finished episode goes on as it was made, and blocking its work again starts from a model.
+func wants_model() -> bool:
+	if has("model"):
+		return true
+	if has("acts"):
+		return false
+	var p: Variant = read_json("plan")
+	return p is Dictionary and (p as Dictionary).get("assembly") == true
+
+
+var _model_read_at := -1
+var _model_kept := {}
+
+
+## WHAT WAS DESIGNED, as [method AssemblyModel.make] left it, `{}` where nothing was.
+func model() -> Dictionary:
+	# ...READ ONCE FOR EACH TIME IT IS WRITTEN: it is a large file, and most of what comes after asks
+	var path := file_of("model")
+	var mt := FileAccess.get_modified_time(path) if FileAccess.file_exists(path) else -1
+	if mt != _model_read_at:
+		var d: Variant = read_json("model") if mt >= 0 else null
+		_model_kept = (d as Dictionary)["made"] if d is Dictionary and (d as Dictionary).get("made") is Dictionary else {}
+		_model_read_at = mt
+	return _model_kept
+
+
+## The model in words, for whoever works on the episode after it is designed: what it is, how big, and its sections in the order they go on. "" where there is none.
+func model_words() -> String:
+	var m := model()
+	if m.is_empty():
+		return ""
+	var lines := PackedStringArray()
+	lines.append("THE MODEL: %s. %d parts on a plate of %d x %d studs (%.0f by %.0f cm), standing %.0f cm tall. Its sections, in the order they go on:" % [String(m.get("name", "")), (m["parts"] as Array).size(),
+		int((m["size"] as Array)[0]), int((m["size"] as Array)[1]), float((m["size"] as Array)[0]) * Assembly.STUD * 100.0, float((m["size"] as Array)[1]) * Assembly.STUD * 100.0, float(m["top"]) * Assembly.PLATE * 100.0])
+	for sec in m["sections"]:
+		var sd: Dictionary = sec
+		if int(sd["parts"]) > 0:
+			lines.append("- \"%s\", %d parts%s" % [String(sd["name"]), int(sd["parts"]), (": " + String(sd["about"])) if not String(sd["about"]).is_empty() else ""])
+	return "\n".join(lines)
 
 
 ## REDO [param step]: delete it and everything made from it. Returns what went. A card painted or

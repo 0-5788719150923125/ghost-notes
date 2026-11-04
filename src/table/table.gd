@@ -675,7 +675,10 @@ func advance(_features, delta: float, _bookend: float) -> void:
 	_work.tick(_now)
 	# A LIVE SHOW WAITS FOR WHAT IS IN THINGS ([method TablePhysics.behind]): drawn behind its bake, it showed what an export never
 	# would - a thing an act moves where its act sends it, through whatever was there
-	var behind := _work.physics != null and feed != null and _work.physics.behind(_now)
+	# ...AND FOR THE BRICKS' RECORD ([method TableAssembly.behind]), which asking begins
+	var behind := feed != null and _work.physics != null and _work.physics.behind(_now)
+	if feed != null and _work.assembly != null and _work.assembly.behind(_now):
+		behind = true
 	if behind != _waiting:
 		_waiting = behind
 		feed.wait_for(WAIT_FOR, behind)
@@ -685,7 +688,10 @@ func advance(_features, delta: float, _bookend: float) -> void:
 	if _work.physics != null and feed != null:
 		var left := feed.show_length() + _follow.offset - _now + 2.0 if feed.show_length() > 0.0 else BUFFER
 		_work.physics.reach = clampf(left, TablePhysics.HORIZON, BUFFER) if feed.paused() else TablePhysics.HORIZON
-		feed.ready_ahead(WAIT_FOR, maxf(_work.physics.baked_to() - _now, 0.0))
+		var ready_to: float = _work.physics.baked_to()
+		if _work.assembly != null:
+			ready_to = minf(ready_to, _work.assembly.ready_to(_now))
+		feed.ready_ahead(WAIT_FOR, maxf(ready_to - _now, 0.0))
 		_ready_said = true
 	# THE WORK, HEARD ([WorkSounds]): the table on the stage only - a preview stands one and never advances it
 	if _sounds == null or _sounds.work != _work:

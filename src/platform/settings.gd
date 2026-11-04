@@ -73,6 +73,9 @@ func _ready() -> void:
 	# read defaults and a probe wrote them back over a tuned pacing and flourish.
 	elif is_probe_launch(OS.get_cmdline_args()):
 		why = "a test"
+	# ...and the bricks' record ([AssemblyBake]), a second ghost with nothing to say to anyone's settings
+	elif OS.get_cmdline_args().has("res://src/table/assembly_bake.gd"):
+		why = "the bricks' record"
 	_read_only = not why.is_empty()
 	_cfg.load(PATH)              # missing file is fine - everything falls back to its default
 	if _read_only:

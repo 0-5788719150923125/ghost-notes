@@ -17,6 +17,10 @@ extends Node
 ## an open card in a pile is not folded by it. OPENING SLIDES: the height passes between its ends, what is under it going with
 ## it, and an assigned fold is there at once and says nothing (THE CONTROL: fold() says). THE WHEEL over a bar scrolls.
 ## THE FAN: pointing at a bar in a pile moves those on it off it (THE CONTROL: a bar the other side of it stays).
+## A VIEW AT THE END STAYS THERE as what is in the cards grows, in the last card or above it, a list built again and a list gone
+## shorter too, and a panel that fits follows its last card past the window's foot (THE CONTROLS: a view at the top, or short of
+## the end, stays where it is; the wheel lets go of the end; a panel that fits does not follow a card above its last, or a new card; a card
+## the viewer opens comes as a press brings it, never dragged back to the end, and one opened where it stands keeps its bar under the pointer).
 ## A SMALL WINDOW closes the piles up, and a large one holds them at their peek. A CARD FREED takes its bar along.
 
 var _fails: Array = []
@@ -35,6 +39,7 @@ func _run() -> void:
 	await _presses()
 	await _slides()
 	await _fan()
+	await _keeps_the_end()
 	_sizes()
 	await _freed()
 	if _fails.is_empty():
@@ -341,6 +346,174 @@ func _fan() -> void:
 	_point_at(Vector2(1000, 600))
 	await _settle(30)
 	_ok(absf(_bar_y(panel, at) - from) < 1.0, "the pointer gone, the pile closes")
+	panel.free()
+	await _settle(1)
+
+
+## [param count] more rows on [param card], as a list's growing does.
+func _grow(card: Card, count: int) -> void:
+	for r in count:
+		var l := Label.new()
+		l.text = "more"
+		l.custom_minimum_size.y = 24.0
+		card.body.add_child(l)
+
+
+func _at_end(panel: SidePanel) -> bool:
+	var bar := panel._scroll.get_v_scroll_bar()
+	return bar.value >= bar.max_value - bar.page - 1.0
+
+
+## Whether [param card]'s last row can be read.
+func _foot_shows(panel: SidePanel, card: Card) -> bool:
+	var rows := card.body.get_children()
+	var below: float = panel._scroll.global_position.y + panel._scroll.size.y
+	return (rows[rows.size() - 1] as Control).get_global_rect().end.y <= below + 1.0
+
+
+## A VIEW AT THE END STAYS THERE
+func _keeps_the_end() -> void:
+	var panel := await _panel(8, 40)
+	var all := _cards(panel)
+	var last: Card = all[7]
+	var bar := panel._scroll.get_v_scroll_bar()
+	_ok(bar.value == 0.0 and not _at_end(panel), "the control: a panel opens at its top, with more to scroll")
+	_grow(last, 6)
+	await _settle(2)
+	_ok(bar.value == 0.0, "the control: a view at the top stays there as the last card grows")
+	bar.value = bar.max_value - bar.page - 40.0
+	await _settle(2)
+	var short := bar.value
+	_grow(last, 6)
+	await _settle(2)
+	_ok(is_equal_approx(bar.value, short), "the control: a view 40 px short of the end stays where it is")
+	bar.value = bar.max_value
+	await _settle(2)
+	var was := bar.value
+	_grow(last, 6)
+	await _settle(2)
+	_ok(bar.value > was + 100.0 and _at_end(panel) and _foot_shows(panel, last),
+		"at the end, rows added to the last card: it stays at the end, its new last row in sight (%d to %d)" % [int(was), int(bar.value)])
+	was = bar.value
+	_grow(all[2], 6)
+	await _settle(2)
+	_ok(bar.value > was + 100.0 and _at_end(panel) and _foot_shows(panel, last), "...and rows added to a card above it")
+	# THE LIST BUILT AGAIN, longer: what it had freed, and more, in one frame
+	var rows := last.body.get_children()
+	for r in rows.slice(rows.size() - 4):
+		last.body.remove_child(r)
+		r.queue_free()
+	_grow(last, 10)
+	await _settle(2)
+	_ok(_at_end(panel) and _foot_shows(panel, last), "...and a list built again, longer")
+	# SHORTER, THEN LONGER, frames apart
+	rows = last.body.get_children()
+	for r in rows.slice(rows.size() - 10):
+		last.body.remove_child(r)
+		r.queue_free()
+	await _settle(2)
+	_ok(_at_end(panel), "a list grown shorter leaves it at the end")
+	_grow(last, 12)
+	await _settle(2)
+	_ok(_at_end(panel) and _foot_shows(panel, last), "...and it follows the list longer again")
+	# THE WHEEL LETS GO
+	_click(last, MOUSE_BUTTON_WHEEL_UP)
+	await _settle(2)
+	var away := bar.value
+	_ok(not _at_end(panel), "the control: the wheel takes it from the end")
+	_grow(last, 6)
+	await _settle(2)
+	_ok(is_equal_approx(bar.value, away), "...and from there it is left where it is")
+	# A CARD THE VIEWER OPENS COMES AS A PRESS BRINGS IT
+	var above: Card = all[1]
+	above.folded = true
+	await _settle(2)
+	bar.value = bar.max_value
+	await _settle(2)
+	_ok(panel._deck.side_of(above) == -1 and _at_end(panel), "the control: at the end, a folded card lies in the top pile")
+	_click(above)
+	await get_tree().create_timer(0.4).timeout
+	await _settle()
+	_ok(not above.folded and panel._deck.side_of(above) == 0 and not _at_end(panel), "a press opens it and brings it, and the view is not dragged back to the end")
+	# ...AND THE LAST CARD ITSELF, LONG, SHOWS ITS BAR AND ITS FIRST ROWS, NOT ITS FOOT
+	last.folded = true
+	await _settle(2)
+	bar.value = bar.max_value
+	await _settle(2)
+	_ok(_at_end(panel), "the control: the last card folded, at the end")
+	_click(last)
+	await get_tree().create_timer(0.4).timeout
+	await _settle()
+	_ok(not last.folded and panel._deck.side_of(last) == 0 and not _at_end(panel), "a press opens the last card from its bar, and shows its start, not its foot")
+	panel.free()
+	await _settle(1)
+	# A SHORT CARD OPENED WHERE IT STANDS: nothing has to bring it, so nothing else takes the view from the end, and its bar stays under the pointer
+	panel = await _panel(2, 40)
+	for key in ["short", "foot"]:
+		var box := panel.add_card(key, key, &"paper")
+		# the last card tall enough that the short one, open, still clears its bar: nothing need scroll to bring it
+		for r in (3 if key == "short" else 14):
+			var l := Label.new()
+			l.custom_minimum_size.y = 24.0
+			box.add_child(l)
+	await _settle()
+	all = _cards(panel)
+	var short_card: Card = all[2]
+	short_card.folded = true
+	await _settle(2)
+	bar = panel._scroll.get_v_scroll_bar()
+	bar.value = bar.max_value
+	await _settle(2)
+	var bar_y := _bar_y(panel, short_card)
+	_ok(panel._deck.side_of(short_card) == 0 and _at_end(panel), "the control: at the end, a short folded card lies where it is, in no pile")
+	_click(short_card)
+	await get_tree().create_timer(0.4).timeout
+	await _settle()
+	_ok(not short_card.folded and absf(_bar_y(panel, short_card) - bar_y) < 1.0,
+		"a press opens it with its bar staying under the pointer, not following the end (%d to %d)" % [int(bar_y), int(_bar_y(panel, short_card))])
+	panel.free()
+	await _settle(1)
+	# A PANEL THAT FITS FOLLOWS ITS LAST CARD PAST THE WINDOW'S FOOT
+	panel = await _panel(3, 2)
+	all = _cards(panel)
+	bar = panel._scroll.get_v_scroll_bar()
+	_ok(bar.max_value - bar.page < 1.0, "the control: a panel that fits has nothing to scroll")
+	_grow(all[2], 60)
+	await _settle(4)
+	_ok(bar.value > 0.0 and _at_end(panel) and _foot_shows(panel, all[2]), "a panel that fits, its last card grown past the window: it follows (%d)" % int(bar.value))
+	panel.free()
+	await _settle(1)
+	# ...AND NOTHING ELSE
+	panel = await _panel(3, 2)
+	all = _cards(panel)
+	bar = panel._scroll.get_v_scroll_bar()
+	_grow(all[0], 60)
+	await _settle(4)
+	_ok(bar.value == 0.0 and bar.max_value - bar.page > 100.0, "the control: its first card grown past the window, it stays at the top")
+	panel.free()
+	await _settle(1)
+	panel = await _panel(2, 2)
+	bar = panel._scroll.get_v_scroll_bar()
+	var new_box := panel.add_card("new", "New", &"paper")
+	for r in 60:
+		var l := Label.new()
+		l.custom_minimum_size.y = 24.0
+		new_box.add_child(l)
+	await _settle(4)
+	_ok(bar.value == 0.0 and bar.max_value - bar.page > 100.0, "the control: a new card past the window's foot does not move it")
+	panel.free()
+	await _settle(1)
+	panel = await _panel(3, 2)
+	all = _cards(panel)
+	bar = panel._scroll.get_v_scroll_bar()
+	(all[0] as Card).folded = true
+	_grow(all[0], 60)
+	await _settle(4)
+	_ok(bar.max_value - bar.page < 1.0, "the control: its first card folded, long, the panel fits")
+	_click(all[0])
+	await get_tree().create_timer(0.4).timeout
+	await _settle()
+	_ok(not (all[0] as Card).folded and bar.value == 0.0 and bar.max_value - bar.page > 100.0, "a press opens it past the window's foot, and the view stays with it")
 	panel.free()
 	await _settle(1)
 

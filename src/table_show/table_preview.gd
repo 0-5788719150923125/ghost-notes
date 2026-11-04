@@ -1212,7 +1212,7 @@ func _placed(spec: Dictionary) -> Dictionary:
 ## call behind it timed out, and the agent gave up. Measured in a virtual KWin, on X11 and on Wayland: 435
 ## frames run in 3 s, none drawn. So once [constant UNDRAWN] frames pass with nothing drawn, the picture
 ## draws its own ([method _draw_unseen]).
-func _render(vp: SubViewport, frames: int) -> Image:
+static func _render(vp: SubViewport, frames: int) -> Image:
 	if vp == null or not is_instance_valid(vp):
 		return null
 	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS

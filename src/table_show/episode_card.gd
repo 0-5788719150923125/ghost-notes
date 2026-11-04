@@ -39,7 +39,7 @@ const KNOBS := {"show": "", "seed": 1, "environment": 0.5,
 	"painter_effort": ""}
 ## Who makes each kind of step (a step's name up to its first ":"), as a row's status names them.
 const MAKERS := {"plan": "producer", "design": "designer", "image": "painter", "check": "art director",
-	"table": "set dresser", "say": "reader", "acts": "puppeteer"}
+	"table": "set dresser", "say": "reader", "acts": "puppeteer", "model": "modeler"}
 ## EVERY STEP AS ITS ROW SAYS IT, "K" each card or beat: what it is called, and what its ⟳ does ("" for a step with no ⟳ of
 ## its own - the draw is a function of the seed, so dealing again deals the same cards, and a different deal is a different
 ## episode; a check and the depth come with their painting; the script with its readings). A ROW IS WHAT THE EPISODE HAS
@@ -53,6 +53,7 @@ const STEPS := {
 	"image:back:": {"label": "Back", "again": "Paint a new back for this printing"},
 	"image:surface": {"label": "Cloth", "again": "Paint a new cloth"},
 	"image:backdrop": {"label": "Room", "again": "Paint a new room"},
+	"model": {"label": "Model", "again": "Design the model again"},
 	"table": {"label": "Set", "again": "Set the table again"},
 	"image:height": {"label": "Depth", "again": ""},
 	"acts": {"label": "Work", "again": "Block the work again"},
@@ -1011,6 +1012,8 @@ func _step_rows() -> Array:
 	for key in f["printings"]:
 		if has.has("image:back:%s" % key):
 			out.append(_row_of("image:back:%s" % key, "image:back:", "Table", busy, f, "Back: %s" % key))
+	if has.has("model"):
+		out.append(_row_of("model", "model", "", busy, f))
 	for st in ["image:surface", "image:backdrop", "table"]:
 		out.append(_row_of(st, st, "Table", busy, f))
 	if bool(f["depth"]):
@@ -1080,6 +1083,9 @@ func _said_of(step: String, f: Dictionary) -> String:
 	elif step == "draw":
 		var n := int(f["cards"])
 		said = ("%d card%s" % [n, "" if n == 1 else "s"]) if _episode.has("draw") else ""
+	elif step == "model":
+		var made := _episode.model()
+		said = "%s, %d parts" % [String(made.get("name", "")), (made.get("parts", []) as Array).size()] if not made.is_empty() else ""
 	elif step == "table":
 		var things := _table_things()
 		said = "%d thing%s" % [things.size(), "" if things.size() == 1 else "s"] if not things.is_empty() else ""
@@ -1104,7 +1110,7 @@ func _doing_of(step: String) -> String:
 	if a.is_empty():
 		return ""
 	var piece := "%s %s" % [String(MAKERS.get(step.get_slice(":", 0), "agent")), a]
-	var calls := _tools_progress(step) if step in ["table", "acts"] else ""
+	var calls := _tools_progress(step) if step in ["model", "table", "acts"] else ""
 	if not calls.is_empty():
 		# THE BUDGET IN VIEW: a run with no clock ends at its last picture, and the row says how near that is
 		var looked: Array = _producer.looks_of(step)

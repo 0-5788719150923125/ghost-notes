@@ -38,6 +38,11 @@ prompt:
   - "You today: {{reader_mood}}"
   - when: running_bit
     say: "Your running bit: {{running_bit}}"
+  - when: model_words
+    say: |-
+      What you are building, which is what the viewer watches come together, and which stands whole by the end:
+      {{model_words}}
+      Say what it is becoming when you would, and never talk as if it were something else.
   - when: "!cardless"
     say: "The spread: {{spread_name}}, {{spread_size}} cards:"
   - when: cardless
@@ -533,11 +538,18 @@ work_list:
           NOBODY TALKS THROUGH ALL OF IT. About {{quiet_seconds}} of those seconds pass with no words at all, only the work and the
           room, and that silence is as much a part of what you write as the words are. Put <!-- quiet: 40 --> where you stop talking,
           for as many seconds as you stop for, up to {{quiet_most}} at a time, on the line where it falls - between two sentences,
-          after a thought that needs nothing after it, or before you have said anything at all. Several long ones and a few short ones
+          or after a thought that needs nothing after it. Several long ones and a few short ones
           read truer than many middling ones, and the voice does not come back because the silence has gone on long: it comes back
           because something occurred to it. A step that begins in a silence has its mark there too, <!-- act: its name --> <!-- quiet:
           30 -->. The seconds here are an example: choose your own, and never write the same one twice in a row. The marks are
           never read aloud, and nothing in the words apologizes for them or remarks on them.
+  # AN EPISODE OPENS TALKING (the user, 2026-11-03: "a solid 45 seconds of silence at the beginning ... feels wrong. We definitely need an intro"; CardReading.opens_talking
+  # holds it whatever is written)
+  - when: quiet_opening
+    say: >-
+          THIS PASSAGE OPENS THE VIDEO, AND YOU ARE TALKING FROM ITS FIRST SECOND. No silence comes before your first words, and none longer than a breath until you have
+          talked for about a minute. This is the intro: the viewer has just sat down with you, so let them know who they are sitting with, where this is, what kind of day
+          it has been, and what you half have in mind, as this voice would say any of that to someone who had just come in. Only after that do the long silences begin.
   # A SHOW WHOSE WORDS ARE ABOUT SOMETHING ELSE while the work is seen (the brief says so): the work answers the
   # words, never the other way round
   - >-

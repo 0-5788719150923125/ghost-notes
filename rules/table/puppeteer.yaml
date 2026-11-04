@@ -227,18 +227,40 @@ acts:
 assembly:
   - >-
       WHAT IS BUILT HERE IS BUILT OF MANY SMALL PARTS: the table's ASSEMBLY (`parts` says where its plate and stocks are). It has one
-      law, `assemble`, and an act of it is one track, {"law": "assemble", "ops": [its steps]}, naming no thing: you say which part
-      and which stud, and the hand finds the piece, moves what lies on it, lifts it over what is in its way and presses it home.
+      law, `assemble`, and an act of it is one track, {"law": "assemble", "ops": [its steps]}, naming no thing: you say what the hands
+      do next, and the hand finds the piece, moves what lies on it, lifts it over what is in its way and presses it home.
       Leave `length` out: an act of it takes what its steps take, and `act` says how long that is.
+  - when: designed
+    say: |-
+      WHAT IS BUILT IS ALREADY DESIGNED, every part of it, and you do not change it. You decide how someone gets there.
+      {{model_words}}
   - insert: assembly_steps
-  - >-
+  - when: designed
+    say: >-
+      WHAT YOU WRITE IS HOW SOMEONE BUILDS THIS, AND IT ENDS WITH THE WHOLE OF IT STANDING. The brief says how this show's work goes:
+      follow it, in the steps themselves. Build it section by section, from the first to the last, a stretch at a time, and between
+      the stretches say what the hands really do: what is dug for, what is tried and put back, what is looked at and not used, where
+      they stop. Let it go wrong now and then, for real, as it would: some parts on wrong and noticed a while later and put right,
+      a stretch taken off and done again because it was not good enough. Anything that comes off is owed, and is built again before
+      the end, so whatever goes wrong costs time and nothing else. By the end of your last act the model stands whole, and from
+      then on it is only looked at. A step that is not a piece going on is not wasted: it is the work. An easy pace is the steps'
+      own, so never write a thing to make it go faster. Keep each act to one stretch the reader can talk under, a few minutes or
+      less, and write as many as the episode needs, at most as many as you are allowed (when you are told an act is too long, split it).
+  - when: "!designed"
+    say: >-
       WHAT YOU WRITE IS HOW SOMEONE BUILDS, NOT WHAT THEY END UP WITH. The brief says how this show's work goes: follow it, in the
       steps themselves. Say what the hands really do, in the order they do it, including what comes to nothing - what is dug for, what
       is tried and put back, what is looked at and not used, where they stop, what comes off again. A step that is not a piece going
       on is not wasted: it is the work. An easy pace is the steps' own, so never write a thing to make it go faster. Keep each act
       to one stretch the reader can talk under, a few minutes or less, and write as many as the episode needs, at most as many as
       you are allowed (when you are told an act is too long, split it).
-  - >-
+  - when: designed
+    say: >-
+      `act` answers with what each act comes to, what it COULD NOT do, and how far the model stands as it leaves it, section by section. Read
+      that. Whatever of it does not stand when the work is handed in is built in a stretch at the start of your last act, all at
+      once, so plan it yourself. `model` shows it from four sides.
+  - when: "!designed"
+    say: >-
       `act` answers with what each act comes to, what it COULD NOT do, and the whole model as it leaves it, level by level: read that
       to see what you have made, and fix what it could not do. `model` shows it from four sides.
 

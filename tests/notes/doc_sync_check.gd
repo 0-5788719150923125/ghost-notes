@@ -425,6 +425,9 @@ func _check_the_picture_travels() -> void:
 	Director.set_filter("static", 0.0)
 	Director.set_pacing(1.0)
 	Director.set_hand("kalam")
+	# as a note opened from nothing builds the card: the dial and its number both at the registry's default
+	var row: Dictionary = (_ed._block_cards["look"] as LookCard)._filter_rows["static"]
+	Card.put_slider(row["slider"], row["readout"], float(Registry.field(Filters.REGISTRY, "static", "default", 0.5)))
 	_doc.allow_autosave_for_test()
 	_doc._saved = _doc._snapshot()
 	_doc._autosave_for_test = false
@@ -437,8 +440,10 @@ func _check_the_picture_travels() -> void:
 	_ok(pic._hand_pick.get_item_text(pic._hand_pick.selected) == "Patrick",
 		"the panel does not show the document's handwriting")
 	_ok(is_equal_approx(pic._scene_hold.value, 1.4), "the panel does not show the document's scene hold")
-	var row: Dictionary = (_ed._block_cards["look"] as LookCard)._filter_rows["static"]
 	_ok((row["box"] as CheckBox).button_pressed, "the panel does not show the document's filter")
+	_ok(is_equal_approx((row["slider"] as HSlider).value, 0.3), "the dial does not show the document's filter amount")
+	_ok((row["readout"] as Label).text == "0.30",
+		"the number beside the dial says %s, not the document's 0.30" % (row["readout"] as Label).text)
 	# put the Director back as it was
 	Director.set_medium(String(was["medium"]))
 	for k in Filters.REGISTRY:

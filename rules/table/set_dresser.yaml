@@ -365,6 +365,10 @@ prompt:
           WHAT IS BUILT ON THIS TABLE is built of many small parts, on a plate in the middle of the picture, and you say where the
           pieces wait. Keep the way clear between the plate and where they wait, and nothing tall on it: the pieces go back and forth
           over it all episode. Build each container that holds them as a real hollow thing, in the frame and within a reach of the plate.
+  - when: model_words
+    say: |-
+      {{model_words}}
+      Stand the plate where all of that is seen whole, nothing cutting it off at the top of the picture, and clear of everything round it.
   - when: assembly
     insert: assembly_stock
   - when: assembly

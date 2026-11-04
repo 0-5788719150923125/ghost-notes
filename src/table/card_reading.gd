@@ -70,6 +70,11 @@ const CHAPTER_MARK := "<!--\\s*chapter\\s*:\\s*([\\s\\S]*?)\\s*-->"
 ## TableWork.schedule], an action's `tail`). An act cued inside one begins as much into it as is written before its mark.
 const QUIET_MARK := "<!--\\s*quiet\\s*:\\s*([0-9]*\\.?[0-9]+)\\s*-->"
 const QUIET_MOST := 240.0
+## AN EPISODE OPENS TALKING ([method opens_talking]): how many words come before any silence, what is only a breath (seconds), and the most that is kept of
+## what was written before them.
+const OPEN_WORDS := 60
+const OPEN_BREATH := 3.0
+const OPEN_HELD := 30.0
 
 
 static func _rx(pattern: String) -> RegEx:
@@ -116,7 +121,7 @@ static func speakable(body: String) -> String:
 ##               before it, `action` the index of its passage's own action (-1: none)
 ##   quiets    - [{si, s}]: each silence ([constant QUIET_MARK]), `si` the spoken word it comes before, `s` its seconds
 static func parse(body: String) -> Dictionary:
-	var src := Manuscript.strip_frontmatter(body)
+	var src := opens_talking(Manuscript.strip_frontmatter(body))
 	var mark := _rx(mark_pattern())
 	var passages: Array = []
 	# an Array, not a PackedStringArray: appending through `(d[k] as PackedStringArray)` appends
@@ -219,6 +224,49 @@ static func parse(body: String) -> Dictionary:
 
 ## HOW FAR INTO A SILENCE a mark from [param from] to [param to] in [param text] stands: the seconds of the quiet marks between the word
 ## before it and it, if there is any quiet between the word before it and the word after it; -1 when it is at a word.
+## AN EPISODE OPENS TALKING (the user, 2026-11-03, of the first real one, whose reader was told it might open in silence and did: "a solid 45 seconds of silence at
+## the beginning ... which feels wrong. We definitely need an intro, even if we're going to go silent at parts throughout"). Whatever was written and whenever: a
+## silence before the first [constant OPEN_WORDS] words comes out, and as much as [constant OPEN_HELD] of what came out falls at the next paragraph's end instead.
+## A breath stays. The work goes on under the talk, and its stops take what the silence would have given it.
+static func opens_talking(src: String) -> String:
+	var words := 0
+	var cuts: Array = []
+	var total := 0.0
+	var quiet := _rx(QUIET_MARK)
+	var at_end := -1
+	var tokens := _rx("<!--.*?-->|\\S+")
+	for m in tokens.search_all(src):
+		var tok := m.get_string()
+		if tok.begins_with("<!--"):
+			var q := quiet.search(tok)
+			if q != null and float(q.get_string(1)) > OPEN_BREATH:
+				cuts.append([m.get_start(), m.get_end()])
+				total += float(q.get_string(1))
+			elif tok.contains("table:") and words > 0:
+				at_end = m.get_start()
+				break
+			continue
+		words += 1
+		if words >= OPEN_WORDS:
+			at_end = m.get_end()
+			break
+	if cuts.is_empty():
+		return src
+	if at_end < 0:
+		at_end = src.length()
+	elif words >= OPEN_WORDS:
+		# ...at the paragraph's end, or before the next beat if that comes first: never in the middle of a thought
+		var para := src.find("\n\n", at_end)
+		var beat := src.find("<!-- table:", at_end)
+		at_end = src.length() if para < 0 and beat < 0 else (mini(para, beat) if para >= 0 and beat >= 0 else maxi(para, beat))
+	var held := "\n\n<!-- quiet: %d -->\n\n" % roundi(minf(total, OPEN_HELD))
+	var out := src.substr(0, at_end) + held + src.substr(at_end)
+	cuts.reverse()
+	for c in cuts:
+		out = out.substr(0, int(c[0])) + out.substr(int(c[1]))
+	return out
+
+
 static func quiet_around(text: String, from: int, to: int) -> float:
 	var q := _rx(QUIET_MARK)
 	var before := 0.0

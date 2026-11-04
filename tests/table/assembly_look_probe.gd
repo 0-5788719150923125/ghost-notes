@@ -6,6 +6,11 @@ extends Node
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/table/assembly_look_probe.gd 400 [--times 12,30] [--out <dir>/bricks] [--size 1280x720]
 ##
+## `--episode <dir>` looks at a real one instead, from a copy (`--acts N`: only its first N acts, for what is quicker): its table, its acts, its
+## words at a synthetic pace.
+##
+## `--jump` goes straight to each moment asked (a record is a lookup, so it lands exactly there). `--final` photographs all of what is built as its last step leaves it. `--plan` makes no record, and shows where the plan has things: what is built as it stands, in moments, with nothing moving. `--model <design.json>` stands a design ([AssemblyModel]) on it, `--work <acts.json>` plays acts of your own, and `--holds` says how long every piece is in hand, stop by stop.
+##
 ## `--clip A,B` writes every frame from A to B seconds, for judging motion and for the frame's cost (printed at the end), and the work's
 ## own sound under them to <out>.wav - no voice, none of the room's - for judging that:
 ##   ffmpeg -framerate 30 -i <out>_c%04d.png -i <out>.wav -pix_fmt yuv420p -shortest bricks.mp4
@@ -89,6 +94,46 @@ static func _sheet_acts() -> Dictionary:
 	return {"acts": [{"name": "sheet", "beat": "intro", "about": "every kind", "length": "under", "tracks": [{"law": "assemble", "ops": ops}]}]}
 
 
+## `--holds`: how long every piece is in hand, stop by stop: what a viewer sits through watching one brick in the air.
+static func _report_holds(lg: Assembly, words_end: float) -> void:
+	var by_kind := {}
+	var longest: Array = []
+	for k in lg.steps.size():
+		var st: Dictionary = lg.steps[k]
+		var stops: Array = lg._stops[k]
+		var ds: PackedFloat32Array = lg._stop_d[k]
+		var held := 0.0
+		var free := 0.0
+		var hand: Dictionary = lg._hand[k]
+		for i in stops.size():
+			var d := float(ds[i]) if i < ds.size() else 0.0
+			if not hand.is_empty() and float((stops[i] as Array)[0]) >= float(hand["from"]) and float((stops[i] as Array)[0]) <= float(hand["to"]):
+				held += d
+				longest.append([d, k, i, String(st["do"]), lg._t0[k]])
+			else:
+				free += d
+		var row: Array = by_kind.get(String(st["do"]), [0, 0.0, 0.0, 0.0])
+		by_kind[String(st["do"])] = [int(row[0]) + 1, float(row[1]) + lg._t1[k] - lg._t0[k], float(row[2]) + held, float(row[3]) + free]
+	print("assembly_look_probe: holds, of %.0f s of words" % words_end)
+	for kind in by_kind:
+		var row: Array = by_kind[kind]
+		print("  %-6s x%-4d %7.1f s in all, %7.1f s stopped in hand, %7.1f s stopped with nothing in hand" % [kind, int(row[0]), float(row[1]), float(row[2]), float(row[3])])
+	longest.sort_custom(func(a: Array, b: Array) -> bool: return float(a[0]) > float(b[0]))
+	var total := 0.0
+	var over := [0, 0, 0, 0]
+	for l in longest:
+		total += float(l[0])
+		for j in 4:
+			if float(l[0]) >= [1.0, 3.0, 8.0, 20.0][j]:
+				over[j] += 1
+	print("  stops in hand: %d, %.1f s in all; over 1 s: %d, over 3 s: %d, over 8 s: %d, over 20 s: %d" % [longest.size(), total, over[0], over[1], over[2], over[3]])
+	for l in longest.slice(0, 12):
+		print("  %6.1f s  stop %d of step %d, a %s at %.1f s" % [float(l[0]), int(l[2]), int(l[1]), String(l[3]), float(l[4])])
+	for k in lg.steps.size():
+		if String((lg.steps[k] as Dictionary)["do"]) == "look":
+			print("  a look, step %d: %.1f s to %.1f s" % [k, lg._t0[k], lg._t1[k]])
+
+
 func _ready() -> void:
 	_run.call_deferred()
 
@@ -121,9 +166,17 @@ func _run() -> void:
 	var clip := Vector2(-1.0, -1.0)
 	var size := Vector2i(1280, 720)
 	var sheet := args.has("--sheet")
+	var episode := ""
+	var first_acts := -1
+	var model_file := ""
+	var work_file := ""
 	for i in args.size() - 1:
 		match args[i]:
 			"--out": out = args[i + 1]
+			"--episode": episode = args[i + 1]
+			"--acts": first_acts = int(args[i + 1])
+			"--model": model_file = args[i + 1]
+			"--work": work_file = args[i + 1]
 			"--times":
 				for s in String(args[i + 1]).split(",", false):
 					times.append(float(s))
@@ -137,10 +190,31 @@ func _run() -> void:
 					size = Vector2i(int(wh[0]), int(wh[1]))
 	DirAccess.make_dir_recursive_absolute(DIR)
 	DirAccess.make_dir_recursive_absolute(out.get_base_dir())
-	for f in [["table.json", _table()], ["acts.json", _sheet_acts() if sheet else _acts()]]:
-		var h := FileAccess.open(DIR.path_join(String(f[0])), FileAccess.WRITE)
-		h.store_string(JSON.stringify(f[1]))
-		h.close()
+	if episode.is_empty():
+		for f in [["table.json", _table()], ["acts.json", _sheet_acts() if sheet else _acts()]]:
+			var h := FileAccess.open(DIR.path_join(String(f[0])), FileAccess.WRITE)
+			h.store_string(JSON.stringify(f[1]))
+			h.close()
+	else:
+		for f in DirAccess.get_files_at(episode):
+			DirAccess.copy_absolute(episode.path_join(f), ProjectSettings.globalize_path(DIR).path_join(f))
+		# ...`--model`: a model's design stood on that table, and `--work`: acts of its own
+		if not model_file.is_empty():
+			var made := ModelTools.safe(AssemblyModel.make(JSON.parse_string(FileAccess.get_file_as_string(model_file))))
+			print(AssemblyModel.report(made))
+			var tb: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(DIR.path_join("table.json")))
+			(tb["assembly"] as Dictionary)["model"] = made
+			var th := FileAccess.open(DIR.path_join("table.json"), FileAccess.WRITE)
+			th.store_string(JSON.stringify(tb))
+			th.close()
+		if not work_file.is_empty():
+			DirAccess.copy_absolute(work_file, ProjectSettings.globalize_path(DIR).path_join("acts.json"))
+		if first_acts >= 0:
+			var raw: Variant = JSON.parse_string(FileAccess.get_file_as_string(DIR.path_join("acts.json")))
+			var list: Array = raw if raw is Array else (raw as Dictionary)["acts"]
+			var h := FileAccess.open(DIR.path_join("acts.json"), FileAccess.WRITE)
+			h.store_string(JSON.stringify({"acts": list.slice(0, first_acts)}))
+			h.close()
 	var positions := [{"name": "one", "asks": "x", "work": "a wall"}, {"name": "two", "asks": "y", "work": "a floor"}, {"name": "three", "asks": "z", "work": "it comes down"}]
 	var plan := {"look": {"candles": 0, "palette": ["#3a2a20", "#c8a060"], "light": {"kind": "a desk lamp at night", "color": "#ffe2bd", "warmth": "warm"}},
 		"spread": {"positions": positions}, "work_close": "", "staging": {"source": "none"}}
@@ -156,6 +230,10 @@ func _run() -> void:
 		passages.append({"kind": m["kind"], "card": m.get("card", 0), "text": String(said.get(say, "A few plain words said for a while at an easy pace."))})
 	# the wreck is its own beat, not the close's: its cue stands in the passage it was written in
 	var script := CardReading.compose(passages)
+	if not episode.is_empty():
+		plan = JSON.parse_string(FileAccess.get_file_as_string(DIR.path_join("plan.json")))
+		script = FileAccess.get_file_as_string(DIR.path_join("script.md"))
+	TableAssembly.plan_only = args.has("--plan")
 	var stage := SubViewport.new()
 	stage.size = size
 	stage.own_world_3d = true
@@ -169,7 +247,7 @@ func _run() -> void:
 	var subs: Subtitles = preload("res://src/show/subtitles.gd").new()
 	var parse := CardReading.parse(script)
 	subs.words = timeline(parse, Director.intro_hold)
-	subs.document = {"source": script, "title": "Brick Look", "table": {"show": "assembly-look", "seed": 41, "dir": DIR, "plan": plan, "cards": []}}
+	subs.document = {"source": script, "title": "Brick Look", "table": {"show": "assembly-look" if episode.is_empty() else "brick-by-brick", "seed": 41 if episode.is_empty() else int(plan.get("seed", 41)), "dir": DIR, "plan": plan, "cards": []}}
 	add_child(subs)
 	medium.bind_captions(subs)
 	var tm := medium as TableMedium
@@ -211,6 +289,9 @@ func _run() -> void:
 	var spent := 0
 	var ticks := 0
 	for want in times:
+		# ...nothing has to be walked to where the plan has things
+		if (TableAssembly.plan_only or args.has("--jump")) and float(want) - t > 1.0:
+			t = float(want) - DT * 2.0
 		while t < float(want):
 			t += DT
 			Spectrum.virtual_clock = t
@@ -234,8 +315,21 @@ func _run() -> void:
 			img.save_png(path)
 		if clip.y <= clip.x or frame <= 1:
 			print("assembly_look_probe: t=%.2f -> %s" % [want, path])
+	# ...`--final`: all of what is built, as the last of its steps leaves it, at the last moment photographed
+	if args.has("--final") and w.assembly != null:
+		var end_of: float = w.assembly.log._t1[w.assembly.log.steps.size() - 1] + 1.0
+		w.assembly.tick(end_of)
+		for _i in 3:
+			await get_tree().process_frame
+		var last_img := stage.get_texture().get_image()
+		if last_img != null:
+			last_img.save_png(out + "_final.png")
+		print("assembly_look_probe: %s" % w.assembly.log.progress_text().get_slice("\n", 0))
+		print("assembly_look_probe: the model cut by the frame by %.1f cm" % (TableAssembly.model_cut_by(w.assembly.spec, tm._plan.cam_base, tm._plan.fov) * 100.0))
 	if clip.y > clip.x:
 		_write_sound(w, clip, out + ".wav")
+	if w.assembly != null and args.has("--holds"):
+		_report_holds(w.assembly.log, last_t)
 	if w.assembly != null and args.has("--steps"):
 		var lg: Assembly = w.assembly.log
 		for r in w.runs:

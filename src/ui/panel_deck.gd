@@ -19,6 +19,12 @@ class_name PanelDeck
 ## A PRESS: a bar where its card is folds or opens it; a bar in a pile brings its card here, opening it if it is folded
 ## ([method reveal]). ONE OPENED FROM ANYWHERE (a chip, too) comes into view. THE FAN: pointing at a bar in a pile spreads
 ## the pile there, so the whole bar shows, however tightly a small window stacks them.
+##
+## A VIEW AT THE END STAYS THERE (the user, 2026-11-03: Generate "can insert new steps into the pipeline card, which causes it to
+## start overflowing, requiring me to scroll again"): what grows while the view is at the end of the scroll keeps it at the end
+## ([method _on_length]), and a turn of the wheel lets go. NOT WHAT THE VIEWER OPENS: a card sliding open is brought by
+## [method reveal], which shows its start. A PANEL THAT FITS is at its end only trivially, so it follows its last card alone: a note's
+## words filling in as it opens must leave it at its top.
 
 ## How much of each bar in a pile shows, at most: a title's whole line, the foot of the bar under the next one's.
 const PEEK := 21.0
@@ -32,6 +38,8 @@ const BAR := 30.0
 const GLIDE := 0.22
 ## How quickly a pile fans, per second.
 const FAN := 18.0
+## How near the end of the scroll counts as at it, px.
+const AT_END := 1.0
 
 var _scroll: ScrollContainer
 var _body: VBoxContainer
@@ -42,6 +50,10 @@ var _sides := {}                    # Card -> -1 in the top pile, 1 in the botto
 var _lift := {}                     # Card -> how far the fan has moved its bar
 var _above := 0.0                   # how far down the top pile covers what scrolls
 var _below := 0.0                   # ...and where the bottom one begins
+var _at_end := true                 # whether the view stands at the end of what scrolls
+var _end := 0.0                     # the furthest it could scroll, at the last look
+var _last_id := 0                   # the last card, by id, at the last look: it may have been freed since
+var _last_tall := 0.0               # ...and its height then
 
 
 ## Over [param scroll], whose content holds [param body]; [param room] says the most the scroll view can be, however much is
@@ -71,7 +83,11 @@ func adopt(card: Card) -> void:
 
 
 func _ready() -> void:
-	_scroll.get_v_scroll_bar().value_changed.connect(func(_v: float) -> void: _place())
+	var bar := _scroll.get_v_scroll_bar()
+	bar.value_changed.connect(func(_v: float) -> void:
+		_at_end = bar.value >= bar.max_value - bar.page - AT_END
+		_place())
+	bar.changed.connect(_on_length)
 	_body.sort_children.connect(_place)
 	_scroll.sort_children.connect(_place)
 	_scroll.gui_input.connect(func(ev: InputEvent) -> void:
@@ -271,6 +287,46 @@ func reveal(card: Card) -> void:
 		to = clampf(free - card.open_height(), top, at)
 	if absf(at - to) >= 1.0:
 		_glide_to(_scroll.get_v_scroll_bar().value + at - to)
+
+
+## HOW FAR THERE IS TO SCROLL HAS CHANGED: a view that was at the end goes to the new one, unless the viewer is what moved it.
+func _on_length() -> void:
+	var bar := _scroll.get_v_scroll_bar()
+	var end := bar.max_value - bar.page
+	var had := _end
+	_end = end
+	var grew := _last_grew()
+	if _at_end and end > had and not _moving() and (had > 0.0 or grew):
+		# not here: this is the middle of the scroll's own layout, which takes no further request to lay out
+		_go_to_end.call_deferred()
+	else:
+		_at_end = bar.value >= end - AT_END
+
+
+func _go_to_end() -> void:
+	var bar := _scroll.get_v_scroll_bar()
+	bar.value = bar.max_value - bar.page
+
+
+## Whether the last card is taller than at the last look, and the same card (one that has just come to stand has not grown).
+func _last_grew() -> bool:
+	var shown := cards()
+	if shown.is_empty():
+		_last_id = 0
+		return false
+	var last: Card = shown[shown.size() - 1]
+	var tall := last.get_combined_minimum_size().y
+	var grew := last.get_instance_id() == _last_id and tall > _last_tall
+	_last_id = last.get_instance_id()
+	_last_tall = tall
+	return grew
+
+
+## Whether the scroll or a card's height is moving because the viewer asked for it.
+func _moving() -> bool:
+	if _glider != null and _glider.is_running():
+		return true
+	return cards().any(func(c: Card) -> bool: return c.sliding())
 
 
 func _glide_to(value: float) -> void:

@@ -102,6 +102,7 @@ var _set_since_change := false
 var _warned := false
 var _warned_title := false
 var _warned_unplaced := false
+var _warned_cut := false
 var _preview: TablePreview
 
 
@@ -231,6 +232,12 @@ func draft() -> Dictionary:
 		out["ride"] = _ride.duplicate(true)
 	if not _assembly.is_empty():
 		out["assembly"] = _assembly.duplicate(true)
+	# ...WHAT IS BUILT ON IT, seen on the plate it will stand on, with the colors it will be in
+	var designed := episode.model() if episode != null else {}
+	if not designed.is_empty():
+		if not out.has("assembly"):
+			out["assembly"] = {}
+		(out["assembly"] as Dictionary)["model"] = designed
 	return out
 
 
@@ -361,6 +368,13 @@ func _put(args: Dictionary) -> Dictionary:
 		lines.append("The assembly: %s." % ("none" if made.is_empty() else "a plate of %s studs, stock: %s" % [str((made["base"] as Dictionary)["size"]), ", ".join(PackedStringArray((made["stock"] as Array).map(func(q: Dictionary) -> String: return String(q["name"]))))]))
 		for n in said:
 			lines.append("- " + String(n))
+		# ...WHAT IS BUILT IS WHAT THE VIDEO IS FOR: the whole of it in the picture, by the end
+		if not (episode.model() if episode != null else {}).is_empty():
+			var cut := _model_cut()
+			if cut > 0.0:
+				lines.append("THE MODEL WOULD BE CUT OFF: where its plate stands, its top rises %.0f cm past the top of the picture. Bring the plate toward the reader until all of it is seen (`base` `at`: the larger its z, the nearer)." % ceilf(cut * 100.0))
+			else:
+				lines.append("All of the model is in the picture where its plate stands, with %.0f cm to spare at its tallest." % floorf(-cut * 100.0))
 	if junk > 0:
 		lines.append("%d of the things given %s not an object {name, parts, ...} - left out." % [junk, "was" if junk == 1 else "were"])
 	if not notes.is_empty():
@@ -684,6 +698,17 @@ func _where_written(t: Dictionary) -> String:
 	return "at %s%s" % [_cm2(Vector2(float(t["at"][0]), float(t["at"][1]))), (", turned %d" % turn) if turn != 0 else ""]
 
 
+## How far what is built rises past the top of the picture where its plate now stands, meters ([method TableAssembly.model_cut_by]): 0 or less, all of it is seen.
+func _model_cut() -> float:
+	var designed := episode.model() if episode != null else {}
+	if designed.is_empty():
+		return 0.0
+	var ready := _assembly.duplicate()
+	ready["model"] = designed
+	var lay := CardTable.layout_of(episode.seed)
+	return TableAssembly.model_cut_by(Assembly.sanitize(ready), lay["camera"], float(lay["fov"]))
+
+
 ## How tall a thing written at [param t]'s `at` can stand and be seen whole, meters ([method
 ## CardTable.headroom_at]) - INF where it is not written.
 func _room_at(t: Dictionary) -> float:
@@ -844,6 +869,11 @@ func _submit() -> Dictionary:
 	if not _set_since_change and not _warned and _can_stand() and _looks < LOOKS:
 		_warned = true
 		return {"text": "You have not seen the table as it now stands: call set, look at the frame, fix what it shows, then submit. (Submit again unchanged to hand it in as it is.)", "error": true}
+	# ...AND ALL OF WHAT IS BUILT IN THE PICTURE, once asked: it is what the video is for
+	var cut := _model_cut()
+	if cut > 0.0 and not _warned_cut:
+		_warned_cut = true
+		return {"text": "The model's top is cut off by the frame by %.0f cm where its plate stands. Bring the plate toward the reader (`assembly` `base` `at`: the larger its z, the nearer). (Submit again to hand the table in as it is.)" % ceilf(cut * 100.0), "error": true}
 	# ...AND ITS NAME GIVEN A COLOR, once asked
 	if _title.is_empty() and not _warned_title:
 		_warned_title = true

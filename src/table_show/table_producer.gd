@@ -188,6 +188,8 @@ func _make(step: String) -> void:
 			_make_say(step.trim_prefix("say:"))
 		"script":
 			_finish(step, _make_script())
+		"model":
+			_make_model()
 		"table":
 			_make_table()
 		"acts":
@@ -238,7 +240,13 @@ func _finish(step: String, err: String) -> void:
 
 func _plan() -> Dictionary:
 	var p: Variant = episode.read_json("plan")
-	return p if p is Dictionary else {}
+	if not (p is Dictionary):
+		return {}
+	# ...WHAT IS BEING BUILT, for everyone after whoever designed it ([method TableEpisode.model_words])
+	var words := episode.model_words()
+	if not words.is_empty():
+		(p as Dictionary)["model_words"] = words
+	return p
 
 
 func _look() -> Dictionary:
@@ -511,7 +519,31 @@ func looks_of(step: String) -> Array:
 		return [(t["set"] as SetDresserTools).looks_used(), SetDresserTools.LOOKS]
 	if t["set"] is PuppeteerTools:
 		return [(t["set"] as PuppeteerTools).looks_used(), PuppeteerTools.LOOKS]
+	if t["set"] is ModelTools:
+		return [(t["set"] as ModelTools).looks_used(), ModelTools.LOOKS]
 	return []
+
+
+## THE MODELER DESIGNS WHAT IS BUILT ([ModelTools], [AssemblyModel]; the user, 2026-11-03: "building to some kind of grand, planned vision"), told what the plan says it is and what earlier episodes built. Given a writer that takes tools, it writes shapes, is told what parts they come to, looks at them and fixes what it sees, and hands in only what holds together. One that cannot is asked for the model in one reply.
+func _make_model() -> void:
+	_close_tools("model")
+	DirAccess.remove_absolute(episode.job_dir("model").path_join(ModelTools.SUBMITTED))
+	var earlier: Array = []
+	for e in TableEpisode.archive(episode.show, episode.seed):
+		if not String((e as Dictionary).get("model", "")).is_empty():
+			earlier.append((e as Dictionary)["model"])
+	var extra := {}
+	var looks := 0
+	if TextGen.make(String(spec.get("writer", "claude"))).takes_tools():
+		var toolset := ModelTools.new(episode.job_dir("model"))
+		var url := AgentTools.open(episode.job_dir("model"), toolset)
+		if not url.is_empty():
+			_tools["model"] = {"url": url, "set": toolset}
+			extra = {"tools_url": url}
+			looks = ModelTools.LOOKS
+		else:
+			toolset.release()
+	_submit_text("model", TablePrompts.modeler(String(spec.get("title", "")), String(spec.get("brief", "")), _plan(), episode.seed, earlier.slice(0, 16), looks), "best", extra)
 
 
 ## THE PUPPETEER blocks the episode's work ([PuppeteerTools], next/table_work.md): told the plan's work beat
@@ -757,7 +789,7 @@ func _land(step: String, res: Dictionary) -> void:
 	var handed := _handed_in(step) if had_tools else ""
 	_close_tools(step)
 	if not handed.is_empty():
-		err = _land_acts(handed) if step == "acts" else _land_table(handed)
+		err = _land_acts(handed) if step == "acts" else (_land_model(handed) if step == "model" else _land_table(handed))
 	elif not bool(res.get("ok", false)):
 		err = String(res.get("error", "the job failed"))
 	else:
@@ -780,6 +812,10 @@ func _land(step: String, res: Dictionary) -> void:
 				err = "" if episode.has(step) else "the picture did not arrive"
 				if err.is_empty() and step == "image:height":
 					err = _land_height()
+			"model":
+				err = _land_model(String(res.get("text", "")))
+				if not err.is_empty() and had_tools:
+					err = "the modeler stopped without handing its model in"
 			"table":
 				err = _land_table(String(res.get("text", "")))
 				if not err.is_empty() and had_tools:
@@ -851,7 +887,7 @@ func _land_plan(text: String) -> String:
 		else:
 			pos.append({"name": _str(q), "asks": ""})
 	spread["name"] = _str(spread.get("name", ""))
-	for k in ["episode_title", "description", "audience", "topic", "premise", "reader_mood", "running_bit", "work_intro", "work_close"]:
+	for k in ["episode_title", "description", "audience", "topic", "premise", "reader_mood", "running_bit", "work_intro", "work_close", "build"]:
 		plan[k] = _str(plan.get(k, ""))
 	plan["beat_word"] = beat_word_of(plan.get("beat_word", ""))
 	for k in ["tags", "habits"]:
@@ -929,7 +965,7 @@ func _land_beats(plan: Dictionary) -> String:
 		return "the plan has no beats"
 	plan.erase("beats")
 	plan["spread"] = {"name": "", "positions": pos}
-	for k in ["episode_title", "description", "audience", "topic", "premise", "reader_mood", "running_bit", "work_intro", "work_close"]:
+	for k in ["episode_title", "description", "audience", "topic", "premise", "reader_mood", "running_bit", "work_intro", "work_close", "build"]:
 		plan[k] = _str(plan.get(k, ""))
 	plan["beat_word"] = beat_word_of(plan.get("beat_word", ""))
 	# WHAT THE EPISODE IS MADE OF: built from many small parts ([Assembly]) or not, and how much of it nobody talks through
@@ -1150,7 +1186,22 @@ func _land_acts(text: String) -> String:
 		return "no act could be kept: %s" % "; ".join(made["notes"])
 	for n in made["notes"]:
 		print("ghost: table acts - %s" % String(n))
+	# ...AND THE MODEL STANDS BY THE END, whatever was written ([method Assembly.with_finish])
+	if episode.wants_model():
+		d = Assembly.with_finish(d as Dictionary, episode.model())
 	return episode.write_json("acts", d)
+
+
+## THE MODEL, as handed in by [ModelTools] (already made: `{raw, made}`), or as written in one reply and made here. Kept with its parts, so nothing need work them out again - if it comes to something.
+func _land_model(text: String) -> String:
+	var d: Variant = TextGen.extract_json(text)
+	if not (d is Dictionary):
+		return "the model was not JSON"
+	var raw: Variant = (d as Dictionary).get("raw", d)
+	var made: Dictionary = (d as Dictionary)["made"] if (d as Dictionary).get("made") is Dictionary else ModelTools.safe(AssemblyModel.make(raw))
+	if (made.get("parts", []) as Array).is_empty():
+		return "the model came to no parts: %s" % "; ".join(PackedStringArray(made.get("notes", [])))
+	return episode.write_json("model", {"raw": raw, "made": made})
 
 
 ## THE TABLE, kept as the set dresser wrote it - it is made safe each time it is built
@@ -1162,6 +1213,12 @@ func _land_table(text: String) -> String:
 		return "the table was not JSON"
 	if (CardTable.sanitize_table(d as Dictionary, _look())["things"] as Array).is_empty():
 		return "nothing on the table could be built"
+	# ...WHAT IS BUILT ON IT GOES WITH IT: every table anywhere is stood from this one file
+	var designed := episode.model()
+	if not designed.is_empty():
+		if not ((d as Dictionary).get("assembly") is Dictionary):
+			(d as Dictionary)["assembly"] = {}
+		((d as Dictionary)["assembly"] as Dictionary)["model"] = designed
 	return episode.write_json("table", d)
 
 
