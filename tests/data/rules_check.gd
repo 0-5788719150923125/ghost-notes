@@ -36,7 +36,9 @@ const KINDS := ["tarot", "arcana", "rider-waite", "pentacle"]
 ## ...and what only a kind of work's own show may say (next/table_work.md).
 const WORKS := ["alchemy", "alchemist", "potion", "cauldron", "baking", "bakery", "jigsaw", "dragon", "brick", "lego",
 	# ...AND NO GAME (next/tabletop.md: "a generic system, such that other games could be supported"): a game is a brief's, never a rule's
-	"dungeon", "goblin", "wizard", "warhammer", "pathfinder", "hit points", "armor class", "d20", "spell slot", "initiative"]
+	"dungeon", "goblin", "wizard", "warhammer", "pathfinder", "hit points", "armor class", "d20", "spell slot", "initiative",
+	# ...AND NO KIND OF PAINTING (next/painted_surface.md): what a surface is painted with is the brief's
+	"makeup", "make-up", "clown", "joker", "lipstick", "eyeliner", "greasepaint"]
 
 var _fails := 0
 

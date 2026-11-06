@@ -102,6 +102,17 @@ const LAWS := {
 		"blurb": "words written onto a sheet (a part of the `sheet` shape) by an unseen pen, left to right and line by line, in a hand - a name on a slip, a label, a line on a page; write only what the script or a card says is written there",
 		"fields": [["text", "the words, a line or a few (\\n between lines)"], ["hand", "neat, quick or print (left out: neat)"],
 			["ink", "\"#rrggbb\" (left out: a brown-black)"], ["between", "[u0, u1]: the stretch of the act the pen writes in (left out: all of it)"]]},
+	# A SURFACE PAINTED (next/painted_surface.md; the user, 2026-11-05: "The person slowly and meticulously applies a foundation, and details,
+	# and eye liner, and lipstick, and gently smears things with a sponge"): the agent says which elements of the design, with what and from
+	# where; the hand finds the way ([TablePaint])
+	"paint": {"label": "Paint", "on": ["pose"],
+		"blurb": "a tool lays elements of a design onto a painted surface, as a careful hand does: fetched from where it rests, loaded from its paint, pressed onto the surface and moved over each element in the way its kind asks - a line drawn along its path in slow strokes, a fill swept back and forth, a fill stippled from its middle out with a sponge, a powder patted on (a little cloud at each pat), dots dabbed, a smear dragged in one pressed stroke, a mist sprayed from a hand's length off, stones carried from their dish and pressed on - lifting between strokes, going back for more when it runs dry, rinsed and dried between colors and before it is put down where there is water for it, and back where it rests at the end. The FIRST act to paint an element lays it; any later one goes over it again with nothing on the tool, softening and smearing its edges (a powder's: sweeping its excess off). It takes as long as its strokes take at a hand's pace, its length worked out from them; slowed, it rests between elements",
+		"fields": [["on", "the thing whose surface is painted (\"mask\", or \"thing/part\")"], ["paint", "the elements of its design to lay, by id, in the order they go on: [\"base\"] or [\"brow left\", \"brow right\"]"],
+			["from", "where the tool takes its paint: a pot (a thing, \"palette/red\" a part, or a point) - for stones, their dish (left out: the paint on the table nearest each element's color)"],
+			["rinse", "a vessel of water the tool is rinsed in before it takes another color, and when it is done - the water clouds a little with each rinse (left out: never)"],
+			["dry", "a cloth it is touched to and wiped on after each rinse (left out: never)"],
+			["manner", "\"blend\" to go over elements already laid, softening their edges with nothing on the tool; or for a fill, how it is laid - \"sweep\" (a brush), \"stipple\" (a sponge), \"pat\" (a puff) - left out: as the tool is"],
+			["size", "how wide the tool works, millimeters (left out: as it is built)"]]},
 }
 ## The hands a `write` may be in ([constant CardTable.HANDS], a typewriter's aside), and its ink unless it says.
 const WRITING_HANDS := ["neat", "quick", "print"]
@@ -618,6 +629,32 @@ static func sanitize_law(raw: Variant, notes: PackedStringArray, running := fals
 			out["between"] = _between(d.get("between"))
 		"assemble":
 			out["ops"] = Assembly.sanitize_ops(d.get("ops"), notes)
+		"paint":
+			var on := Props._text(d.get("on", ""), 100)
+			if on.is_empty():
+				notes.append("a paint names nothing it paints `on` - left out")
+				return {}
+			var ids: Array = []
+			for id in (d["paint"] if d.get("paint") is Array else ([d["paint"]] if d.get("paint") is String else [])):
+				var sid := Props._text(id, 40)
+				if not sid.is_empty() and ids.size() < Skins.MOST_ELEMENTS:
+					ids.append(sid)
+			if ids.is_empty():
+				notes.append("a paint names no elements to `paint` - left out")
+				return {}
+			out["on"] = on
+			out["paint"] = ids
+			# what it is pressed onto, as a tool pressed into a vessel is ([method TableWork._pressed_by])
+			out["press"] = on.get_slice("/", 0)
+			for k in ["from", "rinse", "dry"]:
+				var v := Props._text(d.get(k, ""), 100)
+				if not v.is_empty():
+					out[k] = v
+			var manner := String(d.get("manner", "")).strip_edges().to_lower()
+			if manner in ["blend", "sweep", "stipple", "pat", "dab"]:
+				out["manner"] = manner
+			if d.has("size"):
+				out["size"] = Props._num(d.get("size"), 6.0, 0.5, 80.0)
 		"sprinkle":
 			var at: Variant = _place(d.get("at"))
 			if at != null:

@@ -36,6 +36,11 @@ class_name TableMedium
 ## luminance, never a fixed threshold - are printed as foil: they catch the light as a card
 ## tilts, breathe slowly, and now and then a glint sweeps across them, and the scene's bloom
 ## lets them bleed. The deck's look says how much foil it was printed with.
+##
+## NOTHING IS BUILT ON THE APP'S THREAD (the user, 2026-11-05: "We shouldn't be doing work in the main thread, as a rule"): an
+## episode's table is built on a worker, out of the tree, the show waiting for it as it waits for its bake, and put back
+## ([method _build_away]) - 209459's 8.5 s build drew 1,237 frames meanwhile, none over 11 ms. A render and a gate build where
+## they stand, their frames waiting for nothing; a preview's table is built aside too ([method TablePreview._stand]).
 
 ## THE STAGE AS THE TABLE SETS IT, given back when the table leaves. EDGES: 4x multisampling. SHADOWS:
 ## the first two quadrants of the atlas hold a high-resolution shadow each (a lamp's); the others hold
@@ -328,6 +333,19 @@ var _spin_k := -1                   # ...and the card
 ## BUILT ASIDE, on a worker thread ([method TablePreview._stand]): its long loops then [method _breathe]
 var aside := false
 var _breaths := 0
+## A TABLE PLAYED IS BUILT ON A WORKER TOO, the show waiting for it as it waits for its bake (the user, 2026-11-05: "We shouldn't be
+## doing work in the main thread, as a rule ... it causes bad UI hitches" - 209459's stood for 8 s on the app's thread as it began):
+## taken out of the tree and built aside ([method _build_away]) - the build in hand, -1 when none - and put back where it was. Its leaving
+## then is no teardown (`_away`, [method _exit_tree]); and a table built aside for the show bakes on a thread of its own once it is back
+## (`live_build`, [method TablePhysics.build]). A render and a gate build where they stand: their frames wait for nothing.
+var _build_task := -1
+var _away := false
+var live_build := false
+## ...and a gate that builds a table played as the app does, on a worker (tests/table_show/table_thread_check.gd).
+static var away_in_tests := false
+var _away_from: Node = null
+var _away_at := -1
+var _resized_away := false
 var _wind := {}                     # the table's wind (Winds.plan): its light's, or still air - shared by the light and the air
 var _ride := {}                     # what the table is aboard (Rides.plan), or {} for a table standing still
 var _movers: Array = []             # what moves with the ride and the wind: [{node, r, pivot, into, kind, at, contact}] (_tick_ride)
@@ -375,6 +393,7 @@ var _box_part := TableBox.new()
 var _work := TableWork.new()
 var _sounds: WorkSounds = null        # the work heard ([method advance])
 var _acts_mt := -2                    # the acts file's time when the work was last built (-1: none)
+var _skin_mt := -2                    # ...and the designs painted on it ([TablePaint], `skin.json`)
 var _ready_said := false               # this table has told its feed how far ahead it is baked ([method ShowFeed.ready_ahead])
 var _est := PackedFloat32Array()      # each spoken word's estimated time ([method TablePlan.estimated_times])
 
@@ -482,18 +501,7 @@ func _build_world() -> void:
 
 	_props = Node3D.new()
 	_root3.add_child(_props)
-	# WHAT THE THINGS REFLECT: the table and the room, caught once when the table is set (see
-	# _reflect). Metal with nothing to reflect read as flat paint. The things alone take it: the
-	# cards and the cloth keep the light they were tuned under.
-	_probe = ReflectionProbe.new()
-	_probe.update_mode = ReflectionProbe.UPDATE_ONCE
-	_probe.size = Vector3(1.9, 1.0, 1.4)
-	_probe.position = Vector3(0.0, 0.2, -0.05)
-	_probe.box_projection = true
-	_probe.max_distance = 5.0
-	_probe.enable_shadows = true
-	_probe.reflection_mask = THING_LAYER | (CANDLE_LAYER * 0xF)
-	_root3.add_child(_probe)
+	_make_probe()
 
 	_card_mesh = _make_card_mesh(CARD, CARD_T, CARD_R)
 	_edge_mat = StandardMaterial3D.new()
@@ -611,6 +619,8 @@ func begin_session() -> void:
 
 
 func release() -> void:
+	# ...A TABLE BEING BUILT is waited for and put back, so the stage it is on lets it go with the rest
+	_settle_away()
 	_subs = null
 	_key = ""
 	_released = true
@@ -619,6 +629,9 @@ func release() -> void:
 
 
 func _exit_tree() -> void:
+	# (taken out to be built on a worker, and coming back: its show, its stage and its sounds are its own still)
+	if _away:
+		return
 	if _sounds != null:
 		_sounds.stop()
 	# ...and the show's time never left waiting on a table that is gone (only on this one's: a preview's never waited)
@@ -636,6 +649,9 @@ func _exit_tree() -> void:
 
 
 func on_stage_resized(_size: Vector2) -> void:
+	if _build_task >= 0:
+		_resized_away = true
+		return
 	if _blur != null:
 		_blur.queue_redraw()
 	if _title != null:
@@ -644,7 +660,7 @@ func on_stage_resized(_size: Vector2) -> void:
 
 ## What the work draws off where it first stood, and why, for a feedback capture ([method TableWork.drawn_report]).
 func work_report() -> Array:
-	return _work.drawn_report(_now) if _work != null else []
+	return _work.drawn_report(_now) if _work != null and _build_task < 0 else []
 
 
 func advance(_features, delta: float, _bookend: float) -> void:
@@ -652,7 +668,14 @@ func advance(_features, delta: float, _bookend: float) -> void:
 	# THE EPISODE'S CLOCK: the reading's, and a reading started again in it (a scrub, [method _seek_to]) on the clock of the one
 	# the table was made for ([member ReadingFollower.offset])
 	_now = (_subs.now() if _subs != null and is_instance_valid(_subs) else t) + _follow.offset
+	# ...A TABLE BEING BUILT on a worker: nothing of it touched until it is done and back
+	if _build_task >= 0:
+		if not WorkerThreadPool.is_task_completed(_build_task):
+			return
+		_settle_away()
 	_ensure_doc()
+	if _build_task >= 0:
+		return
 	_poll_t -= delta
 	if _poll_t <= 0.0:
 		_poll_t = 1.0
@@ -730,11 +753,20 @@ func _ensure_doc() -> void:
 		return
 	_key = key
 	_built_key = key
+	if not aside and is_inside_tree() and (away_in_tests or not TablePhysics.render_waits()):
+		_build_away(d, pay, src, feed.intro_hold)
+	else:
+		_make_episode(d, pay, src, feed.intro_hold)
+
+
+## THE EPISODE [param d] (its `table` [param pay], its script [param src]) MADE AND BUILT, the show's intro held [param hold] - where it
+## stands, or on a worker ([method _build_away]).
+func _make_episode(d: Dictionary, pay: Dictionary, src: String, hold: float) -> void:
 	# A NEW EPISODE IS A NEW PLAN ([method TablePlan.make]): a function of the document, the set
 	# dresser's table as its file says now and the show's intro hold, and nothing of the last one's
 	# survives into it. The medium builds from it and decides nothing of its own.
 	_source = src
-	_plan = TablePlan.make(d, _table_json(pay), feed.intro_hold)
+	_plan = TablePlan.make(d, _table_json(pay), hold)
 	var spoken: PackedStringArray = _plan.parse.get("spoken", PackedStringArray()) if not _plan.parse.is_empty() \
 		else PackedStringArray()
 	_est = _plan.estimated_times(spoken.size())
@@ -745,16 +777,59 @@ func _ensure_doc() -> void:
 	_sched = []
 	var t0 := Time.get_ticks_msec()
 	_build_episode()
-	print("ghost: card table - %s #%d, %d cards, %d actions, %d things (built in %d ms)" % [String(pay.get("show", "?")), _plan.seed_value,
+	print("ghost: card table - %s #%d, %d cards, %d actions, %d things (built in %d ms%s)" % [String(pay.get("show", "?")), _plan.seed_value,
 		(pay.get("cards", []) as Array).size(), (_plan.parse.get("actions", []) as Array).size(), _things_part.on_table.size(),
-		Time.get_ticks_msec() - t0])
+		Time.get_ticks_msec() - t0, ", on a worker" if live_build else ""])
+
+
+## THE EPISODE BUILT ON A WORKER ([member _build_task]), the show held meanwhile as for its bake: out of the tree first (a worker may
+## touch no node in it), the last table's sounds and bake stopped (its thread reads what is built again), and back in [method _settle_away].
+## THE REFLECTION PROBE IS FREED FIRST, and made again as the table comes back (the user's log, 2026-11-06: `Parameter "scenario" is
+## null` in `_render_reflection_probe_step`): a probe that updates once catches its six faces a frame each, and one taken out of the
+## world partway stays on the renderer's list with no world to draw - freeing it is what takes it off.
+func _build_away(d: Dictionary, pay: Dictionary, src: String, hold: float) -> void:
+	if _sounds != null:
+		_sounds.stop()
+	if _work != null and _work.physics != null:
+		_work.physics.clear()
+	_drop_probe()
+	_away_from = get_parent()
+	_away_at = get_index()
+	_away = true
+	aside = true
+	live_build = true
+	_away_from.remove_child(self)
+	if feed != null and not _waiting:
+		_waiting = true
+		feed.wait_for(WAIT_FOR, true)
+	_build_task = WorkerThreadPool.add_task(_make_episode.bind(d, pay, src, hold), false, "the episode's table")
+
+
+## A TABLE BUILT ON A WORKER, done (waited for, if it is not yet: a session let go mid-build) and put back where it stood.
+func _settle_away() -> void:
+	if _build_task < 0:
+		return
+	WorkerThreadPool.wait_for_task_completion(_build_task)
+	_build_task = -1
+	aside = false
+	live_build = false
+	if _away_from != null and is_instance_valid(_away_from):
+		_away_from.add_child(self)
+		_away_from.move_child(self, mini(_away_at, _away_from.get_child_count() - 1))
+	if _probe == null:
+		_make_probe()
+	_away = false
+	_away_from = null
+	if _resized_away:
+		_resized_away = false
+		on_stage_resized(Vector2(stage.size) if stage != null else Vector2.ZERO)
 
 
 ## Whether episode [param pay]'s `table.json` and `acts.json` are as the table standing was built from.
 func _as_built(pay: Dictionary) -> bool:
 	var dir := String(pay.get("dir", ""))
 	var mt := func(f: String) -> int: return FileAccess.get_modified_time(dir.path_join(f)) if FileAccess.file_exists(dir.path_join(f)) else -1
-	return int(mt.call("table.json")) == _table_mt and int(mt.call("acts.json")) == _acts_mt
+	return int(mt.call("table.json")) == _table_mt and int(mt.call("acts.json")) == _acts_mt and int(mt.call("skin.json")) == _skin_mt
 
 
 ## A SCRUB IN THE EPISODE STANDING, [param d] the reading started again ([ReadingFollower.seek]; the user, 2026-11-01: scrubbed back
@@ -768,6 +843,10 @@ func _seek_to(d: Dictionary) -> void:
 	var spoken: PackedStringArray = _plan.parse.get("spoken", PackedStringArray())
 	var si := 0
 	var sw: Variant = d.get("start_words", PackedStringArray())
+	# ...A READING FROM THE TOP IS NO SCRUB: it has an intro of its own ([method _restart])
+	if not (sw is PackedStringArray and not (sw as PackedStringArray).is_empty()):
+		_restart()
+		return
 	if sw is PackedStringArray and not (sw as PackedStringArray).is_empty() and not spoken.is_empty():
 		si = maxi(TabletScript.find_run(spoken, sw, int(d.get("start_index", -1))), 0)
 	# ...where its first word was heard - or, never heard, guessed on from the last word that was, at the plan's own pace
@@ -791,6 +870,27 @@ func _seek_to(d: Dictionary) -> void:
 	_work._full = true
 	print("ghost: card table - the same episode again from word %d, at %.1f s of it: the table and its bake stand (baked to %.1f s)" % [
 		si, at, _work.physics.baked_to() if _work.physics != null else 0.0])
+
+
+## THE SAME EPISODE READ AGAIN FROM THE TOP (a Stop, then a Play): the table and what was baked of it stand, but its clock and its
+## plan's times start over, with the intro the show holds NOW - its words come on the new reading's own clock, intro and all, and
+## every act begins again as its words come. Taken as a scrub's seek it had kept the last reading's: the intro set from 6 s to 9 s
+## between a Stop and a Play (the user, 2026-11-06: "the speaking starting DURING the intro sequence ... not inheriting the new values
+## properly after clicking stop/start"), the table stood 6.4 s ahead of the voice through it - its title gone, its work begun in the
+## silence - and jumped back as the first word was heard.
+func _restart() -> void:
+	var spoken: PackedStringArray = _plan.parse.get("spoken", PackedStringArray())
+	_plan.hold = feed.intro_hold
+	_est = _plan.estimated_times(spoken.size())
+	_follow.near_past = true
+	_follow.reset(spoken, -1, _est)
+	_built_n = -1
+	_sched = []
+	_work._last_now = -INF
+	_work._begun = {}
+	_work._full = true
+	print("ghost: card table - the same episode again from the top, its intro %.1f s: the table and its bake stand (baked to %.1f s)" % [
+		_plan.hold, _work.physics.baked_to() if _work.physics != null else 0.0])
 
 
 ## THE EPISODE BUILT from what its plan decided ([member _plan]): the camera, the light, the cards and
@@ -1236,7 +1336,9 @@ func _poll_pictures(force := false) -> void:
 		_plan_moves()
 	# ...and THE WORK, blocked while it can already be playing: built again over the table as it stands
 	var apath := dir.path_join("acts.json")
-	if (FileAccess.get_modified_time(apath) if FileAccess.file_exists(apath) else -1) != _acts_mt:
+	var spath := dir.path_join("skin.json")
+	if (FileAccess.get_modified_time(apath) if FileAccess.file_exists(apath) else -1) != _acts_mt \
+			or (FileAccess.get_modified_time(spath) if FileAccess.file_exists(spath) else -1) != _skin_mt:
 		_build_table()
 		_plan_moves()
 	var room := _picture(dir.path_join("backdrop.png"), force)
@@ -1544,6 +1646,7 @@ func _build_work(spec: Dictionary) -> void:
 	# a beat a card's, or one of a show's that draws none (CardTable.beats)
 	var beats := maxi(CardTable.beats(_plan.pay.get("plan", {}) if _plan.pay.get("plan") is Dictionary else {}), (_plan.pay.get("cards", []) as Array).size())
 	_work.since = _plan.since
+	_work.skin_doc = _skin_json()
 	_work.build(raw, beats, spec.get("sound", {}) if spec.get("sound") is Dictionary else {})
 	for n in _work.notes:
 		print("ghost: card table - work: %s" % n)
@@ -1560,9 +1663,46 @@ func rework(raw: Variant) -> void:
 	var path := String(_plan.pay.get("dir", "")).path_join("acts.json")
 	_acts_mt = FileAccess.get_modified_time(path) if FileAccess.file_exists(path) else -1
 	var beats := maxi(CardTable.beats(_plan.pay.get("plan", {}) if _plan.pay.get("plan") is Dictionary else {}), (_plan.pay.get("cards", []) as Array).size())
+	_work.skin_doc = _skin_json()
 	_work.rebind(raw, beats)
 	if not _sched.is_empty():
 		_work.schedule(_sched, _plan.parse, _follow.said0, _follow.said1, _est, _now)
+
+
+## THE DESIGNS PAINTED ON THIS TABLE ([TablePaint]): the episode's `skin.json` as parsed, read from the FILE as the acts are - and
+## its time noted, so a design that lands live is painted.
+func _skin_json() -> Dictionary:
+	var path := String(_plan.pay.get("dir", "")).path_join("skin.json")
+	_skin_mt = FileAccess.get_modified_time(path) if FileAccess.file_exists(path) else -1
+	if _skin_mt >= 0:
+		var j := JSON.new()
+		if j.parse(FileAccess.get_file_as_string(path)) == OK and j.data is Dictionary:
+			return j.data
+	return {}
+
+
+## WHAT THE THINGS REFLECT: the table and the room, caught once when the table is set (see
+## [method _reflect]). Metal with nothing to reflect read as flat paint. The things alone take it: the
+## cards and the cloth keep the light they were tuned under.
+func _make_probe() -> void:
+	_probe = ReflectionProbe.new()
+	_probe.update_mode = ReflectionProbe.UPDATE_ONCE
+	_probe.size = Vector3(1.9, 1.0, 1.4)
+	_probe.position = Vector3(0.0, 0.2, -0.05)
+	_probe.box_projection = true
+	_probe.max_distance = 5.0
+	_probe.enable_shadows = true
+	_probe.reflection_mask = THING_LAYER | (CANDLE_LAYER * 0xF)
+	_root3.add_child(_probe)
+
+
+## The reflection probe freed, before the table leaves the world to be built ([method _build_away]) - made again by
+## [method _make_probe] as it comes back. ([TablePreview] binds acts with it out of the world too, and keeps it: a table it stood has
+## long caught its faces by then, and one made again would leave the agent's next look without them for a few frames.)
+func _drop_probe() -> void:
+	if _probe != null:
+		_probe.free()
+		_probe = null
 
 
 ## Catch the table again for the things to reflect: a probe that updates once does so again when

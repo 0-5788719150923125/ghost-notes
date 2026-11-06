@@ -167,6 +167,8 @@ func file_of(step: String) -> String:
 			return dir.path_join("table.json")
 		"model":
 			return dir.path_join("model.json")
+		"skin":
+			return dir.path_join("skin.json")
 		"meta":
 			return dir.path_join("meta.json")
 		"prep":
@@ -287,6 +289,8 @@ func steps() -> Array:
 		out.append_array(["image:surface", "image:backdrop", "table"])
 		if wants_height():
 			out.append("image:height")
+		if wants_skin():
+			out.append("skin")
 		if not work_plan().is_empty():
 			out.append("acts")
 		out.append("say:intro")
@@ -307,6 +311,8 @@ func steps() -> Array:
 	# THE WORK AT THE TABLE, where the plan has any (next/table_work.md): the puppeteer blocks it once the
 	# table is set and the cards are drawn
 	var works := work_plan()
+	if wants_skin():
+		out.append("skin")
 	if not works.is_empty():
 		out.append("acts")
 	for k in range(1, n + 1):
@@ -485,6 +491,9 @@ func needs(step: String) -> Array:
 			return ["say:close"]
 		"model":
 			return ["plan"]
+		"skin":
+			# what is painted is designed on the surface the table stands it on
+			return ["plan", "table"]
 		"table":
 			# the table is set from the plan, LOOKING AT the cloth it stands on - and at the room, which
 			# its light must agree with (where the windows are, which side the sun comes from)
@@ -493,7 +502,7 @@ func needs(step: String) -> Array:
 			# the work is blocked on the table as it is set, with the cards as they were drawn (the work is
 			# made of them: an ingredient fetched and ground) - no reader sees past its own beat's - and, where
 			# a card is WRITTEN, what is written on it (a recipe's steps are the work)
-			var out := ["plan", "draw", "table"] + (["model"] if wants_model() else [])
+			var out := ["plan", "draw", "table"] + (["model"] if wants_model() else []) + (["skin"] if wants_skin() else [])
 			var p: Variant = read_json("plan")
 			if p is Dictionary and (p as Dictionary).get("look") is Dictionary and CardTable.written((p as Dictionary)["look"]):
 				for k in range(1, n + 1):
@@ -577,6 +586,17 @@ static func _soft(from: String, to: String) -> bool:
 		or (to.begins_with("design:") and from.begins_with("design:")) \
 		or (to == "table" and (from == "image:surface" or from == "image:backdrop")) \
 		or (to == "image:height" and from == "table")
+
+
+## WHETHER THIS EPISODE DESIGNS WHAT IS PAINTED ([Skins]; next/painted_surface.md): a plan that says what is painted, unless its work was
+## blocked before there were designs - a finished episode goes on as it was made.
+func wants_skin() -> bool:
+	if has("skin"):
+		return true
+	if has("acts"):
+		return false
+	var p: Variant = read_json("plan")
+	return p is Dictionary and not String((p as Dictionary).get("painted", "")).strip_edges().is_empty()
 
 
 ## WHETHER THIS EPISODE DESIGNS WHAT IT BUILDS FIRST ([AssemblyModel]): a plan that builds, unless its work was blocked before there were models to build to - a finished episode goes on as it was made, and blocking its work again starts from a model.

@@ -17,13 +17,18 @@ float smoke_noise(vec2 p) {
 		mix(smoke_hash(i + vec2(0.0, 1.0)), smoke_hash(i + vec2(1.0, 1.0)), f.x), f.y);
 }
 
+// how torn its edge is (1, a billow of smoke; 0, a soft round haze - powder) and how thick it is (Effects.BURSTS' `torn`, `thick`)
+uniform float torn = 1.0;
+uniform float thick = 0.42;
 void fragment() {
 	vec2 p = corner * 2.0 - 1.0;
 	float r = length(p);
-	// a billow: a soft disc whose edge is torn by noise
+	// a billow: a soft disc whose edge is torn by noise - or a haze, thickest at its middle and gone by its edge
 	float n = smoke_noise(p * 2.6 + tint.rg * 7.0) * 0.6 + smoke_noise(p * 5.3 + 3.1) * 0.4;
-	float a = (1.0 - smoothstep(0.25, 1.0, r + (n - 0.5) * 0.45));
+	float billow = 1.0 - smoothstep(0.25, 1.0, r + (n - 0.5) * 0.45);
+	float haze = exp(-4.5 * r * r) * (1.0 - smoothstep(0.8, 1.0, r));
+	float a = mix(haze, billow, clamp(torn, 0.0, 1.0));
 	ALBEDO = tint.rgb;
 	ROUGHNESS = 1.0;
-	ALPHA = clamp(a * fade * 0.42, 0.0, 1.0);
+	ALPHA = clamp(a * fade * thick, 0.0, 1.0);
 }

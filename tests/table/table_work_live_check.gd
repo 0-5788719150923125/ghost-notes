@@ -23,6 +23,9 @@ extends Node
 ## - A SKIP AHEAD LANDS IN THE WORLD THE READING WOULD HAVE REACHED (2026-11-01, the user, skipping an intro watched 20 times: "ensure that
 ##   timeline scrubbing can recover properly"): only a reading's first words heard, then started again past the grind's word - the
 ##   acts of the words skipped are placed before the landing, each at its written length, never all at once as it lands.
+## - A READING FROM THE TOP AGAIN IS NO SCRUB (2026-11-06, the intro lengthened between a Stop and a Play, "the speaking starting DURING
+##   the intro sequence"): the table and its work stand, its clock starts over and its plan takes the new intro - its work later with its
+##   words; the control, the same reading named as a scrub to its first word, has its clock put on.
 ## - THE CONTROL: the same table with no acts - nothing scheduled, no stream, no cue - and its clock still runs; and, its acts
 ##   written again, it is a new table, never the last one sought in.
 ##
@@ -114,6 +117,7 @@ func _run() -> void:
 	_worked()
 	_seek()
 	_skip()
+	_restarted()
 	_laid_rests()
 	_control()
 	print("table_work_live_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
@@ -397,6 +401,55 @@ func _skip() -> void:
 		_ok(not r.is_empty() and float(r["t1"]) <= at + 0.01, "the skip: %s is done before the reading lands at %.2f s: %s" % [act[0], at, "not placed" if r.is_empty() else "it ends at %.2f s" % float(r["t1"])])
 	var g := _run_of("grind")
 	_ok(not g.is_empty() and float(g["t0"]) < at, "the skip: the grind, its word skipped, began before the landing at %.2f s: %s" % [at, "not placed" if g.is_empty() else "at %.2f s" % float(g["t0"])])
+
+
+## A READING STARTED AGAIN FROM THE TOP is no scrub ([method TableMedium._restart]; 2026-11-06, the intro set from 6 s to 9 s between a Stop
+## and a Play: "the speaking starting DURING the intro sequence"): the table and its work stand, but its clock starts over and its plan
+## takes the intro the show holds now - its first word estimated where the new intro ends, the grind its words' 3 s later. THE CONTROL:
+## the same reading named as a scrub to its first word puts its clock on where that word was heard before.
+func _restarted() -> void:
+	_build(_acts())
+	var w = medium._work
+	var spoken: PackedStringArray = medium._plan.parse["spoken"]
+	var was_hold: float = Director.intro_hold
+	var grind_was := float(_run_of("grind").get("t0", -1.0))
+	var heard0: float = medium._follow.st0[0]
+	var again := func(start_words: bool) -> void:
+		var doc: Dictionary = (subs.document as Dictionary).duplicate()
+		doc.erase("start_words")
+		doc.erase("start_index")
+		doc.erase("start_time")
+		if start_words:
+			doc["start_words"] = spoken.slice(0, 8)
+			doc["start_index"] = 0
+		medium.release()
+		subs.queue_free()
+		subs = preload("res://src/show/subtitles.gd").new()
+		add_child(subs)
+		subs.document = doc
+		subs.words = load("res://tests/table/table_look_probe.gd").timeline(CardReading.parse(String(doc["source"])), 0.36, Director.intro_hold)
+		medium.bind_captions(subs)
+		medium._ensure_doc()
+	# ...Stop, the intro 3 s longer, Play
+	Director.intro_hold = was_hold + 3.0
+	again.call(false)
+	_ok(is_same(medium._work, w), "the restart: the table is %s" % ("the one standing" if is_same(medium._work, w) else "BUILT AGAIN"))
+	_ok(medium._follow.offset == 0.0, "the restart: its clock is put %.2f s on, as a scrub's" % medium._follow.offset)
+	_ok(absf(medium._plan.hold - Director.intro_hold) < 1e-4 and medium._est.size() > 0 and medium._est[0] >= Director.intro_hold - 1e-4,
+		"the restart: its plan keeps the last intro - %.1f s, its first word estimated at %.2f s - not the %.1f s it has now" % [
+		medium._plan.hold, medium._est[0] if medium._est.size() > 0 else -1.0, Director.intro_hold])
+	medium._follow.extend(subs.words)
+	medium._sched = medium._follow.place(medium._plan.parse["actions"], maxf(Director.intro_hold, 0.6), TableMedium.LEAD, TableMedium.TAIL)
+	w.schedule(medium._sched, medium._plan.parse, medium._follow.said0, medium._follow.said1, medium._est, 0.0)
+	var grind_now := float(_run_of("grind").get("t0", -1.0))
+	_ok(grind_was >= 0.0 and absf(grind_now - grind_was - 3.0) < 0.5, "the restart: the grind begins %.2f s later with its words, not 3 (%.2f s, then %.2f s)" % [
+		grind_now - grind_was, grind_was, grind_now])
+	# THE CONTROL: named as a scrub to its first word, the clock is put where that word was heard last
+	var heard_last: float = medium._follow.st0[0]
+	again.call(true)
+	_ok(absf(medium._follow.offset - heard_last) < 1e-3 and heard_last > heard0, "THE CONTROL: a scrub to the first word puts its clock %.2f s on, not where it was heard last, %.2f s" % [
+		medium._follow.offset, heard_last])
+	Director.intro_hold = was_hold
 
 
 ## WHAT A HAND LAYS DOWN RESTS ([constant TableWork.LAID_REST]; feedback 0008, the phoenix feather: "It came to the table, touched the table, then immediately bounced

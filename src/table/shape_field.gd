@@ -16,6 +16,9 @@ class_name ShapeField
 ##     be floating above the table ... it seems to be casting too much of a shadow");
 ##   - a BOX, a BALL, a RING, a crystal POINT and a TUBE's segments in closed forms, inside the box the built
 ##     geometry measured;
+##   - a MASK as [FaceForm] builds it: its relief over its own front, its flat back, past its outline the rim - never its box,
+##     in which a brush on the face read four centimeters deep and every paint act was told its tool passed through the
+##     mask (joker-motivation 856886, 2026-11-05);
 ##   - anything else as that box, its corners rounded.
 ##
 ## A warp's `scale` is undone before a point is measured (its distance scaled back by the least of it); its other
@@ -32,7 +35,7 @@ const CELL := Vector2(0.0003, 0.0016)
 const BAND := 6
 const FAR_LEAST := 0.012
 
-var kind := "box"             # lathe, extrude, box, ball, ring, capsules
+var kind := "box"             # lathe, extrude, box, ball, ring, capsules, mask
 ## The part's box as built, in its own space (meters): what a broad test asks of it.
 var box := AABB()
 var scale := Vector3.ONE      # a warp's scale, undone before a point is measured
@@ -68,6 +71,10 @@ var ring_t := 0.0
 var caps_a := PackedVector3Array()
 var caps_b := PackedVector3Array()
 var caps_r := PackedFloat32Array()
+# a mask: its size (centimeters, [FaceForm]), how strongly its features stand out, and its back's depth behind its rim (meters)
+var face_size := Vector3.ZERO
+var face_relief := 1.0
+var face_back := 0.0
 var _surface := PackedVector3Array()   # [method surface_points], once made
 var _surface_made := false
 static var _making := Mutex.new()
@@ -146,6 +153,11 @@ static func of(part: Dictionary, built: AABB) -> ShapeField:
 				f.caps_r.append(r)
 			if f.caps_a.is_empty():
 				f.kind = "box"
+		"mask":
+			f.kind = "mask"
+			f.face_size = part["size"] if part.get("size") is Vector3 else FaceForm.size_of(part.get("size"))
+			f.face_relief = float(part.get("relief", 1.0))
+			f.face_back = float(part.get("thick", FaceForm.THICK)) * 0.01
 		_:
 			f.kind = "box"
 	if f.kind == "box":
@@ -419,6 +431,8 @@ func _local(q: Vector3) -> Vector4:
 			var d := t.length() - ring_t
 			var radial := Vector3(v.x / rr, 0.0, v.z / rr) if rr > 1e-6 else Vector3.RIGHT
 			return _with(d, radial * t.x + Vector3.UP * t.y)
+		"mask":
+			return _mask_d(q)
 		"capsules":
 			var best := INF
 			var bn := Vector3.UP
@@ -449,6 +463,30 @@ func _local(q: Vector3) -> Vector4:
 		else:
 			n = Vector3(0.0, 0.0, signf(v.z))
 	return _with(d, n)
+
+
+## A MASK's distance at [param q] ([FaceForm]: x across its middle, y up from its chin, z out of its rim): inside its outline, in
+## front of the face by its height over the rim along its normal, or behind its flat back - between them, inside, the nearer; past
+## its outline, out of the rim across and over or under the rim's edge.
+func _mask_d(q: Vector3) -> Vector4:
+	var w := face_size.x * 0.005
+	var h := face_size.y * 0.01
+	var r := FaceForm.outside(q.x / w, q.y / h)
+	if r < 1.0:
+		var front := FaceForm.height(q.x / w, q.y / h, face_relief) * face_size.z * 0.01
+		var n := FaceForm.normal(q.x * 100.0, q.y * 100.0, face_size, face_relief)
+		if q.z >= front:
+			return _with((q.z - front) * n.z, n)
+		if q.z <= -face_back:
+			return _with(-face_back - q.z, Vector3(0.0, 0.0, -1.0))
+		var to_front := (front - q.z) * n.z
+		var to_back := q.z + face_back
+		return _with(-minf(to_front, to_back), n if to_front < to_back else Vector3(0.0, 0.0, -1.0))
+	var v := Vector2(q.x, q.y - FaceForm.MIDDLE * h)
+	var across := v.length() * (1.0 - 1.0 / r)
+	var dz := maxf(maxf(q.z, -face_back - q.z), 0.0)
+	var dir := v / maxf(v.length(), 1e-9)
+	return _with(Vector2(across, dz).length(), Vector3(dir.x * across, dir.y * across, signf(q.z + face_back * 0.5) * dz))
 
 
 static func _with(d: float, n: Vector3) -> Vector4:

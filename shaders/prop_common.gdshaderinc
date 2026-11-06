@@ -24,11 +24,72 @@ varying vec3 cpos;          // ...in centimeters
 varying vec3 lpos;          // ...in centimeters from the middle of its own copy (Props.Tris.placed)
 varying flat float tag;     // the copy's own number, 0..1
 
+// A BRUSH'S HAIRS (Bristles, a `tuft`): their root and the way they run (the mesh's own space), how long they are (meters,
+// 0: not hairs), and how they bend now - where their tips are pulled to (meters) and how far they splay - each vertex as far
+// as it is up its hair (UV2's x). TablePaint sets the bend from show time.
+uniform vec3 bristle_root = vec3(0.0);
+uniform vec3 bristle_axis = vec3(0.0, 1.0, 0.0);
+uniform float bristle_len = 0.0;
+uniform vec3 bristle_bend = vec3(0.0);
+uniform float bristle_splay = 0.0;
+// A SPONGE GIVES where it is pressed: the way it is pressed (the mesh's space) and how far, a share of its depth; its middle
+uniform vec4 squash = vec4(0.0);
+uniform vec3 squash_at = vec3(0.0);
+// a surface it is pressed onto (its own space): its normal toward it and how far along that the surface is; how far the deepest
+// of it went past it, the band over it that gives and how far it spreads; the deepest of it (TablePaint._flat_on)
+uniform vec4 flat_on = vec4(0.0, 1.0, 0.0, 0.0);
+uniform vec3 flat_by = vec3(0.0);
+uniform vec3 flat_at = vec3(0.0);
+// (spread out from the deepest point as from a disc this wide, never from a point)
+const float FLAT_CORE = 0.004;
+// A SURFACE PAINTED (TablePaint): where each point is on its skin, seen from its front - across and down, 0-1 - and how far
+// it faces that front
+uniform bool skinned = false;
+uniform vec4 skin_u = vec4(0.0);
+uniform vec4 skin_v = vec4(0.0);
+uniform vec3 skin_side = vec3(0.0, 0.0, 1.0);
+varying vec3 skin_at;
+
 void vertex() {
 	cpos = VERTEX * 100.0;
 	opos = cpos / max(grain, 0.05) + vec3(seed * 17.31, seed * 3.7, seed * 9.13);
 	lpos = (VERTEX - CUSTOM0.xyz) * 100.0;
 	tag = CUSTOM0.w;
+	if (skinned) {
+		vec4 q = vec4(VERTEX, 1.0);
+		skin_at = vec3(dot(skin_u, q), dot(skin_v, q), dot(NORMAL, skin_side));
+	} else {
+		skin_at = vec3(0.0);
+	}
+	if (bristle_len > 0.0) {
+		float s = clamp(UV2.x, 0.0, 1.0);
+		vec3 off = VERTEX - bristle_root;
+		vec3 radial = off - bristle_axis * dot(off, bristle_axis);
+		float side = length(bristle_bend);
+		// bent along its length, more toward the tip; splayed out from the middle; and no longer for being bent
+		VERTEX += bristle_bend * (s * s) + radial * bristle_splay * s * 1.2
+			- bristle_axis * (side * side / max(bristle_len, 1e-4)) * 0.5 * s * s * s;
+	}
+	if (squash.w > 0.0) {
+		vec3 d = normalize(squash.xyz);
+		float into = max(dot(VERTEX - squash_at, d), 0.0);
+		vec3 across = (VERTEX - squash_at) - d * dot(VERTEX - squash_at, d);
+		VERTEX += -d * into * squash.w + across * squash.w * 0.3 * into / max(length(VERTEX - squash_at), 1e-4);
+	}
+	// PRESSED ONTO A SURFACE (a sponge into its paint, TablePaint._flat_lift - the same numbers): what would go under it is drawn ON
+	// it, the band over it squeezed hardest nearest it, and spread out from the deepest of it as far as it gave
+	if (flat_by.x > 0.0) {
+		vec3 fn = normalize(flat_on.xyz);
+		float fs = dot(VERTEX, fn) - flat_on.w;
+		float band = max(flat_by.y, 1e-5);
+		if (fs < band) {
+			float fu = clamp((fs + flat_by.x) / (band + flat_by.x), 0.0, 1.0);
+			float lifted = band * pow(fu, (band + flat_by.x) / band) - fs;
+			vec3 rel = VERTEX - flat_at;
+			vec3 out_way = rel - fn * dot(rel, fn);
+			VERTEX += fn * lifted + out_way * lifted * flat_by.z / max(length(out_way), FLAT_CORE);
+		}
+	}
 }
 
 #include "res://shaders/noise_common.gdshaderinc"

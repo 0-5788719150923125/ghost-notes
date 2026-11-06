@@ -532,15 +532,22 @@ work_list:
       {{work_seconds}} seconds in all{{^quiet}}: say at least enough to cover it, and more where you have a
       story to tell{{/quiet}}.
   # A SILENCE (the user, 2026-11-02: "There might be stretches where we do not talk at all"): a thing a reader writes as it writes a
-  # hesitation, with the seconds it wants - the work goes on through it and the voice takes it up afterward
+  # hesitation, with the seconds it wants - the work goes on through it and the voice takes it up afterward. ONLY AT A TURN (2026-11-06,
+  # joker-motivation 209459, its silences between paragraphs of one thought: "a forced pause between two connected paragraphs feels
+  # wrong. If we're going to pause, the follow-up speaking to a pause should probably be something slightly different, or something
+  # that calls back to the thought from a few minutes ago")
   - when: quiet
     say: >-
           NOBODY TALKS THROUGH ALL OF IT. About {{quiet_seconds}} of those seconds pass with no words at all, only the work and the
           room, and that silence is as much a part of what you write as the words are. Put <!-- quiet: 40 --> where you stop talking,
-          for as many seconds as you stop for, up to {{quiet_most}} at a time, on the line where it falls - between two sentences,
-          or after a thought that needs nothing after it. Several long ones and a few short ones
-          read truer than many middling ones, and the voice does not come back because the silence has gone on long: it comes back
-          because something occurred to it. A step that begins in a silence has its mark there too, <!-- act: its name --> <!-- quiet:
+          for as many seconds as you stop for, up to {{quiet_most}} at a time, on the line where it falls. A SILENCE FALLS ONLY WHERE A
+          THOUGHT IS FINISHED: what is said after it turns - something new, or a thought from minutes before come back to, seen
+          differently now. Never between two paragraphs where the second goes on with the first, never between a question and its
+          answer, never in the middle of a run that is building: if two paragraphs belong together, say them together and take the
+          silence after the second. So a passage has as many silences as it has real turns - a few long ones read truer than many
+          middling ones - and when it has fewer turns than its seconds of silence would fill, it keeps fewer and longer silences, or
+          less silence, never one where nothing turns. The voice does not come back because the silence has gone on long: it comes
+          back because something occurred to it. A step that begins in a silence has its mark there too, <!-- act: its name --> <!-- quiet:
           30 -->. The seconds here are an example: choose your own, and never write the same one twice in a row. The marks are
           never read aloud, and nothing in the words apologizes for them or remarks on them.
   # AN EPISODE OPENS TALKING (the user, 2026-11-03: "a solid 45 seconds of silence at the beginning ... feels wrong. We definitely need an intro"; CardReading.opens_talking

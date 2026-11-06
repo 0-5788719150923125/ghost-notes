@@ -1,0 +1,1611 @@
+extends RefCounted
+class_name Skins
+
+## Skins - THE PAINTED SURFACE (next/painted_surface.md; next/table_work.md section 11): what is painted on a part's `skin`,
+## and how a tool lays it on. The user, 2026-11-05, of Joker Motivation: "The person slowly and meticulously applies a
+## foundation, and details, and eye liner, and lipstick, and gently smears things with a sponge ... We are creating a work of
+## art." Nothing here knows a face: a skin is any part painted from one side - a mask's face, a cake's top, a sign, a
+## miniature - and a DESIGN is its ELEMENTS.
+##
+## A DESIGN IS DATA, never a picture: its elements, in the order they go on, each a shape in MILLIMETERS across and down the
+## skin as it is seen from its side (x to the right, y down, from its top left corner) - a `fill` (an SVG path, or "all" of the
+## surface), a `line` (an SVG path drawn with a `width`), `dots` or `stones` - with its `paint`, its `finish` and its `stage`.
+## The decorator writes it ([method sanitize]); Godot draws each shape from its own SVG ([method cover]) so the edges are the
+## design's exactly.
+##
+## A TOOL LAYS IT ON AS A HAND DOES ([method program]): a line drawn along its path in slow strokes, lifted at its corners; a
+## fill swept back and forth along its length; a base stippled with a sponge from its middle out, twice; a powder patted; dots
+## dabbed; stones carried from their dish and pressed on - going back to the paint when the tool runs dry. Every point of an
+## element is given the moment the tool first covers it, as a share of its program ([method when_map]), so the paint shows
+## exactly where the tool has been, a pure function of time ([TablePaint] plays it).
+
+## THE FINISHES paint can have: how rough it is (0 a mirror, 1 chalk), how metallic, how much glitter is in it, and how much of
+## what is under it it hides (`opacity`, when the element says none).
+const FINISHES := {
+	"matte": {"label": "Matte", "blurb": "a soft, flat finish - greasepaint, face paint, gouache, a set foundation", "rough": 0.62, "metal": 0.0, "glitter": 0.0, "opacity": 1.0},
+	"satin": {"label": "Satin", "blurb": "a soft sheen - cream paint, a satin lipstick, acrylic", "rough": 0.4, "metal": 0.0, "glitter": 0.0, "opacity": 1.0},
+	"gloss": {"label": "Gloss", "blurb": "wet-looking and shining - a glossy lipstick, lacquer, a glaze, a varnish", "rough": 0.06, "metal": 0.0, "glitter": 0.0, "opacity": 1.0},
+	"glitter": {"label": "Glitter", "blurb": "fine flakes that catch the light - a glitter gel, a sparkling dust", "rough": 0.35, "metal": 0.3, "glitter": 1.0, "opacity": 0.9},
+	"metal": {"label": "Metal", "blurb": "a metal's shine - gold leaf, silver paint, a metallic pigment", "rough": 0.28, "metal": 0.9, "glitter": 0.0, "opacity": 1.0},
+	"pearl": {"label": "Pearl", "blurb": "a soft pearly shimmer - a highlighter, a pearl paint, an iridescent powder", "rough": 0.24, "metal": 0.35, "glitter": 0.15, "opacity": 0.8},
+	"powder": {"label": "Powder", "blurb": "a fine translucent veil that takes the shine off what is under it - a setting powder, a dusting of flour or chalk; patted on, and patted again to sweep its excess away", "rough": 0.97, "metal": 0.0, "glitter": 0.0, "opacity": 0.38},
+}
+## WHAT A SECOND PASS OF POWDER LEAVES of the first (its excess swept off).
+const SWEPT := 0.35
+## THE MANNERS a tool lays an element on in - the first that suits it is taken unless the act says another.
+const MANNERS := {
+	"line": {"label": "Line", "blurb": "drawn along its path in short pulls, each begun back over the last and now and then gone over again, lifted between them"},
+	"sweep": {"label": "Sweep", "blurb": "a fill swept back and forth along its length, each stroke beside the last - a flat or round brush, or a sponge's flat face"},
+	"stipple": {"label": "Stipple", "blurb": "small presses from its middle outward, over it twice, the second filling what the first left - a sponge's corner"},
+	"pat": {"label": "Pat", "blurb": "patted all over, a press at a time, a little cloud rising at each - a powder puff or sock"},
+	"dab": {"label": "Dab", "blurb": "each dot set with one press of the tool's end"},
+	"place": {"label": "Place", "blurb": "each stone taken from its dish, carried over and pressed on where it goes"},
+	"blend": {"label": "Blend", "blurb": "an element already on, gone over again with nothing on the tool so its edges soften and smear - a blending brush or a sponge's flat face"},
+	"smear": {"label": "Smear", "blurb": "paint already on dragged along a path in one pressed stroke, thinning and streaking as it goes - a sponge's edge, a fingertip, a dry brush"},
+	"spray": {"label": "Spray", "blurb": "a mist sprayed over it from a hand's length away, a few pumps across it - a setting spray, a mister"},
+}
+## A SMEAR: how wide it is when none is given (millimeters), how much of its paint is left at its end, the streaks across it, and how
+## many pieces along it its paint thins over. A MIST: the sheen it leaves (roughness), what of it is left once dry, and how long that
+## takes (seconds).
+const SMEAR_WIDTH := 6.0
+const SMEAR_LEFT := 0.2
+const SMEAR_STREAKS := 6
+const SMEAR_PIECES := 12
+const DEW := 0.08
+const DEW_LEFT := 0.35
+const DEW_DRIES := 75.0
+## A design's limits: elements, the characters of one path, dots and stones one element has, and a line's width (mm).
+const MOST_ELEMENTS := 120
+const MOST_PATH := 6000
+const MOST_DOTS := 120
+const MOST_STONES := 60
+const WIDTH := Vector2(0.2, 25.0)
+## How far an element's edge may be softened (millimeters), and how far a blend softens it when its `soft` says none.
+const SOFT_MOST := 15.0
+const BLEND_SOFT := 4.0
+## How finely an element is drawn (pixels a millimeter) and its reveal map ([method when_map]), and how finely a path is
+## followed (millimeters).
+const PX_MM := 5.0
+const WHEN_PX := 1.0
+const PATH_STEP := 0.5
+
+## THE PACE of a hand at this work, at its own speed - A CAREFUL HAND'S, a face painted as a work of art (the user, 2026-11-05: a first
+## face done in 9:22 was "a VERY fast application of elaborate clown makeup ... most GRWM videos would be closer to the range of 20 or
+## 30 minutes"; at 16 mm/s a liner outlined ten diamonds in a minute, a careful one takes three to five): millimeters a second along a
+## line, across a sweep and a blend; how long it takes to come down onto the surface and to lift off it; how far it lifts between
+## strokes (millimeters); how fast it moves between them (mm/s, never quicker than TRAVEL_LEAST seconds).
+const LINE_SPEED := 7.0
+const SWEEP_SPEED := 24.0
+const BLEND_SPEED := 16.0
+const DOWN := 0.5
+const UP := 0.45
+const HOVER := 4.0
+const TRAVEL := 60.0
+const TRAVEL_LEAST := 0.35
+## A LOOK after each stroke: the tool backs off this far (millimeters) and the eye checks what it did, for between these (seconds),
+## before the next - drawn by the stroke, so the same design paints the same way.
+const LOOK := Vector2(0.6, 1.8)
+const LOOK_LIFT := 9.0
+## A DAB: down, held, up (seconds), how high it lifts between dabs and how fast it moves; a PAT the same, slower and higher.
+const DAB := Vector3(0.24, 0.16, 0.22)
+const DAB_LIFT := 2.5
+const DAB_MOVE := 70.0
+const PAT := Vector3(0.4, 0.35, 0.45)
+const PAT_LIFT := 9.0
+## A TRIP BACK TO THE PAINT in the middle of an element (seconds), and how much is laid before the tool runs dry: of a line
+## (mm), a sweep (mm of stroke), stipple dabs, pats and dots - a sponge and a puff a few presses a load (the user, 2026-11-06:
+## "there is no way we could possibly have enough foundation to paint as much as we already have in that picture"; it had been 70).
+const RELOAD := 3.4
+const RELOAD_LINE := 110.0
+const RELOAD_SWEEP := 260.0
+const RELOAD_DABS := 16
+const RELOAD_PATS := 12
+const RELOAD_DOTS := 14
+## ...AND IT LAYS LESS AS IT RUNS DRY (the user: "the application to get lighter and lighter on the mask, fainter and fainter, until
+## we are forced to pick-up more product from the case"): what each press or stretch lays, of what the first after a load lays, by
+## the time the tool goes back for more - a stipple's and a pat's presses much less, a sweep a little; a line (a liner, a pencil),
+## a dot, a smear and a mist as much to the end ([method when_map]'s second channel).
+const DRY_DABS := 0.25
+const DRY_PATS := 0.3
+const DRY_SWEEP := 0.85
+## ...AS A HAND RUNS A TOOL DRY, never by a count (the user, 2026-11-06: "every 16 dabs is going to be strange as well: because it's
+## constant"; "each application might use a different amount ... a person might choose to apply the dabbing even when they have very
+## little product ... you can almost always get a little bit more out of the dabs, though it becomes less and less over time"): what is
+## on the tool is taken off a share at a time - each press (or stroke) its own hand, this share more or less than the manner's - so it
+## never runs out; each load is taken up this share more or less full; and the hand goes back for more once a press would lay less than
+## this load's own STOP (shares of the manner's dry) - or, one load in PUSH_ON, only far later (PUSH_STOP). How many presses a load
+## lasts is what comes of it. Never less than LAYS_LEAST of a full first press. What never runs pale (a line, a dot) goes back after
+## LOAD_SPREAD either way of its number. All drawn from the element, so the same design always paints the same way.
+const TAKE_SPREAD := 0.45
+const AMOUNT_SPREAD := 0.15
+const STOP := Vector2(0.75, 1.5)
+const PUSH_ON := 0.2
+const PUSH_STOP := Vector2(0.25, 0.55)
+const LAYS_LEAST := 0.03
+const LOAD_SPREAD := 0.4
+## ...a SWEEP's, gently: its strokes and its loads this share more or less, back for more about its dry - a fill is gone over once,
+## and a stroke laid pale or a load pushed on is a stripe in it to the end.
+const TAKE_SPREAD_SWEEP := 0.08
+const AMOUNT_SPREAD_SWEEP := 0.05
+const STOP_SWEEP := Vector2(0.92, 1.04)
+## A SMEAR's pace (millimeters a second). A SPRAY: how long it is held up and aimed, each pump, the time between pumps, how wide one
+## pump's mist lands (millimeters), and how much surface a pump covers (square millimeters).
+const SMEAR_SPEED := 10.0
+const AIM := 1.5
+const PUMP := Vector2(0.3, 0.6)
+const PUMP_MOVE := 1.2
+const PUMP_REACH := 45.0
+const PUMP_AREA := 2500.0
+## A STONE: to its dish and picked up (seconds), down onto its place, pressed, up.
+const PICK := 3.2
+const PLACE := Vector3(0.8, 0.7, 0.6)
+## Where a line is cut into runs: at a corner sharper than this (degrees).
+const CORNER := 75.0
+## A RUN IS DRAWN IN SHORT PULLS (the user, 2026-11-06: "brush strokes are drawn perfectly, all in one line, never lifting the brush ...
+## They would draw in short, small bursts, lifting the brush each time, making strokes, correcting mistakes"): each pull this long
+## (mm, each its own), started this far back over the last one's end so they join, lifted this far between them (mm) and down and up
+## this fast (seconds); its pace each its own share of [constant LINE_SPEED], eased in and out; and now and then - this share of them -
+## part of a pull gone over again, slower, before the next. A look back only where a run ends.
+const PULL := Vector2(6.0, 16.0)
+const PULL_OVER := 1.5
+const PULL_LIFT := 1.2
+const PULL_DOWN := 0.22
+const PULL_UP := 0.2
+const PULL_PACE := Vector2(0.8, 1.25)
+const PULL_AGAIN := 0.14
+## A shape apart within an element at least this many coverage pixels ([method _islands]); a smaller speck is part of the nearest.
+const ISLAND_LEAST := 12
+## A sweep's rows, apart (a share of the tool's width); a stipple's dabs apart, and a pat's.
+const ROWS := 0.7
+const DABS := 0.78
+const PATS := 1.05
+## ...and a sweep's row is kept every this far along (millimeters): a hand's tool is held clear of the surface at each place it is
+## kept ([method TablePaint._cleared]), and a row with its two ends alone had crossed the nose at the ends' angle.
+const ROW_KEYS := 4.0
+## A SPONGE IS HELD TWO WAYS (the user, 2026-11-05: "women generally would dab with the corner of the sponge, not with the flat side
+## of it ... They probably use the flat side to smear it and spread it, but use the corner to dip into the container, and to paint
+## features"): its flat face for the manners that spread, its corner for every other - and a corner lays paint this much of its
+## face's width ([method width_for]).
+const FLAT_MANNERS := ["sweep", "blend"]
+const CORNER_WIDE := 0.75
+
+
+# --- the design ---------------------------------------------------------------------------------------
+
+## WHATEVER A DECORATOR WROTE, as a design that can be painted on a skin [param frame] millimeters across and down:
+## `{name, elements: [{id, stage, paint, finish, opacity, soft, kind (fill, line, dots, stones), d (a path, or "all"), width,
+## dots, stones}], notes}` - every element with a shape and an id of its own, in the order written.
+static func sanitize(raw: Variant, frame: Vector2) -> Dictionary:
+	var notes := PackedStringArray()
+	var d: Dictionary = raw if raw is Dictionary else {}
+	var list: Variant = d.get("elements", raw if raw is Array else [])
+	var out: Array = []
+	var ids := {}
+	for e in (list if list is Array else []):
+		if out.size() >= MOST_ELEMENTS:
+			notes.append("more than %d elements: the rest are left out" % MOST_ELEMENTS)
+			break
+		if not (e is Dictionary):
+			continue
+		var made := _element(e as Dictionary, frame, notes, out)
+		if made.is_empty():
+			continue
+		var id := String(made["id"])
+		if id.is_empty() or ids.has(id.to_lower()):
+			var k := out.size() + 1
+			while ids.has(("%s %d" % [String(made["stage"]) if not String(made["stage"]).is_empty() else "element", k]).to_lower()):
+				k += 1
+			if not id.is_empty():
+				notes.append("two elements are called \"%s\": the second is \"%s %d\"" % [id, String(made["stage"]) if not String(made["stage"]).is_empty() else "element", k])
+			id = "%s %d" % [String(made["stage"]) if not String(made["stage"]).is_empty() else "element", k]
+			made["id"] = id
+		ids[id.to_lower()] = true
+		out.append(made)
+	return {"name": Props._text(d.get("name", ""), 80), "elements": out, "notes": notes}
+
+
+static func _element(e: Dictionary, frame: Vector2, notes: PackedStringArray, before: Array = []) -> Dictionary:
+	var id := Props._text(e.get("id", e.get("name", "")), 40)
+	var out := {"id": id, "stage": Props._text(e.get("stage", ""), 30).to_lower()}
+	# A SMEAR takes the paint of what it drags, an element laid before it
+	if e.has("smear"):
+		var from := String(e["smear"]).strip_edges().to_lower()
+		var src: Dictionary = {}
+		for b in before:
+			if String((b as Dictionary)["id"]).to_lower() == from:
+				src = b
+		if src.is_empty() or String(src["kind"]) in ["stones", "mist"]:
+			notes.append("%s: a smear drags the paint of an element laid before it (`smear`: its id) - \"%s\" is none - left out" % [id, from])
+			return {}
+		var dl := _path_text(e.get("line", ""))
+		if dl.is_empty() or flatten(dl).is_empty():
+			notes.append("%s: a smear's `line` is the path it is dragged along - left out" % id)
+			return {}
+		out.merge({"kind": "smear", "d": dl, "from_el": String(src["id"]), "width": Props._num(e.get("width"), SMEAR_WIDTH, WIDTH.x, WIDTH.y),
+			"paint": Props._color(e["paint"], "#202020") if Props._is_color(e.get("paint")) else String(src["paint"]),
+			"finish": String(e["finish"]) if FINISHES.has(String(e.get("finish", ""))) else String(src["finish"]),
+			"opacity": Props._num(e.get("opacity"), float(src["opacity"]), 0.05, 1.0), "soft": Props._num(e.get("soft"), 1.0, 0.0, SOFT_MOST)})
+		return out
+	# A MIST lays no color: a wet sheen over what it lands on, which dries to a soft glow
+	if e.has("mist"):
+		var m: Variant = e["mist"]
+		var dm := "all" if (m is String and String(m).strip_edges().to_lower() == "all") or m == true else _path_text(m)
+		if dm.is_empty():
+			notes.append("%s: a `mist` is \"all\" or a closed path it lands on - left out" % id)
+			return {}
+		out.merge({"kind": "mist", "d": dm, "paint": "#ffffff", "finish": "gloss", "opacity": Props._num(e.get("opacity"), 1.0, 0.05, 1.0),
+			"soft": Props._num(e.get("soft"), 6.0, 0.0, SOFT_MOST)})
+		return out
+	var finish := String(e.get("finish", "matte")).strip_edges().to_lower()
+	if not FINISHES.has(finish):
+		if not finish.is_empty():
+			notes.append("%s: \"%s\" is not a finish (%s) - matte" % [id, finish, ", ".join(PackedStringArray(FINISHES.keys()))])
+		finish = "matte"
+	out["finish"] = finish
+	out["paint"] = Props._color(e.get("paint", e.get("color", "")), "#202020") if Props._is_color(e.get("paint", e.get("color", ""))) else ""
+	out["opacity"] = Props._num(e.get("opacity"), float((FINISHES[finish] as Dictionary)["opacity"]), 0.05, 1.0)
+	out["soft"] = Props._num(e.get("soft"), 0.0, 0.0, SOFT_MOST)
+	if e.has("stones"):
+		out["kind"] = "stones"
+		out["stones"] = _circles(e["stones"], frame, MOST_STONES, Vector2(0.4, 8.0))
+		if (out["stones"] as Array).is_empty():
+			notes.append("%s: its stones are [[x, y, r], ...] millimeters - left out" % id)
+			return {}
+		if String(out["paint"]).is_empty():
+			out["paint"] = "#e8f0ff"
+		return out
+	if String(out["paint"]).is_empty():
+		notes.append("%s: no `paint` (\"#rrggbb\") - left out" % id)
+		return {}
+	if e.has("dots"):
+		out["kind"] = "dots"
+		out["dots"] = _circles(e["dots"], frame, MOST_DOTS, Vector2(0.2, 15.0))
+		if (out["dots"] as Array).is_empty():
+			notes.append("%s: its dots are [[x, y, r], ...] millimeters - left out" % id)
+			return {}
+		return out
+	if e.has("line"):
+		var dl := _path_text(e["line"])
+		if dl.is_empty() or flatten(dl).is_empty():
+			notes.append("%s: its `line` is not a path (SVG's M, L, H, V, C, S, Q, T, A, Z) - left out" % id)
+			return {}
+		out["kind"] = "line"
+		out["d"] = dl
+		out["width"] = Props._num(e.get("width"), 1.5, WIDTH.x, WIDTH.y)
+		return out
+	if e.has("fill"):
+		var f: Variant = e["fill"]
+		if f is String and String(f).strip_edges().to_lower() == "all":
+			out["kind"] = "fill"
+			out["d"] = "all"
+			return out
+		var df := _path_text(f)
+		if df.is_empty() or flatten(df).is_empty():
+			notes.append("%s: its `fill` is not a closed path (SVG's M, L, C, Q, A, Z ...) or \"all\" - left out" % id)
+			return {}
+		out["kind"] = "fill"
+		out["d"] = df
+		out["rule"] = "evenodd" if String(e.get("rule", "")).strip_edges().to_lower() == "evenodd" else "nonzero"
+		return out
+	notes.append("%s: an element is a `fill`, a `line`, `dots` or `stones` - left out" % id)
+	return {}
+
+
+## A path as written, if it is only a path's letters and numbers.
+static func _path_text(v: Variant) -> String:
+	if not (v is String):
+		return ""
+	var s := String(v).strip_edges()
+	if s.is_empty() or s.length() > MOST_PATH:
+		return ""
+	var rx := RegEx.create_from_string("^[MmLlHhVvCcSsQqTtAaZz0-9eE.,+\\-\\s]+$")
+	return s if rx.search(s) != null else ""
+
+
+static func _circles(v: Variant, frame: Vector2, most: int, r: Vector2) -> Array:
+	var out: Array = []
+	for c in (v if v is Array else []):
+		if out.size() >= most:
+			break
+		if c is Array and (c as Array).size() >= 2:
+			var x := float(Props._num((c as Array)[0], 0.0, -frame.x, frame.x * 2.0))
+			var y := float(Props._num((c as Array)[1], 0.0, -frame.y, frame.y * 2.0))
+			var rr := float(Props._num((c as Array)[2] if (c as Array).size() > 2 else 1.5, 1.5, r.x, r.y))
+			out.append([x, y, rr])
+	return out
+
+
+## WHERE A DESIGN PAINTS on its skin, as a decorator reads it back: each element by id, its stage, what it is and how big.
+static func summary(design: Dictionary, frame: Vector2) -> PackedStringArray:
+	var lines := PackedStringArray()
+	for e in design.get("elements", []):
+		var ed: Dictionary = e
+		var r := bounds(ed, frame)
+		lines.append("- \"%s\" (%s): a %s%s in %s, %s, %d x %d mm at [%d, %d]" % [ed["id"], ed["stage"] if not String(ed["stage"]).is_empty() else "no stage",
+			ed["kind"], " %.1f mm wide" % float(ed["width"]) if ed["kind"] == "line" else "", ed["paint"], ed["finish"],
+			roundi(r.size.x), roundi(r.size.y), roundi(r.position.x), roundi(r.position.y)])
+	return lines
+
+
+# --- paths --------------------------------------------------------------------------------------------
+
+## AN SVG PATH as lines: each subpath `{pts: PackedVector2Array, closed}` - curves and arcs followed every [param step]
+## millimeters. Commands SVG's own: M L H V C S Q T A Z, absolute and relative.
+static func flatten(d: String, step := PATH_STEP) -> Array:
+	var rd := _PathReader.new()
+	rd.read(d, step)
+	return rd.out
+
+
+static func _steps_of(length: float, step: float) -> int:
+	return clampi(int(ceil(length / maxf(step, 0.05))), 1, 400)
+
+
+## An SVG arc from [param a] to [param b], as points after [param a] (the spec's own conversion to its middle).
+static func _arc(a: Vector2, b: Vector2, rx: float, ry: float, phi: float, fa: bool, fs: bool, step: float) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	if rx < 1e-6 or ry < 1e-6 or a.distance_to(b) < 1e-6:
+		out.append(b)
+		return out
+	var c := cos(phi)
+	var s := sin(phi)
+	var d := (a - b) * 0.5
+	var x1 := c * d.x + s * d.y
+	var y1 := -s * d.x + c * d.y
+	var lam := (x1 * x1) / (rx * rx) + (y1 * y1) / (ry * ry)
+	if lam > 1.0:
+		rx *= sqrt(lam)
+		ry *= sqrt(lam)
+	var num := rx * rx * ry * ry - rx * rx * y1 * y1 - ry * ry * x1 * x1
+	var den := rx * rx * y1 * y1 + ry * ry * x1 * x1
+	var k := sqrt(maxf(num / maxf(den, 1e-12), 0.0)) * (-1.0 if fa == fs else 1.0)
+	var cx1 := k * rx * y1 / ry
+	var cy1 := -k * ry * x1 / rx
+	var mid := (a + b) * 0.5
+	var cx := c * cx1 - s * cy1 + mid.x
+	var cy := s * cx1 + c * cy1 + mid.y
+	var ang := func(u: Vector2, v: Vector2) -> float: return atan2(u.x * v.y - u.y * v.x, u.dot(v))
+	var t1: float = ang.call(Vector2(1, 0), Vector2((x1 - cx1) / rx, (y1 - cy1) / ry))
+	var dt: float = ang.call(Vector2((x1 - cx1) / rx, (y1 - cy1) / ry), Vector2((-x1 - cx1) / rx, (-y1 - cy1) / ry))
+	if not fs and dt > 0.0:
+		dt -= TAU
+	elif fs and dt < 0.0:
+		dt += TAU
+	var n := _steps_of(absf(dt) * maxf(rx, ry), step)
+	for i in range(1, n + 1):
+		var t := t1 + dt * float(i) / float(n)
+		out.append(Vector2(cx + c * rx * cos(t) - s * ry * sin(t), cy + s * rx * cos(t) + c * ry * sin(t)))
+	return out
+
+
+## AN ELEMENT's extent in millimeters, its line's width and its dots' size in it.
+static func bounds(e: Dictionary, frame := Vector2.ZERO) -> Rect2:
+	var pts := PackedVector2Array()
+	var grow := 0.0
+	match String(e.get("kind", "")):
+		"fill", "line", "smear", "mist":
+			if String(e.get("d", "")) == "all":
+				return Rect2(Vector2.ZERO, frame)
+			for sp in flatten(String(e["d"]), 1.0):
+				pts.append_array((sp as Dictionary)["pts"])
+			grow = float(e.get("width", 0.0)) * 0.5
+		"dots", "stones":
+			for c in e.get(String(e["kind"]), []):
+				pts.append(Vector2(float(c[0]), float(c[1])))
+				grow = maxf(grow, float(c[2]))
+	if pts.is_empty():
+		return Rect2()
+	var r := Rect2(pts[0], Vector2.ZERO)
+	for q in pts:
+		r = r.expand(q)
+	return r.grow(grow)
+
+
+# --- what each element covers -------------------------------------------------------------------------
+
+## THE SVG OF ONE ELEMENT, white on nothing, over [param rect] (millimeters) at [param px] pixels a millimeter - clipped to
+## the surface's [param outline] (a path, millimeters; "" for none).
+static func svg_of(e: Dictionary, rect: Rect2, px: float, outline: String, frame: Vector2) -> String:
+	var w := maxi(int(ceil(rect.size.x * px)), 1)
+	var h := maxi(int(ceil(rect.size.y * px)), 1)
+	var body := ""
+	match String(e["kind"]):
+		"fill":
+			var d := String(e["d"])
+			if d == "all":
+				d = outline if not outline.is_empty() else "M0 0 H%.2f V%.2f H0 Z" % [frame.x, frame.y]
+			body = "<path d=\"%s\" fill=\"#ffffff\" fill-rule=\"%s\"/>" % [d, String(e.get("rule", "nonzero"))]
+		"line":
+			body = "<path d=\"%s\" fill=\"none\" stroke=\"#ffffff\" stroke-width=\"%.3f\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>" % [String(e["d"]), float(e["width"])]
+		"dots":
+			for c in e["dots"]:
+				body += "<circle cx=\"%.3f\" cy=\"%.3f\" r=\"%.3f\" fill=\"#ffffff\"/>" % [float(c[0]), float(c[1]), float(c[2])]
+		"smear":
+			body = smear_svg(e, "#ffffff")
+		"mist":
+			var dm := String(e["d"])
+			if dm == "all":
+				dm = outline if not outline.is_empty() else "M0 0 H%.2f V%.2f H0 Z" % [frame.x, frame.y]
+			body = "<path d=\"%s\" fill=\"#ffffff\"/>" % dm
+		"stones":
+			return ""
+	var clip := ""
+	if not outline.is_empty():
+		clip = "<defs><clipPath id=\"s\"><path d=\"%s\"/></clipPath></defs>" % outline
+		body = "<g clip-path=\"url(#s)\">%s</g>" % body
+	return "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\" viewBox=\"%.4f %.4f %.4f %.4f\">%s%s</svg>" % [
+		w, h, rect.position.x, rect.position.y, float(w) / px, float(h) / px, clip, body]
+
+
+## A SMEAR as SVG, in [param color]: streaks side by side across its width, each thinning along the way it is dragged, from its
+## paint's own strength to [constant SMEAR_LEFT] of it - pieces along it, each a little fainter, so it fades as paint does.
+static func smear_svg(e: Dictionary, color: String) -> String:
+	var out := ""
+	var w := float(e.get("width", SMEAR_WIDTH))
+	for sp in flatten(String(e["d"])):
+		var pts := _resampled((sp as Dictionary)["pts"], 1.0)
+		if pts.size() < 2:
+			continue
+		var total := 0.0
+		for k in range(1, pts.size()):
+			total += pts[k - 1].distance_to(pts[k])
+		for j in SMEAR_STREAKS:
+			# each streak a lane across the width, its own strength and width - what the tool's edge left
+			var lane := (float(j) + 0.5) / float(SMEAR_STREAKS) - 0.5
+			var strength := 0.55 + 0.45 * fposmod(sin(float(j) * 12.9898 + float(hash(e.get("id", ""))) * 0.001) * 43758.5, 1.0)
+			var lw := w / float(SMEAR_STREAKS) * (1.3 + 0.6 * fposmod(float(j) * 0.618, 1.0))
+			var line := _offset(pts, lane * w * 0.92)
+			var run := 0.0
+			var piece := PackedVector2Array([line[0]])
+			var k0 := 0
+			for k in range(1, line.size()):
+				run += pts[k - 1].distance_to(pts[k])
+				piece.append(line[k])
+				var at := run / maxf(total, 1e-3)
+				if at >= float(k0 + 1) / float(SMEAR_PIECES) or k == line.size() - 1:
+					var fade := lerpf(1.0, SMEAR_LEFT, (float(k0) + 0.5) / float(SMEAR_PIECES))
+					var d := "M %.2f %.2f" % [piece[0].x, piece[0].y]
+					for q in range(1, piece.size()):
+						d += " L %.2f %.2f" % [piece[q].x, piece[q].y]
+					out += "<path d=\"%s\" fill=\"none\" stroke=\"%s\" stroke-opacity=\"%.3f\" stroke-width=\"%.3f\" stroke-linecap=\"butt\" stroke-linejoin=\"round\"/>" % [d, color, strength * fade, lw]
+					piece = PackedVector2Array([line[k]])
+					k0 += 1
+	return out
+
+
+## [param pts] moved [param by] millimeters to its left as it goes.
+static func _offset(pts: PackedVector2Array, by: float) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	for k in pts.size():
+		var a := pts[maxi(k - 1, 0)]
+		var b := pts[mini(k + 1, pts.size() - 1)]
+		var d := (b - a).normalized()
+		out.append(pts[k] + Vector2(-d.y, d.x) * by)
+	return out
+
+
+## WHAT ELEMENT [param e] COVERS over [param rect] at [param px] pixels a millimeter: an image whose alpha is its coverage
+## (Godot draws it from its SVG - ThorVG - so its edges are the design's), or null for stones, which are things, not paint.
+static func cover(e: Dictionary, rect: Rect2, px: float, outline: String, frame: Vector2) -> Image:
+	var svg := svg_of(e, rect, px, outline, frame)
+	if svg.is_empty():
+		return null
+	var img := Image.new()
+	if img.load_svg_from_string(svg, 1.0) != OK or img.is_empty():
+		return null
+	if img.get_format() != Image.FORMAT_RGBA8:
+		img.convert(Image.FORMAT_RGBA8)
+	return img
+
+
+## The rect an element's pictures cover (millimeters): its extent, grown by [param margin] (for softening), on its skin.
+static func rect_of(e: Dictionary, frame: Vector2, margin: float) -> Rect2:
+	var r := bounds(e, frame).grow(margin + 1.0)
+	var on := Rect2(Vector2.ZERO, frame)
+	r = r.intersection(on) if r.intersects(on) else Rect2(Vector2.ZERO, Vector2(1.0, 1.0))
+	return Rect2(r.position.floor(), (r.end.ceil() - r.position.floor()).max(Vector2(1.0, 1.0)))
+
+
+# --- how a tool lays it on ----------------------------------------------------------------------------
+
+## THE MANNER [param e] is laid on in by a tool of kind [param tool] ("brush", "sponge" or "tool"), unless [param asked].
+static func manner_of(e: Dictionary, tool: String, asked := "") -> String:
+	var kind := String(e.get("kind", ""))
+	if asked == "blend":
+		return "blend"
+	match kind:
+		"stones":
+			return "place"
+		"dots":
+			return "dab"
+		"line":
+			return "line"
+		"smear":
+			return "smear"
+		"mist":
+			return "spray"
+	if asked in ["sweep", "stipple", "pat", "dab"]:
+		return asked
+	match tool:
+		"brush":
+			return "sweep"
+		"sponge":
+			return "stipple"
+	return "pat"
+
+
+## HOW WIDE a tool of [param kind] ("brush", "sponge" or "tool"), [param mm] millimeters across its face, lays paint in
+## [param manner]: a sponge held by its corner ([constant FLAT_MANNERS]) lays [constant CORNER_WIDE] of it.
+static func width_for(kind: String, mm: float, manner: String) -> float:
+	return mm * CORNER_WIDE if kind == "sponge" and not manner in FLAT_MANNERS else mm
+
+
+## A PROGRAM: the tool's way over element [param e] in [param manner], a tool [param tool_mm] millimeters across, at a hand's
+## own pace - `{keys: [[t, x, y, lift, press, at]] (seconds, millimeters; at 0 on the surface, 1 back at its paint, 2 at its
+## stones' dish), strokes: [{pts, t, r}] (where it lays paint: millimeters, seconds, its radius), stones: [[t pick, t placed, x,
+## y, r]], natural (seconds), pats: [t], manner}`. [param cov]: what the element covers at [constant WHEN_PX] pixels a millimeter
+## over [param rect] (an image, or null).
+static func program(e: Dictionary, manner: String, tool_mm: float, cov: Image, rect: Rect2) -> Dictionary:
+	var p := _Prog.new()
+	p.seed = hash([String(e.get("id", "")), manner])
+	var r := maxf(tool_mm * 0.5, 0.4)
+	match manner:
+		"line":
+			var lw := maxf(float(e.get("width", 1.0)) * 0.5, 0.4)
+			var ri := 0
+			for st in _strokes_of(String(e["d"])):
+				var pulls := _pulls(st, hash([p.seed, ri]))
+				ri += 1
+				for i in pulls.size():
+					var pl: Dictionary = pulls[i]
+					var last := i == pulls.size() - 1
+					p.stroke(pl["pts"], LINE_SPEED * float(pl["pace"]), lw, RELOAD_LINE, true, 1.0,
+						Skins.HOVER if i == 0 else PULL_LIFT, last, true)
+		# ...A SHAPE AT A TIME: an element of several apart (both eyes' diamonds) is finished in one before the next is begun (feedback
+		# 0022: "one stroke of green on one eye, and another stroke on the other eye, then back to the first eye ... over and over")
+		"sweep", "blend":
+			for part in _islands(cov):
+				for st in _rows(part, rect, tool_mm * ROWS):
+					p.stroke(_resampled(st, ROW_KEYS), SWEEP_SPEED if manner == "sweep" else BLEND_SPEED, r, RELOAD_SWEEP if manner == "sweep" else INF, manner == "sweep",
+						DRY_SWEEP if manner == "sweep" else 1.0)
+		"stipple", "pat":
+			var spacing := tool_mm * (DABS if manner == "stipple" else PATS)
+			var passes := 2 if manner == "stipple" else 1
+			for part in _islands(cov):
+				for k in passes:
+					for c in _dabs(part, rect, spacing, k):
+						if manner == "stipple":
+							p.dab(c, r, DAB, DAB_LIFT, RELOAD_DABS, false, DRY_DABS)
+						else:
+							p.dab(c, r, PAT, PAT_LIFT, RELOAD_PATS, true, DRY_PATS)
+		"dab":
+			for c in e.get("dots", []):
+				p.dab(Vector2(float(c[0]), float(c[1])), maxf(float(c[2]), 0.4), Vector3(DAB.x, DAB.y * 2.0, DAB.z), HOVER, RELOAD_DOTS)
+		"place":
+			for c in e.get("stones", []):
+				p.place(Vector2(float(c[0]), float(c[1])), float(c[2]))
+		"smear":
+			for st in flatten(String(e["d"])):
+				p.stroke(_resampled((st as Dictionary)["pts"], 2.0), SMEAR_SPEED, maxf(float(e.get("width", SMEAR_WIDTH)) * 0.5, 0.5), INF, true)
+		"spray":
+			for c in _pumps(cov, rect):
+				p.pump(c)
+	var out := p.done()
+	out["manner"] = manner
+	return out
+
+
+## WHERE A SPRAY IS AIMED, pump by pump: across what [param cov] covers along its long way, one a [constant PUMP_AREA] of it.
+static func _pumps(cov: Image, rect: Rect2) -> Array:
+	var out: Array = []
+	if cov == null:
+		return out
+	var pts := PackedVector2Array()
+	for y in cov.get_height():
+		for x in cov.get_width():
+			if cov.get_pixel(x, y).a > 0.3:
+				pts.append(rect.position + (Vector2(x, y) + Vector2(0.5, 0.5)) / WHEN_PX)
+	if pts.is_empty():
+		return out
+	var n := clampi(int(round(float(pts.size()) / (PUMP_AREA * WHEN_PX * WHEN_PX))), 1, 6)
+	var lo := pts[0]
+	var hi := pts[0]
+	var mid := Vector2.ZERO
+	for q in pts:
+		lo = lo.min(q)
+		hi = hi.max(q)
+		mid += q
+	mid /= float(pts.size())
+	var wide := (hi.y - lo.y) > (hi.x - lo.x)
+	for k in n:
+		var f := (float(k) + 0.5) / float(n)
+		out.append(Vector2(mid.x, lerpf(lo.y, hi.y, f)) if wide else Vector2(lerpf(lo.x, hi.x, f), mid.y))
+	return out
+
+
+## A line's runs: each subpath cut at its sharp corners - and drawn in short pulls ([method _pulls]).
+static func _strokes_of(d: String) -> Array:
+	var out: Array = []
+	for sp in flatten(d):
+		var pts := _resampled((sp as Dictionary)["pts"], 2.0)
+		var cur := PackedVector2Array([pts[0]])
+		for k in range(1, pts.size()):
+			var a := pts[k - 1]
+			var b := pts[k]
+			cur.append(b)
+			var sharp := false
+			if k + 1 < pts.size():
+				var d0 := (b - a).normalized()
+				var d1 := (pts[k + 1] - b).normalized()
+				sharp = d0.length() > 0.5 and d1.length() > 0.5 and rad_to_deg(acos(clampf(d0.dot(d1), -1.0, 1.0))) > CORNER
+			if sharp and k + 1 < pts.size():
+				out.append(cur)
+				cur = PackedVector2Array([b])
+		if cur.size() >= 2:
+			out.append(cur)
+	return out
+
+
+## A RUN [param run] AS A HAND DRAWS IT ([constant PULL]): short pulls along it, each started back over the last one's end, and now and
+## then part of one gone over again - `[{pts, pace}]` in the order drawn, the same for the same [param seed].
+static func _pulls(run: PackedVector2Array, seed: int) -> Array:
+	var cum := PackedFloat32Array([0.0])
+	for k in range(1, run.size()):
+		cum.append(cum[k - 1] + run[k - 1].distance_to(run[k]))
+	var total := cum[cum.size() - 1]
+	var out: Array = []
+	var drawn := func(k: int) -> float: return float(absi(hash([seed, k])) % 100003) / 100003.0
+	var s0 := 0.0
+	var k := 0
+	while s0 < total - 0.01:
+		var len := lerpf(PULL.x, PULL.y, drawn.call(k * 3))
+		# (what would be left too short to pull is taken in this one)
+		var s1 := total if total - (s0 + len) < PULL.x * 0.5 else s0 + len
+		var pace := lerpf(PULL_PACE.x, PULL_PACE.y, drawn.call(k * 3 + 1))
+		out.append({"pts": _along(run, cum, s0, s1), "pace": pace})
+		# ...GONE OVER AGAIN: its last part, slower, from a little way back
+		if drawn.call(k * 3 + 2) < PULL_AGAIN and s1 - s0 > PULL.x:
+			out.append({"pts": _along(run, cum, lerpf(s0, s1, 0.35), s1), "pace": pace * 0.7})
+		if s1 >= total:
+			break
+		s0 = maxf(s1 - PULL_OVER, s0 + 0.5)
+		k += 1
+	return out
+
+
+## The part of [param run] between [param s0] and [param s1] millimeters along it ([param cum]: how far along each point is).
+static func _along(run: PackedVector2Array, cum: PackedFloat32Array, s0: float, s1: float) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	var at := func(s: float) -> Vector2:
+		var j := clampi(cum.bsearch(s), 1, cum.size() - 1)
+		var span := maxf(cum[j] - cum[j - 1], 1e-6)
+		return run[j - 1].lerp(run[j], clampf((s - cum[j - 1]) / span, 0.0, 1.0))
+	out.append(at.call(s0))
+	for j in cum.size():
+		if cum[j] > s0 + 1e-4 and cum[j] < s1 - 1e-4:
+			out.append(run[j])
+	out.append(at.call(s1))
+	return out
+
+
+## [param pts] with no stretch longer than [param most] millimeters (a long straight line cut where a hand would lift).
+static func _resampled(pts: PackedVector2Array, most: float) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	for k in pts.size():
+		if k > 0:
+			var n := int(ceil(pts[k - 1].distance_to(pts[k]) / most))
+			for j in range(1, n):
+				out.append(pts[k - 1].lerp(pts[k], float(j) / float(n)))
+		out.append(pts[k])
+	return out
+
+
+## A FILL's sweeps: rows [param spacing] millimeters apart along the long way of what [param cov] covers, back and forth, each
+## row's covered stretches a stroke.
+## COVERAGE [param cov] AS THE SHAPES APART IN IT (8-connected, alpha over 0.3), each an image of its own the same size - left to right
+## by their middles; a speck under [constant ISLAND_LEAST] pixels goes with the shape nearest it. Itself, alone, when it is one shape.
+static func _islands(cov: Image) -> Array:
+	if cov == null:
+		return [cov]
+	var w := cov.get_width()
+	var h := cov.get_height()
+	var label := PackedInt32Array()
+	label.resize(w * h)
+	label.fill(-1)
+	var sizes := PackedInt32Array()
+	var mids: Array = []
+	for y0 in h:
+		for x0 in w:
+			if label[y0 * w + x0] >= 0 or cov.get_pixel(x0, y0).a <= 0.3:
+				continue
+			var id := sizes.size()
+			var stack := PackedInt32Array([y0 * w + x0])
+			label[y0 * w + x0] = id
+			var n := 0
+			var sum := Vector2.ZERO
+			while not stack.is_empty():
+				var i := stack[stack.size() - 1]
+				stack.resize(stack.size() - 1)
+				var x := i % w
+				var y := i / w
+				n += 1
+				sum += Vector2(x, y)
+				for dy in [-1, 0, 1]:
+					for dx in [-1, 0, 1]:
+						var nx: int = x + dx
+						var ny: int = y + dy
+						if nx < 0 or ny < 0 or nx >= w or ny >= h:
+							continue
+						var j := ny * w + nx
+						if label[j] < 0 and cov.get_pixel(nx, ny).a > 0.3:
+							label[j] = id
+							stack.append(j)
+			sizes.append(n)
+			mids.append(sum / float(n))
+	var big: Array = []
+	for id in sizes.size():
+		if sizes[id] >= ISLAND_LEAST:
+			big.append(id)
+	if big.size() <= 1:
+		return [cov]
+	big.sort_custom(func(a: int, b: int) -> bool: return (mids[a] as Vector2).x < (mids[b] as Vector2).x)
+	# (a speck goes with the shape whose middle is nearest)
+	var home := PackedInt32Array()
+	home.resize(sizes.size())
+	for id in sizes.size():
+		var best := 0
+		var bd := INF
+		for bi in big.size():
+			var dd := (mids[id] as Vector2).distance_to(mids[big[bi]])
+			if dd < bd:
+				bd = dd
+				best = bi
+		home[id] = best
+	var out: Array = []
+	for bi in big.size():
+		out.append(Image.create(w, h, false, cov.get_format()))
+	for y in h:
+		for x in w:
+			var id := label[y * w + x]
+			if id >= 0:
+				(out[home[id]] as Image).set_pixel(x, y, cov.get_pixel(x, y))
+	return out
+
+
+static func _rows(cov: Image, rect: Rect2, spacing: float) -> Array:
+	var out: Array = []
+	if cov == null:
+		return out
+	var w := cov.get_width()
+	var h := cov.get_height()
+	var pts := PackedVector2Array()
+	for y in h:
+		for x in w:
+			if cov.get_pixel(x, y).a > 0.3:
+				pts.append(rect.position + (Vector2(x, y) + Vector2(0.5, 0.5)) / WHEN_PX)
+	if pts.is_empty():
+		return out
+	# the long way: the covered points' own principal axis
+	var mid := Vector2.ZERO
+	for q in pts:
+		mid += q
+	mid /= float(pts.size())
+	var sxx := 0.0
+	var syy := 0.0
+	var sxy := 0.0
+	for q in pts:
+		var d := q - mid
+		sxx += d.x * d.x
+		syy += d.y * d.y
+		sxy += d.x * d.y
+	var ang := 0.5 * atan2(2.0 * sxy, sxx - syy)
+	var along := Vector2(cos(ang), sin(ang))
+	var across := Vector2(-along.y, along.x)
+	var lo := INF
+	var hi := -INF
+	var a_lo := INF
+	var a_hi := -INF
+	for q in pts:
+		lo = minf(lo, (q - mid).dot(across))
+		hi = maxf(hi, (q - mid).dot(across))
+		a_lo = minf(a_lo, (q - mid).dot(along))
+		a_hi = maxf(a_hi, (q - mid).dot(along))
+	var spacing_ := maxf(spacing, 0.5)
+	var n := maxi(int(ceil((hi - lo) / spacing_)), 1)
+	var reach := spacing_ * 0.55
+	for k in n:
+		var o := lo + (float(k) + 0.5) * (hi - lo) / float(n)
+		var row: Array = []
+		var inside := false
+		var cur := PackedVector2Array()
+		var s := a_lo - 1.0
+		while s <= a_hi + 1.0:
+			var q := mid + along * s + across * o
+			var hit := _covered_near(cov, rect, q, reach)
+			if hit and not inside:
+				cur = PackedVector2Array([q])
+				inside = true
+			elif hit:
+				if cur.size() == 1:
+					cur.append(q)
+				else:
+					cur[1] = q
+			elif inside:
+				if cur.size() == 1:
+					cur.append(cur[0] + along * 0.5)
+				row.append(cur)
+				inside = false
+			s += 1.0
+		if inside:
+			if cur.size() == 1:
+				cur.append(cur[0] + along * 0.5)
+			row.append(cur)
+		# back and forth: every other row the other way, its stretches in the order it meets them
+		if k % 2 == 1:
+			row.reverse()
+			for j in row.size():
+				var st: PackedVector2Array = row[j]
+				st.reverse()
+				row[j] = st
+		out.append_array(row)
+	return out
+
+
+static func _covered_near(cov: Image, rect: Rect2, q: Vector2, reach: float) -> bool:
+	for d in [Vector2.ZERO, Vector2(reach, 0), Vector2(-reach, 0), Vector2(0, reach), Vector2(0, -reach)]:
+		var px := ((q + (d as Vector2)) - rect.position) * WHEN_PX
+		var x := int(px.x)
+		var y := int(px.y)
+		if x >= 0 and y >= 0 and x < cov.get_width() and y < cov.get_height() and cov.get_pixel(x, y).a > 0.3:
+			return true
+	return false
+
+
+## A STIPPLE's dabs over what [param cov] covers, [param spacing] millimeters apart on a staggered grid (the second pass
+## [param second] off by half), from the middle outward ring by ring, round each ring as a hand goes.
+static func _dabs(cov: Image, rect: Rect2, spacing: float, second: int) -> Array:
+	var out: Array = []
+	if cov == null:
+		return out
+	var spacing_ := maxf(spacing, 0.6)
+	var pts: Array = []
+	var mid := Vector2.ZERO
+	var rows := int(ceil(rect.size.y / (spacing_ * 0.866))) + 1
+	var cols := int(ceil(rect.size.x / spacing_)) + 1
+	var off := Vector2(spacing_ * 0.5, spacing_ * 0.433) * float(second)
+	for j in rows:
+		for i in cols:
+			var q := rect.position + off + Vector2(float(i) * spacing_ + (spacing_ * 0.5 if j % 2 == 1 else 0.0), float(j) * spacing_ * 0.866)
+			if _covered_near(cov, rect, q, spacing_ * 0.35):
+				pts.append(q)
+				mid += q
+	if pts.is_empty():
+		return out
+	mid /= float(pts.size())
+	pts.sort_custom(func(a: Vector2, b: Vector2) -> bool:
+		var ra := floorf(a.distance_to(mid) / spacing_)
+		var rb := floorf(b.distance_to(mid) / spacing_)
+		if ra != rb:
+			return ra < rb
+		return (a - mid).angle() < (b - mid).angle())
+	return pts
+
+
+## THE REVEAL MAP of program [param prog] over [param rect] (millimeters): when along the program (0-1) each point is first
+## covered by the paint it lays, and how much of a full load the tool had on it then ([constant DRY_DABS]), at [constant WHEN_PX]
+## pixels a millimeter - a point of the element never reached takes the nearest reached one's. FORMAT_RGF.
+static func when_map(prog: Dictionary, rect: Rect2) -> Image:
+	var w := maxi(int(ceil(rect.size.x * WHEN_PX)), 1)
+	var h := maxi(int(ceil(rect.size.y * WHEN_PX)), 1)
+	var vals := PackedFloat32Array()
+	vals.resize(w * h)
+	vals.fill(-1.0)
+	var natural := maxf(float(prog["natural"]), 1e-3)
+	var st := _Stamps.new()
+	st.vals = vals
+	st.loads.resize(w * h)
+	st.loads.fill(1.0)
+	st.w = w
+	st.h = h
+	st.origin = rect.position
+	for s in prog["strokes"]:
+		var pts: PackedVector2Array = (s as Dictionary)["pts"]
+		var ts: PackedFloat32Array = (s as Dictionary)["t"]
+		var r := float((s as Dictionary)["r"])
+		var ld: PackedFloat32Array = (s as Dictionary).get("load", PackedFloat32Array())
+		if pts.size() == 1:
+			st.stamp(pts[0], r, ts[0] / natural, ld[0] if not ld.is_empty() else 1.0)
+			continue
+		for k in range(1, pts.size()):
+			var a := pts[k - 1]
+			var b := pts[k]
+			var n := maxi(int(ceil(a.distance_to(b) / (0.5 / WHEN_PX))), 1)
+			for j in n + 1:
+				var f := float(j) / float(n)
+				st.stamp(a.lerp(b, f), r, lerpf(ts[k - 1], ts[k], f) / natural, lerpf(ld[k - 1], ld[k], f) if ld.size() == pts.size() else 1.0)
+	vals = st.vals
+	var loads := st.loads
+	# ...and the rest from the nearest reached
+	var queue := PackedInt32Array()
+	for k in vals.size():
+		if vals[k] >= 0.0:
+			queue.append(k)
+	var head := 0
+	while head < queue.size():
+		var k := queue[head]
+		head += 1
+		var x := k % w
+		var y := k / w
+		for d in [[1, 0], [-1, 0], [0, 1], [0, -1]]:
+			var nx: int = x + d[0]
+			var ny: int = y + d[1]
+			if nx < 0 or ny < 0 or nx >= w or ny >= h:
+				continue
+			var nk := ny * w + nx
+			if vals[nk] < 0.0:
+				vals[nk] = vals[k]
+				loads[nk] = loads[k]
+				queue.append(nk)
+	var img := Image.create(w, h, false, Image.FORMAT_RGF)
+	for k in vals.size():
+		img.set_pixel(k % w, k / w, Color(vals[k] if vals[k] >= 0.0 else 1.0, loads[k], 0.0))
+	return img
+
+
+## Paint stamped into a reveal map ([method when_map]): the first to reach a point gives it its moment.
+class _Stamps:
+	extends RefCounted
+	var vals := PackedFloat32Array()
+	var loads := PackedFloat32Array()
+	var w := 0
+	var h := 0
+	var origin := Vector2.ZERO
+
+	func stamp(c: Vector2, r: float, u: float, load := 1.0) -> void:
+		var pc := (c - origin) * Skins.WHEN_PX
+		var rp := maxf(r * Skins.WHEN_PX, 0.75)
+		for y in range(maxi(int(pc.y - rp), 0), mini(int(pc.y + rp) + 1, h)):
+			for x in range(maxi(int(pc.x - rp), 0), mini(int(pc.x + rp) + 1, w)):
+				if vals[y * w + x] < 0.0 and Vector2(float(x) + 0.5, float(y) + 0.5).distance_to(pc) <= rp:
+					vals[y * w + x] = u
+					loads[y * w + x] = load
+
+
+## AN SVG PATH READ ([method flatten]): its tokens in turn, the subpath being followed, and those done.
+class _PathReader:
+	extends RefCounted
+	const LETTERS := "MmLlHhVvCcSsQqTtAaZz"
+	var toks := PackedStringArray()
+	var i := 0
+	var out: Array = []
+	var cur := PackedVector2Array()
+
+	func num() -> float:
+		var v := float(toks[i]) if i < toks.size() else 0.0
+		i += 1
+		return v
+
+	func is_num(k: int) -> bool:
+		return k < toks.size() and not (toks[k].length() == 1 and LETTERS.contains(toks[k]))
+
+	func close_sub(closed: bool) -> void:
+		if cur.size() >= 2:
+			out.append({"pts": cur, "closed": closed})
+		cur = PackedVector2Array()
+
+	func read(d: String, step: float) -> void:
+		var rx := RegEx.create_from_string("[MmLlHhVvCcSsQqTtAaZz]|[-+]?(?:\\d+\\.?\\d*|\\.\\d+)(?:[eE][-+]?\\d+)?")
+		for m in rx.search_all(d):
+			toks.append(m.get_string())
+		var p := Vector2.ZERO
+		var start := Vector2.ZERO
+		var last_c := Vector2.INF     # the last cubic's second control, for S
+		var last_q := Vector2.INF     # the last quadratic's control, for T
+		var cmd := ""
+		var guard := 0
+		while i < toks.size() and guard < 100000:
+			guard += 1
+			var tk := toks[i]
+			if tk.length() == 1 and LETTERS.contains(tk):
+				cmd = tk
+				i += 1
+				if cmd == "Z" or cmd == "z":
+					if cur.size() >= 1 and cur[0].distance_to(p) > 1e-6:
+						cur.append(cur[0])
+					p = start
+					close_sub(true)
+					last_c = Vector2.INF
+					last_q = Vector2.INF
+					continue
+			elif cmd.is_empty():
+				out = []
+				return
+			if not is_num(i):
+				continue
+			var rel := cmd == cmd.to_lower()
+			var o := p if rel else Vector2.ZERO
+			match cmd.to_upper():
+				"M":
+					close_sub(false)
+					p = o + Vector2(num(), num())
+					start = p
+					cur.append(p)
+					# further pairs are lines
+					cmd = "l" if rel else "L"
+					last_c = Vector2.INF
+					last_q = Vector2.INF
+				"L":
+					p = o + Vector2(num(), num())
+					if cur.is_empty():
+						cur.append(start)
+					cur.append(p)
+					last_c = Vector2.INF
+					last_q = Vector2.INF
+				"H":
+					p = Vector2((p.x if rel else 0.0) + num(), p.y)
+					cur.append(p)
+					last_c = Vector2.INF
+					last_q = Vector2.INF
+				"V":
+					p = Vector2(p.x, (p.y if rel else 0.0) + num())
+					cur.append(p)
+					last_c = Vector2.INF
+					last_q = Vector2.INF
+				"C", "S":
+					var c1: Vector2
+					if cmd.to_upper() == "C":
+						c1 = o + Vector2(num(), num())
+					else:
+						c1 = p * 2.0 - last_c if last_c != Vector2.INF else p
+					var c2: Vector2 = o + Vector2(num(), num())
+					var e: Vector2 = o + Vector2(num(), num())
+					var n := Skins._steps_of(p.distance_to(c1) + c1.distance_to(c2) + c2.distance_to(e), step)
+					if cur.is_empty():
+						cur.append(p)
+					for k in range(1, n + 1):
+						var t := float(k) / float(n)
+						var u := 1.0 - t
+						cur.append(p * u * u * u + c1 * 3.0 * u * u * t + c2 * 3.0 * u * t * t + e * t * t * t)
+					last_c = c2
+					last_q = Vector2.INF
+					p = e
+				"Q", "T":
+					var c: Vector2
+					if cmd.to_upper() == "Q":
+						c = o + Vector2(num(), num())
+					else:
+						c = p * 2.0 - last_q if last_q != Vector2.INF else p
+					var e: Vector2 = o + Vector2(num(), num())
+					var n := Skins._steps_of(p.distance_to(c) + c.distance_to(e), step)
+					if cur.is_empty():
+						cur.append(p)
+					for k in range(1, n + 1):
+						var t := float(k) / float(n)
+						var u := 1.0 - t
+						cur.append(p * u * u + c * 2.0 * u * t + e * t * t)
+					last_q = c
+					last_c = Vector2.INF
+					p = e
+				"A":
+					var rx_ := absf(num())
+					var ry_ := absf(num())
+					var phi := deg_to_rad(num())
+					var fa := num() != 0.0
+					var fs := num() != 0.0
+					var e: Vector2 = o + Vector2(num(), num())
+					if cur.is_empty():
+						cur.append(p)
+					cur.append_array(Skins._arc(p, e, rx_, ry_, phi, fa, fs, step))
+					last_c = Vector2.INF
+					last_q = Vector2.INF
+					p = e
+				_:
+					i += 1
+		close_sub(false)
+
+
+## A program as it is built, a step at a time.
+class _Prog:
+	extends RefCounted
+	var keys: Array = []
+	var strokes: Array = []
+	var stones: Array = []
+	var pats := PackedFloat32Array()
+	var mists: Array = []
+	var t := 0.0
+	var at := Vector2.INF       # where it is over the surface
+	var laid := 0.0             # what it has laid since it was loaded (millimeters)
+	var count := 0              # presses since it was loaded
+	var seed := 0               # the element's: what each load and each press come to ([constant Skins.TAKE_SPREAD])
+	var loads := 0              # the loads taken up since the element began (its first, the act's own)
+	var presses := 0
+	var product := -1.0         # WHAT IS ON THE TOOL, of a full load (-1: what never runs pale, or nothing taken up yet)
+	var stop := 0.0             # ...and how little it lays before the hand goes back for more: this load's own
+
+	## A number in [0, 1) drawn from the element and [param k].
+	func _drawn(k: int) -> float:
+		return float(absi(hash([seed, k])) % 100003) / 100003.0
+
+	## How long this load lasts of [param most] (presses, millimeters) - for what never runs pale (a line, a dot), which goes back by
+	## how much it has laid.
+	func _load_of(most: float) -> float:
+		return most * lerpf(1.0 - Skins.LOAD_SPREAD, 1.0 + Skins.LOAD_SPREAD, _drawn(loads * 4 + 3)) if most < INF else INF
+
+	## A LOAD TAKEN UP: as full as this one happens to be ([constant Skins.AMOUNT_SPREAD]), and how little a press may lay before the hand
+	## goes back for more - about the manner's [param dry] ([constant Skins.STOP]), and now and then ([constant Skins.PUSH_ON]) far less.
+	## A SWEEP's ([param pressed] false) keeps nearer its manner's, and never pushes on: no later pass fills what it leaves pale.
+	func _fresh(dry: float, pressed := true) -> void:
+		var amount := Skins.AMOUNT_SPREAD if pressed else Skins.AMOUNT_SPREAD_SWEEP
+		product = lerpf(1.0 - amount, 1.0 + amount, _drawn(loads * 4))
+		var r := _drawn(loads * 4 + 1)
+		var on := pressed and _drawn(loads * 4 + 2) < Skins.PUSH_ON
+		var span := Skins.STOP if pressed else Skins.STOP_SWEEP
+		stop = dry * (lerpf(Skins.PUSH_STOP.x, Skins.PUSH_STOP.y, r) if on else lerpf(span.x, span.y, r))
+		# (never before it is halfway from full to its manner's dry: a sweep's, nearly full, had gone back after every stroke)
+		stop = minf(stop, product * (1.0 + dry) * 0.5)
+
+	## A press's (or a stroke's) own hand: how much more or less than the manner's share it takes and lays ([constant Skins.TAKE_SPREAD]).
+	func _hand(spread := Skins.TAKE_SPREAD) -> float:
+		presses += 1
+		return lerpf(1.0 - spread, 1.0 + spread, _drawn(100000 + presses))
+
+	## How much a press with hand [param f] lays now, of what the first of a full load lays: what is left on the tool, as hard as it is
+	## pressed - never nothing; what never runs pale, all of it.
+	func _shown(f: float) -> float:
+		return clampf(product * f, Skins.LAYS_LEAST, 1.0) if product >= 0.0 else 1.0
+
+	## [param units] presses or millimeters at the manner's [param rate], with hand [param f], taken off the tool: A SHARE OF WHAT IS
+	## LEFT, never all of it - there is always a little more to be had, less and less (the user, 2026-11-06).
+	func _take(rate: float, units: float, f: float) -> void:
+		if product >= 0.0:
+			product *= exp(-rate * units * f)
+
+	func _key(x: Vector2, lift: float, press: float, where := 0) -> void:
+		keys.append([t, x.x, x.y, lift, press, where])
+
+	## Over [param x], lifted [param lift] - from wherever it was, at a hand's pace between strokes.
+	func _go(x: Vector2, lift: float) -> void:
+		if at == Vector2.INF:
+			at = x
+			_key(x, lift, 0.0)
+			return
+		var d := at.distance_to(x)
+		if d < 1e-3 and not keys.is_empty() and float((keys[keys.size() - 1] as Array)[3]) == lift:
+			return
+		if not keys.is_empty():
+			var k: Array = keys[keys.size() - 1]
+			if float(k[3]) < lift:
+				t += Skins.UP
+				_key(at, lift, 0.0)
+		t += maxf(d / Skins.TRAVEL, Skins.TRAVEL_LEAST)
+		at = x
+		_key(x, lift, 0.0)
+
+	## Back to its paint for more: there and back (TablePaint finds the way).
+	func _trip_back() -> void:
+		laid = 0.0
+		count = 0
+		loads += 1
+		var x := at
+		t += Skins.UP
+		_key(x, Skins.HOVER * 3.0, 0.0)
+		_key(x, Skins.HOVER * 3.0, 0.0, 1)
+		t += Skins.RELOAD
+		_key(x, Skins.HOVER * 3.0, 0.0, 1)
+		t += 0.01
+		_key(x, Skins.HOVER * 3.0, 0.0)
+
+	## Back to its paint for more, if it needs it: what runs pale ([param dry] below 1) once what is left lays less than this load's own
+	## [member stop] (its first load the act's own, taken up before); what never does once it has laid this load's share of [param most].
+	## A sweep's stroke [param ahead] millimeters long is not begun on a tool that would be below its stop by its end: a long row
+	## begun just over it had ended a stripe.
+	func _reload(most: float, dry := 1.0, pressed := true, ahead := 0.0) -> void:
+		if dry < 1.0 and most < INF:
+			if product < 0.0:
+				_fresh(dry, pressed)
+			elif product * exp(log(dry) / maxf(most, 1e-3) * ahead) < stop:
+				_trip_back()
+				_fresh(dry, pressed)
+			return
+		if laid >= _load_of(most):
+			_trip_back()
+
+	## A STROKE along [param pts] at [param speed] (mm/s), laying paint [param r] wide (when [param paints]) - running pale over a load of
+	## about [param most] millimeters to about [param dry] of what it lays just loaded (1: never).
+	## A PULL ([constant Skins.PULL]) comes over [param lift] (millimeters), down and up the quicker, eased in and out along the way, and
+	## gets [param look] only where its run ends.
+	func stroke(pts: PackedVector2Array, speed: float, r: float, most: float, paints: bool, dry := 1.0, lift := Skins.HOVER, look := true,
+			pull := false) -> void:
+		if pts.size() < 2:
+			return
+		var length := 0.0
+		for k in range(1, pts.size()):
+			length += pts[k - 1].distance_to(pts[k])
+		_reload(most, dry, false, length)
+		_go(pts[0], lift)
+		t += Skins.PULL_DOWN if pull else Skins.DOWN
+		_key(pts[0], 0.0, 1.0)
+		var ts := PackedFloat32Array([t])
+		var rate := -log(dry) / maxf(most, 1e-3) if dry < 1.0 and most < INF else 0.0
+		var f := _hand(Skins.TAKE_SPREAD_SWEEP)
+		var left := PackedFloat32Array([_shown(f)])
+		var along := 0.0
+		for k in range(1, pts.size()):
+			var d := pts[k - 1].distance_to(pts[k])
+			# (a pull starts slow, runs, and slows into its end)
+			var u := (along + d * 0.5) / maxf(length, 1e-3)
+			along += d
+			t += d / (speed * ((0.55 + 0.45 * sin(PI * u)) / 0.84 if pull else 1.0))
+			laid += d
+			_take(rate, d, f)
+			_key(pts[k], 0.0, 1.0)
+			ts.append(t)
+			left.append(_shown(f))
+		if paints:
+			strokes.append({"pts": pts, "t": ts, "r": r, "load": left})
+		at = pts[pts.size() - 1]
+		t += Skins.PULL_UP if pull and not look else Skins.UP
+		_key(at, Skins.PULL_LIFT if pull and not look else Skins.HOVER, 0.0)
+		if not look:
+			return
+		# ...and A LOOK at it, backing off a little ([constant Skins.LOOK])
+		t += lerpf(Skins.LOOK.x, Skins.LOOK.y, fposmod(sin(float(keys.size()) * 12.9898 + at.x * 0.731 + at.y * 0.317) * 43758.5453, 1.0))
+		_key(at, Skins.LOOK_LIFT, 0.0)
+
+	## A DAB at [param c]: down, held, up ([param pace]), [param lift] over it between - a pat too - each press taking its own share of
+	## what is left, about [param dry] of a full load's first by about [param most] presses (1: never pale, back every so many).
+	func dab(c: Vector2, r: float, pace: Vector3, lift: float, most: int, pat := false, dry := 1.0) -> void:
+		if dry < 1.0:
+			_reload(float(most), dry)
+		elif count >= maxi(roundi(_load_of(float(most))), 2):
+			_trip_back()
+		var f := _hand()
+		var load := _shown(f)
+		if dry < 1.0:
+			_take(-log(dry) / maxf(float(most) - 1.0, 1.0), 1.0, f)
+		count += 1
+		var d := at.distance_to(c) if at != Vector2.INF else 0.0
+		if at == Vector2.INF:
+			_key(c, lift, 0.0)
+		else:
+			t += maxf(d / Skins.DAB_MOVE, 0.08)
+			_key(c, lift, 0.0)
+		at = c
+		t += pace.x
+		_key(c, 0.0, 1.0)
+		strokes.append({"pts": PackedVector2Array([c]), "t": PackedFloat32Array([t]), "r": r, "load": PackedFloat32Array([load])})
+		if pat:
+			pats.append(t)
+		t += pace.y
+		_key(c, 0.0, 1.0)
+		t += pace.z
+		_key(c, lift, 0.0)
+
+	## A PUMP OF MIST at [param c], from a hand's length off (`at` 3): aimed, pumped, and on to the next.
+	func pump(c: Vector2) -> void:
+		var off := TablePaint.SPRAY_STANDOFF
+		if keys.is_empty():
+			_key(c, off, 0.0, 3)
+			t += Skins.AIM
+		else:
+			t += Skins.PUMP_MOVE
+		_key(c, off, 0.0, 3)
+		t += Skins.PUMP.x
+		_key(c, off, 1.0, 3)
+		strokes.append({"pts": PackedVector2Array([c]), "t": PackedFloat32Array([t]), "r": Skins.PUMP_REACH})
+		mists.append([t, c.x, c.y])
+		t += Skins.PUMP.y
+		_key(c, off, 0.0, 3)
+		at = c
+
+	## A STONE, picked from its dish and pressed on at [param c].
+	func place(c: Vector2, r: float) -> void:
+		var x := at if at != Vector2.INF else c
+		if at != Vector2.INF:
+			t += Skins.UP
+			_key(x, Skins.HOVER * 3.0, 0.0)
+		_key(x, Skins.HOVER * 3.0, 0.0, 2)
+		t += Skins.PICK
+		var picked := t - Skins.PICK * 0.5
+		_key(c, Skins.HOVER * 3.0, 0.0, 2)
+		t += 0.01
+		_key(c, Skins.HOVER * 3.0, 0.0)
+		at = c
+		t += maxf(Skins.HOVER * 3.0 / Skins.TRAVEL, 0.3)
+		_key(c, Skins.HOVER, 0.0)
+		t += Skins.PLACE.x
+		_key(c, 0.0, 1.0)
+		stones.append([picked, t, c.x, c.y, r])
+		t += Skins.PLACE.y
+		_key(c, 0.0, 1.0)
+		t += Skins.PLACE.z
+		_key(c, Skins.HOVER, 0.0)
+
+	func done() -> Dictionary:
+		if keys.is_empty():
+			_key(Vector2.ZERO, Skins.HOVER, 0.0)
+		return {"keys": keys, "strokes": strokes, "stones": stones, "pats": pats, "mists": mists, "natural": maxf(t, 0.1)}
+
+
+# --- the skins a table has, and a design seen on one ---------------------------------------------------
+
+## THE SKINS OF TABLE [param table] (the set dresser's `table.json`, as parsed): every part painted from its front - `{thing, part,
+## shape, frame (millimeters across and down its front), outline (an SVG path in them, "" for its whole frame), landmarks (a mask's:
+## name -> {at, wide}), color, part (made safe)}` - as a designer is told them before anything is built.
+static func skins_of(table: Variant) -> Array:
+	var out: Array = []
+	if not (table is Dictionary):
+		return out
+	var safe := Props.sanitize(table as Dictionary, [])
+	for t in safe.get("things", []):
+		_skins_in((t as Dictionary).get("parts", []), String((t as Dictionary)["name"]), safe.get("materials", {}), out)
+	return out
+
+
+static func _skins_in(parts: Array, thing: String, mats: Dictionary, out: Array) -> void:
+	for p in parts:
+		var pd: Dictionary = p
+		if pd.get("parts") is Array:
+			_skins_in(pd["parts"], thing, mats, out)
+			continue
+		if pd.get("skin") != true:
+			continue
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 1
+		var box := AABB()
+		var first := true
+		for g in Props._geometry(pd, rng):
+			var b := Props._bounds_of((g as Dictionary)["geo"])
+			box = b if first else box.merge(b)
+			first = false
+		var shape := String(pd["shape"])
+		var m: Dictionary = mats.get(String(pd.get("material", "")), {})
+		out.append({"thing": thing, "part": String((pd.get("work", {}) as Dictionary).get("name", "")), "shape": shape,
+			"frame": Vector2(box.size.x, box.size.y) * 1000.0, "outline": FaceForm.outline_path(pd["size"]) if shape == "mask" else "",
+			"landmarks": FaceForm.landmarks(pd["size"]) if shape == "mask" else {}, "color": String(m.get("color", "#e8e2d6")), "part_spec": pd,
+			"box": box})
+
+
+## THE SKIN [param skin] ([method skins_of]) SEEN FROM ITS FRONT with [param design] painted on it, as far as stage [param upto] ("" all
+## of it): its bare surface shaded by a light from the top left, every element in its paint, its stones as small rings, and over it a
+## faint grid every 10 millimeters (brighter every 50), its outline and its landmarks - drawn on the processor, [param px] pixels a
+## millimeter. A designer's own look at what it wrote.
+static func look(skin: Dictionary, design: Dictionary, upto := "", px := 3.0, guides := true) -> Image:
+	var frame: Vector2 = skin["frame"]
+	var w := maxi(int(ceil(frame.x * px)), 8)
+	var h := maxi(int(ceil(frame.y * px)), 8)
+	var base := _bare_front(skin, frame)
+	base.resize(w, h, Image.INTERPOLATE_BILINEAR)
+	var body := ""
+	var stages_done := false
+	for e in design.get("elements", []):
+		var ed: Dictionary = e
+		if not upto.is_empty() and stages_done and String(ed["stage"]) != upto.to_lower():
+			break
+		if not upto.is_empty() and String(ed["stage"]) == upto.to_lower():
+			stages_done = true
+		match String(ed["kind"]):
+			"fill":
+				var d := String(ed["d"])
+				if d == "all":
+					d = String(skin.get("outline", "")) if not String(skin.get("outline", "")).is_empty() else "M0 0 H%.2f V%.2f H0 Z" % [frame.x, frame.y]
+				body += "<path d=\"%s\" fill=\"%s\" fill-opacity=\"%.2f\" fill-rule=\"%s\"/>" % [d, ed["paint"], float(ed["opacity"]), String(ed.get("rule", "nonzero"))]
+			"line":
+				body += "<path d=\"%s\" fill=\"none\" stroke=\"%s\" stroke-opacity=\"%.2f\" stroke-width=\"%.3f\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>" % [ed["d"], ed["paint"], float(ed["opacity"]), float(ed["width"])]
+			"dots":
+				for c in ed["dots"]:
+					body += "<circle cx=\"%.2f\" cy=\"%.2f\" r=\"%.2f\" fill=\"%s\" fill-opacity=\"%.2f\"/>" % [float(c[0]), float(c[1]), float(c[2]), ed["paint"], float(ed["opacity"])]
+			"smear":
+				body += smear_svg(ed, String(ed["paint"]))
+			"mist":
+				pass
+			"stones":
+				for c in ed["stones"]:
+					body += "<circle cx=\"%.2f\" cy=\"%.2f\" r=\"%.2f\" fill=\"%s\" stroke=\"#202020\" stroke-width=\"0.25\"/>" % [float(c[0]), float(c[1]), float(c[2]), ed["paint"]]
+	var outline := String(skin.get("outline", ""))
+	var clip := ""
+	if not outline.is_empty():
+		clip = "<defs><clipPath id=\"s\"><path d=\"%s\"/></clipPath></defs>" % outline
+		body = "<g clip-path=\"url(#s)\">%s</g>" % body
+	if guides:
+		var g := ""
+		var x := 10.0
+		while x < frame.x:
+			g += "<line x1=\"%.1f\" y1=\"0\" x2=\"%.1f\" y2=\"%.1f\" stroke=\"#4fd0ff\" stroke-opacity=\"%.2f\" stroke-width=\"%.2f\"/>" % [x, x, frame.y, 0.55 if int(x) % 50 == 0 else 0.22, 0.35 if int(x) % 50 == 0 else 0.2]
+			x += 10.0
+		var y := 10.0
+		while y < frame.y:
+			g += "<line x1=\"0\" y1=\"%.1f\" x2=\"%.1f\" y2=\"%.1f\" stroke=\"#4fd0ff\" stroke-opacity=\"%.2f\" stroke-width=\"%.2f\"/>" % [y, frame.x, y, 0.55 if int(y) % 50 == 0 else 0.22, 0.35 if int(y) % 50 == 0 else 0.2]
+			y += 10.0
+		if not outline.is_empty():
+			g += "<path d=\"%s\" fill=\"none\" stroke=\"#4fd0ff\" stroke-opacity=\"0.6\" stroke-width=\"0.4\" stroke-dasharray=\"2 1.5\"/>" % outline
+		for k in skin.get("landmarks", {}):
+			var at: Vector2 = (skin["landmarks"][k] as Dictionary)["at"]
+			g += "<circle cx=\"%.1f\" cy=\"%.1f\" r=\"1.2\" fill=\"none\" stroke=\"#ff5a5a\" stroke-opacity=\"0.8\" stroke-width=\"0.4\"/>" % [at.x, at.y]
+		body += g
+	var svg := "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\" viewBox=\"0 0 %.3f %.3f\">%s%s</svg>" % [w, h, float(w) / px, float(h) / px, clip, body]
+	var over := Image.new()
+	if over.load_svg_from_string(svg, 1.0) == OK and not over.is_empty():
+		if over.get_format() != Image.FORMAT_RGBA8:
+			over.convert(Image.FORMAT_RGBA8)
+		base.blend_rect(over, Rect2i(Vector2i.ZERO, over.get_size()), Vector2i.ZERO)
+	return base
+
+
+## A SKIN'S BARE FRONT, one pixel a millimeter: its surface shaded by a light from the top left, the room dark round it.
+static func _bare_front(skin: Dictionary, frame: Vector2) -> Image:
+	var w := maxi(int(ceil(frame.x)), 2)
+	var h := maxi(int(ceil(frame.y)), 2)
+	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0.1, 0.1, 0.11))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 1
+	var faces := PackedVector3Array()
+	for g in Props._geometry(skin["part_spec"], rng):
+		var geo: Props.Tris = (g as Dictionary)["geo"]
+		faces.append_array(geo.v)
+	if faces.is_empty():
+		return img
+	var tm := TableWork._ray_mesh(faces)
+	var box: AABB = skin["box"]
+	var base := Color.html(String(skin.get("color", "#e8e2d6")))
+	var light := Vector3(-0.45, 0.55, 0.7).normalized()
+	for j in h:
+		for i in w:
+			var from := Vector3(box.position.x + (float(i) + 0.5) * 0.001, box.end.y - (float(j) + 0.5) * 0.001, box.end.z + 0.02)
+			var got := TableWork._ray(tm, from, Vector3.FORWARD)
+			if got.is_empty():
+				continue
+			var n: Vector3 = (got["normal"] as Vector3).normalized()
+			if n.z < 0.0:
+				n = -n
+			var lit := 0.38 + 0.62 * maxf(n.dot(light), 0.0)
+			img.set_pixel(i, j, Color(base.r * lit, base.g * lit, base.b * lit))
+	return img
+
+
+## THE LANGUAGE A DESIGN IS WRITTEN IN, as a decorator reads it: the elements, their finishes and how a tool lays each.
+static func describe() -> String:
+	var lines := PackedStringArray()
+	lines.append("A DESIGN is {\"name\", \"elements\": [...]}: its ELEMENTS in the order they go on - what goes on later lies over what went on before. Every place is in MILLIMETERS on the surface as it is seen straight from the front: x from its left edge to the right, y from its top edge down. Each element is {\"id\" (a short name of its own), \"stage\" (which stage of the work it belongs to, a word or two), \"paint\": \"#rrggbb\", \"finish\", \"opacity\" (0.05-1: how much of what is under it shows through, left out: the finish's), \"soft\" (millimeters its edge is softened, 0-%d: a blended shadow or a glow), and its shape - one of:" % int(SOFT_MOST))
+	lines.append("- \"fill\": a closed SVG path (M, L, H, V, C, S, Q, T, A, Z - absolute or relative), filled - or \"all\", the whole surface (a base color). \"rule\": \"evenodd\" cuts holes where it crosses itself.")
+	lines.append("- \"line\": an SVG path drawn along with \"width\" (millimeters, %.1f-%.0f), rounded at its ends - outlines, brows, cracks, filigree. Each subpath is drawn in its own strokes." % [WIDTH.x, WIDTH.y])
+	lines.append("- \"dots\": [[x, y, r], ...] millimeters, each set with one press - up to %d." % MOST_DOTS)
+	lines.append("- \"stones\": [[x, y, r], ...] - small gems carried from their dish and pressed on one at a time, up to %d; \"paint\" is their color." % MOST_STONES)
+	lines.append("- \"smear\": the id of an element listed before it, and \"line\" the path that paint is dragged along with \"width\" (left out: %d): one pressed stroke that takes the paint from where it starts and thins and streaks it as it goes - a smudged edge, a dragged tear, a mouth smeared past its corner. It takes that element's paint and finish unless it says its own." % int(SMEAR_WIDTH))
+	lines.append("- \"mist\": \"all\" or a closed path - a fine spray that lays no color, only a wet sheen over what is there, which dries to a soft glow in about a minute (a setting spray, last).")
+	lines.append("FINISHES:")
+	for k in FINISHES:
+		lines.append("- %s: %s" % [k, String((FINISHES[k] as Dictionary)["blurb"])])
+	lines.append("HOW EACH IS LAID, by the tool the work gives it: %s." % "; ".join(PackedStringArray(MANNERS.keys().map(func(k: String) -> String: return "%s - %s" % [k, String((MANNERS[k] as Dictionary)["blurb"])]))))
+	return "\n".join(lines)
+
+
+## A SURFACE as a designer is told it ([method skins_of]): its name, its size, its outline and its landmarks.
+static func told(skin: Dictionary) -> String:
+	var frame: Vector2 = skin["frame"]
+	var nm := String(skin["thing"]) + ("/" + String(skin["part"]) if not String(skin["part"]).is_empty() else "")
+	var lines := PackedStringArray()
+	lines.append("\"%s\": %d mm across and %d mm down, painted from its front over a bare %s %s." % [nm, roundi(frame.x), roundi(frame.y), skin.get("color", ""), String(skin["shape"])])
+	if not String(skin.get("outline", "")).is_empty():
+		lines.append("Its outline (where the surface ends - paint past it is on nothing): %s" % String(skin["outline"]))
+	var lm: Dictionary = skin.get("landmarks", {})
+	if not lm.is_empty():
+		lines.append("Its landmarks (millimeters, left and right as you look at it):")
+		for k in lm:
+			var d: Dictionary = lm[k]
+			var at: Vector2 = d["at"]
+			var bit := "- %s: [%d, %d]" % [k, roundi(at.x), roundi(at.y)]
+			if d.has("from"):
+				bit += " from [%d, %d] to [%d, %d]" % [roundi((d["from"] as Vector2).x), roundi((d["from"] as Vector2).y), roundi((d["to"] as Vector2).x), roundi((d["to"] as Vector2).y)]
+			elif float(d.get("wide", 0.0)) > 0.0:
+				bit += ", about %d mm across" % roundi(float(d["wide"]))
+			lines.append(bit)
+	return "\n".join(lines)
+
+
+## HOW LONG PAINT ACT [param act] TAKES AT A HAND'S PACE (seconds), from the files alone - the designs ([param doc], `skin.json`) and
+## the table ([param table], `table.json`) - as [TablePaint] works it out on a table that stands; what a reader is told before one does.
+static func act_natural(act: Dictionary, doc: Dictionary, table: Variant) -> float:
+	var most := 0.0
+	for tr in act.get("tracks", []):
+		var t: Dictionary = tr
+		if String(t.get("law", "")) != "paint":
+			continue
+		var on := String(t.get("on", ""))
+		var design: Dictionary = {}
+		for g in doc.get("designs", []):
+			if g is Dictionary and String((g as Dictionary).get("thing", "")).to_lower() == on.get_slice("/", 0).to_lower():
+				design = g
+		if design.is_empty():
+			continue
+		var fr: Array = design.get("frame", [150.0, 210.0])
+		var frame := Vector2(float(fr[0]), float(fr[1]))
+		var made := sanitize(design, frame)
+		var tool := _tool_in(table, String(t.get("thing", "")), String(t.get("part", "")))
+		var total := TablePaint.FETCH + TablePaint.RETURN
+		var loaded := ""
+		for id in t.get("paint", []):
+			for e in made["elements"]:
+				var ed: Dictionary = e
+				if String(ed["id"]).to_lower() != String(id).to_lower():
+					continue
+				var manner := manner_of(ed, String(tool[0]), String(t.get("manner", "")))
+				var mm := float(t["size"]) if t.has("size") else width_for(String(tool[0]), float(tool[1]), manner)
+				var rect := rect_of(ed, frame, 0.0)
+				var prog := program(ed, manner, mm, cover(ed, rect, WHEN_PX, String(design.get("outline", "")), frame), rect)
+				total += TablePaint.MOVE + float(prog["natural"])
+				if not String(ed["kind"]) in ["stones", "smear", "mist"] and manner != "blend" and String(ed["paint"]) != loaded:
+					total += TablePaint.LOAD
+					loaded = String(ed["paint"])
+		most = maxf(most, total)
+	return most
+
+
+## WHAT TOOL [param thing] (its part [param part]) IS on table [param table]: [its kind - brush, sponge or tool -, how wide it works].
+static func _tool_in(table: Variant, thing: String, part: String) -> Array:
+	if not (table is Dictionary):
+		return ["tool", 6.0]
+	var safe := Props.sanitize(table as Dictionary, [])
+	for t in safe.get("things", []):
+		if String((t as Dictionary)["name"]).to_lower() != thing.to_lower():
+			continue
+		var found := _tool_of_parts((t as Dictionary)["parts"], safe.get("materials", {})) if part.is_empty() \
+			else _tool_parts((t as Dictionary)["parts"], part.to_lower(), false, safe.get("materials", {}))
+		if not found.is_empty():
+			return found
+	return ["tool", 6.0]
+
+
+static func _tool_parts(parts: Array, part: String, within: bool, mats: Dictionary) -> Array:
+	for p in parts:
+		var pd: Dictionary = p
+		var named := String((pd.get("work", {}) as Dictionary).get("name", "")).to_lower()
+		if (within and part.is_empty()) or (not part.is_empty() and named == part):
+			return _tool_of_parts([pd], mats)
+		if pd.get("parts") is Array:
+			var got := _tool_parts(pd["parts"], part, false, mats)
+			if not got.is_empty():
+				return got
+	return []
+
+
+## A TOOL MADE OF [param parts] (made safe), measured as [method TablePaint.tool_of] measures one that stands: a tuft makes it a brush
+## as wide as its hairs; sponge makes it a sponge as wide as its face; anything else a tool as thin as it is.
+static func _tool_of_parts(parts: Array, mats: Dictionary) -> Array:
+	var leaves: Array = []
+	_leaves_of(parts, Transform3D.IDENTITY, leaves)
+	var box := AABB()
+	var first := true
+	var sponge := false
+	for lf in leaves:
+		var pd: Dictionary = lf[0]
+		if String(pd.get("shape", "")) == "tuft":
+			return ["brush", float(pd.get("width", 0.7)) * 10.0]
+		var m: Dictionary = mats.get(String(pd.get("material", "")), {})
+		sponge = sponge or String(m.get("kind", "")) == "sponge"
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 1
+		for g in Props._geometry(pd, rng):
+			var b: AABB = (lf[1] as Transform3D) * Props._bounds_of((g as Dictionary)["geo"])
+			box = b if first else box.merge(b)
+			first = false
+	if first:
+		return []
+	var dims := [box.size.x, box.size.y, box.size.z]
+	dims.sort()
+	if sponge:
+		return ["sponge", sqrt(float(dims[1]) * float(dims[2])) * 1000.0 * 0.7]
+	if float(dims[0]) < float(dims[1]) * 0.5 and float(dims[1]) > float(dims[2]) * 0.5:
+		return ["tool", clampf(sqrt(float(dims[1]) * float(dims[2])) * 1000.0 * 0.7, 3.0, 60.0)]
+	return ["tool", clampf(float(dims[0]) * 1000.0, 3.0, 40.0)]
+
+
+static func _leaves_of(parts: Array, xf: Transform3D, out: Array) -> void:
+	for p in parts:
+		var pd: Dictionary = p
+		var own := xf * Transform3D(Basis.from_euler((pd.get("turn", Vector3.ZERO) as Vector3) * (PI / 180.0)), (pd.get("at", Vector3.ZERO) as Vector3) * 0.01)
+		if pd.get("parts") is Array:
+			_leaves_of(pd["parts"], own, out)
+		else:
+			out.append([pd, own])

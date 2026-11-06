@@ -104,13 +104,29 @@ var _warned_title := false
 var _warned_unplaced := false
 var _warned_cut := false
 var _preview: TablePreview
+## THE SHOW'S FIXED THINGS ([FixedTable]): standing from the start, as the brief writes them - never moved, made again or taken away.
+var _fixed := {}
+var _fixed_names: Array = []
 
 
-## [param name] and [param byline]: the show's, set over the table at the opening.
-func _init(ep: TableEpisode, episode_plan: Dictionary, job_dir: String, name := "", byline := "") -> void:
+## [param name] and [param byline]: the show's, set over the table at the opening. [param fixed]: what the brief stands on every
+## episode's table ([FixedTable]).
+func _init(ep: TableEpisode, episode_plan: Dictionary, job_dir: String, name := "", byline := "", fixed := {}) -> void:
 	episode = ep
 	plan = episode_plan
 	dir = job_dir
+	_fixed = fixed
+	_fixed_names = FixedTable.names(fixed)
+	for t in fixed.get("things", []):
+		if t is Dictionary:
+			_things.append((t as Dictionary).duplicate(true))
+	for k in (fixed.get("materials", {}) as Dictionary):
+		_materials[String(k)] = (fixed["materials"] as Dictionary)[k]
+	if fixed.get("light") is Dictionary:
+		_merge_light(fixed["light"])
+	if fixed.get("sound") is Dictionary:
+		_sound = (fixed["sound"] as Dictionary).duplicate(true)
+		_sound_put = true
 	_look = CardTable.sanitize_look(plan.get("look", {}) if plan.get("look") is Dictionary else {})
 	_preview = TablePreview.new(ep, plan, dir.path_join("preview"), name, byline)
 	# A RUN STARTS CLEAN: a rerun works in the folder the last run left, and its handed-in table or
@@ -319,6 +335,10 @@ func _put(args: Dictionary) -> Dictionary:
 		if nm.is_empty():
 			nm = "thing %d" % (_things.size() + 1)
 		thing["name"] = nm
+		# ...NEVER ONE OF THE SHOW'S OWN, which stand as its brief writes them
+		if _fixed_names.has(nm.to_lower()):
+			notes.append("\"%s\" is one of the show's fixed things: it stands as the brief writes it, and is not put again" % nm)
+			continue
 		var at := _index_of(nm)
 		if at >= 0:
 			# A THING MADE AGAIN KEEPS ITS PLACE on the blueprint, unless it is given one
@@ -400,6 +420,9 @@ func _remove(args: Dictionary) -> Dictionary:
 	var gone := PackedStringArray()
 	var missing := PackedStringArray()
 	for n in names:
+		if _fixed_names.has(String(n).strip_edges().to_lower()):
+			missing.append("%s (one of the show's fixed things, which stay)" % String(n))
+			continue
 		var at := _index_of(String(n).strip_edges())
 		var fx := _effect_of(String(n).strip_edges())
 		var li := _layer_of(String(n).strip_edges()) if _layers_put else -1
@@ -586,6 +609,9 @@ func _blueprint(args: Dictionary) -> Dictionary:
 		var i := _index_of(nm)
 		if i < 0:
 			notes.append("nothing called \"%s\" has been put - make it with put first" % nm)
+			continue
+		if _fixed_names.has(nm.to_lower()):
+			notes.append("\"%s\" is one of the show's fixed things: it stands where the brief puts it - build round it" % nm)
 			continue
 		var thing: Dictionary = _things[i]
 		if not _needs_place(thing):

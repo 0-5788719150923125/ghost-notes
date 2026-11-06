@@ -767,7 +767,9 @@ As above, each its own note when it is reached.
 
 ### 11. No cards, fixed things, the mask, the painted surface
 
-Section 11, for Joker Motivation. *Status, 2026-10-26: A SHOW WITH NO CARDS is built (the user: "that card
+Section 11, for Joker Motivation. *Status, 2026-11-05: the rest is built - fixed things, the mask form, the painted surface, a
+tool pressed onto it in any direction, brushes whose hairs bend, a sponge that gives, powder that puffs - see next/painted_surface.md.*
+*Status, 2026-10-26: A SHOW WITH NO CARDS is built (the user: "that card
 dependency shouldn't exist"); the fixed things, the mask form, the painted surface and `press` in any direction
 are designed, not built.* A plan of beats (the producer's, for a brief that draws no cards) is an episode
 staged from nowhere (`TableActions.SOURCES` `none`, opened by `begin`; `CardTable.cardless`, `CardTable.beats`):

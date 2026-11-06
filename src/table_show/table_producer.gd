@@ -193,6 +193,8 @@ func _make(step: String) -> void:
 			_finish(step, _make_script())
 		"model":
 			_make_model()
+		"skin":
+			_make_skin()
 		"table":
 			_make_table()
 		"acts":
@@ -251,6 +253,30 @@ func _plan() -> Dictionary:
 	var words := episode.model_words()
 	if not words.is_empty():
 		(p as Dictionary)["model_words"] = words
+	# ...THE SHOW'S FIXED THINGS, standing on every table as its brief writes them ([FixedTable])
+	var fixed: Dictionary = spec.get("fixed", {}) if spec.get("fixed") is Dictionary else {}
+	if not (fixed.get("things", []) as Array).is_empty():
+		var said := PackedStringArray()
+		for t in fixed["things"]:
+			if t is Dictionary:
+				var at: Variant = (t as Dictionary).get("at", [0, 0])
+				said.append("\"%s\" at %s" % [String((t as Dictionary).get("name", "")), JSON.stringify(at)])
+		(p as Dictionary)["fixed_things"] = ", ".join(said)
+	# ...AND WHAT IS PAINTED, element by element, for whoever lays it on ([Skins])
+	var doc: Variant = episode.read_json("skin") if episode.has("skin") else null
+	if doc is Dictionary:
+		var lines := PackedStringArray()
+		for g in (doc as Dictionary).get("designs", []):
+			if not (g is Dictionary):
+				continue
+			var gd: Dictionary = g
+			var fr: Array = gd.get("frame", [150.0, 210.0])
+			var made := Skins.sanitize(gd, Vector2(float(fr[0]), float(fr[1])))
+			lines.append("\"%s\", painted on \"%s\"%s - its elements in the order they go on:" % [made["name"], gd.get("thing", ""),
+				("/" + String(gd["part"])) if not String(gd.get("part", "")).is_empty() else ""])
+			lines.append_array(Skins.summary(made, Vector2(float(fr[0]), float(fr[1]))))
+		if not lines.is_empty():
+			(p as Dictionary)["painted_design"] = "\n".join(lines)
 	return p
 
 
@@ -619,7 +645,7 @@ func _make_table() -> void:
 	var extra := {}
 	if TextGen.make(String(spec.get("writer", "claude"))).takes_tools():
 		var toolset := SetDresserTools.new(episode, _plan(), episode.job_dir("table"), String(spec.get("title", "")),
-			String(spec.get("byline", "")))
+			String(spec.get("byline", "")), spec.get("fixed", {}) if spec.get("fixed") is Dictionary else {})
 		var url := AgentTools.open(episode.job_dir("table"), toolset)
 		if not url.is_empty():
 			_tools["table"] = {"url": url, "set": toolset}
@@ -654,6 +680,8 @@ func looks_of(step: String) -> Array:
 		return [(t["set"] as PuppeteerTools).looks_used(), PuppeteerTools.LOOKS]
 	if t["set"] is ModelTools:
 		return [(t["set"] as ModelTools).looks_used(), ModelTools.LOOKS]
+	if t["set"] is DecoratorTools:
+		return [(t["set"] as DecoratorTools).looks_used(), DecoratorTools.LOOKS]
 	return []
 
 
@@ -677,6 +705,67 @@ func _make_model() -> void:
 		else:
 			toolset.release()
 	_submit_text("model", TablePrompts.modeler(String(spec.get("title", "")), String(spec.get("brief", "")), _plan(), episode.seed, earlier.slice(0, 16), looks), "best", extra)
+
+
+## THE DECORATOR DESIGNS WHAT IS PAINTED ([DecoratorTools], [Skins]; next/painted_surface.md), told what the plan says is painted, every
+## surface the set table has to paint and what earlier episodes painted. Given a writer that takes tools, it writes elements, looks at them
+## painted on the surface and fixes what it sees; one that cannot is asked for the design in one reply.
+func _make_skin() -> void:
+	_close_tools("skin")
+	DirAccess.remove_absolute(episode.job_dir("skin").path_join(DecoratorTools.SUBMITTED))
+	var surfaces := Skins.skins_of(episode.read_json("table"))
+	var earlier: Array = []
+	for h in TableEpisode.history(episode.show):
+		var s := int((h as Dictionary)["seed"])
+		if s == episode.seed or earlier.size() >= 16:
+			continue
+		var d: Variant = TableEpisode.open(episode.show, s).read_json("skin")
+		if d is Dictionary:
+			for g in (d as Dictionary).get("designs", []):
+				if g is Dictionary and not String((g as Dictionary).get("name", "")).is_empty():
+					earlier.append(String((g as Dictionary)["name"]))
+	var extra := {}
+	var looks := 0
+	if TextGen.make(String(spec.get("writer", "claude"))).takes_tools():
+		var toolset := DecoratorTools.new(episode.job_dir("skin"), surfaces)
+		var url := AgentTools.open(episode.job_dir("skin"), toolset)
+		if not url.is_empty():
+			_tools["skin"] = {"url": url, "set": toolset}
+			extra = {"tools_url": url}
+			looks = DecoratorTools.LOOKS
+		else:
+			toolset.release()
+	_submit_text("skin", TablePrompts.decorator(String(spec.get("title", "")), String(spec.get("brief", "")), _plan(), episode.seed, surfaces, earlier, looks), "best", extra)
+
+
+## WHAT THE DECORATOR HANDED IN ([param text]: `{"designs": [...]}`, or one design for the table's first surface) made safe on the
+## surfaces the table has, and kept as `skin.json` - each design with where it goes, its frame and its outline.
+func _land_skin(text: String) -> String:
+	var d: Variant = TextGen.extract_json(text)
+	if not (d is Dictionary):
+		return "the design was not JSON"
+	var surfaces := Skins.skins_of(episode.read_json("table"))
+	if surfaces.is_empty():
+		return "the table has no surface to paint (no part with `skin`)"
+	var list: Array = (d as Dictionary)["designs"] if (d as Dictionary).get("designs") is Array else [d]
+	var out: Array = []
+	for g in list:
+		if not (g is Dictionary):
+			continue
+		var gd: Dictionary = g
+		var on := "%s/%s" % [gd.get("thing", ""), gd.get("part", "")]
+		var skin: Dictionary = surfaces[0]
+		for sf in surfaces:
+			if on.to_lower() == ("%s/%s" % [(sf as Dictionary)["thing"], (sf as Dictionary)["part"]]).to_lower() or String(gd.get("thing", "")).to_lower() == String((sf as Dictionary)["thing"]).to_lower():
+				skin = sf
+		var made := Skins.sanitize(gd, skin["frame"])
+		if (made["elements"] as Array).is_empty():
+			continue
+		out.append({"thing": skin["thing"], "part": skin["part"], "frame": [(skin["frame"] as Vector2).x, (skin["frame"] as Vector2).y],
+			"outline": skin["outline"], "name": made["name"], "elements": gd.get("elements", [])})
+	if out.is_empty():
+		return "the design has no element that can be painted"
+	return episode.write_json("skin", {"designs": out})
 
 
 ## THE PUPPETEER blocks the episode's work ([PuppeteerTools], next/table_work.md): told the plan's work beat
@@ -840,7 +929,16 @@ static func _beat_of(step: String, bare := false) -> String:
 func _acts_of(beat: String) -> Array:
 	if beat.is_empty() or not episode.has("acts"):
 		return []
-	return Motions.of_beat(Motions.sanitize_acts(episode.read_json("acts"), episode.beat_count())["acts"], beat)
+	var acts: Array = Motions.of_beat(Motions.sanitize_acts(episode.read_json("acts"), episode.beat_count())["acts"], beat)
+	# ...WHAT IS PAINTED TAKES WHAT ITS STROKES TAKE ([Skins]): a reader is told it, and its words leave room for it
+	if episode.has("skin"):
+		var doc: Variant = episode.read_json("skin")
+		for a in acts:
+			var natural := Skins.act_natural(a as Dictionary, doc if doc is Dictionary else {}, episode.read_json("table"))
+			if natural > 0.0:
+				(a as Dictionary)["_natural"] = natural
+				(a as Dictionary)["length"] = natural
+	return acts
 
 
 func _make_script() -> String:
@@ -937,6 +1035,8 @@ func _land(step: String, res: Dictionary) -> void:
 				err = _land_acts(handed)
 			"model":
 				err = _land_model(handed)
+			"skin":
+				err = _land_skin(handed)
 			"prep":
 				err = _land_prep(handed)
 			"say":
@@ -971,6 +1071,10 @@ func _land(step: String, res: Dictionary) -> void:
 				err = _land_model(String(res.get("text", "")))
 				if not err.is_empty() and had_tools:
 					err = "the modeler stopped without handing its model in"
+			"skin":
+				err = _land_skin(String(res.get("text", "")))
+				if not err.is_empty() and had_tools:
+					err = "the decorator stopped without handing its design in"
 			"table":
 				err = _land_table(String(res.get("text", "")))
 				if not err.is_empty() and had_tools:
@@ -1042,7 +1146,7 @@ func _land_plan(text: String) -> String:
 		else:
 			pos.append({"name": _str(q), "asks": ""})
 	spread["name"] = _str(spread.get("name", ""))
-	for k in ["episode_title", "description", "audience", "topic", "premise", "reader_mood", "running_bit", "work_intro", "work_close", "build"]:
+	for k in ["episode_title", "description", "audience", "topic", "premise", "reader_mood", "running_bit", "work_intro", "work_close", "build", "painted"]:
 		plan[k] = _str(plan.get(k, ""))
 	plan["game"] = plan.get("game") == true
 	plan["table_note"] = _str(plan.get("table_note", ""))
@@ -1127,7 +1231,7 @@ func _land_beats(plan: Dictionary) -> String:
 		return "the plan has no beats"
 	plan.erase("beats")
 	plan["spread"] = {"name": "", "positions": pos}
-	for k in ["episode_title", "description", "audience", "topic", "premise", "reader_mood", "running_bit", "work_intro", "work_close", "build"]:
+	for k in ["episode_title", "description", "audience", "topic", "premise", "reader_mood", "running_bit", "work_intro", "work_close", "build", "painted"]:
 		plan[k] = _str(plan.get(k, ""))
 	plan["game"] = plan.get("game") == true
 	plan["table_note"] = _str(plan.get("table_note", ""))
@@ -1375,6 +1479,8 @@ func _land_table(text: String) -> String:
 	var d: Variant = TextGen.extract_json(text)
 	if not (d is Dictionary):
 		return "the table was not JSON"
+	# ...THE SHOW'S FIXED THINGS STAND IN IT AS THE BRIEF WRITES THEM, whatever was handed in ([FixedTable])
+	d = FixedTable.merge(d as Dictionary, spec.get("fixed", {}) if spec.get("fixed") is Dictionary else {})
 	if (CardTable.sanitize_table(d as Dictionary, _look())["things"] as Array).is_empty():
 		return "nothing on the table could be built"
 	# ...WHAT IS BUILT ON IT GOES WITH IT: every table anywhere is stood from this one file

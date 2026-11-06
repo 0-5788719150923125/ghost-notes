@@ -450,7 +450,9 @@ func build() -> void:
 	for sd in solids:
 		own.append((sd as Dictionary).duplicate())
 	work._solids_ref = own
-	_sync = work.medium == null or bool(work.medium.aside) or not work.medium.is_inside_tree() or (render_waits() and not threaded)
+	# (a table built aside to be played - [member TableMedium.live_build] - bakes on its own thread as one built where it stands does)
+	var live: bool = work.medium != null and work.medium.get("live_build") == true
+	_sync = work.medium == null or (bool(work.medium.aside) and not live) or (not work.medium.is_inside_tree() and not live) or (render_waits() and not threaded)
 	if not _sync:
 		_sem = Semaphore.new()
 		_thread = Thread.new()
@@ -462,6 +464,7 @@ func build() -> void:
 ## plan. What was baked stays; the plan the work hands next ([method replan]) is baked again from the first moment it changes.
 func rebind() -> void:
 	twin.acts = work.acts
+	twin.paint = work.paint.twin_for(twin) if work.paint != null else null
 	twin._moved = work._moved
 	twin._soft = work._soft
 	_find_sprinkles()
@@ -523,6 +526,7 @@ func _make_twin() -> void:
 	twin._parent_work = work._parent_work
 	twin.swings = work.swings
 	twin.hung = work.hung
+	twin.paint = work.paint.twin_for(twin) if work.paint != null else null
 
 
 ## The pose of the node solid [param sd] hangs from at show time [param t], by the twin.
@@ -2695,6 +2699,23 @@ func _rest_of(wi: int) -> Transform3D:
 ## Whether the work holds loose work [param wi] at [param t] - by itself or with its group: its stretches found once a
 ## plan ([member _hold_spans]), those less than [constant HOLD_GAP] apart one hold - a hand never lets go between one move
 ## and the next (a stopper had dropped 2 cm in the 65 ms between two of its tracks). A whole thing is [method _ch_of]'s.
+## THE SOLIDS OF WHAT [param wi]'s paint act lays it on at show time [param t] ([TablePaint]): none while no paint act holds it.
+func _painted_by(wi: int, t: float) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	for e in twin._chan.get(_ch_of(wi), []):
+		var ed: Dictionary = e
+		var tr: Dictionary = ed["track"]
+		if String(tr["law"]) != "paint" or t < float(ed.get("s0", ed["t0"])) or t > float(ed.get("s1", ed["t1"])):
+			continue
+		# ...what it paints, and the pots, the water and the towel it goes to ([method TablePaint.touches])
+		var tis: PackedInt32Array = twin.paint.touches(tr) if twin.paint != null else PackedInt32Array([twin._thing_named(String(tr.get("press", "")))])
+		for si in solids.size():
+			var ti := int((solids[si] as Dictionary).get("thing", -1))
+			if ti >= 0 and tis.has(ti) and not out.has(si):
+				out.append(si)
+	return out
+
+
 func _held_at(wi: int, t: float) -> bool:
 	if not _hold_spans.has(wi):
 		var all: Array = []
@@ -2974,6 +2995,10 @@ func _rigid_step(t: float, dt: float) -> void:
 		for si in b.get("seat", PackedInt32Array()):
 			if not _off_seat(si, wi, now, SEAT_REACH, SEAT_TURN):
 				skip.append(si)
+		# ...AND A TOOL PAINTING A SURFACE IS LAID ON IT, never pushed off it ([TablePaint]): a brush's hairs and a sponge's face meet
+		# what they paint as the hand means them to, and the bake leaves the tool where its law puts it
+		if moving:
+			skip.append_array(_painted_by(wi, t))
 		b["seat_skip"] = skip
 		var was: Variant = null
 		if b["held"] != null:

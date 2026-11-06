@@ -20,7 +20,8 @@ extends Node
 ## - `--acts-file`: the copy's `acts.json` replaced by this one - an act tried on the episode as it was exported.
 ## - `--shots`: on a real renderer, the picture at each of these moments (seconds) as the export drew it, 1280x720, written to
 ##   `--out` (by default the copy's folder) as `shot_<t>.png` - the bake run up to each, and nothing else baked or followed.
-## - `--live`: PLAYED AS THE APP PLAYS IT - the words a sentence at a time, `--ahead` seconds before they are said, the bake on a
+## - `--live`: PLAYED AS THE APP PLAYS IT - the table built on a worker (each frame drawn meanwhile said), the words a sentence at a
+##   time, `--ahead` seconds before they are said, the bake on a
 ##   thread of its own, the clock the wall's (held only while the show waits for its bake) - and each frame that held this
 ##   thread over 50 ms said, with what took it: what a viewer sees frozen while the voice goes on.
 ## - `--script`: the episode's `script.md` as it stands now, its words timed from the plan's estimate (`--pace=1`) - a take carries the
@@ -31,10 +32,16 @@ extends Node
 ##   the sentence holding T, or from spoken word K, its words timed from 0 - and played `after` seconds (`--after`): whether the table and its bake stood, how long the show
 ##   waited, and how far each watched part is drawn from where the first pass drew it at the same moment of the episode.
 ## - `--stalls=T0,T1`: the stretch baked first, then every frame of it played - each over 50 ms said, with what took it.
+## - `--held`: each painting program's held keys - how many a tool is stood off its surface at, and how far, and where; how far it is
+##   lifted on its way between them. With `--audit`, a painting tool OFF what it paints while the law has it pressing is said too
+##   (`GHOST_AUDIT_WHY=1`: whether the law's own place or the drawn one is off).
+## - `--live`, its first frames: the medium mounted, the table put back in the tree, and the 20 frames that first draw it (the Director
+##   held, the camera is never placed: those frames draw all of it, a cost the app never pays).
 ## - `--profile=T`: bake through T+2, then measure 60 frames of playback there, with the bake already available. Prints
 ##   the work's CPU cost, the whole medium's CPU cost and wall time per frame (use GHOST_PROBE_GPU=1 for rendering).
 ## - `--audit`: THE SHOW AGAINST WHAT MUST ALWAYS HOLD, baked whole and every frame looked at: liquid neither made nor lost; a body in nothing solid, nor through the table; no
-##   jump between frames; a hand's thing not held far off its hand; nothing let go hanging in the air; a loose thing inside its vessel's walls; a surface moving smoothly.
+##   jump between frames; a hand's thing not held far off its hand; nothing let go hanging in the air; a loose thing inside its vessel's walls; a surface moving smoothly;
+##   a painting tool's own surface in nothing but what gives, to a millimeter (a pot's wall is three).
 ##   Each said once, with when and how much - what a viewer would report, found before they must.
 ## - `--heard[=LEAD]`: THE SHOW AS A LIVE PLAN COMES TO KNOW IT, on this thread: the words a sentence at a time, `--ahead` seconds before
 ##   they are said, the bake LEAD seconds (12) past the clock, each new plan taken as the app takes it, to the end - and whatever follows
@@ -112,10 +119,12 @@ func _run() -> void:
 	stage.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	add_child(stage)
 	Director.detach()
+	var mount_at := Time.get_ticks_usec()
 	medium = Medium.make("table") as TableMedium
 	medium.mount(stage)
 	Director.attach(stage, medium)
 	Director.hold(true)
+	var mounted_us := Time.get_ticks_usec() - mount_at
 	subs = preload("res://src/show/subtitles.gd").new()
 	add_child(subs)
 	medium.bind_captions(subs)
@@ -144,7 +153,50 @@ func _run() -> void:
 	subs.document = book
 	var clock := Time.get_ticks_msec()
 	medium._key = ""
+	# ...PLAYED LIVE, the table is built as the app builds it: on a worker, the app drawing meanwhile - each frame it drew said
+	TableMedium.away_in_tests = live
 	medium._ensure_doc()
+	if medium._build_task >= 0:
+		var drawn := 0
+		var longest := 0
+		var over := 0
+		var last := Time.get_ticks_msec()
+		var first := -1
+		var settled_us := 0
+		while medium._build_task >= 0:
+			await get_tree().process_frame
+			var gap := Time.get_ticks_msec() - last
+			last = Time.get_ticks_msec()
+			first = gap if first < 0 else first
+			drawn += 1
+			longest = maxi(longest, gap)
+			over += 1 if gap > 50 else 0
+			if medium._build_task >= 0 and WorkerThreadPool.is_task_completed(medium._build_task):
+				var s0 := Time.get_ticks_usec()
+				medium._settle_away()
+				settled_us = Time.get_ticks_usec() - s0
+		print("episode_bake_probe: the table built on a worker in %d ms - %d frames drawn meanwhile, %d over 50 ms, the longest %d ms" % [
+			Time.get_ticks_msec() - clock, drawn, over, longest])
+		# ...AND WHAT IS STILL ON THIS THREAD: the medium mounted (`medium 'table'`), the first frame after it, the table put back in the
+		# tree, and the frames that first draw it (its materials' pipelines, its shadow maps, the probe catching its faces)
+		var after := PackedStringArray()
+		medium._work.profiling = true
+		medium._work.profile = {}
+		for i in 20:
+			await get_tree().process_frame
+			if i == 0:
+				var spent := PackedStringArray()
+				for key in medium._work.profile:
+					if int(medium._work.profile[key]) > 20000:
+						spent.append("%s %.0f ms" % [key, int(medium._work.profile[key]) / 1000.0])
+				if not spent.is_empty():
+					print("episode_bake_probe: the first frame back, the table's work: %s" % ", ".join(spent))
+			after.append(str(Time.get_ticks_msec() - last))
+			last = Time.get_ticks_msec()
+		# (the Director held, the table's camera is never placed: these first frames draw it from where a camera starts, all of it)
+		print("episode_bake_probe: mounted in %.1f ms, the first frame after %d ms; put back in the tree in %.1f ms; the 20 frames after: %s ms" % [
+			mounted_us / 1000.0, first, settled_us / 1000.0, ", ".join(after)])
+	TableMedium.away_in_tests = false
 	if from_script:
 		all_words = _words_of_plan(_arg(args, "pace", "1").to_float())
 		subs.words = _arrived(all_words, ahead, 0.0) if live or heard else all_words
@@ -154,6 +206,39 @@ func _run() -> void:
 	var w: TableWork = medium._work
 	var ph: TablePhysics = w.physics
 	print("episode_bake_probe: %s - %d things, %d works, %d acts, stood in %d ms" % [copy, w.things.size(), w.works.size(), w.acts.size(), Time.get_ticks_msec() - clock])
+	# ...HOW FAR EACH PAINTING TOOL IS HELD OFF ITS SURFACE (`--held`): each program's held keys' stand-off, where the surface is under it
+	if _arg(args, "held", "") != "" and w.paint != null:
+		for si in w.paint.skins.size():
+			var sd: Dictionary = w.paint.skins[si]
+			for key in (sd.get("held", {}) as Dictionary):
+				var kept: Dictionary = sd["held"][key]
+				var hs: PackedVector4Array = kept.get("held", PackedVector4Array())
+				var most := 0.0
+				var over := 0
+				for hv in hs:
+					most = maxf(most, hv.w)
+					over += 1 if hv.w > 0.002 else 0
+				var arcs: PackedFloat32Array = kept.get("arcs", PackedFloat32Array())
+				var arc_most := 0.0
+				var arcs_over := 0
+				for av in arcs:
+					arc_most = maxf(arc_most, av)
+					arcs_over += 1 if av > 0.002 else 0
+				print("  HELD %-44s %4d keys, %4d stood off over 2 mm, the most %.1f mm; %d ways lifted over 2 mm, the most %.1f mm" % [String(key).left(44),
+					hs.size(), over, most * 1000.0, arcs_over, arc_most * 1000.0])
+				# ...and where each key stood off is, on the surface (millimeters) - its program's own key
+				var prog_keys: Array = []
+				for made in w.paint._made.values():
+					var pp: Dictionary = (made as Dictionary).get("program", {})
+					if not pp.is_empty() and String(key).begins_with(String(pp.get("id", "")) + "|"):
+						prog_keys = pp["keys"]
+				var said := 0
+				for k in mini(hs.size(), prog_keys.size()):
+					if hs[k].w > 0.004 and said < 6:
+						said += 1
+						var kk: Array = prog_keys[k]
+						print("      key %d at (%.1f, %.1f) mm, pressed %.1f, stood off %.1f mm, held %s" % [k, float(kk[1]), float(kk[2]), float(kk[4]), hs[k].w * 1000.0,
+							Vector3(hs[k].x, hs[k].y, hs[k].z)])
 	for n in w.notes:
 		print("  note: " + n)
 	if ph == null:
@@ -1211,6 +1296,7 @@ func _audit(w: TableWork, ph: TablePhysics, t_to: float) -> void:
 			note.call("%s ends the show turned from how it was built (deg)" % label.call(key), t_to, turned)
 		if m.origin.length() > 0.02:
 			note.call("%s ends the show away from where it was built (cm)" % label.call(key), t_to, m.origin.length() * 100.0)
+	_audit_paint(w, ph, t_to, note)
 	var said: Array = found.keys()
 	said.sort_custom(func(a: String, b: String) -> bool: return float((found[a] as Dictionary)["t0"]) < float((found[b] as Dictionary)["t0"]))
 	for what in said:
@@ -1219,6 +1305,135 @@ func _audit(w: TableWork, ph: TablePhysics, t_to: float) -> void:
 	for tool in _through_n:
 		print("  AUDIT %s stood through a sheet at %d of the moments looked at" % [tool, int(_through_n[tool])])
 	print("  AUDIT %d kind(s) of thing said" % said.size())
+
+
+## A PAINTING TOOL, LOOKED AT CLOSER THAN A BODY IS: its own mesh's points every [constant AUDIT_PAINT_STEP] of each act it paints in, against
+## every solid that does not give ([constant AUDIT_GIVES]: the paint in a pot, water, powder, a towel) - deeper than [constant AUDIT_PAINT_DEEP],
+## or than [constant AUDIT_PAINT_PRESS] in the surface it paints, where it is pressed. A body's own look ([constant AUDIT_DEEP]) said nothing of a
+## sponge through a pot's tin wall 3 mm thick (feedback 0016, joker-motivation 209459).
+const AUDIT_PAINT_STEP := 0.05
+const AUDIT_PAINT_DEEP := 0.0008
+const AUDIT_PAINT_PRESS := 0.0035
+const AUDIT_PAINT_OFF := 0.0015
+var _why_said := 0
+const AUDIT_GIVES := ["cream", "powder", "liquid", "sponge", "fabric"]
+
+
+func _audit_paint(w: TableWork, ph: TablePhysics, t_to: float, note: Callable) -> void:
+	if w.paint == null:
+		return
+	for ch in w._chan:
+		var cs := String(ch)
+		if not cs.begins_with("w") or not cs.ends_with(":pose"):
+			continue
+		var entries: Array = (w._chan[ch] as Array).filter(func(e: Dictionary) -> bool: return String((e["track"] as Dictionary).get("law", "")) == "paint")
+		if entries.is_empty():
+			continue
+		var wi := cs.substr(1).get_slice(":", 0).to_int()
+		var pts := _audit_mesh_points((w.works[wi] as Dictionary)["node"], w, 500)
+		if pts.is_empty():
+			continue
+		var own := AABB(pts[0], Vector3.ZERO)
+		for q in pts:
+			own = own.expand(q)
+		# ...AND ON WHAT IT PAINTS WHILE IT PAINTS (feedback 0019: "This brush is not touching the mask; it is floating above it"): each
+		# moment the law has it pressing on the surface, its tip as the bake has it no further off the surface than AUDIT_PAINT_OFF
+		# (measured on the skin's own meshes along the tool, as the picture draws it - its field is coarse at a rim)
+		var skin_tm: TriangleMesh = null
+		for sd in w.paint.skins:
+			var faces := PackedVector3Array()
+			for m in (sd as Dictionary)["meshes"]:
+				var mi := m as MeshInstance3D
+				if mi.mesh != null:
+					var to := w._world_of(mi)
+					for v in mi.mesh.get_faces():
+						faces.append(to * v)
+			if not faces.is_empty():
+				skin_tm = TableWork._ray_mesh(faces)
+		var tool: Dictionary = w.paint.tools.get(cs, {})
+		for e in entries:
+			var t := float((e as Dictionary)["t0"])
+			var t1 := minf(float((e as Dictionary)["t1"]), t_to)
+			var tr: Dictionary = (e as Dictionary)["track"]
+			var span := maxf(float(e["t1"]) - float(e["t0"]), 1e-3)
+			var plan: Dictionary = w.paint._plan_entry(e, tr, span) if not tool.is_empty() else {}
+			while t < t1:
+				var pv: Variant = ph.pose_of(wi, t)
+				t += AUDIT_PAINT_STEP
+				if pv == null:
+					continue
+				var x: Transform3D = pv
+				if skin_tm != null and not plan.is_empty():
+					var tt := t - AUDIT_PAINT_STEP
+					var h := TablePaint._hold_of(w.paint._held_at(plan, tr, clampf(tt - float(e["t0"]), 0.0, span), tt, e["from"],
+						w._rest.get(cs, Transform3D.IDENTITY)), tool)
+					if bool(h[3]) and float(h[2]) > 0.5:
+						var c := TablePaint._contact(tool, TablePaint._contact_of(h))
+						var tip_w := x * (c["tip"] as Vector3)
+						# (straight in along the face's front, and how far off it that is along the surface's own normal there - along the
+						# tool, a brush meeting a steep rim at a graze read a small gap as a long one)
+						var skin_w := w.paint.holder_world(0, tt)
+						var along: Vector3 = (skin_w.basis * ((w.paint.skins[0] as Dictionary)["surface"] as Dictionary)["front"]).normalized()
+						var hit := TableWork._ray(skin_tm, tip_w + along * 0.05, -along)
+						var hn: Vector3 = (hit["normal"] as Vector3).normalized() if not hit.is_empty() else along
+						hn = hn if hn.dot(along) > 0.0 else -hn
+						var off := 0.0 if hit.is_empty() else (tip_w - (hit["position"] as Vector3)).dot(hn)
+						if hit.is_empty():
+							note.call("%s past the edge of what it paints, pressing on it (mm along it)" % w._part_label(wi), tt, 30.0)
+						elif off > AUDIT_PAINT_OFF:
+							note.call("%s off what it paints, pressing on it (mm)" % w._part_label(wi), tt, off * 1000.0)
+							if OS.get_environment("GHOST_AUDIT_WHY") != "" and off > 0.004 and _why_said < 16 and String(tool.get("kind", "")) == "brush":
+								_why_said += 1
+								var want: Vector3 = h[0]
+								var hit2 := TableWork._ray(skin_tm, want + along * 0.05, -along)
+								var want_off := (want - (hit2["position"] as Vector3)).dot(hn) if not hit2.is_empty() else 99.0
+								print("  WHY %.2f %s: drawn tip %.1f mm off, the law's own tip %.1f mm off, drawn tip %.1f mm from the law's; contact %s, axis %s, press %.2f" % [
+									tt, w._part_label(wi), off * 1000.0, want_off * 1000.0, tip_w.distance_to(want) * 1000.0, TablePaint._contact_of(h), h[1], float(h[2])])
+				var reach := x * own
+				for si in ph.solids.size():
+					var sd: Dictionary = ph.solids[si]
+					if int(sd["wi"]) == wi or not sd.has("field"):
+						continue
+					var part: Dictionary = sd["part"]
+					if AUDIT_GIVES.has(String((w.materials.get(String(part.get("material", "")), {}) as Dictionary).get("kind", ""))):
+						continue
+					var xf: Transform3D = sd["rest"]
+					var wb: AABB = xf * (sd["box"] as AABB)
+					if not wb.intersects(reach):
+						continue
+					var allow := AUDIT_PAINT_PRESS if bool(part.get("skin", false)) else AUDIT_PAINT_DEEP
+					var inv := xf.affine_inverse()
+					var worst := 0.0
+					for p in pts:
+						var q := x * p
+						if wb.grow(0.001).has_point(q):
+							worst = maxf(worst, -float((sd["field"] as ShapeField).sample(inv * q).x))
+					if worst > allow:
+						note.call("%s in %s, painting (mm)" % [w._part_label(wi), ph._solid_label(si)], t - AUDIT_PAINT_STEP, worst * 1000.0)
+
+
+## [param node]'s own meshes' points in its own space, at most [param most].
+static func _audit_mesh_points(node: Node3D, w: TableWork, most: int) -> PackedVector3Array:
+	var inv := w._world_of(node).affine_inverse()
+	var all := PackedVector3Array()
+	var seen := {}
+	for m in node.find_children("*", "MeshInstance3D", true, false):
+		var mi := m as MeshInstance3D
+		if mi.mesh == null:
+			continue
+		var xf := inv * w._world_of(mi)
+		for v in mi.mesh.get_faces():
+			var q := xf * v
+			var key := Vector3i(roundi(q.x * 2000.0), roundi(q.y * 2000.0), roundi(q.z * 2000.0))
+			if not seen.has(key):
+				seen[key] = true
+				all.append(q)
+	if all.size() <= most:
+		return all
+	var out := PackedVector3Array()
+	for k in most:
+		out.append(all[k * all.size() / most])
+	return out
 
 
 ## Each loose thing's drawn surface as it lies as built, in the table's space, a couple of hundred points at most: {loose index: points}.

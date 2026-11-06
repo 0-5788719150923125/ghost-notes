@@ -189,7 +189,7 @@ static func deck_noun(look: Dictionary) -> String:
 ## ([method TableProducer.voice_marks_only]). What the editor's palette promises of a brief
 ## ([ScriptMarks], "cards") is kept here.
 static func brief(body: String) -> String:
-	return TableProducer.voice_marks_only(TextNorm._expand_macros(CardDeck.strip(body)))
+	return TableProducer.voice_marks_only(TextNorm._expand_macros(CardDeck.strip(FixedTable.strip(body))))
 
 
 ## The context every agent shares: which show, and its brief - the same words for every show.
@@ -354,6 +354,7 @@ static func set_dresser(title: String, brief: String, plan: Dictionary, seed: in
 		"title": title.strip_edges(), "byline": byline.strip_edges(),
 		"seen": ", ".join(PackedStringArray(seen)), "airs": ", ".join(PackedStringArray(airs)),
 		"assembly": plan.get("assembly") == true, "assembly_stock": Assembly.describe_stock(), "model_words": String(plan.get("model_words", "")),
+		"painted": String(plan.get("painted", "")), "fixed": String(plan.get("fixed_things", "")),
 		"game": CardTable.game_of(plan), "game_top_x": roundi(GameBoard.TOP_LEAST.x), "game_top_z": roundi(GameBoard.TOP_LEAST.y),
 		"game_keep_x": roundi(GameBoard.MAP_MOST.x * 100.0), "game_keep_z": roundi(GameBoard.MAP_MOST.y * 100.0), "game_mid_z": roundi((GameBoard.MIDDLE.y - Tables.ORIGIN.y) * 100.0),
 	}
@@ -429,7 +430,8 @@ static func puppeteer(title: String, brief: String, plan: Dictionary, seed: int,
 		"work": work_lines(plan), "cards": cards, "parts": parts if not parts.strip_edges().is_empty() else "(nothing on the table works yet)",
 		"laws": Motions.describe_laws(), "bursts": ", ".join(PackedStringArray(Effects.BURSTS.keys())),
 		"tools": looks > 0, "looks": looks, "cardless": CardTable.cardless(plan), "beats": CardTable.beats(plan),
-		"assembly": plan.get("assembly") == true, "assembly_steps": Assembly.describe(plan.has("model_words")), "model_words": String(plan.get("model_words", "")), "designed": plan.has("model_words")}
+		"assembly": plan.get("assembly") == true, "assembly_steps": Assembly.describe(plan.has("model_words")), "model_words": String(plan.get("model_words", "")), "designed": plan.has("model_words"),
+		"painted_design": String(plan.get("painted_design", ""))}
 	return {"system": show_context(title, brief), "prompt": Rules.say("table/puppeteer.prompt", vars)}
 
 
@@ -444,6 +446,16 @@ static func modeler(title: String, brief: String, plan: Dictionary, seed: int, e
 	vars["tall_cm"] = roundi(minf(seen, float(AssemblyModel.TALL_MOST) * Assembly.PLATE) * 100.0)
 	vars["tall_levels"] = int(minf(seen, float(AssemblyModel.TALL_MOST) * Assembly.PLATE) / Assembly.PLATE)
 	return {"system": show_context(title, brief), "prompt": Rules.say("table/modeler.prompt", vars)}
+
+
+## THE DECORATOR designs what is painted at the table ([DecoratorTools], [Skins]; next/painted_surface.md): told the plan's words for it,
+## each surface the table has to paint, the language a design is written in, and what earlier episodes painted.
+static func decorator(title: String, brief: String, plan: Dictionary, seed: int, surfaces: Array, earlier: Array, looks := 0) -> Dictionary:
+	var vars := {"seed": seed, "episode_title": String(plan.get("episode_title", "")), "premise": String(plan.get("premise", "")),
+		"painted": String(plan.get("painted", "")), "language": Skins.describe(), "earlier": "; ".join(PackedStringArray(earlier)),
+		"has_earlier": not earlier.is_empty(), "tools": looks > 0, "looks": looks,
+		"surfaces": surfaces.map(func(s: Dictionary) -> Dictionary: return {"told": Skins.told(s)})}
+	return {"system": show_context(title, brief), "prompt": Rules.say("table/decorator.prompt", vars)}
 
 
 ## THE GAME MASTER'S PREPARATION (next/tabletop.md): tonight's world and every player's sheet, made alone, secret from everyone else at the table.

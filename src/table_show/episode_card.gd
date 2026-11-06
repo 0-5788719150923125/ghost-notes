@@ -39,7 +39,7 @@ const KNOBS := {"show": "", "seed": 1, "environment": 0.5,
 	"painter_effort": "", "players": "", "players_model": "", "players_effort": ""}
 ## Who makes each kind of step (a step's name up to its first ":"), as a row's status names them.
 const MAKERS := {"plan": "producer", "design": "designer", "image": "painter", "check": "art director",
-	"table": "set dresser", "say": "reader", "acts": "puppeteer", "model": "modeler", "prep": "game master"}
+	"table": "set dresser", "say": "reader", "acts": "puppeteer", "model": "modeler", "skin": "decorator", "prep": "game master"}
 ## EVERY STEP AS ITS ROW SAYS IT, "K" each card or beat: what it is called, and what its ⟳ does ("" for a step with no ⟳ of
 ## its own - the draw is a function of the seed, so dealing again deals the same cards, and a different deal is a different
 ## episode; a check and the depth come with their painting; the script with its readings). A ROW IS WHAT THE EPISODE HAS
@@ -54,6 +54,7 @@ const STEPS := {
 	"image:surface": {"label": "Cloth", "again": "Paint a new cloth"},
 	"image:backdrop": {"label": "Room", "again": "Paint a new room"},
 	"model": {"label": "Model", "again": "Design the model again"},
+	"skin": {"label": "What is painted", "again": "Design what is painted again"},
 	"prep": {"label": "Preparation", "again": "Prepare the game again"},
 	"table": {"label": "Set", "again": "Set the table again"},
 	"image:map:K": {"label": "Map", "again": "Paint this map again"},
@@ -541,7 +542,7 @@ func _show_title() -> String:
 func _spec() -> Dictionary:
 	var body := Manuscript.strip_frontmatter(_doc.pull())
 	return {"title": _show_title(), "byline": _show_byline(), "uploads_as": _uploads_as(),
-		"brief": TablePrompts.brief(body), "deck": CardDeck.of(body),
+		"brief": TablePrompts.brief(body), "deck": CardDeck.of(body), "fixed": FixedTable.parse(body),
 		"chooses": CardDeck.chooses(body), "voices": reading.cast_names(), "seats": reading.cast_seats(),
 		"writer": _knobs["writer"], "writer_model": _knobs["writer_model"], "writer_effort": _knobs["writer_effort"],
 		"painter": _knobs["painter"], "painter_model": _knobs["painter_model"], "painter_effort": _knobs["painter_effort"],
@@ -1040,6 +1041,8 @@ func _step_rows() -> Array:
 		out.append(_row_of(st, st, "Table", busy, f))
 	if bool(f["depth"]):
 		out.append(_row_of("image:height", "image:height", "Table", busy, f))
+	if has.has("skin"):
+		out.append(_row_of("skin", "skin", "", busy, f))
 	if has.has("acts"):
 		out.append(_row_of("acts", "acts", "", busy, f))
 	out.append(_row_of("say:intro", "say:intro", "", busy, f))
@@ -1117,6 +1120,13 @@ func _said_of(step: String, f: Dictionary) -> String:
 	elif step == "model":
 		var made := _episode.model()
 		said = "%s, %d parts" % [String(made.get("name", "")), (made.get("parts", []) as Array).size()] if not made.is_empty() else ""
+	elif step == "skin":
+		var doc: Variant = _episode.read_json("skin") if _episode.has("skin") else null
+		var names := PackedStringArray()
+		for g in ((doc as Dictionary).get("designs", []) if doc is Dictionary else []):
+			if g is Dictionary:
+				names.append("%s, %d elements" % [String((g as Dictionary).get("name", "")), ((g as Dictionary).get("elements", []) as Array).size()])
+		said = "; ".join(names)
 	elif step == "table":
 		var things := _table_things()
 		said = "%d thing%s" % [things.size(), "" if things.size() == 1 else "s"] if not things.is_empty() else ""
@@ -1141,7 +1151,7 @@ func _doing_of(step: String) -> String:
 	if a.is_empty():
 		return ""
 	var piece := "%s %s" % [String(MAKERS.get(step.get_slice(":", 0), "agent")), a]
-	var calls := _tools_progress(step) if step in ["model", "table", "acts", "prep"] or (step.begins_with("say:") and _episode.wants_game()) else ""
+	var calls := _tools_progress(step) if step in ["model", "skin", "table", "acts", "prep"] or (step.begins_with("say:") and _episode.wants_game()) else ""
 	if not calls.is_empty():
 		# THE BUDGET IN VIEW: a run with no clock ends at its last picture, and the row says how near that is
 		var looked: Array = _producer.looks_of(step)

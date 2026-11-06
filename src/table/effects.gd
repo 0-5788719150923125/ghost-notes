@@ -93,6 +93,13 @@ const BURSTS := {
 	"smoke": {"about": "a soft puff that billows out, rises and thins away", "shape": "puff",
 		"count": 26, "speed": 0.1, "spread": 120.0, "gravity": 0.05, "drag": 1.6, "life": 3.2, "size": 26.0,
 		"sizes": Vector2(10.0, 60.0), "glows": Vector2(0.0, 0.0), "grow": 2.5, "waver": 0.015, "twinkle": 0.0, "color": "#b9b4ad"},
+	"powder": {"about": "a soft little cloud of fine powder lifting off where something is patted or brushed, hanging and settling - a powder puff's, flour's, chalk's", "shape": "puff",
+		"count": 30, "speed": 0.12, "spread": 160.0, "gravity": -0.05, "drag": 3.0, "life": 1.8, "size": 2.0,
+		"sizes": Vector2(0.8, 12.0), "glows": Vector2(0.0, 0.0), "grow": 2.2, "waver": 0.02, "twinkle": 0.0, "color": "#f2ede6",
+		"torn": 0.0, "thick": 0.14},
+	"mist": {"about": "a fine spray of droplets thrown out in a cone and drifting down - a setting spray, an atomizer, a plant mister", "shape": "orb",
+		"count": 140, "speed": 0.35, "spread": 28.0, "gravity": -0.25, "drag": 3.5, "life": 1.4, "size": 0.9,
+		"sizes": Vector2(0.4, 3.0), "glows": Vector2(0.0, 0.3), "grow": 0.2, "waver": 0.01, "twinkle": 0.15, "color": "#f4f8ff"},
 	"stars": {"about": "little four-pointed stars bursting out, turning and fading", "shape": "star",
 		"count": 46, "speed": 0.3, "spread": 180.0, "gravity": 0.0, "drag": 3.2, "life": 1.3, "size": 6.0,
 		"sizes": Vector2(3.0, 12.0), "glows": Vector2(0.6, 1.9), "grow": 0.0, "waver": 0.0, "twinkle": 0.8, "color": "#ffe9b0"},
@@ -969,6 +976,12 @@ static func _burst(fx: Dictionary, salt: int, root: Node3D) -> Dictionary:
 	mat.set_shader_parameter("waver", float(look["waver"]))
 	mat.set_shader_parameter("twinkle", float(look["twinkle"]))
 	mat.set_shader_parameter("stretch", float(look.get("stretch", 0.022)))
+	# A PUFF'S EDGE AND HOW THICK IT IS: smoke torn and billowing; POWDER A SOFT ROUND HAZE, barely there (feedback 0018, joker-motivation
+	# 209459: "What are these sparkles, coming off of the pad thing? They look like stars" - a few millimeters across, lit by the lamp
+	# against the dark, a torn billow drew a little bright star)
+	if smoke:
+		mat.set_shader_parameter("torn", float(look.get("torn", 1.0)))
+		mat.set_shader_parameter("thick", float(look.get("thick", 0.42)))
 	(layer["mm"] as MultiMesh).instance_count = 0
 	return {"fx": fx, "look": look, "layer": layer, "salt": salt, "planned": ""}
 
@@ -1013,7 +1026,8 @@ static func births(fx: Dictionary, moments: Array, salt: int) -> Array:
 				out_dir = (out_dir + (xf.basis.y.normalized() * (1.0 if rng.randf() < 0.5 else -1.0)) * 0.35).normalized()
 			else:
 				local = Vector3(rng.randf_range(-1, 1), rng.randf_range(0, 1), rng.randf_range(-1, 1)) * 0.008
-				out_dir = Vector3.UP
+				# ...thrown up, or the way its moment's own up points (a spray's mist toward what it is sprayed at)
+				out_dir = xf.basis.y.normalized() if xf.basis.y.length() > 1e-6 else Vector3.UP
 			var dir := _cone(out_dir, spread, rng)
 			var v := dir * speed * rng.randf_range(0.45, 1.15)
 			out.append({"born": born, "pos": xf * local, "vel": v,

@@ -5,7 +5,7 @@ shader_type spatial;
 render_mode blend_mix, depth_draw_opaque, cull_back, diffuse_burley, specular_schlick_ggx;
 
 // Props.MATERIALS: 0 painted, 1 metal, 2 wax, 4 crystal, 5 ceramic, 6 stone, 7 wood, 8 paper,
-// 9 leather, 10 fabric, 11 bone, 12 plant, 13 liquid, 14 powder
+// 9 leather, 10 fabric, 11 bone, 12 plant, 13 liquid, 14 powder, 15 cream, 16 sponge
 uniform int kind = 0;
 uniform vec3 color : source_color = vec3(0.7);
 uniform vec3 color2 : source_color = vec3(0.3);
@@ -23,6 +23,12 @@ uniform float show_time = 0.0;
 // EACH COPY GLOWS ITS OWN WAY (Props.build sets it for a part with copies - a heap of coals): 0 the part as one
 uniform float apart = 0.0;
 uniform float boil = 0.0;
+// THE PAINT ON A BRUSH'S TIP (TablePaint): its color, and how much of it there is (0 clean)
+uniform vec4 tip_paint : source_color = vec4(0.0);
+// A SURFACE PAINTED (TablePaint): its paint composed in 2D from its front - its color, and its finish (rough, metallic,
+// glittering) - each premultiplied by how much paint there is
+uniform sampler2D skin_color : filter_linear, repeat_disable;
+uniform sampler2D skin_finish : filter_linear, repeat_disable;
 #include "res://shaders/prop_common.gdshaderinc"
 
 void fragment() {
@@ -189,6 +195,27 @@ void fragment() {
 		spec = mix(0.3, 0.9, spark);
 		sss = 0.15 + 0.3 * clarity;
 		back = color * 0.12 * clarity;
+	} else if (kind == 15) {
+		// CREAM: a soft waxy paste, swirled where a finger or a brush has been through its top (pattern)
+		float swirl = sin(length(cpos.xz - vec2(seed * 3.1, seed * 1.7)) * 9.0 + fbm(cpos * 0.9) * 6.0);
+		relief += swirl * pattern * 0.00004;
+		albedo = color * (0.95 + 0.06 * n1);
+		rough = mix(0.7, 0.18, polish);
+		spec = 0.45;
+		sss = 0.2 + 0.25 * clarity;
+		back = color * 0.12 * clarity;
+		coat = polish * 0.3;
+	} else if (kind == 16) {
+		// SPONGE: foam full of fine pores (pattern), soaked with paint where it has been used (wear, in color2)
+		vec3 c = cellsid(cpos * (8.0 / max(grain, 0.1)));
+		float pore = (1.0 - smoothstep(0.12, 0.32, c.x)) * pattern;
+		relief -= pore * 0.0003;
+		albedo = mix(color * (0.9 + 0.12 * n2), color2, smoothstep(0.45, 0.8, fbm(cpos * 0.6 + vec3(5.0))) * wear);
+		albedo *= 1.0 - pore * 0.45;
+		rough = 0.95;
+		spec = 0.2;
+		sss = 0.3 * clarity;
+		back = albedo * 0.15;
 	} else {
 		// PAINTED or lacquered: a color, as glossy as its polish
 		albedo = color * (0.95 + 0.08 * n1);
@@ -274,6 +301,45 @@ void fragment() {
 		float g = pow(clamp(dot(NORMAL, VIEW), 0.0, 1.0), 2.5) * (0.35 + 0.65 * billow);
 		albedo = mix(albedo, color2 * 1.15, g * 0.75);
 		sss = max(sss, 0.55);
+	}
+	// THE PAINT ON A BRUSH'S TIP, toward its end, wet
+	if (bristle_len > 0.0 && tip_paint.a > 0.0) {
+		float wet = tip_paint.a * smoothstep(0.55, 0.9, UV2.x);
+		albedo = mix(albedo, tip_paint.rgb, wet);
+		rough = mix(rough, 0.3, wet);
+	}
+	// A SURFACE PAINTED from its front: the paint composed for it, laid over what it is - its color where there is paint,
+	// its finish as rough, metallic or glittering as that paint is - and only where the surface faces that front
+	float painted = 0.0;
+	float glit = 0.0;
+	if (skinned) {
+		vec2 suv = skin_at.xy;
+		vec4 sc = texture(skin_color, suv);
+		vec4 sf = texture(skin_finish, suv);
+		float on = sc.a * smoothstep(0.02, 0.25, skin_at.z) * step(0.0, suv.x) * step(suv.x, 1.0) * step(0.0, suv.y) * step(suv.y, 1.0);
+		vec3 pc = sc.a > 1e-4 ? sc.rgb / sc.a : vec3(0.0);
+		pc = pow(clamp(pc, 0.0, 1.0), vec3(2.2));
+		vec3 pf = sf.a > 1e-4 ? sf.rgb / sf.a : vec3(0.6, 0.0, 0.0);
+		albedo = mix(albedo, pc, on);
+		rough = mix(rough, pf.r, on);
+		metal = mix(metal, pf.g, on);
+		coat = mix(coat, smoothstep(0.25, 0.05, pf.r) * 0.9, on);
+		coat_rough = mix(coat_rough, 0.03, on * smoothstep(0.25, 0.05, pf.r));
+		sss = mix(sss, 0.0, on);
+		spec = mix(spec, 0.5, on);
+		painted = on;
+		glit = pf.b * on;
+		// a little body where it is laid on thick
+		relief += on * 0.00003;
+	}
+	if (glit > 0.0) {
+		// GLITTER IN THE PAINT: flakes of it, each its own little mirror
+		vec3 gc = cellsid(cpos * 14.0 + vec3(seed * 3.0));
+		float flake = (1.0 - smoothstep(0.22, 0.32, gc.x)) * step(0.4, gc.z) * glit;
+		tilt = tipped(gc.z, 0.7) * flake;
+		albedo = mix(albedo, min(albedo * 1.6 + vec3(0.08), vec3(1.0)), flake);
+		rough = mix(rough, 0.06, flake);
+		mirror = max(mirror, flake * 0.45);
 	}
 	if (mirror > 0.0) {
 		vec3 tv = mat3(VIEW_MATRIX) * (mat3(MODEL_MATRIX) * tilt);

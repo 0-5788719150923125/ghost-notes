@@ -60,6 +60,8 @@ const SHAPES := {
 	"bone": "a bone, lying on its side along x: `kind` \"femur\" (a thigh bone: a ball on a neck at one end, two knuckles at the other), \"long\" (an arm or leg bone, knobbed at both ends), \"rib\" (a curved, flattened bar), \"small\" (a chicken's or a small animal's - thin, knobbed, a little bent: copy it in a `heap` for a pile of them) or \"wishbone\"; `length` and `thickness` (the shaft's, centimeters). Its material is most often `bone`.",
 	"skull": "a skull, resting on its jaw and facing the thing's front: `kind` \"human\", \"horned\" (a cow's, a goat's or a ram's, long-snouted, with `horns` \"straight\", \"curved\" or \"curled\", or \"none\") or \"bird\" (a long beak); `length` (centimeters, front to back - a person's is about 19). Its sockets are deep and its openings go through. It is bone, not a head: no eyes, no skin, nothing living.",
 	"sculpt": "a form modeled freely, as clay is, from STROKES - for what no other shape makes: the skull or the jaw of a creature not listed, a shell, an antler, a gnarled root, a seed pod, a mushroom, a stone worn into a shape, a carved charm. `strokes` [{`points` [[x, y, z, r], ...]}, ...] in order: each stroke a rod through its points (curving through them; `smooth` false joins them straight), r its thickness there (a radius, centimeters), so it swells and narrows as it goes; one point is a ball, stretched to `size` [width, height, depth] if given. Each stroke melts into what came before it, `blend` centimeters soft (0 a crisp seam); `carve` true cuts it out of what came before instead - a socket, a groove, a hollow, a hole right through, the gap under an arch. `mirror` true makes it the same on both sides of x = 0: draw only its middle and its right side. It is one surface, its hollows shut in from the light; a rod much thinner than a hundredth of the whole comes out broken. Draw it blind and you will not get it right first: look at it from every side, and put it again.",
+	"mask": "A FACE WITH NO ONE IN IT, life size or any size: a mask form, a makeup artist's practice face, a mannequin's face, a milliner's block - its eyes closed, its lips closed, no hair and no ears, smooth all over, standing on its chin and facing the thing's front (+z). `size` [width, height, depth] (a person's: [15, 21, 8] - depth from its rim to the tip of its nose), `relief` 0.3-1.5 (how strongly its features stand out: 1 a person's), `thick` (its flat back's depth behind its rim, centimeters). Stand it on a stand or prop it against something: it has no foot of its own. Give it `skin` true to paint its face.",
+	"tuft": "A BRUSH'S HAIRS: a bundle of fine hairs rising from y = 0 (where they leave the ferrule) to their tips, which bend as the brush is pulled and pressed and spring back as it lifts. `kind` round (a soft point), liner (long and fine), flat (a chisel edge, wide across x), fan (spread wide) or dome (full and rounded - a blending or powder brush); `length` (centimeters out of the ferrule), `width` (across, at the ferrule), `thick` (a flat or fan's thinness), `hairs` (6-140). Build a brush as a group: a `tube` handle, a short `lathe` or `loft` ferrule, and the tuft standing out of it - give the group a free `joint` and `points` {\"tip\": the tuft's end, \"grip\": the handle's} so it can be picked up and painted with.",
 	"grains": "LOOSE STUFF, poured and never one piece: sand, salt, sugar, snow, ash, flour, seeds, peppercorns, ground herbs, tea, powder, gravel, beads. Drawn where it lies, `at` inside the vessel that holds it - it fills that vessel's inside from the bottom up to `fill` (0-1 of the way to its rim) - or on the cloth or a dish, where it lies in a little heap of `amount` grains (up to 240). `grain`: one grain's size in centimeters (0.1 sugar or flour, drawn as small clumps, to 1 a pea or a bead); its material is its look, and how it behaves - heavy or light, whether it dissolves. It is REAL: tipped, its vessel spills it from the mouth and it falls, runs and heaps where it lands, and in a liquid it sinks, floats or dissolves.",
 	"extrude": "an outline raised straight up: trays, tiles, plaques, tablets, boxes, dishes and candles of any plan - a star, a hexagon, a heart. `outline` (polygon with `sides` 3-12, star with `sides` points, circle, rect, heart, lens (pointed at both ends, as a leaf or an eye is) or drop (round behind, pointed in front) - or `points` [[x, z], ...] for any outline, which may go in and out), `size` [width, depth], `height`; optional `taper` 0-0.9 (narrower at the top), `bevel` (centimeters cut off the top edge), `wall` (centimeters: hollow, as a tray or a dish is, its floor as thick as its wall). A wax extrude takes `wick` or `wicks` as a turned candle does.",
 }
@@ -212,6 +214,10 @@ const MATERIALS := {
 		"about": "what is IN a vessel - a brew, ink, oil, wine, water, honey - wet and never quite still, `pattern` its foam in `color2`, `clarity` the light in its depth; a part of its own filling the vessel to its surface (see WORKING PARTS: it boils, fills, empties, changes color and glows)"},
 	"powder": {"code": 14, "polish": 0.1, "wear": 0.0, "pattern": 0.3, "clarity": 0.3, "grain": 0.5, "density": 0.6, "strength": 0.0, "dissolves": 3.0,
 		"about": "loose fine stuff, and what is ground: snow, flour, ash, chalk, salt, sugar, pollen, ground spice, dust - matte and soft, `pattern` the sparkle of the grains that catch the light (snow, salt, sugar) in `color2`; its grains dissolve in a liquid in `dissolves` seconds (snow melts in 2, sugar in 6, salt in 10; 0 never - ash, sand)"},
+	"cream": {"code": 15, "polish": 0.45, "wear": 0.0, "pattern": 0.3, "clarity": 0.4, "grain": 1.0, "density": 1.0, "strength": 0.0, "dissolves": 0.0,
+		"about": "a soft paste in a pot or a stick - greasepaint, cream makeup, a lipstick, a balm, frosting, butter, wax polish: smooth and a little waxy, `polish` its sheen, `pattern` the swirls a finger or a brush has left in its top; what a tool is loaded with paint from"},
+	"sponge": {"code": 16, "polish": 0.05, "wear": 0.2, "pattern": 0.6, "clarity": 0.3, "grain": 0.4, "density": 0.1, "strength": 0.0, "dissolves": 0.0,
+		"about": "soft foam full of fine holes - a makeup sponge, a sea sponge, a foam wedge, a powder puff's face: matte, `pattern` how open its pores are, `wear` the paint soaked into it in `color2`; it gives where it is pressed"},
 	"painted": {"code": 0, "polish": 0.5, "wear": 0.0, "pattern": 0.0, "clarity": 0.5, "grain": 1.0, "density": 1.0, "strength": 0.0, "dissolves": 0.0,
 		"about": "lacquer, enamel or paint over anything"},
 }
@@ -561,6 +567,12 @@ static func _sanitize_part(p: Dictionary, mats: Dictionary, pal: Array) -> Dicti
 			if (out["strokes"] as Array).is_empty():
 				return {}
 			out["mirror"] = _flag(p.get("mirror"))
+		"mask":
+			out["size"] = FaceForm.size_of(p.get("size"))
+			out["relief"] = _num(p.get("relief"), 1.0, 0.3, 1.5)
+			out["thick"] = _num(p.get("thick"), FaceForm.THICK, 0.1, 5.0)
+		"tuft":
+			Bristles.sanitize(p, out)
 		"grains":
 			out["grain"] = _num(p.get("grain"), 0.3, 0.05, 1.5)
 			out["fill"] = _num(p.get("fill"), 0.4, 0.0, 1.0)
@@ -573,6 +585,9 @@ static func _sanitize_part(p: Dictionary, mats: Dictionary, pal: Array) -> Dicti
 			out["width"] = _num(p.get("width"), 0.55, 0.2, 1.2)
 	out["ornament"] = _sanitize_ornament(p.get("ornament"))
 	out["copies"] = _copies_of(p)
+	# A SURFACE TO PAINT ([Skins], [TablePaint]): painted from its front (+z as it is built), one copy alone
+	if p.get("skin") == true and not shape in ["grains", "strand", "tuft"]:
+		out["skin"] = true
 	out["warp"] = _sanitize_warp(p.get("warp"))
 	# HOW IT MOVES with the ride and the wind ([Rides]): never a flame's (its light stands where it was lit), and
 	# never a strand laid across the table
@@ -949,6 +964,7 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 	# its own box as built, and its meshes - and every grains part, which has no geometry of its own
 	var solids: Array = []
 	var grains: Array = []
+	var skins: Array = []
 	for leaf in leaves:
 		var part: Dictionary = leaf["part"]
 		var geos: Array = leaf["geos"]
@@ -1008,6 +1024,16 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 				# a part's copies each glow their own way (prop.gdshader `apart`)
 				if xforms.size() > 1:
 					mat.set_shader_parameter("apart", 1.0)
+				# A BRUSH'S HAIRS bend about their root, along their length ([Bristles]): where it is in the mesh's own space
+				if String(part.get("shape", "")) == "tuft":
+					var txf: Transform3D = mine[0]
+					var up_v := txf.basis * Vector3.UP
+					var tuft := {"kind": String(part.get("kind", "round")), "mm": float(part.get("width", 0.7)) * 10.0,
+						"len": float(part.get("length", 2.0)) * 0.01 * up_v.length(), "root": txf * Vector3.ZERO, "axis": up_v.normalized()}
+					mat.set_shader_parameter("bristle_root", tuft["root"])
+					mat.set_shader_parameter("bristle_axis", tuft["axis"])
+					mat.set_shader_parameter("bristle_len", tuft["len"])
+					mat.set_meta("tuft", tuft)
 				mi.material_override = mat
 				if see_through(m):
 					mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -1019,6 +1045,13 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 						for w in g.wicks:
 							wicks.append((xf as Transform3D) * w)
 							glows.append(mat)
+		# A SURFACE TO PAINT ([TablePaint]): its first copy, where it stands in the node it hangs in, and its own extent
+		if part.get("skin") == true and not held_meshes.is_empty():
+			var sch0: Array = leaf["chains"]
+			var sh := _holder(sch0[0] if not sch0.is_empty() else [], inner, movers, mover_at, seed, works)
+			skins.append({"part": String((part.get("work", {}) as Dictionary).get("name", "")), "holder": sh,
+				"meshes": held_meshes.get(sh.get_instance_id(), []), "xform": xforms[0], "box": own_box, "shape": String(part.get("shape", "")),
+				"outline": FaceForm.outline_path(part["size"]) if String(part.get("shape", "")) == "mask" else ""})
 		var sch: Array = leaf["chains"]
 		for ci in xforms.size():
 			var holder := _holder(sch[ci] if ci < sch.size() else [], inner, movers, mover_at, seed, works)
@@ -1028,7 +1061,7 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 	root.add_child(inner)
 	if all.is_empty():
 		return {"node": root, "size": AABB(), "foot": PackedVector2Array(), "outline": PackedVector2Array(),
-			"wicks": [], "glows": [], "meshes": [], "movers": [], "works": works, "solids": solids, "grains": grains, "inner": inner}
+			"wicks": [], "glows": [], "meshes": [], "movers": [], "works": works, "solids": solids, "grains": grains, "inner": inner, "skins": skins}
 	var box := AABB(all[0], Vector3.ZERO)
 	for p in all:
 		box = box.expand(p)
@@ -1045,7 +1078,7 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 	var size := AABB((box.position + shift) * k, box.size * k)
 	return {"node": root, "size": size, "foot": _foot(placed, FOOT_H), "outline": _hull(placed, INF),
 		"wicks": wicks, "glows": glows, "meshes": meshes, "movers": movers, "works": works, "sized": k, "solids": solids, "grains": grains,
-		"inner": inner}
+		"inner": inner, "skins": skins}
 
 
 ## THE NODE A COPY HANGS IN, for its [param chain] of movers ([method _assemble], outermost first): each a
@@ -2001,6 +2034,10 @@ static func _shaped(p: Dictionary, rng: RandomNumberGenerator) -> Array:
 			return _skull(p, rng)
 		"sculpt":
 			return [{"geo": _sculpt(p)}]
+		"mask":
+			return [{"geo": FaceForm.build(p)}]
+		"tuft":
+			return [{"geo": Bristles.build(p, rng)}]
 	return []
 
 

@@ -6,10 +6,12 @@ extends Node
 ## and how far it baked. What a puppeteer waits on, measured on the run it waited through - the benchmark for a tool's speed.
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/table/act_calls_probe.gd 7200 --show=the-quiet-crucible --seed=841899 \
-##       [--calls=<a tools.jsonl>] [--first=N] [--last=N] [--watch] [--copy=<dir>]
+##       [--calls=<a tools.jsonl>] [--first=N] [--last=N] [--watch] [--copy=<dir>] [--full]
 ##
 ## `--calls` defaults to the episode's own `jobs/acts/tools.jsonl`; `--first`/`--last` replay a stretch of them (the calls
 ## before `--first` replayed too, untimed, so the draft is the one the puppeteer had). It needs a renderer, as the tools do.
+## `--full` prints every reply whole, as the puppeteer would read it now, where the default prints only what went wrong. What a
+## `watch` shows is saved beside the copy's job (`look_NN.jpg`, NN the call's number).
 ##
 ## READ-ONLY: the episode is copied to `--copy` (by default the project's `dist/act_calls_probe/`, a real disk Godot never
 ## imports) and the copy's folder is the episodes' root for the run; nothing of the author's is written.
@@ -60,6 +62,7 @@ func _run() -> void:
 	var first := _arg(args, "first", "0").to_int()
 	var last := _arg(args, "last", str(calls.size() - 1)).to_int()
 	var watch := _arg(args, "watch", "") != ""
+	var full := _arg(args, "full", "") != ""
 	print("act_calls_probe: %d calls from %s, replaying %d-%d on %s" % [calls.size(), calls_path, first, last, copy_dir])
 	var total := 0.0
 	var timed := 0.0
@@ -89,6 +92,15 @@ func _run() -> void:
 			("  (stood %.1f s, baked %.1f s, checked %.1f s)" % [int(pv.timing.get("stand", 0)) / 1000.0, int(pv.timing.get("bake", 0)) / 1000.0,
 				int(pv.timing.get("checks", 0)) / 1000.0]) if tool == "act" and pv != null and not pv.timing.is_empty() else ""])
 		var text := String(out.get("text", ""))
+		# ...and what it showed, saved beside the copy's job as the server saves it for the agent
+		for img in out.get("images", []):
+			if img is Image:
+				var shot := job.path_join("look_%02d.jpg" % i)
+				(img as Image).save_jpg(shot, 0.9)
+				print("    (saved %s)" % shot)
+		if full:
+			print(text)
+			continue
 		for l in text.split("\n"):
 			if l.contains("HELD BACK") or l.contains("PASSES THROUGH") or l.contains("SPILLED") or l.contains("let go") or l.contains("poured") \
 					or l.contains("could not") or l.contains("HANGS") or l.contains("MISSED") or l.contains("set down"):

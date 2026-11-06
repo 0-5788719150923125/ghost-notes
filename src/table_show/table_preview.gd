@@ -63,8 +63,11 @@ var _stood := ""
 ## What the last [method work_checks] spent standing the table, baking and checking (ms) - a probe's.
 var timing := {}
 ## The pictures of the episode the table is built on - copied beside the description being tried,
-## never its card faces: the set dresser knows no card.
-const PICTURES := ["surface.png", "height.png", "height.json", "backdrop.png", "backdrop.json", "back.png"]
+## never its card faces: the set dresser knows no card - and the other files the table reads from its
+## folder that an earlier step made: the designs painted on it (`skin.json`, [TablePaint]). Left out, a
+## puppeteer's mask had no design, every paint act laid nothing and pressed its tool into the bare mask,
+## and the puppeteer would not hand the work in (joker-motivation 856886, 2026-11-05).
+const PICTURES := ["surface.png", "height.png", "height.json", "backdrop.png", "backdrop.json", "back.png", "skin.json"]
 ## The studio's four sides of one thing: a direction from its middle toward the camera, and a caption.
 const SIDES := [["front", Vector3(0.0, 0.14, 1.0)], ["its right side", Vector3(1.0, 0.14, 0.0)],
 	["from above (its front at the bottom)", Vector3(0.0, 1.0, 0.0)], ["as the camera sees it", Vector3.ZERO]]
@@ -138,6 +141,7 @@ var _table: SubViewport = null
 var _medium = null               # a TableMedium, loaded by class name
 var _doc: Doc
 var _releases := 0               # how many times it was given back ([method release]): a table built across one is dropped
+var _reworking := -1             # the worker binding the table standing to other acts ([method _stand]), -1 when none
 var _halted := false             # a bake under way given up ([method halt])
 
 
@@ -166,6 +170,10 @@ static func can_set() -> bool:
 ## once it is done ([method _stand]).
 func release() -> void:
 	_releases += 1
+	# ...a table being bound to other acts on a worker is waited for, never freed under it
+	if _reworking >= 0:
+		WorkerThreadPool.wait_for_task_completion(_reworking)
+		_reworking = -1
 	if _studio != null and is_instance_valid(_studio):
 		_studio.queue_free()
 	if _table != null and is_instance_valid(_table):
@@ -836,7 +844,30 @@ func _stand(raw: Dictionary, acts: Variant = null) -> String:
 		var e := TextGen.put(_dir.path_join("acts.json"), JSON.stringify(acts, "\t"))
 		if not e.is_empty():
 			return e
-		_medium.rework(acts)
+		# ...ON A WORKER, out of the tree as a table built aside is ([method TableMedium._build_away]): the acts' paint holds alone are
+		# seconds of work (the user, 2026-11-05: "We shouldn't be doing work in the main thread, as a rule")
+		var table := _table
+		var parent := table.get_parent()
+		var at := table.get_index()
+		var m = _medium
+		m._away = true
+		parent.remove_child(table)
+		var releases := _releases
+		_reworking = WorkerThreadPool.add_task(func() -> void: m.rework(acts), false, "the puppeteer's acts")
+		while not WorkerThreadPool.is_task_completed(_reworking):
+			await _tree().process_frame
+			if _reworking < 0:
+				break
+		if _reworking >= 0:
+			WorkerThreadPool.wait_for_task_completion(_reworking)
+			_reworking = -1
+		m._away = false
+		# (given back meanwhile, the table went with it - [method release])
+		if _releases != releases or not is_instance_valid(table):
+			return "the table's stage was given back while its acts were bound"
+		if is_instance_valid(parent):
+			parent.add_child(table)
+			parent.move_child(table, mini(at, parent.get_child_count() - 1))
 		return ""
 	var err := TextGen.put(_dir.path_join("table.json"), spec)
 	if not err.is_empty():

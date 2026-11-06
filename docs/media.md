@@ -119,6 +119,8 @@ THE LOOK IS THE EPISODE'S. The cloth, the room, the card back and every face are
 
 FOIL. The brightest, most colorful parts of each painting - found per picture from its own luminance, never a fixed threshold - are printed as foil: they catch the light as a card tilts, breathe slowly, and now and then a glint sweeps across them, and the scene's bloom lets them bleed. The deck's look says how much foil it was printed with.
 
+NOTHING IS BUILT ON THE APP'S THREAD (the user, 2026-11-05: "We shouldn't be doing work in the main thread, as a rule"): an episode's table is built on a worker, out of the tree, the show waiting for it as it waits for its bake, and put back (`_build_away`) - 209459's 8.5 s build drew 1,237 frames meanwhile, none over 11 ms. A render and a gate build where they stand, their frames waiting for nothing; a preview's table is built aside too (`TablePreview._stand`).
+
 Source: [src/table/table.gd](../src/table/table.gd)
 
 ## `likeness` - Likeness

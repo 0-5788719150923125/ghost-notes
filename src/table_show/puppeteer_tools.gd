@@ -88,7 +88,7 @@ func list_tools() -> Array:
 				"required": ["acts"]}},
 		{"name": "remove", "description": "Take acts out of the episode's work, by name.",
 			"inputSchema": {"type": "object", "properties": {"names": {"type": "array", "items": {"type": "string"}}}, "required": ["names"]}},
-		{"name": "watch", "description": "Watch one act on this episode's own table from the camera's place: six pictures, start to end, left to right and down.",
+		{"name": "watch", "description": "Watch one act on this episode's own table from the camera's place: one picture of six frames, start to end, left to right and down - one look.",
 			"inputSchema": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}},
 		{"name": "model", "description": "What is built on this table as one act leaves it, close to and from four sides, by the table's own light: its shape, seen as the chair never sees it. A table with no assembly has nothing to show.",
 			"inputSchema": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}},
@@ -228,7 +228,9 @@ func _watch(args: Dictionary) -> Dictionary:
 	var frames := PackedStringArray()
 	for f in got["frames"]:
 		frames.append("%.1f s" % float(f))
-	return {"text": "\"%s\", six pictures, left to right and down: %s into it.\n%s\nLooks left: %d." % [nm, ", ".join(frames), JUDGE, LOOKS - _looks],
+	# ONE LOOK, SIX FRAMES: "six pictures ... Looks left: 29" was read as six spent a watch, and a puppeteer with 20 acts to watch gave
+	# up with 24 looks left, "only 4 more watches" (joker-motivation 856886)
+	return {"text": "\"%s\", one picture of six frames, left to right and down: %s into it.\n%s\nLooks left: %d (a watch is one)." % [nm, ", ".join(frames), JUDGE, LOOKS - _looks],
 		"images": [got["image"]]}
 
 

@@ -27,6 +27,10 @@ var medium: TableMedium
 ## What is built on this table ([TableAssembly]; null where the table has no `assembly`), and what the table wrote of it.
 var assembly: TableAssembly
 var assembly_spec := {}
+## WHAT IS PAINTED HERE ([TablePaint], next/painted_surface.md): every part with a `skin`, the designs on them (the episode's
+## `skin.json`, as parsed - [member skin_doc]) and the acts that paint them.
+var paint: TablePaint
+var skin_doc := {}
 ## A game played on this table ([TableGame]; null where there is none), what it was handed and where its pictures are.
 var game: TableGame
 var game_spec := {}
@@ -252,6 +256,7 @@ var _planned := false
 var _steady := false          # while that is found: nothing drifts
 var _air = null               # the acts' cue bursts (Effects.Air), or null
 var _cues: Array = []         # [{act, at, every, where, name}]
+var _paint_bursts: Array = [] # what the painting throws: "dust" (a powder's puffs), "mist" (a spray's) - [TablePaint]
 var _timed: Array = []        # every material on the table that follows show time: a liquid's surface, copies glowing apart
 var _huffs: Array = []        # the creatures' huffs, heard and seen ([method Soundscape.seen_calls])
 var _sound := {}              # the table's sound, its creatures' huffs seen ([method _build_cues])
@@ -310,6 +315,8 @@ func clear() -> void:
 		game.clear()
 	game = null
 	game_spec = {}
+	if paint != null:
+		paint.clear()
 	assembly_notes = PackedStringArray()
 	_group_of = {}
 	acts = []
@@ -385,6 +392,8 @@ func take(t: Dictionary, b: Dictionary, node: Node3D, shades: Array = []) -> voi
 				_group_of[wi] = groups.size()
 			groups.append({"thing": ti, "name": String((works[members[0]] as Dictionary)["name"]), "members": members, "middle": Vector3.ZERO})
 	things.append(entry)
+	if not (b.get("skins", []) as Array).is_empty():
+		_painter().take(ti, b)
 	if physics == null:
 		physics = TablePhysics.new()
 		physics.work = self
@@ -409,6 +418,8 @@ func build(raw: Variant, beats: int, sound: Dictionary = {}) -> void:
 	if not game_spec.is_empty():
 		game = TableGame.new(self, game_spec, game_dir, game_seed)
 		game.stand()
+	if paint != null:
+		paint.set_designs(skin_doc)
 	_take_acts(raw, beats)
 	if assembly != null:
 		assembly.perform(acts)
@@ -455,6 +466,9 @@ func build(raw: Variant, beats: int, sound: Dictionary = {}) -> void:
 				_soft_table[wi] = true
 	for wi in _soft_table:
 		_soft[wi] = true
+	# WHAT IS PAINTED, AND BY WHICH ACTS: each element's program and pictures, and each act that paints its length at a hand's pace
+	if paint != null:
+		paint.prepare()
 	for ti in things.size():
 		_rest["t%d:pose" % ti] = _world_rest_thing(ti)
 	for wi in works.size():
@@ -518,10 +532,14 @@ func rebind(raw: Variant, beats: int) -> void:
 			_air.root.queue_free()
 		_air.release()
 	_air = null
+	if paint != null:
+		paint.set_designs(skin_doc)
 	_take_acts(raw, beats)
 	if assembly != null:
 		assembly.perform(acts)
 	_fit_acts()
+	if paint != null:
+		paint.prepare()
 	_build_cues()
 	plan_cues()
 	if physics != null:
@@ -551,6 +569,8 @@ func _take_acts(raw: Variant, beats: int) -> void:
 				_drunk_from(act, t as Dictionary, tracks_of)
 		for t in tracks_of:
 			var tr: Dictionary = t
+			if String(tr["law"]) == "paint":
+				tr["_act"] = String(act["name"])
 			var why := _resolve(tr)
 			if not why.is_empty():
 				notes.append("%s: %s" % [String(act["name"]), why])
@@ -567,11 +587,39 @@ func _take_acts(raw: Variant, beats: int) -> void:
 		if kept.is_empty():
 			notes.append("%s: none of its tracks found anything on the table to move" % String(act["name"]))
 			continue
+		# ...AND THE WATER A BRUSH IS RINSED IN CLOUDS WITH WHAT IS RINSED OUT OF IT ([method TablePaint.cloud_at])
+		for tr in kept.duplicate():
+			if String((tr as Dictionary)["law"]) == "paint" and (tr as Dictionary).has("rinse"):
+				var cloud := _cloud_of(tr as Dictionary)
+				if not cloud.is_empty():
+					kept.append(cloud)
 		act["tracks"] = _trips(act, kept)
 		acts.append(act)
 		for tr in kept:
 			if String((tr as Dictionary)["law"]) == "write":
 				_writing[int(tr["_wi"])] = {"text": tr["text"], "hand": tr["hand"], "ink": tr["ink"]}
+
+
+## THE WATER PAINT TRACK [param tr] RINSES ITS BRUSH IN, as a track of its own on the water's color - or empty where what it names
+## holds no liquid with a name.
+func _cloud_of(tr: Dictionary) -> Dictionary:
+	var rinse := String(tr.get("rinse", ""))
+	var ti := _thing_named(rinse.get_slice("/", 0))
+	if ti < 0:
+		return {}
+	var want := rinse.get_slice("/", 1).to_lower() if rinse.contains("/") else ""
+	var liquid := int(Props.MATERIALS["liquid"]["code"])
+	for wv in (things[ti] as Dictionary)["works"]:
+		var wk: Dictionary = works[int(wv)]
+		var nm := String(wk["name"])
+		if nm.is_empty() or (not want.is_empty() and nm.to_lower() != want):
+			continue
+		for m in wk["mats"]:
+			var kd: Variant = (m as ShaderMaterial).get_shader_parameter("kind")
+			if kd != null and int(kd) == liquid:
+				var track := {"thing": String((things[ti] as Dictionary)["name"]), "part": nm, "state": "tint", "law": "cloud", "_with": tr}
+				return track if _resolve(track).is_empty() else {}
+	return {}
 
 
 ## WHAT DRINK [param tr] OF ACT [param act] TAKES: as much of what is in it as it says goes while it is out of sight, by a `to` on each liquid's fill, added to [param tracks], one drink after another. A stretch too
@@ -670,6 +718,19 @@ func _build_cues() -> void:
 		fxs.append({"kind": "burst", "name": "huffs", "on": "huffs", "look": "smoke", "count": 10, "size": 24.0,
 			"speed": 0.35, "spread": 35.0, "life": 2.6, "glow": 0.0, "colors": ["#8f8b86", "#a6a29c"]})
 		moments.append("huffs")
+	# THE PUFFS A POWDER RAISES as it is patted on and swept off ([TablePaint])
+	_paint_bursts = []
+	if paint != null and paint.raises("mist"):
+		_paint_bursts.append("mist")
+		fxs.append({"kind": "burst", "name": "paint mist", "on": "paint mist", "look": "mist", "count": 120, "size": 0.9,
+			"speed": 0.5, "spread": 22.0, "life": 1.2, "glow": 0.0, "colors": ["#f4f8ff", "#e8eef4"]})
+		moments.append("paint mist")
+	if paint != null and paint.raises("dust"):
+		_paint_bursts.append("dust")
+		# (a few soft puffs of haze, never many small bright ones - feedback 0018)
+		fxs.append({"kind": "burst", "name": "paint dust", "on": "paint dust", "look": "powder", "count": 14, "size": 7.0,
+			"speed": 0.12, "spread": 150.0, "life": 2.4, "glow": 0.0, "colors": ["#f4efe8", "#e6dfd6"]})
+		moments.append("paint dust")
 	if not fxs.is_empty():
 		var made_fx := Effects.sanitize(fxs, [], [], moments)
 		if not made_fx.is_empty():
@@ -697,7 +758,7 @@ func _resolve(track: Dictionary) -> String:
 	if ti < 0:
 		return "no thing on the table is called \"%s\"" % String(track["thing"])
 	var part := String(track.get("part", ""))
-	var pose := law in ["circle", "aim", "carry", "pour", "dip", "drink"] or (law == "path" and _path_moves(track))
+	var pose := law in ["circle", "aim", "carry", "pour", "dip", "drink", "paint"] or (law == "path" and _path_moves(track))
 	if pose and part.is_empty() and assembly != null and assembly.holds_stock(String((things[ti] as Dictionary)["name"])):
 		return "\"%s\" holds the assembly's pieces, which are not its parts: it stays where it stands" % String(track["thing"])
 	var state := String(track.get("state", ""))
@@ -709,7 +770,7 @@ func _resolve(track: Dictionary) -> String:
 			return "\"%s\" holds a flame, which stays where it was lit: it is never moved whole" % String(track["thing"])
 		track["_ch"] = "t%d:pose" % ti
 		track["_ti"] = ti
-		return ""
+		return _painted(track)
 	var found := _part_of(ti, part)
 	var wi := int(found["wi"])
 	var gi := int(found["gi"])
@@ -742,7 +803,7 @@ func _resolve(track: Dictionary) -> String:
 			track["_gi"] = gi
 		else:
 			track["_ch"] = "w%d:pose" % wi
-		return ""
+		return _painted(track)
 	match kind:
 		"hinge":
 			track["_ch"] = "w%d:angle" % wi
@@ -751,6 +812,22 @@ func _resolve(track: Dictionary) -> String:
 		_:
 			return "\"%s\" of \"%s\" has no hinge or slide for a %s to turn, and the track names no `state`" % [part, String(track["thing"]), law]
 	return ""
+
+
+## A PAINT TRACK [param track] found on what it paints ([method TablePaint.resolve]) - "" for any other law.
+func _painted(track: Dictionary) -> String:
+	if String(track["law"]) != "paint":
+		return ""
+	if String(track.get("_ch", "")).begins_with("g"):
+		return "a part's copies paint nothing together: name one (\"%s 1\")" % String(track.get("part", ""))
+	return _painter().resolve(track)
+
+
+## The table's painting, made when first asked ([TablePaint]).
+func _painter() -> TablePaint:
+	if paint == null:
+		paint = TablePaint.new(self)
+	return paint
 
 
 ## A THING IS ONE ONLY AS FAR AS SOMETHING HOLDS IT TOGETHER (next/table_physics.md, "Primitives"): a hand moving a thing whole
@@ -1472,6 +1549,11 @@ func schedule(sched: Array, parse: Dictionary, said0: PackedFloat32Array, said1:
 			if cued.has(nm):
 				t0 = maxf(t0, maxf(float(cued[nm]), span.x))
 			var parts := _channels_of(a)
+			# ...ONE HAND PAINTS ONE THING AT A TIME: an act that paints waits for the last to be done with its tool, whichever it was (a
+			# paint act is never hurried far, [constant TablePaint.LEAST], and one run past its words had the next tool start beside it)
+			if _paints(a):
+				parts = parts.duplicate()
+				parts.append(PAINT_HAND)
 			for ch in parts:
 				t0 = maxf(t0, float(busy.get(ch, -INF)))
 			if _begun.has(nm):
@@ -1508,7 +1590,11 @@ func schedule(sched: Array, parse: Dictionary, said0: PackedFloat32Array, said1:
 				t1 = maxf(t1, t0 + float(a.get("_min_length", 0.0)))
 				if t1 == INF:
 					t1 = t0 + Motions.UNDER_GUESS
-			if _begun.has(nm) and not bool(a["under"]):
+			# ...AND ONCE BEGUN, HOW LONG IT RUNS: an act of fixed length, and an act that paints - a paint act's every stroke is laid out
+			# over its whole length, so each sentence's new guess at the word that ends it moved every stroke from its first, and the bake
+			# went back to the act's start every sentence while the show waited for it (joker-motivation 856886, 2026-11-05: "it keeps
+			# stalling/buffering ... the buffer on the timeline is still quite far ahead")
+			if _begun.has(nm) and (not bool(a["under"]) or _paints(a)):
 				t1 = float((_begun[nm] as Array)[1])
 			if t0 <= now:
 				_begun[nm] = [t0, t1]
@@ -1530,6 +1616,18 @@ func schedule(sched: Array, parse: Dictionary, said0: PackedFloat32Array, said1:
 	if assembly != null:
 		assembly.lay(runs, acts, now)
 	_timelines()
+
+
+## The one hand that paints, as the schedule keeps it busy ([method schedule]).
+const PAINT_HAND := "hand:paint"
+
+
+## Whether act [param a] paints ([TablePaint]).
+static func _paints(a: Dictionary) -> bool:
+	for t in a.get("tracks", []):
+		if String((t as Dictionary).get("law", "")) == "paint":
+			return true
+	return false
 
 
 ## THE CHANNELS ACT [param i] LEAVES LAID DOWN ([constant LAID_REST]): each whose last track in it is set `down`, or a path ending with what it
@@ -1750,6 +1848,14 @@ func _timelines() -> void:
 			(e as Dictionary).erase("_clear")
 			(e as Dictionary).erase("_clear_path")
 	c = _spent("plan: chains", c)
+	# WHEN EACH ELEMENT IS LAID, from where its act now runs ([TablePaint])
+	if paint != null:
+		var painting: Array = []
+		for ch in _chan:
+			for e in _chan[ch]:
+				if String(((e as Dictionary)["track"] as Dictionary)["law"]) == "paint":
+					painting.append(e)
+		paint.spans(painting)
 	plan_cues()
 	c = _spent("plan: cues", c)
 	if physics != null:
@@ -2005,6 +2111,8 @@ func _eval(e: Dictionary, tau: float, T: float) -> Variant:
 	if ch.ends_with(":pose"):
 		return _pose(e, tau, d, T)
 	if e["from"] is Color:
+		if String(tr["law"]) == "cloud":
+			return _painter().cloud_at(tr["_with"], e["from"], tau, d)
 		return Motions.tint(tr, e["from"], tau, d, T) if String(tr["law"]) == "to" else e["from"]
 	return Motions.scalar(tr, float(e["from"]), tau, d, T)
 
@@ -2132,6 +2240,8 @@ func _pose(e: Dictionary, tau: float, d: float, T: float) -> Transform3D:
 			out = _rebuilt((dr[1] as Basis) * r, p + (dr[0] as Vector3), q0, x0)
 		"drink":
 			out = _drink_at(e, tr, u, d, T, from, x0, q0)
+		"paint":
+			out = _painter().pose(e, tr, tau, d, T, from, x0)
 		"pour":
 			out = _pour_at(e, tr, u, d, T, from, x0, q0)
 		"dip":
@@ -3314,6 +3424,8 @@ func tick(t: float) -> void:
 	for m in _timed:
 		(m as ShaderMaterial).set_shader_parameter("show_time", t)
 	_spent("plumes and air", c)
+	if paint != null:
+		paint.tick(t, func(ch: String) -> Array: return _chan.get(ch, []))
 	if _first_drawn.is_empty():
 		for wi in works.size():
 			_first_drawn[wi] = _world_of((works[wi] as Dictionary)["node"])
@@ -3865,6 +3977,15 @@ func plan_cues() -> void:
 	var moments := {}
 	for c in _cues:
 		moments[String(c["name"])] = []
+	if paint != null:
+		for look in ["dust", "mist"]:
+			if not _paint_bursts.has(look):
+				continue
+			var puffs: Array = []
+			for dd in paint.dust(look):
+				puffs.append({"t": float(dd["t"]), "dur": 0.12 if look == "dust" else 0.3, "from": "point", "card": -1,
+					"path": [[float(dd["t"]), Transform3D(dd["basis"] as Basis, dd["p"] as Vector3)]]})
+			moments["paint " + look] = puffs
 	if not _huffs.is_empty():
 		# each where its body is: to its side, past the far edge, further when it is far
 		var bounds: AABB = medium._furniture.get("bounds", AABB(Vector3(-0.95, -0.05, -0.4), Vector3(1.9, 0.05, 0.85)))
@@ -3980,6 +4101,9 @@ func parts_report() -> String:
 				lines.append("    - %s" % c)
 	if assembly != null:
 		lines.append(assembly.report())
+	# WHAT CAN BE PAINTED, its design element by element, and what paints ([TablePaint])
+	if paint != null:
+		lines.append_array(paint.report())
 	return "\n".join(lines)
 
 
@@ -4027,6 +4151,12 @@ func check(name: String) -> Dictionary:
 				"slot": (_rest["w%d:pose" % wi] as Transform3D) * (((works[wi] as Dictionary)["w"] as Dictionary).get("box", AABB()) as AABB)})
 	var lines := PackedStringArray()
 	lines.append("\"%s\" (beat %s) runs %.1f s%s." % [name, String(act["beat"]), t1 - t0, " here (\"under\": as long as its words leave it)" if bool(act["under"]) else ""])
+	# ...and what it paints, and what no act paints yet ([TablePaint])
+	if paint != null:
+		lines.append_array(paint.said(act, t0, t1))
+		var left := paint.unpainted()
+		if not left.is_empty() and paint.said(act, t0, t1).size() > 0:
+			lines.append("No act lays these elements yet: %s." % ", ".join(Array(left).map(func(x: String) -> String: return "\"%s\"" % x)))
 	# ...and each pour it makes, judged by where what it poured went
 	var pours: Array = []
 	if physics != null:
@@ -4048,8 +4178,10 @@ func check(name: String) -> Dictionary:
 		return {"text": "\n".join(lines), "through": 0}
 	var still := TriangleMesh.new()
 	var faces := PackedVector3Array()
+	var by_thing: Array = []     # each thing's faces, as they stand: a painting tool's own `still` leaves out what it goes into
 	tick(t0)
 	for th in things:
+		var tf := PackedVector3Array()
 		for m in (th as Dictionary)["meshes"]:
 			var mi := m as MeshInstance3D
 			if mi == null or mi.mesh == null:
@@ -4063,7 +4195,9 @@ func check(name: String) -> Dictionary:
 				continue
 			var xf := _world_of(mi)
 			for q in mi.mesh.get_faces():
-				faces.append(xf * q)
+				tf.append(xf * q)
+		by_thing.append(tf)
+		faces.append_array(tf)
 	if not faces.is_empty():
 		still = _ray_mesh(faces)
 	var through := 0
@@ -4118,6 +4252,18 @@ func check(name: String) -> Dictionary:
 		# touches its sloping wall as it goes (the-quiet-crucible 119515's puppeteer, told its pestle passed through the
 		# mortar, lifted it clear of what it was grinding - and shrank the lumps instead)
 		var pressed := _pressed_by(act, mv)
+		# ...AND WHAT A PAINTING TOOL GOES INTO, it is never looked for inside at all ([method TablePaint.touches]): measured by the
+		# solids' fields, a palette's cream and the cradle under a face's rim still read 3 to 74 points "passing through" where the
+		# triangles had it inside and the field did not (joker-motivation 856886)
+		var still_of := still
+		var has_faces := not faces.is_empty()
+		if not (pressed.get("free", []) as Array).is_empty():
+			var kept := PackedVector3Array()
+			for ti in by_thing.size():
+				if not (pressed["free"] as Array).has(ti):
+					kept.append_array(by_thing[ti])
+			has_faces = not kept.is_empty()
+			still_of = _ray_mesh(kept) if has_faces else TriangleMesh.new()
 		for s in CHECK_STEPS + 1:
 			var t := lerpf(t0, t1, float(s) / float(CHECK_STEPS))
 			tick(t)
@@ -4141,7 +4287,7 @@ func check(name: String) -> Dictionary:
 				var p: Vector3 = (cache[m] as Transform3D) * pts[i]
 				var in_top := p.y < -THROUGH_TOP and Tables.inside(medium._top, Vector2(p.x, p.z), 0.0)
 				# ...and the room it stood in as built is its own slot: going back into it is going home
-				var in_thing := not in_top and not faces.is_empty() and not slot.has_point(p) and _inside(still, p) \
+				var in_thing := not in_top and has_faces and not slot.has_point(p) and _inside(still_of, p) \
 					and not (not pressed.is_empty() and _pressed_into(pressed, p, t))
 				if (s == 0 or home) and (in_top or in_thing):
 					if seated[i] == 0 and s == 0:
@@ -4279,10 +4425,11 @@ func _sprinkles_said(act: Dictionary, t0: float, t1: float) -> PackedStringArray
 
 
 ## The things a mover [param mv] of [param act] is pressed onto (a law's `press`, its tip's or its grip's): `{tis: their
-## numbers, own: the mover's own works}` - none pressed, empty.
+## numbers, own: the mover's own works, free: those it meets at any depth}` - none pressed, empty.
 func _pressed_by(act: Dictionary, mv: Dictionary) -> Dictionary:
 	var tis: Array = []
 	var own: Array = []
+	var free: Array = []
 	for t in act["tracks"]:
 		var tr: Dictionary = t
 		if not String(tr.get("_ch", "")).ends_with(":pose") or not tr.has("_wi"):
@@ -4295,12 +4442,22 @@ func _pressed_by(act: Dictionary, mv: Dictionary) -> Dictionary:
 				var ti := _thing_named(String((end as Dictionary)["press"]))
 				if ti >= 0 and not tis.has(ti):
 					tis.append(ti)
-	return {} if tis.is_empty() else {"tis": tis, "own": own}
+		# ...A PAINTING TOOL, what it paints and the pots, water and towel it goes to ([method TablePaint.touches]) - AT ANY DEPTH:
+		# where it goes is the paint law's, which the puppeteer cannot move clear (a sponge stippled to the face's rim gave onto the
+		# board under it, 7 mm, and every act was told it passed through the mask - joker-motivation 856886); the law's own gate
+		# holds it to the surface (tests/table/paint_check.gd)
+		if String(tr.get("law", "")) == "paint" and paint != null:
+			for ti in paint.touches(tr):
+				if not tis.has(ti):
+					tis.append(ti)
+				if not free.has(ti):
+					free.append(ti)
+	return {} if tis.is_empty() else {"tis": tis, "own": own, "free": free}
 
 
 ## Whether [param p] (the table's space) is no deeper than [constant PRESS_INTO] inside any of the things a tool is
-## pressed onto ([param pressed], [method _pressed_by]) at show time [param t] - where it meets them - the tool's own
-## solids aside.
+## pressed onto ([param pressed], [method _pressed_by]) at show time [param t] - where it meets them - or inside one it meets
+## at any depth (its `free`), the tool's own solids aside.
 func _pressed_into(pressed: Dictionary, p: Vector3, t: float) -> bool:
 	if physics == null:
 		return false
@@ -4312,7 +4469,7 @@ func _pressed_into(pressed: Dictionary, p: Vector3, t: float) -> bool:
 		if not (pose * (d["box"] as AABB)).grow(PRESS_INTO).has_point(p):
 			continue
 		var f := (d["field"] as ShapeField).sample(pose.affine_inverse() * p).x
-		if f < 0.0 and f > -PRESS_INTO:
+		if f < 0.0 and (f > -PRESS_INTO or (pressed.get("free", []) as Array).has(int(d["thing"]))):
 			return true
 	return false
 

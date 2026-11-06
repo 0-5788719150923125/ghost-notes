@@ -40,6 +40,8 @@ prompt:
   - ""
   - insert: laws
   - ""
+  - when: painted_design
+    include: painting
   - include: acts
   - when: assembly
     say: ""
@@ -50,6 +52,23 @@ prompt:
     include: with_tools
   - when: "!tools"
     include: in_one_reply
+
+# A SURFACE PAINTED (next/painted_surface.md; the user, 2026-11-05: "this is gentle, and slow. We're in no rush. We are creating a
+# work of art"): the design is the decorator's, and the puppeteer only says which tool lays which elements when - the hand finds the
+# way, and an act takes what its strokes take
+painting:
+  - "WHAT IS PAINTED THIS EPISODE, designed before you began:"
+  - "{{painted_design}}"
+  - >-
+      Lay it on with `paint` acts, element by element in that order, each with the tool its kind of work calls for and from the
+      paint of its color - a stage of the design an act or a few, in the beats the plan gives each stage. An act that paints takes
+      as long as its strokes take at a careful hand's pace (`act` says how long, element by element): make it "under" and give it
+      the words it needs; never hurry it. A brush that lays color is rinsed in water and dried on a cloth, where there are such
+      things (`rinse`, `dry`): `paint` rinses it before each new color and before it is put down. A smear drags paint already laid
+      and a mist is sprayed: neither takes paint from a pot. Every element is laid by the close - `act` says what no act lays yet. Going over an element already laid with a soft
+      tool and nothing on it softens its edges; patting a powder again sweeps its excess away. Put each tool back where it rests
+      when its act is done (`paint` does it by itself).
+  - ""
 
 # AN ACT, and how a beat's acts are run (TableWork.schedule)
 acts:
@@ -277,8 +296,9 @@ with_tools:
       moving thing goes, anything passing through anything, and what the physics did: what poured,
       spilled, fell, sank, floated, dissolved or broke, and where it went - and what could not be
       kept, and why;
-      `watch` shows one act from the camera's place, six pictures start to end; `remove` takes acts
-      out; `submit` hands the work in. Every picture counts against the {{looks}} you have.
+      `watch` shows one act from the camera's place, one picture of six frames start to end; `remove`
+      takes acts out; `submit` hands the work in. Each `watch` (and each `model`) is one look of the
+      {{looks}} you have, however many frames it shows.
   - >-
       Read the parts first. Write a beat's acts, read what `act` says of them, fix them, and watch each
       before you hand the work in - the viewer sees every move.

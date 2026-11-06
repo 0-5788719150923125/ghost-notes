@@ -225,6 +225,7 @@ reply_beats: |-
     "work_close": "what is done at the table during the close - optional",
     "assembly": "true only when the work is building something out of many small parts that fit together on a grid",
     "build": "where `assembly` is true: the one thing this episode builds, so it can be designed before anything is picked up, in a sentence or two - what it is, what is in it, what makes it this one and no other",
+    "painted": "where the brief has something painted at the table: what is painted on it this episode, as its designer would be told - the look, its colors, its parts and the order they go on, what makes it this one and no other - in three to six sentences; left out otherwise",
     "quiet": "how much of the work nobody talks through, as the brief has it, a share from 0 to 0.8 - 0 when the voice goes on throughout",
     "game": "true only when the brief's show is a game really played at a table: then leave `beats` empty",
     "scenes": "where `game` is true: how many stretches this session may run to, at most",
@@ -409,6 +410,13 @@ work:
       which stretch of it goes up, and what goes wrong on the way and what comes down and goes up again. And
       `quiet`, how much of the work nobody talks through, as the brief has it. A beat's words are only
       as many as the part of it that is talked through.
+  # A SURFACE PAINTED (next/painted_surface.md): designed from these words before the table's work is blocked, in elements a
+  # tool lays on one at a time - so the words are a designer's brief, never the design itself
+  - >-
+      When the brief's work is painting something - a surface designed and painted, stage by stage - `painted`
+      says what is painted this episode, as its designer would be told: the look, its colors, its parts and
+      the order they go on, and what makes it this one and no other. The beats' `work` then says which stage
+      each beat paints, in the brief's own order, so that by the close it is finished.
   # A GAME (next/tabletop.md): played live, so nothing that happens is the producer's to plan: its title and angle promise a situation and never how it comes out
   - >-
       A SHOW THAT IS A GAME REALLY PLAYED AT A TABLE, when the brief's is one: `game` true. Nobody knows what will happen: it is played, with real dice, by people deciding as they go, so you plan no beats and no story. You

@@ -365,6 +365,19 @@ prompt:
           WHAT IS BUILT ON THIS TABLE is built of many small parts, on a plate in the middle of the picture, and you say where the
           pieces wait. Keep the way clear between the plate and where they wait, and nothing tall on it: the pieces go back and forth
           over it all episode. Build each container that holds them as a real hollow thing, in the frame and within a reach of the plate.
+  # A SHOW'S FIXED THINGS (FixedTable): the brief's own, on every episode's table - the set dresser builds round them
+  - when: fixed
+    say: >-
+          THE SHOW'S OWN THINGS stand on this table already, exactly as its brief writes them: {{fixed}}. They are on your
+          blueprint and in every picture from the start. Build round them: they are never moved, made again or taken away, and
+          nothing stands where they stand.
+  # A SURFACE PAINTED (next/painted_surface.md): the paints are things on the table, each taken up from where it stands
+  - when: painted
+    say: >-
+          WHAT IS PAINTED HERE THIS EPISODE: {{painted}} Whatever is painted has a surface to take it - a part with `skin` true,
+          painted from its front - and every paint it takes stands on the table, where the brief keeps them: each a pot, a pan or a
+          stick of `cream` in its own color, within a reach of what is painted and in the frame, as many as its colors. A tool that
+          lays paint is a free part of its own (a brush is a group with a `tuft`), standing where it rests between uses.
   - when: model_words
     say: |-
       {{model_words}}
