@@ -21,6 +21,9 @@ const UNSEEN := 0.08
 
 var dir := ""
 var submitted := false
+## THE FACE PAINTED FIRST that the first surface's design copies (`face_ref.png`, [method Skins.face_reference]; "" none): each look of it
+## shows the painting beside it.
+var reference := ""
 ## The skins the table has ([method Skins.skins_of]).
 var skins: Array = []
 
@@ -221,11 +224,27 @@ func _look(args: Dictionary) -> Dictionary:
 		return {"text": "There is no surface to paint called \"%s\": %s." % [str(args.get("on", "")), ", ".join(_names())], "error": true}
 	var made := Skins.sanitize(_raw.get(si, {}), (skins[si] as Dictionary)["frame"])
 	var img := Skins.look(skins[si], made, String(args.get("stage", "")) if args.get("stage") is String else "")
+	if si == 0 and not reference.is_empty():
+		img = _beside(img, Image.load_from_file(reference))
 	_looks += 1
 	var path := dir.path_join("look_%02d.jpg" % _looks)
 	if img.save_jpg(path, 0.9) != OK:
 		return {"text": "It could not be shown.", "error": true}
 	return {"text": "%s Looks left: %d." % [JUDGE, LOOKS - _looks], "images": [path]}
+
+
+## [param look] with [param painting] to its right, as tall as it ([param look] alone where the painting cannot be read).
+static func _beside(look: Image, painting: Image) -> Image:
+	if painting == null or painting.is_empty():
+		return look
+	var p := painting.duplicate() as Image
+	p.convert(look.get_format())
+	p.resize(maxi(roundi(float(p.get_width()) * float(look.get_height()) / float(p.get_height())), 1), look.get_height(), Image.INTERPOLATE_BILINEAR)
+	var out := Image.create(look.get_width() + p.get_width() + 8, look.get_height(), false, look.get_format())
+	out.fill(Color.BLACK)
+	out.blit_rect(look, Rect2i(Vector2i.ZERO, look.get_size()), Vector2i.ZERO)
+	out.blit_rect(p, Rect2i(Vector2i.ZERO, p.get_size()), Vector2i(look.get_width() + 8, 0))
+	return out
 
 
 ## THE DESIGNS AS A FILE HOLDS THEM ([TablePaint] reads `skin.json`): each surface's, with where it is and what it is in.

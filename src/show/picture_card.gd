@@ -2,9 +2,9 @@ extends VBoxContainer
 class_name PictureCard
 
 ## PictureCard - the picture a reading is shown in: the MEDIUM (what the show is carried on), the
-## FILMS a comic cuts to, the book's PICTURES ([IllustrationPanel]), and the Director's dials -
-## scene hold, flourishes, camera, handwriting (next/notes.md step 5: one card per section). Its
-## block in a document is `picture:`; the pictures keep their own, `illustrations:`.
+## FILMS a comic cuts to, and the Director's dials - scene hold, flourishes, camera, handwriting
+## (next/notes.md step 5: one card per section). Its block in a document is `picture:`. The pictures a
+## book, a notebook or a tablet prints are the note's Pictures card's ([PicturesCard]), as a letter's are.
 ##
 ## WHAT IT OFFERS FOLLOWS THE NOTE: a note with only a song gets the media that need nothing but a
 ## sound to cut on ([method Medium.offered] - not the novel, the notebook or the tablet, which print a
@@ -34,7 +34,6 @@ var _hand_pick: OptionButton
 var _scene_hold: HSlider
 var _flourish: HSlider
 var _camera: HSlider
-var _illustrations: IllustrationPanel   # the book's pictures - see illustration_panel.gd
 var _film_list: VBoxContainer
 var _film_freq: HSlider
 var _film_status: Label
@@ -66,11 +65,6 @@ func _init(reading := true) -> void:
 	_frame_pick = _frame_option()
 	_setting_rows.append(_frame_pick.get_parent())
 	_build_films()
-	# THE BOOK'S PICTURES, under the medium picker for the reason the films are: they only
-	# mean something to the medium that prints them, and they appear the moment it is picked.
-	_illustrations = preload("res://src/media/illustration_panel.gd").new()
-	add_child(_illustrations)
-	_tag("illustrations", _illustrations)
 	_scene_hold = Card.slider_row(self, "Scene hold", Director.PACING_MIN, Director.PACING_MAX, 0.05,
 		Director.pacing,
 		"How long each visual scene stays on screen before the show cuts to the next. 1 is the "
@@ -127,16 +121,6 @@ func _to_defaults() -> void:
 	_flourish.value = 1.0
 	_camera.value = 1.0
 	Director.set_frame("landscape")
-
-
-## The chapter's text, whenever the panel reads it: the pictures list follows it.
-func set_script_text(body: String) -> void:
-	_illustrations.set_script_text(body)
-
-
-## The book's pictures - a card of their own in the document (`illustrations:`), shown here.
-func illustrations() -> IllustrationPanel:
-	return _illustrations
 
 
 ## The block for a document: under a medium that takes no settings, its name alone.

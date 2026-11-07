@@ -130,6 +130,11 @@ func _parsers_agree() -> void:
 				_ok(seen.size() == 2 and ReadingJoin.overlaps(seen[1]), "%s does not bring its turn in over the last" % k)
 				if k == "over" and seen.size() == 2:
 					_ok(is_equal_approx(float((seen[1] as Dictionary)["over"]), float(fill)), "an over's seconds are not the ones it says")
+			"heard":
+				var heard := ReadingPlan.make("<!-- speaker: Narrator -->\nIn the room.\n\n<!-- speaker: Bea -->\n%s\nOver the air." % ex, "", {"reader": "Narrator", "hesitate": true, "bare": 1.0, "outro": 0.0})["chunks"] as Array
+				_ok(heard.size() == 2 and String((heard[0] as Dictionary).get("heard", "")).is_empty()
+						and String((heard[1] as Dictionary).get("heard", "")) == fill and VoiceFX.HEARD.has(fill),
+					"a turn marked %s is not heard through it" % ex)
 			"hesitation", "hesitation_timed":
 				var h := Manuscript.hesitations("Wait %s for it." % ex)
 				_ok(h.size() == 1, "%s is not a hesitation" % k)
@@ -280,6 +285,9 @@ func _parsers_agree() -> void:
 				_ok(not shown.contains("quicker"), "a delivery mark reached the page")
 			"thought", "strike", "struck", "color", "unspoken", "sketch_timed", "point", "tap", "image_end", "still", "new_page":
 				_letter_mark(k, ex)
+			"call", "hang_up", "ring", "text_msg", "ping", "desk_sound", "static", "print", "sleep", "screen_off", "look", "lift", \
+					"switch", "live", "image_screen", "typed", "shown", "session", "moving", "reply":
+				_dispatch_mark(k, ex)
 			_:
 				_ok(false, "%s has no check in script_marks_check - prove it before shipping it" % k)
 	# THE SYNTHESIS FIX, two-sided: the raw text DOES read a cue aloud, the stripped text not.
@@ -447,6 +455,88 @@ func _highlighter() -> void:
 		"the synthesis highlighter colors a cue it does not honor")
 	te.free()
 	te2.free()
+
+
+## A DISPATCH DESK'S MARK ([DispatchScript]), read by the desk's own parser: what each makes the desk do, what the voice
+## says and what it is heard through.
+func _dispatch_mark(k: String, ex: String) -> void:
+	var head := "<!-- speaker: Control -->\n\nThe night begins.\n\n"
+	var tail := "\n\nThe night goes on.\n"
+	match k:
+		"call", "hang_up":
+			var call := ex if k == "call" else "<!-- call: AISLE -->"
+			var end := ex if k == "hang_up" else "<!-- /call -->"
+			var d := DispatchScript.parse(head + call + "\n\n<!-- speaker: Aisle -->\n\nHello?\n\n<!-- speaker: Control -->\n\nGo.\n\n" + end + tail)
+			var kinds: Array = []
+			for a in d["actions"]:
+				kinds.append(String(a["kind"]))
+			var sp := String(d["speakable"])
+			_ok(kinds == ["call", "hang_up"] and String(d["actions"][0]["how"]) == "dial" and (d["warnings"] as PackedStringArray).is_empty()
+				and sp.contains("<!-- heard: phone -->\n\n<!-- action-hold") and not (d["spoken"] as PackedStringArray).has("aisle"),
+				"%s: a call is not dialed, its voice not heard through it, or a phone is left open (%s, %s)" % [k, str(kinds), str(d["warnings"])])
+		"ring":
+			var d := DispatchScript.parse(head + ex + "\n\n<!-- call: LIGHTS -->\n\n<!-- speaker: Lights -->\n\nGot him.\n\n<!-- /call -->" + tail)
+			_ok(String(d["actions"][0]["kind"]) == "ring" and String(d["actions"][1]["how"]) == "answer",
+				"a call straight after a ring does not answer it")
+		"text_msg":
+			var d := DispatchScript.parse(head + ex + tail)
+			var a: Dictionary = d["actions"][0]
+			_ok(String(a["kind"]) == "text" and String(a["label"]) == "AISLE" and String(a["words"]) == "He looked at me"
+				and not (d["spoken"] as PackedStringArray).has("looked") and float(a["rest"]) > 1.0, "a text is said, or not shown on its phone")
+		"reply":
+			var d := DispatchScript.parse(head + "<!-- text: AISLE | He looked at me -->\n\n" + ex + "\n\nGood. Let him wonder." + tail)
+			var kinds: Array = (d["actions"] as Array).map(func(x: Dictionary) -> String: return String(x["kind"]))
+			_ok(kinds == ["text", "reply"] and String(d["actions"][1]["label"]) == "AISLE" and String(d["actions"][1]["text"]) == "Good. Let him wonder."
+				and (d["spoken"] as PackedStringArray).has("wonder"), "a reply is not typed into the phone that texted, or not said (%s)" % str(kinds))
+		"ping":
+			var a: Dictionary = DispatchScript.parse(head + ex + tail)["actions"][0]
+			_ok(String(a["kind"]) == "ping" and String(a["place"]) == "the stairwell" and is_equal_approx(float(a["rest"]), DispatchScript.PING),
+				"a ping does not carry its place, or holds the voice past its beat")
+		"moving":
+			var d := DispatchScript.parse(head + ex + "\n\nHe is walking.\n\n<!-- ping: the stairwell -->" + tail)
+			var kinds: Array = (d["actions"] as Array).map(func(x: Dictionary) -> String: return String(x["kind"]))
+			_ok(kinds == ["moving", "ping"] and is_equal_approx(float(d["actions"][0]["rest"]), DispatchScript.MOVING)
+				and (d["spoken"] as PackedStringArray).has("walking"), "a moving mark does not set him off under the words before the ping (%s)" % str(kinds))
+		"desk_sound":
+			var a: Dictionary = DispatchScript.parse(head + ex + tail)["actions"][0]
+			_ok(String(a["kind"]) == "sound" and String(a["sound"]) == "jet" and is_equal_approx(float(a["rest"]), float(DispatchSounds.SOUNDS["jet"]["secs"])),
+				"a sound's words do not find its sound")
+		"static":
+			var a: Dictionary = DispatchScript.parse(head + ex + tail)["actions"][0]
+			var sea: Dictionary = DispatchScript.parse(head + "<!-- static: 3, surf -->" + tail)["actions"][0]
+			_ok(String(a["kind"]) == "static" and is_equal_approx(float(a["rest"]), 5.0) and String(a["storm"]) == "popcorn"
+				and String(sea["storm"]) == "surf", "a static's seconds or its storm are not read")
+		"print":
+			var d := DispatchScript.parse(head + "```type\nLOGGED.\n```\n\n" + ex + tail)
+			var a: Dictionary = d["actions"].back()
+			_ok(String(a["kind"]) == "print" and Array(a["lines"]).has("LOGGED."), "a print does not print what was typed")
+		"sleep", "screen_off", "look", "lift", "switch", "live":
+			var a: Dictionary = DispatchScript.parse(head + ex + tail)["actions"][0]
+			var want := String({"sleep": "sleep", "screen_off": "off", "look": "look", "lift": "lift", "switch": "switch", "live": "live"}[k])
+			var arg := String(a.get("screen", a.get("at", a.get("thing", a.get("side", "")))))
+			_ok(String(a["kind"]) == want and (k == "sleep" or arg in ["tv", "radar", "mug", "BAD"]), "%s: the desk does not do it (%s)" % [k, str(a)])
+		"image_screen":
+			var d := DispatchScript.parse(head + ex + tail)
+			var a: Dictionary = d["actions"][0]
+			_ok(String(a["kind"]) == "picture" and String(a["screen"]) == "feed" and Manuscript.images(DispatchScript.pictures_only(ex)).size() == 1
+				and not (d["spoken"] as PackedStringArray).has("picture"), "a picture on a screen is not pinned there, or not painted")
+		"typed":
+			var d := DispatchScript.parse(head + ex + tail)
+			var a: Dictionary = d["actions"][0]
+			var sp := String(d["speakable"])
+			_ok(String(a["kind"]) == "type" and (d["spoken"] as PackedStringArray).has("grocery") and sp.contains("Grocery store")
+				and not sp.contains("```") and int(a["to"]) - int(a["from"]) == 5, "a typed block is not said as it is typed")
+		"shown":
+			var d := DispatchScript.parse(head + ex + tail)
+			_ok(String(d["actions"][0]["kind"]) == "screen" and not (d["spoken"] as PackedStringArray).has("contained")
+				and not String(d["speakable"]).contains("STATUS"), "a shown block is said")
+		"session":
+			var d := DispatchScript.parse(head + ex + tail)
+			var a: Dictionary = d["actions"][0]
+			var steps: Array = a.get("steps", [])
+			_ok(String(a["kind"]) == "session" and steps.size() == 2 and String(steps[0]["typed"]) == "search ryan brooks"
+				and (steps[0]["out"] as PackedStringArray) == PackedStringArray(["1 MATCH"]) and not (d["spoken"] as PackedStringArray).has("brooks")
+				and float(a["rest"]) > 2.0, "a session's commands are not typed and answered in order, silent, the voice waiting")
 
 
 ## A LETTER'S MARK ([LetterScript]), read by the letter's own parser: what each does to what the pen

@@ -65,10 +65,24 @@ void vertex() {
 		float s = clamp(UV2.x, 0.0, 1.0);
 		vec3 off = VERTEX - bristle_root;
 		vec3 radial = off - bristle_axis * dot(off, bristle_axis);
-		float side = length(bristle_bend);
-		// bent along its length, more toward the tip; splayed out from the middle; and no longer for being bent
-		VERTEX += bristle_bend * (s * s) + radial * bristle_splay * s * 1.2
-			- bristle_axis * (side * side / max(bristle_len, 1e-4)) * 0.5 * s * s * s;
+		// BENT ASIDE AS AN ARC OF A CIRCLE, AS LONG AS IT WAS (Bristles.bent_at, the same arithmetic): never along itself, its tip
+		// at most ASIDE_MOST of its length aside - and splayed out from the middle
+		vec3 aside = bristle_bend - bristle_axis * dot(bristle_bend, bristle_axis);
+		float side = length(aside);
+		float hl = max(bristle_len, 1e-4);
+		float q = min(side / hl, 0.7);
+		float th = 2.0 * q;
+		for (int i = 0; i < 4; i++) {
+			float f = (1.0 - cos(th)) / max(th, 1e-4) - q;
+			float df = (th * sin(th) - (1.0 - cos(th))) / max(th * th, 1e-8);
+			th -= f / max(df, 1e-4);
+		}
+		th = max(th, 0.0);
+		if (th > 1e-4) {
+			float rr = hl / th;
+			VERTEX += bristle_axis * (rr * sin(th * s) - hl * s) + (aside / side) * rr * (1.0 - cos(th * s));
+		}
+		VERTEX += radial * bristle_splay * s * 1.2;
 	}
 	if (squash.w > 0.0) {
 		vec3 d = normalize(squash.xyz);

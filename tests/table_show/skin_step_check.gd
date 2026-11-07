@@ -43,6 +43,7 @@ func _run() -> void:
 	await process_frame
 	TableEpisode.root = ROOT
 	_steps()
+	_face()
 	_surfaces()
 	await _tools()
 	await _fixed()
@@ -76,13 +77,94 @@ func _steps() -> void:
 	var ep := _episode(1, "a white face with a red mouth")
 	var steps := ep.steps()
 	_ok(steps.has("skin") and steps.find("skin") > steps.find("table") and steps.find("skin") < steps.find("acts"), "the design comes after the table and before the work: %s" % [steps])
-	_ok(ep.needs("skin") == ["plan", "table"], "the design needs the plan and the table: %s" % [ep.needs("skin")])
+	_ok(ep.needs("skin") == ["plan", "table", "image:face", "check:face"], "the design needs the plan, the table and the face painted first, looked at: %s" % [ep.needs("skin")])
 	_ok(ep.needs("acts").has("skin"), "the work needs the design")
 	_ok(ep.dependents("skin").has("acts"), "designing again throws the work away")
 	_ok(not _episode(2, "").steps().has("skin"), "control: a plan that paints nothing designs nothing")
 	var made := _episode(3, "a face")
 	made.write_json("acts", {"acts": []})
 	_ok(not made.steps().has("skin"), "control: an episode whose work was blocked before goes on as it was made")
+	# THE FACE PAINTED FIRST (feedback 0023): painted after the table is set, looked at, then copied - and repainting it throws the design
+	# and the work away. THE CONTROLS: an episode designed before there were paintings goes on as it was made; designed again, it starts
+	# from one
+	var fi := steps.find("image:face")
+	_ok(fi > steps.find("table") and steps.find("check:face") == fi + 1 and steps.find("skin") > fi + 1, "the face is painted after the table and looked at before the design: %s" % [steps])
+	_ok(ep.needs("image:face") == ["plan", "table"] and ep.needs("check:face") == ["image:face"], "painted from the plan on the table, and looked at: %s %s" % [ep.needs("image:face"), ep.needs("check:face")])
+	_ok(ep.dependents("image:face").has("skin") and ep.dependents("image:face").has("check:face"), "painting it again throws its check and the design away")
+	var before := _episode(6, "a face")
+	before.write_json("skin", {"designs": []})
+	_ok(not before.steps().has("image:face") and before.needs("skin") == ["plan", "table"], "control: an episode designed before there were paintings goes on as it was made: %s" % [before.steps()])
+	before.invalidate("skin")
+	_ok(before.steps().has("image:face") and before.needs("skin").has("check:face"), "control: and designed again, it starts from one")
+
+
+## THE FACE PAINTED FIRST, AS THE CODE HANDLES IT ([Skins], [TableProducer]): the bare surface in the middle of an upright 2:3 canvas,
+## lit so its features show; a painting that lies on it fits and one moved or spilled past its edge does not; cut back to the surface's
+## millimeters with the light taken out, the bare surface's own color comes back even across it (the control: cut with the light left in,
+## its edge is darker); its colors told, most of it first. Landed, it is kept with what the surface wears of it, and one that does not lie
+## on it is removed; sent back by the art director, it is painted again with what was wrong (the control: kept, it stands).
+func _face() -> void:
+	var skin: Dictionary = Skins.skins_of(Check.station())[0]
+	var canvas := Skins.face_canvas(skin)
+	var bare: Image = canvas["image"]
+	var at: Vector2i = canvas["at"]
+	var size: Vector2i = canvas["size"]
+	_ok(absf(float(bare.get_width()) / float(bare.get_height()) - 2.0 / 3.0) < 0.01 and size == Vector2i(450, 630) and at.x >= 0 and at.y >= 0,
+		"the bare surface is in an upright 2:3 canvas, 3 pixels a millimeter: %s at %s in %s" % [size, at, bare.get_size()])
+	var mid := bare.get_pixel(at.x + size.x / 2, at.y + int(size.y * 0.4))
+	_ok(mid.get_luminance() > 0.5 and bare.get_pixel(2, 2).get_luminance() < 0.02, "lit on black: %s, %s" % [mid, bare.get_pixel(2, 2)])
+	# a painting of it: the bare picture with a red band across its middle
+	var painted := bare.duplicate() as Image
+	for y in range(at.y + 300, at.y + 330):
+		for x in range(at.x + 120, at.x + 330):
+			painted.set_pixel(x, y, Color(0.75, 0.08, 0.12))
+	_ok(Skins.face_fit(bare, painted).is_empty(), "a painting on the surface lies on it: %s" % Skins.face_fit(bare, painted))
+	var moved := Image.create(bare.get_width(), bare.get_height(), false, Image.FORMAT_RGBA8)
+	moved.blit_rect(painted, Rect2i(Vector2i.ZERO, painted.get_size()), Vector2i(0, 70))
+	_ok(not Skins.face_fit(bare, moved).is_empty(), "control: moved down 23 mm, it does not")
+	var spilled := painted.duplicate() as Image
+	spilled.fill_rect(Rect2i(0, 0, bare.get_width(), at.y + 40), Color(0.2, 0.5, 0.9))
+	_ok(Skins.face_fit(bare, spilled).contains("edge"), "control: painted onto the black round it, it does not: %s" % Skins.face_fit(bare, spilled))
+	var big := painted.duplicate() as Image
+	big.resize(painted.get_width() / 2, painted.get_height() / 2)
+	_ok(Skins.face_fit(bare, big).is_empty(), "a painting handed back at another size is read at the canvas's: %s" % Skins.face_fit(bare, big))
+	# ...cut back to the surface, the light taken out
+	var ref := Skins.face_reference(bare, bare, canvas, skin)
+	var base := Color.html(String(skin.get("color", "#e8e2d6")))
+	var spread := 0.0
+	var raw_spread := 0.0
+	for p in [Vector2i(225, 250), Vector2i(60, 320), Vector2i(390, 320), Vector2i(225, 560)]:
+		var c := ref.get_pixel(p.x, p.y)
+		var r := bare.get_pixel(at.x + p.x, at.y + p.y)
+		spread = maxf(spread, absf(c.get_luminance() - base.get_luminance()))
+		raw_spread = maxf(raw_spread, absf(r.get_luminance() - base.get_luminance()))
+	_ok(ref.get_size() == size and spread < 0.05, "cut back, the bare surface is its own color across it (%.3f off at most)" % spread)
+	_ok(raw_spread > spread + 0.03, "control: with the light left in, it is %.3f off" % raw_spread)
+	var pal := Skins.face_palette(Skins.face_reference(painted, bare, canvas, skin))
+	_ok(pal.size() >= 2 and Color.html(String((pal[0] as Dictionary)["hex"])).get_luminance() > 0.5 and pal.any(func(c: Dictionary) -> bool: return Color.html(String(c["hex"])).r > Color.html(String(c["hex"])).g * 3.0)
+		and not pal.any(func(c: Dictionary) -> bool: return Color.html(String(c["hex"])).get_luminance() < 0.1),
+		"its colors, most of it first, the band's red among them and none of the room round it: %s" % [pal])
+	# ...AS THE PRODUCER LANDS IT
+	var ep := _episode(7, "a red band")
+	ep.write_json("table", Check.station())
+	var prod := TableProducer.new(ep, {"title": "Show", "brief": "A brief."})
+	bare.save_png(ep.dir.path_join("face_bare.png"))
+	TextGen.put(ep.dir.path_join("face.json"), JSON.stringify({"on": "mask/face", "at": [at.x, at.y], "size": [size.x, size.y], "px": 3.0}))
+	painted.save_png(ep.file_of("image:face"))
+	_ok(prod._land_face().is_empty() and FileAccess.file_exists(ep.dir.path_join("face_ref.png")), "a painting that lies on it lands, with what the surface wears of it")
+	moved.save_png(ep.file_of("image:face"))
+	_ok(not prod._land_face().is_empty() and not ep.has("image:face") and (ep.sent_back("face") as Array).size() == 1,
+		"control: one that does not lie on it is removed, and the next painter told why")
+	DirAccess.remove_absolute(ep.dir.path_join("sent_back_face.json"))
+	painted.save_png(ep.file_of("image:face"))
+	prod._land_face()
+	var err := prod._land_check("check:face", JSON.stringify({"verdict": "repaint", "faults": ["the band is off the mouth"]}))
+	_ok(err.is_empty() and not ep.has("image:face") and not FileAccess.file_exists(ep.dir.path_join("face_ref.png")) and (ep.sent_back("face") as Array).size() == 1,
+		"sent back, it is painted again with what was wrong: %s %s" % [err, ep.sent_back("face")])
+	_ok(TablePrompts.face_image({}, ep.read_json("plan"), skin, "/x.png", PackedStringArray(["the band is off the mouth"])).contains("the band is off the mouth"),
+		"and the painter is told it")
+	painted.save_png(ep.file_of("image:face"))
+	_ok(prod._land_check("check:face", JSON.stringify({"verdict": "keep", "faults": []})).is_empty() and ep.has("check:face") and ep.has("image:face"), "control: kept, it stands")
 
 
 func _surfaces() -> void:
@@ -199,6 +281,14 @@ func _prompts() -> void:
 	for looks in [0, DecoratorTools.LOOKS]:
 		var p := TablePrompts.decorator("Show", "A brief.", plan, 7, surfaces, ["an old face"], looks)
 		_ok(Rules.missing.is_empty() and String(p["prompt"]).contains("left eye") and String(p["prompt"]).contains("an old face"), "the decorator's prompt renders whole (%d looks)" % looks)
+	var copying := TablePrompts.decorator("Show", "A brief.", plan, 7, surfaces, [], DecoratorTools.LOOKS, [{"hex": "#f4f1ea", "share": 0.7}, {"hex": "#b3122a", "share": 0.1}])
+	_ok(Rules.missing.is_empty() and String(copying["prompt"]).contains("A COPY OF IT") and String(copying["prompt"]).contains("#b3122a (10%)") and String(copying["prompt"]).contains("beside it"),
+		"the decorator copying a painting is told so, and its colors")
+	_ok(not String(TablePrompts.decorator("Show", "A brief.", plan, 7, surfaces, [], DecoratorTools.LOOKS)["prompt"]).contains("A COPY OF IT"), "control: with none, it is not")
+	var fp := TablePrompts.face_image({}, plan, surfaces[0], "/tmp/x.png")
+	_ok(Rules.missing.is_empty() and fp.contains("a white face with a red mouth") and fp.contains("150 mm across") and not fp.contains("{{"), "the painter's face renders whole")
+	var fc := TablePrompts.face_check("Show", "A brief.", plan, surfaces[0])
+	_ok(Rules.missing.is_empty() and String(fc["prompt"]).contains("a white face with a red mouth") and String(fc["prompt"]).contains("\"verdict\""), "the art director's look at it renders whole")
 	var pp := TablePrompts.puppeteer("Show", "A brief.", plan, 7, [], "the parts", 4)
 	_ok(Rules.missing.is_empty() and String(pp["prompt"]).contains("WHAT IS PAINTED THIS EPISODE"), "the puppeteer is told the design")
 	var sp := TablePrompts.set_dresser("Show", "A brief.", plan, 7, {}, [], false, 4)

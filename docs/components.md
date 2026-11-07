@@ -19,7 +19,7 @@ A CARD ANY PANEL CAN SHOW IS A ROW'S `script`: the path of the script that build
 
 Static and free of autoload names, like `Capabilities`, so a gate can read it under `--script`.
 
-Registry: `Components.REGISTRY` in [src/notes/components.gd](../src/notes/components.gd) (18 components, 2 slots, 6 workspaces).
+Registry: `Components.REGISTRY` in [src/notes/components.gd](../src/notes/components.gd) (19 components, 2 slots, 6 workspaces).
 
 ## Slots
 
@@ -28,7 +28,7 @@ Where a note has room for exactly one. Components that take the same slot are al
 | Slot | What it is | Taken by |
 | --- | --- | --- |
 | `clock` | What the show is timed by, and how long it is: a song, a voice reading the text, or a clip. | Song, Voice, Voice lab, Clip |
-| `presentation` | What the show is seen in: the Picture and the medium it names, a card table, a voice lab's own show, or a clip's own frame. | Voice lab, Picture, Table, Proof, Letter, Actor, Clip |
+| `presentation` | What the show is seen in: the Picture and the medium it names, a card table, a voice lab's own show, or a clip's own frame. | Voice lab, Picture, Table, Proof, Letter, Dispatch desk, Actor, Clip |
 
 ## Workspaces
 
@@ -83,10 +83,12 @@ By family - the color a component's card, chip and marks are drawn in.
   - needs audio, places; gives picture; brings Scenes; asks for `forward_plus`; kept in `scenes:`
 - **Picture** (`picture`) - A show for the note, and what it is carried on: Auto (the seeded show, nothing to set), full frame, a comic, a book, a notebook, a tablet.
   - needs picture; gives places; brings Scenes; takes the presentation; asks for `forward_plus`; kept in `picture:`
-- **Illustrations** (`illustrations`) - The book's pictures, painted by an agent from the marks in the text, or imported.
-  - needs text, places; gives picture; comes with Picture, Letter; asks for `forward_plus`; kept in `illustrations:`
+- **Pictures** (`illustrations`) - The note's pictures, painted by an agent from the image marks in its words or imported from a file - one card, whatever the note is shown in: a novel, a notebook, a tablet, a letter, a dispatch desk.
+  - needs text; gives picture; comes with Picture, Letter, Dispatch desk; asks for `forward_plus`; kept in `illustrations:`
 - **Letter** (`letter`) - The note read as a letter written by hand at a desk: the pen writes each paragraph as the voice reads it, crosses lines out, draws the sketches the letter describes, taps while the writer thinks, and a picture takes the screen for a passage read over it.
   - needs reading; gives picture; brings Voice; takes the presentation; asks for `forward_plus`, `subprocess`, `agent:writer`, `tex`, `python:math`; kept in `letter:`
+- **Dispatch desk** (`dispatch`) - The note played at a desk late at night, seen from the chair: an old terminal types what is said and shows what is written, a dozen labeled flip phones ring and are held to the ear (every voice but the room's heard through one), a radar pings, a receiver crackles, a printer prints, small screens show pictures - the camera turning gently to whatever is active, roots growing across the desk.
+  - needs reading; gives picture; brings Voice; takes the presentation; asks for `forward_plus`; kept in `dispatch:`
 - **Actor** (`actor`) - An actor reads the note in their own room, built from their own videos - a folder, or links to videos, playlists or a channel: the footage surveyed and grouped by camera and look, a still of them chosen, and their motion, blinks, mouths and voice learned from every video. Every pixel of them is their own.
   - needs reading; gives picture; brings Voice; takes the presentation; asks for `forward_plus`, `subprocess`, `ffmpeg`, `python:face`, `python:speech`, `python:download`, `agent:writer`; kept in `actor:`
 - **Clip** (`clip`) - A video, cut and prepared from a file or a link, with chroma-key effects over it: markers, tracks and renders.

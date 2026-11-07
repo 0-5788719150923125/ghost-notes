@@ -18,9 +18,10 @@ is built and seeded (2026-10-27)**, in the table's own words, so an agent can wr
 
 **A component, `letter`** ("+" Letter on a note; it brings a Voice; the reading's workspace runs it, as
 the Actor's card stands there). **The note's words are the letter, word for word**: no agent writes it.
-Its card ([LetterCard], `src/letter/`) pins the medium, draws the sketches, paints the pictures and hands
-the reading the letter with the pen's rests in it ([LetterWalk]) and the document a render draws from
-([LetterCard.Publish]).
+Its card ([LetterCard], `src/letter/`) pins the medium, draws the sketches and hands the reading the letter
+with the pen's rests in it ([LetterWalk]) and the document a render draws from ([LetterCard.Publish]). Its
+pictures are painted on the note's Pictures card, which comes with it (2026-11-06, next/pictures.md;
+[LetterMedium] `pictures_in` says which marks they are: never a sketch).
 
 **A medium, `letter`** ([LetterMedium], `src/desk/letter.gd`): the Proof desk's ([DeskMedium]) - pad,
 pen, lamp, camera, the voice followed word by word, the elastic pen - with the letter's own hand and

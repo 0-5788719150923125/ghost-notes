@@ -502,6 +502,12 @@ static func cover_of(layers: Array) -> float:
 	return 1.0 - through
 
 
+## WHAT THIS MEDIUM SHOWS AS PICTURES ([method Medium.pictures_of], the note's Pictures card): every picture a passage is
+## read over, each over the whole screen - never a sketch, which the pen draws ([LetterSketches]).
+static func pictures_in(body: String) -> Array:
+	return Manuscript.images(LetterScript.pictures_only(body))
+
+
 ## EACH PICTURE'S MOVE by [param spans]' index (`{}` for a span that is no picture): `{kind, grow, way, drift}` - a
 ## row of [constant MOVES] drawn from [param seed] and the picture's place in the letter, never the row the picture
 ## before it took, `grow` its start and end, `way` its drift's direction (at least a quarter turn from the one

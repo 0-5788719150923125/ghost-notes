@@ -22,6 +22,50 @@ class_name VoiceFX
 ## signal, and the tones sit at consonant intervals above the tracked pitch, so
 ## the chord follows the narration's register instead of fighting it.
 
+# --- heard through something: a phone, a radio ----------------------------------
+#
+# A VOICE THROUGH A PHONE (next/dispatch.md; the user's dispatch desk, 2026-11-06: "Every other voice comes through a
+# phone: the one in hand at an earpiece's thin, close band, or one lying open on the desk (on hold), small and further
+# off. A voice in the caller's own room is heard through the caller's phone, fainter still"). The telephone's band is
+# 300-3400 Hz (ITU-T G.712's voice channel): a second-order Butterworth high-pass and low-pass at a row's `low` and
+# `high` - an RBJ biquad each - then a soft clip, the small speaker's grit (`drive`: tanh, its small-signal gain one),
+# then its level (`gain`). On the voice as it leaves the model and before anything of the room's, so the room hears the
+# phone - and after the pitch tracker, which needs the fundamental the band takes away (a man's 100 Hz). A row
+# further off is quieter and narrower: a phone lying on the desk is a smaller sound than one at the ear, and a voice
+# in a room at the far end of a line is heard through that line and its room both. A radio is narrower and driven
+# harder than a phone, under static of its own (below); any script may mark a turn `<!-- heard: radio -->`.
+const HEARD := {
+	"phone": {"label": "Through a phone", "blurb": "Held to the ear: the telephone's band, close, with a little grit and the line's faint hiss.",
+		"low": 300.0, "high": 3400.0, "drive": 2.0, "gain": 0.95, "hiss": 0.004, "crackle": 0.0, "squelch": false},
+	"desk": {"label": "From a phone on the desk", "blurb": "A phone lying open on the desk, on hold: the same band and line, smaller and further off.",
+		"low": 420.0, "high": 3000.0, "drive": 1.5, "gain": 0.42, "hiss": 0.004, "crackle": 0.0, "squelch": false},
+	"far": {"label": "Through somebody else's phone", "blurb": "A voice in the caller's room, heard through the caller's phone: narrower still, and faint.",
+		"low": 500.0, "high": 2600.0, "drive": 1.2, "gain": 0.3, "hiss": 0.004, "crackle": 0.0, "squelch": false},
+	"radio": {"label": "Over a radio", "blurb": "A two-way radio or a scanner: a narrow, hard-driven band under static that crackles, the squelch bursting as the voice keys up and hissing off after it.",
+		"low": 350.0, "high": 2700.0, "drive": 3.0, "gain": 0.85, "hiss": 0.03, "crackle": 4.0, "squelch": true},
+}
+
+# --- ...and its static: a line's hiss, a radio's crackle -------------------------
+#
+# WHAT A LINE ADDS (2026-11-06, the user: "if any of those voices are coming over radio transmissions or cell phones
+# ... we should consider adding appropriate effects ... for radio: we might want to add a new voice feature, to overlay
+# static over the voice"). A row's `hiss` is white noise at that RMS and its `crackle` that many pops a second (each a
+# few milliseconds of noise, random in size), added to the voice BEFORE the band - so the static is shaped by the band
+# and clipped by the speaker as a real receiver's is. IT RIDES THE VOICE: the channel opens when the voice is heard
+# (its envelope over STATIC_OPEN) and stays open STATIC_HOLD past its last sound, so it hisses through the gaps between
+# words and never through the rests between turns - a line, not a bed. A row with `squelch` is a two-way radio: a short
+# burst as the channel opens, and the tail as it closes - the hiss a receiver lets through as the carrier drops.
+# Pseudo-random from a seed of its own, so the same take is the same static, live and exported.
+const STATIC_OPEN := 0.01        # the voice's envelope (its peak, full scale) that opens the channel
+const STATIC_FOLLOW := 0.01      # seconds the envelope falls over
+const STATIC_HOLD := 0.35        # seconds the channel stays open past the voice's last sound
+const STATIC_FADE := 0.012       # seconds it fades in and out over
+const STATIC_BURST := 0.05       # a radio's key-up burst, in seconds...
+const STATIC_TAIL := 0.22        # ...and its squelch tail
+const STATIC_KICK := 2.5         # how much louder than the hiss the burst and the tail begin
+const CRACKLE_RING := 0.0015     # how long a pop rings, in seconds
+const CRACKLE_KICK := 6.0        # how much louder than the hiss a pop is, at most
+
 # --- echo: a room at the bottom of the dial, a slapback at the top ------------
 #
 # THE SETTING CHOOSES THE CHARACTER, NOT JUST THE LEVEL. It used to choose only
@@ -306,6 +350,9 @@ var resonance := 0.0           # 0..1
 ## the dial and its meanings, and only the engine differs (see its class docs).
 var room := RoomFX.new()
 var presence := 1.0            # 1 = in the room, lower = further away
+## WHAT THIS VOICE IS HEARD THROUGH, a key of [constant HEARD] ("" the room): dialed with its room at each turn
+## ([constant Manuscript.HEARD], [member ReadingJoin.marks]).
+var heard := ""
 var pad := 0.0                 # 0..1 the ambient bed
 var pad_seed := 0              # same text, same music
 # Staged by sweeping against real narration (voice RMS 0.0474):
@@ -399,6 +446,26 @@ var _near_vg := 1.0                     # the vocal level, into the whole chain
 var _near_dg := 1.0                     # the distance, on the direct voice
 var _near_bg := 1.0                     # ...and its low band, on top of that
 var _near_lp := 0.0                     # the direct voice's low band
+# Heard through a phone: the two biquads' coefficients (b0 b1 b2 a1 a2 each, resolved when [member heard] changes) and
+# their states (x1 x2 y1 y2 each), the soft clip and the level.
+var _hd_for := "?"
+var _hd := PackedFloat32Array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+var _hs := PackedFloat32Array([0, 0, 0, 0, 0, 0, 0, 0])
+var _hd_drive := 1.0
+var _hd_gain := 1.0
+# ...and its static: the row's levels, the channel's state (open for `_st_hold` samples more, faded by `_st_gate`), a
+# radio's burst and tail left to play, the pop ringing now, and the static's own generator (xorshift32, never reset).
+var _st_hiss := 0.0
+var _st_crackle := 0.0
+var _st_squelch := false
+var _st_env := 0.0
+var _st_hold := 0
+var _st_gate := 0.0
+var _st_burst := 0
+var _st_tail := 0
+var _st_pop := 0.0
+var _st_k := PackedFloat32Array([0, 0, 0, 0])   # the envelope's fall, the fade's step, the pop's ring, a pop's chance
+var _st_rng := 0x2545F491
 
 func setup(sr: int) -> void:
 	sample_rate = sr
@@ -629,6 +696,7 @@ func _run(buf: PackedFloat32Array, stereo: bool) -> Array:
 	var near_lp_a := 1.0 - exp(-TAU * NEAR_BASS_HZ / sample_rate)
 	var res_step := PackedFloat32Array()
 	res_step.resize(TONES)
+	var heard_on := _resolve_heard()
 	for i in n:
 		# --- near: the reader's distance, eased; the vocal level feeds everything ---
 		# Off entirely once home and settled, so a reading with Near at 0 is the chain it was.
@@ -664,6 +732,10 @@ func _run(buf: PackedFloat32Array, stereo: bool) -> Array:
 					else lerpf(_voice_ms, ms, 1.0 - exp(-1.0 / (PAD_LEVEL_TAU * TRACK_HZ)))
 				_level_pad()
 			_track_e = 0.0
+
+		# --- heard through a phone: the band, its grit, its level - as the voice leaves it, before the room hears it ---
+		if heard_on:
+			dry = _heard_tick(dry)
 
 		# ...THE ROOM HEARS THE VOICES OVER THIS ONE too: it is one room
 		var wet := dry + (sv.x + sv.y) * 0.5 * SIDE_ROOM
@@ -794,6 +866,121 @@ func _run(buf: PackedFloat32Array, stereo: bool) -> Array:
 				out[i] = Vector2(clampf(wet + direct * (g.x - 1.0) + sv.x * (1.0 - SIDE_ROOM), -1.0, 1.0),
 					clampf(wet + direct * (g.y - 1.0) + sv.y * (1.0 - SIDE_ROOM), -1.0, 1.0))
 	return [buf, out]
+
+
+## [member heard]'s filters for this buffer: resolved when it changed (its states cleared, so a voice heard through a
+## phone does not begin with the last one's ringing), and whether there is a phone to hear it through at all.
+func _resolve_heard() -> bool:
+	var key := heard if HEARD.has(heard) else ""
+	if key == _hd_for:
+		return not key.is_empty()
+	_hd_for = key
+	_hs.fill(0.0)
+	if key.is_empty():
+		return false
+	var row: Dictionary = HEARD[key]
+	var hp := biquad("high", float(row["low"]), float(sample_rate))
+	var lp := biquad("low", float(row["high"]), float(sample_rate))
+	for k in 5:
+		_hd[k] = hp[k]
+		_hd[5 + k] = lp[k]
+	_hd_drive = maxf(float(row["drive"]), 0.01)
+	_hd_gain = float(row["gain"])
+	_st_hiss = float(row.get("hiss", 0.0))
+	_st_crackle = float(row.get("crackle", 0.0))
+	_st_squelch = bool(row.get("squelch", false))
+	var sr := float(sample_rate)
+	_st_k[0] = exp(-1.0 / (STATIC_FOLLOW * sr))
+	_st_k[1] = 1.0 / (STATIC_FADE * sr)
+	_st_k[2] = exp(-1.0 / (CRACKLE_RING * sr))
+	_st_k[3] = _st_crackle / sr
+	_st_env = 0.0
+	_st_hold = 0
+	_st_gate = 0.0
+	_st_burst = 0
+	_st_tail = 0
+	_st_pop = 0.0
+	return true
+
+
+## One sample through the phone: its static added, high-pass, low-pass, the clip, the level.
+func _heard_tick(v: float) -> float:
+	var x := v + _static_tick(v)
+	var y := _hd[0] * x + _hd[1] * _hs[0] + _hd[2] * _hs[1] - _hd[3] * _hs[2] - _hd[4] * _hs[3]
+	_hs[1] = _hs[0]
+	_hs[0] = x
+	_hs[3] = _hs[2]
+	_hs[2] = y
+	var z := _hd[5] * y + _hd[6] * _hs[4] + _hd[7] * _hs[5] - _hd[8] * _hs[6] - _hd[9] * _hs[7]
+	_hs[5] = _hs[4]
+	_hs[4] = y
+	_hs[7] = _hs[6]
+	_hs[6] = z
+	return tanh(z * _hd_drive) / _hd_drive * _hd_gain
+
+
+## THE LINE'S STATIC for one sample of the voice [param v] (see [constant STATIC_OPEN]): the hiss while the channel is open,
+## a radio's burst and tail, a crackle's pop - 0 where the row has none and the channel is shut.
+func _static_tick(v: float) -> float:
+	if _st_hiss <= 0.0 and _st_crackle <= 0.0:
+		return 0.0
+	var sr := float(sample_rate)
+	var a := absf(v)
+	_st_env = a if a > _st_env else _st_env * _st_k[0]
+	if _st_env > STATIC_OPEN:
+		if _st_hold <= 0 and _st_squelch:
+			_st_burst = int(STATIC_BURST * sr)
+			_st_tail = 0
+		_st_hold = int(STATIC_HOLD * sr)
+	elif _st_hold > 0:
+		_st_hold -= 1
+		if _st_hold == 0 and _st_squelch:
+			_st_tail = int(STATIC_TAIL * sr)
+	_st_gate = move_toward(_st_gate, 1.0 if _st_hold > 0 else 0.0, _st_k[1])
+	var level := _st_hiss * _st_gate
+	if _st_burst > 0:
+		level += _st_hiss * STATIC_KICK * float(_st_burst) / (STATIC_BURST * sr)
+		_st_burst -= 1
+	if _st_tail > 0:
+		level += _st_hiss * STATIC_KICK * float(_st_tail) / (STATIC_TAIL * sr)
+		_st_tail -= 1
+	if level <= 0.0 and absf(_st_pop) < 1e-6:
+		return 0.0
+	# uniform noise has an RMS of 1/sqrt(3): scaled, the hiss is the row's RMS
+	var n := _st_white() * level * 1.7320508
+	if _st_crackle > 0.0 and level > 0.0 and _st_rand() < _st_k[3]:
+		_st_pop = _st_hiss * CRACKLE_KICK * (0.3 + 0.7 * _st_rand())
+	if _st_pop != 0.0:
+		n += _st_pop * _st_white()
+		_st_pop *= _st_k[2]
+		if absf(_st_pop) < 1e-6:
+			_st_pop = 0.0
+	return n
+
+
+## The static's generator: the next number in [0, 1) (xorshift32).
+func _st_rand() -> float:
+	_st_rng ^= (_st_rng << 13) & 0xFFFFFFFF
+	_st_rng ^= _st_rng >> 17
+	_st_rng ^= (_st_rng << 5) & 0xFFFFFFFF
+	return float(_st_rng & 0xFFFFFF) / 16777216.0
+
+
+## ...and in [-1, 1).
+func _st_white() -> float:
+	return _st_rand() * 2.0 - 1.0
+
+
+## A SECOND-ORDER BUTTERWORTH ("high" or "low") at [param hz] for [param sr]: `[b0, b1, b2, a1, a2]`, a0 divided out
+## (Bristow-Johnson's cookbook, Q 1/sqrt 2).
+static func biquad(kind: String, hz: float, sr: float) -> PackedFloat32Array:
+	var w := TAU * clampf(hz, 10.0, sr * 0.45) / sr
+	var cw := cos(w)
+	var alpha := sin(w) / (2.0 * 0.70710678)
+	var a0 := 1.0 + alpha
+	var b0 := (1.0 - cw) * 0.5 if kind == "low" else (1.0 + cw) * 0.5
+	var b1 := (1.0 - cw) if kind == "low" else -(1.0 + cw)
+	return PackedFloat32Array([b0 / a0, b1 / a0, b0 / a0, -2.0 * cw / a0, (1.0 - alpha) / a0])
 
 
 ## The reader's next distance: [param c] from -1 (backed off) through 0 (where they sit) to 1

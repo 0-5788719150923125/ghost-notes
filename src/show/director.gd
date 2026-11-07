@@ -128,6 +128,12 @@ var filters: Dictionary = {}
 ## HOW THE SUBTITLES REVEAL A LINE ([constant Subtitles.REVEALS]): the show's, like its look, so an export
 ## render draws them the same way.
 var subtitle_reveal := "karaoke"
+## THE TONEMAPPER ([constant Tonemaps.REGISTRY]): the show's, like the filters, so an export render inherits it - pushed
+## down to every 3D set as it changes ([method Tonemaps.choose]). Filmic until a note picks another.
+var tonemap: String = Tonemaps.DEFAULT
+## ...and the adjustments a person made, kept for each tonemapper apart (key -> its adjustments): trying AgX never moves
+## Filmic's. A tonemapper not here is at its preset.
+var tonemap_adjust: Dictionary = {}
 const FLOURISH_MIN := 0.0
 const FLOURISH_MAX := 4.0
 const PACING_MIN := 0.25
@@ -373,6 +379,7 @@ func reset_show() -> void:
 	set_opening(Openings.DEFAULT)
 	for k in filters.keys():
 		set_filter(String(k), 0.0)
+	set_tonemap_all(Tonemaps.DEFAULT, {})
 
 
 ## Is a session attached - is there a show for a cut, a restage or the transport to act on?
@@ -516,6 +523,63 @@ func set_subtitle_reveal(key: String) -> void:
 	_save_pacing()
 
 
+## THE TONEMAPPER: [param key] ([constant Tonemaps.REGISTRY]), with the adjustments kept for it - at once, on every 3D
+## set up now, as a filter is.
+func set_tonemap(key: String) -> void:
+	var k: String = Tonemaps.known(key)
+	if k == tonemap:
+		return
+	tonemap = k
+	_save_pacing()
+	_push_tonemap()
+
+
+## One adjustment of the tonemapper chosen now ([constant Tonemaps.ADJUSTMENTS]), kept for it alone.
+func set_tonemap_adjust(name: String, value: float) -> void:
+	if not Tonemaps.ADJUSTMENTS.has(name):
+		return
+	var a := tonemap_adjustments()
+	var v := float(Tonemaps.sanitize({name: value})[name])
+	if is_equal_approx(v, float(a[name])):
+		return
+	a[name] = v
+	# back at its preset, it is forgotten: a note's block names only what someone moved
+	if a == Tonemaps.sanitize({}):
+		tonemap_adjust.erase(tonemap)
+	else:
+		tonemap_adjust[tonemap] = a
+	_save_pacing()
+	_push_tonemap()
+
+
+## [param key]'s adjustments (the chosen tonemapper's when empty), every one named: its own, else neutral.
+func tonemap_adjustments(key := "") -> Dictionary:
+	return Tonemaps.sanitize(tonemap_adjust.get(tonemap if key.is_empty() else key, {}))
+
+
+## Every tonemapper's adjustments as they were made, and [param key] chosen - a note's block arriving
+## ([method LookCard.apply]): one push for the lot.
+func set_tonemap_all(key: String, adjust: Dictionary) -> void:
+	tonemap_adjust = _tonemap_kept(adjust)
+	tonemap = Tonemaps.known(key)
+	_save_pacing()
+	_push_tonemap()
+
+
+## Only tonemappers that are known, each made whole.
+func _tonemap_kept(adjust: Variant) -> Dictionary:
+	var out := {}
+	if adjust is Dictionary:
+		for k in adjust:
+			if Tonemaps.REGISTRY.has(String(k)):
+				out[String(k)] = Tonemaps.sanitize(adjust[k])
+	return out
+
+
+func _push_tonemap() -> void:
+	Tonemaps.choose(tonemap, tonemap_adjustments())
+
+
 ## How strongly [param key] is applied right now, 0 when it is off.
 func filter_amount(key: String) -> float:
 	return float(filters.get(key, 0.0))
@@ -583,6 +647,9 @@ func _load_pacing() -> void:
 	filters = Filters.sanitize(Settings.read("director", "filters", {}))
 	var rv := String(Settings.read("director", "subtitle_reveal", "karaoke"))
 	subtitle_reveal = rv if Subtitles.REVEALS.has(rv) else "karaoke"
+	tonemap = Tonemaps.known(String(Settings.read("director", "tonemap", Tonemaps.DEFAULT)))
+	tonemap_adjust = _tonemap_kept(Settings.read("director", "tonemap_adjust", {}))
+	_push_tonemap()
 
 
 ## Hand the current values to [Settings], which owns the file and the flushing. There is no
@@ -600,6 +667,8 @@ func _save_pacing() -> void:
 	Settings.write("director", "frame", frame)
 	Settings.write("director", "filters", filters)
 	Settings.write("director", "subtitle_reveal", subtitle_reveal)
+	Settings.write("director", "tonemap", tonemap)
+	Settings.write("director", "tonemap_adjust", tonemap_adjust)
 
 
 func attach(host: Node, medium: Medium = null) -> void:

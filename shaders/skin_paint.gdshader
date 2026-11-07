@@ -31,6 +31,15 @@ uniform float dries = 0.0;
 uniform float dried = 1.0;
 // its picture's size in millimeters, for the size of a sponge's pores
 uniform vec2 mm = vec2(100.0);
+// THE FACE PAINTED FIRST (feedback 0023; next/painted_surface.md): the painting the surface's design was copied from, over the whole
+// surface - and where this element's picture lies on it (0-1: its corner, its size). Where the painting's color there is near this
+// element's paint, it lays the painting's own - its shading, its highlights, its fine marks - and its own paint elsewhere: a base laid
+// over the whole face is the painting's whites where the painting is white, and its own white under what goes on later.
+uniform sampler2D reference : source_color, filter_linear, repeat_disable;
+uniform bool referenced = false;
+uniform vec4 rect_uv = vec4(0.0, 0.0, 1.0, 1.0);
+// how near (a color's distance, 0 to the square root of 3) is the painting's own, and how far the element's
+const vec2 REFERENCE_NEAR = vec2(0.16, 0.34);
 // how long a point takes to come in as the tool passes (seconds)
 const float EDGE = 0.18;
 // A PRESS: how far its edge wanders from where the tool reached (millimeters), the film the first press leaves (a stipple's cream, a
@@ -100,5 +109,10 @@ void fragment() {
 	if (dries > 0.0) {
 		a *= mix(1.0, dried, smoothstep(span.y, span.y + dries, now));
 	}
-	COLOR = finish_pass ? vec4(finish.rgb, a) : vec4(paint.rgb, a * color_alpha);
+	vec3 col = paint.rgb;
+	if (referenced) {
+		vec3 ref = texture(reference, rect_uv.xy + UV * rect_uv.zw).rgb;
+		col = mix(ref, paint.rgb, smoothstep(REFERENCE_NEAR.x, REFERENCE_NEAR.y, distance(ref, paint.rgb)));
+	}
+	COLOR = finish_pass ? vec4(finish.rgb, a) : vec4(col, a * color_alpha);
 }

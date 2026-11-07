@@ -66,8 +66,9 @@ var timing := {}
 ## never its card faces: the set dresser knows no card - and the other files the table reads from its
 ## folder that an earlier step made: the designs painted on it (`skin.json`, [TablePaint]). Left out, a
 ## puppeteer's mask had no design, every paint act laid nothing and pressed its tool into the bare mask,
-## and the puppeteer would not hand the work in (joker-motivation 856886, 2026-11-05).
-const PICTURES := ["surface.png", "height.png", "height.json", "backdrop.png", "backdrop.json", "back.png", "skin.json"]
+## and the puppeteer would not hand the work in (joker-motivation 856886, 2026-11-05) - and the face painted first that they were copied
+## from (`face_ref.png`, on the surface `face.json` names).
+const PICTURES := ["surface.png", "height.png", "height.json", "backdrop.png", "backdrop.json", "back.png", "skin.json", "face_ref.png", "face.json"]
 ## The studio's four sides of one thing: a direction from its middle toward the camera, and a caption.
 const SIDES := [["front", Vector3(0.0, 0.14, 1.0)], ["its right side", Vector3(1.0, 0.14, 0.0)],
 	["from above (its front at the bottom)", Vector3(0.0, 1.0, 0.0)], ["as the camera sees it", Vector3.ZERO]]

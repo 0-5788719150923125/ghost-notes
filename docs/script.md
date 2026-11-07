@@ -11,7 +11,7 @@ AN ENTRY DOES NOT IMPLEMENT ITS MARK. The parsers of record stay where they are 
 
 A CARDS BRIEF IS NOT A SCRIPT, AND HAS MARKS OF ITS OWN (2026-10-12, the user: "why are all of the supported macros and features missing from 'cards' editor mode? I would expect that most if not all of the features from generative mode should also work here"). The palette was empty there because no entry named the mode: a show's document is the BRIEF its agents work from, never read aloud, so a mark in it does something only where the code reads it out of the brief or an agent is told to honor it. Those are offered ("table" in `modes`), each saying what it does THERE (`blurbs`): a speaker cue gives the show another voice, a `## Cards` section is its deck, a macro reads as its default and a note to self is taken out before any agent sees the brief (`TablePrompts.brief`), and a hesitation, a delivery or a stressed word stands in a line the brief gives the host word for word (rules/table/reader.yaml, `spoken`). The marks of a page or a tablet (pictures, scene lines, web pages) and the inline pronunciation are not: the table is the only medium there, its pictures are the painter's, and a reader's passage keeps no bracket (`TableProducer.clean_spoken`).
 
-Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/script_marks.gd) (46 entries). Each one is proven against the parser that reads it by `tests/notes/script_marks_check.gd`.
+Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/script_marks.gd) (67 entries). Each one is proven against the parser that reads it by `tests/notes/script_marks_check.gd`.
 
 ## Voices
 
@@ -20,6 +20,7 @@ Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/scr
 | Speaker cue | `<!-- speaker: Name -->` | Generative, Table | Hands everything after it to the named voice, until the next cue. The panel's voices list follows the names the script uses. Must be a line of its own, or it is only a note. **In a Table brief:** Gives the show another voice by this name: a tab of its own on the Voice card, and the reader writes its lines and hands them over. Say in the brief who it is and when it speaks. Must be a line of its own. |
 | Talk over | `<!-- over: 0.6 -->` | Generative, Table | At the top of a speaker's turn: this turn comes in before the last one has ended, on its last words, by a third of a second or the seconds given. Each voice stays where it sits, and both are heard. **In a Table brief:** In a line the brief gives word for word, on the line after a speaker's cue: this turn comes in over the last. Elsewhere a game's master writes these with its tools. |
 | All at once | `<!-- together -->` | Generative, Table | At the top of a speaker's turn: this turn comes in with the last one, just after it began, as a table reacts as one. Several in a row all come in together. **In a Table brief:** In a line the brief gives word for word, on the line after a speaker's cue: this turn comes in with the last. Elsewhere a game's master writes these with its tools. |
+| Heard through | `<!-- heard: radio -->` | Generative | On the line after a speaker's cue: this whole turn is heard through something - phone (held to the ear), desk (a phone lying on the desk), far (a voice in the caller's room, through their phone) or radio (a two-way radio under crackling static, its squelch hissing as the voice keys up and off). The band, the grit and the line's static are the voice's; a turn with none is heard in the room. A dispatch desk writes these itself. |
 
 ## Timing
 
@@ -92,7 +93,7 @@ Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/scr
 | Mark | Example | Panels | What it does |
 |---|---|---|---|
 | Thought | `*She is always fine.*` | Generative | Letter: a paragraph in italics, whole, is a thought - said, and never written: the writer stops and thinks it, the pen lifted. |
-| Strike | `<!-- strike -->` | Generative | Letter: the writer stops to decide, then the pen crosses out the paragraph it last wrote, every line of it. The pause is about 3 seconds; strike: 5 makes it 5. |
+| Strike | `<!-- strike -->` | Generative | Letter: the writer stops to decide, then the pen crosses out the paragraph it last wrote, every line of it. The pause is about 3 seconds; strike: 5 makes it 5. At the dispatch desk, after a typed block, it is backspaced off the terminal. |
 | Struck words | `<!-- struck: morning -->` | Generative | Letter: inside a written line, these words are written and said first - then the writer stops to decide, crosses out just these words, and writes the words after the mark beside them. |
 | Ink | `<!-- color: red -->` | Generative | Letter: the pen's ink from here on - red, blue, green, purple, brown, black, a hex color, or default for the desk's own. Each ink is a pen of its own lying by the pad; the writer puts one down and picks up the other, and inside a written line goes on beside where it stopped. |
 | Written, not said | `<!-- unspoken: Dear Ink, -->` | Generative | Letter: the pen writes this and the voice does not say it - it waits while it is written. On a line of its own, a line; inside a written line, words in it (a correction beside struck words). |
@@ -102,6 +103,39 @@ Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/scr
 | Picture ends | `<!-- /image -->` | Generative | Letter: ends the passage a picture is shown over - from its image mark to here the picture fills the screen, slowly moving, while the voice reads on and the pen writes on unseen; then the desk comes back. An image mark straight after it, or before it, dissolves into its own picture instead, the page never seen between. |
 | Hold still | `<!-- still -->` | Generative | Letter: from here to the next written line the camera holds dead still on the last sketch, and the pen is taken off the page - for something the viewer does on the screen. |
 | New page | `<!-- new page -->` | Generative | Letter: the next writing starts a page of its own (a page also turns by itself once it is full). |
+
+## Dispatch desk
+
+| Mark | Example | Panels | What it does |
+|---|---|---|---|
+| Call | `<!-- call: AISLE -->` | Generative | Dispatch desk: the phone with this label lifts out of its row and flips open - speed-dialed (held up, 1 and Send) and to the ear, ringing twice before anyone answers; answered at once if it was ringing, picked back up if it lay open. Another in hand is laid down open on the desk first (on hold). Every voice but the room's is heard through a phone. |
+| Hang up | `<!-- /call -->` | Generative | Dispatch desk: the phone in hand snaps shut and goes back to its row; /call: VAN hangs up one lying open on the desk. |
+| Ring | `<!-- ring: LIGHTS -->` | Generative | Dispatch desk: that phone buzzes and rattles against its neighbors. A call to it straight after answers it; with none, it rings out. |
+| Text | `<!-- text: AISLE \| He looked at me -->` | Generative | Dispatch desk: a chime and a buzz, and that phone comes up out of its row, flips open and is held up to be read - the words on its screen, never said and never captioned. The voice waits long enough to read it; the phone goes home after, unless it texts again in a moment. |
+| Reply | `<!-- reply -->` | Generative | Dispatch desk: the room's next words are typed into the phone that texted last (or the one named) as they are said, a key at a time under its message, and sent - the voice still says them. |
+| Ping | `<!-- ping: the stairwell -->` | Generative | Dispatch desk: the target comes to this place on the radar - a sonar ping, the place written small beside the blip (the first ping: the radar finds him there). He goes there along a track while the voice goes on, the sweep painting him a step further each round, never a jump - from where a Moving mark set him off, else over the moments before. A place named again is the same spot; what follows a comma in a name is a little off it (the grocery store, aisle seven). |
+| Moving | `<!-- moving -->` | Generative | Dispatch desk: the target sets off from where he is toward the next ping's place - the radar sounds its alarm and the camera turns to it. The voice goes on while he goes: write what is said over the walk between this and the ping where he arrives. |
+| Sound | `<!-- sound: a jet passes low over the building -->` | Generative | Dispatch desk: a sound in the room or outside it, named by a word among these the desk knows (a jet passing over); the voice waits for it. |
+| Static | `<!-- static: 5 -->` | Generative | Dispatch desk: the receiver opens up for that many seconds, its needle swinging and the scope's trace jumping - Jupiter's crackle; static: 5, surf is its sea. The voice waits. |
+| Print | `<!-- print -->` | Generative | Dispatch desk: the printer prints what was typed since it last printed, with its screech, the paper feeding off the desk to the heap. The voice waits. |
+| Screen saver | `<!-- sleep -->` | Generative | Dispatch desk: the terminal's screen goes dark. A typed, shown or session block wakes it. |
+| Screen off | `<!-- off: tv -->` | Generative | Dispatch desk: that screen goes dark - tv, feed or satellite. |
+| Look | `<!-- look: radar -->` | Generative | Dispatch desk: the camera turns to that thing on the desk - phones, terminal, radar, receiver, printer, chart, handbook, switch, mug, feed, satellite, tv, or home - and stays until something else is active. |
+| Lift | `<!-- lift: mug -->` | Generative | Dispatch desk: a thing on the desk (the mug) is lifted toward the chair, held a moment, and set back down where it stood. |
+| Switch | `<!-- switch: BAD -->` | Generative | Dispatch desk: the switch box's toggle is thrown to that side, GOOD (up) or BAD (down). |
+| Live picture | `<!-- live: tv -->` | Generative | Dispatch desk: that screen shows this desk, live, seen from just behind the empty chair - whatever lies on it. Words after a comma say so for whoever reads the note. |
+| Picture on a screen | `<!-- image (feed): what the picture shows -->` | Generative | Dispatch desk: a picture on one of the desk's screens - feed, satellite or tv - until the next picture there or off. Painted by the Illustrations library from its words. |
+| Typed | ````type
+23:21. Grocery store, aisle seven.
+```` | Generative | Dispatch desk: typed on the terminal and said a little behind the keys, as a letter is read behind its pen - the first two words typed before the voice begins, each word after while it says the one two before, so the line is said straight through. A block in capitals is said in sentence case (a short word in capitals is read as letters). Added under what the terminal shows. |
+| Shown | ````screen
+STATUS ...... CONTAINED
+```` | Generative | Dispatch desk: put up on the terminal, replacing what it showed - drawn down the glass a line at a time, as a terminal draws - and never said; the voice reads aloud only what it says after it. |
+| Session | ````terminal
+> search ryan brooks
+1 MATCH
+> open 1
+```` | Generative | Dispatch desk: a session at the terminal, silent, the voice waiting - each line opening > is a command, typed at the prompt a key at a time and entered, and the lines after it are what the terminal answers, printed a line at a time. Asleep, the terminal wakes to a bare prompt first; the prompt comes back after the last answer. A shown block straight after is what the last command opened. |
 
 ## Notes
 

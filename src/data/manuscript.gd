@@ -62,6 +62,10 @@ const NARRATOR := "Narrator"
 const OVER := "<!--\\s*over\\s*(?::\\s*([0-9]*\\.?[0-9]+)\\s*(?:s|secs?|seconds)?)?\\s*-->"
 const TOGETHER := "<!--\\s*together\\s*-->"
 const OVER_BARE := 0.35
+## A VOICE HEARD THROUGH SOMETHING (next/dispatch.md; the user's dispatch desk, 2026-11-06: every voice but the room's
+## "comes through a phone"). `<!-- heard: phone -->` at the top of a speaker's turn: the whole turn is heard through
+## that, a key of [constant VoiceFX.HEARD] - group 1. A turn with none is heard in the room. [ReadingPlan], [ReadingJoin].
+const HEARD := "<!--\\s*heard\\s*:\\s*([A-Za-z_]+)\\s*-->"
 
 static var _re := {}
 

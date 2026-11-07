@@ -36,15 +36,15 @@ core. The commitments:
 
 ## Feature registries
 
-- [Components](components.md) (18 components, 6 workspaces) - what a note can carry, the room each part takes, which panel runs it, and what each part asks of the platform.
+- [Components](components.md) (19 components, 6 workspaces) - what a note can carry, the room each part takes, which panel runs it, and what each part asks of the platform.
 - [Scenes](scenes.md) (55) - the visualizer scenes in the rotation, each from its own doc comment.
-- [Media](media.md) (10) - what the show is carried on.
+- [Media](media.md) (11) - what the show is carried on.
 - [Look filters](filters.md) (8) - the post-process over the whole picture.
 - [Layers](layers.md) (22) - the visual components scenes compose - weather, skies, atmosphere.
 - [Forces](forces.md) (8) - the physics primitives particles compose.
 - [Stage actors and verbs](stage.md) (3 actors, 22 verbs) - what a storyboard's `stage` entries are made of.
 - [Masking effects](masking.md) (21) - the video effects editor: its model, its effects and its headless tools.
-- [Script marks](script.md) (46) - every mark a script may carry - the script editor's palette.
+- [Script marks](script.md) (67) - every mark a script may carry - the script editor's palette.
 - [Agents](agents.md) (4 writers, 3 painters, 2 assistants) - the AI command-line tools Ghost Notes hands its words, pictures and fixes to: which does what, how each is run, and how to install one.
 
 ## Subsystems
@@ -125,12 +125,15 @@ From a song file to the typed per-frame `AudioFeatures` every scene consumes - l
 How things get drawn and how a heavy scene stays interactive: thousands of shapes in one draw call, geometry built off the main thread, the lens, planes and meshes of the software 3D path, color, and how soft a light's shadow is.
 
 - [`frame_forge.gd`](../src/render/frame_forge.gd) **FrameForge** - scene geometry built OFF the main thread: the foundational fix for UI lag, not another mitigation.
+- [`graphics.gd`](../src/render/graphics.gd) **Graphics** - how finely the stage is drawn, live and in an export: the same picture, each at a quality of its own.
 - [`lens3d.gd`](../src/render/lens3d.gd) **Lens3D** - a positionable perspective camera for the unified 3D path.
 - [`mesh3d.gd`](../src/render/mesh3d.gd) **Mesh3D** - a tiny software 3D mesh for the 2D canvas.
 - [`palette.gd`](../src/render/palette.gd) **Palette** - a color ramp sampled by a scalar (0..1). The color half of the texture story: a `Field` gives a scalar (height, mottle, development); a Palette turns it into color. Themed presets map terrain elevation to believable bands (water -> shore -> green -> rock -> snow), but a Palette colors anything ...
 - [`plane3d.gd`](../src/render/plane3d.gd) **Plane3D** - a flat quad genuinely placed in 3D space, projected through a `Lens3D`.
 - [`scheme.gd`](../src/render/scheme.gd) **Scheme** - a scene's color identity, drawn from a named mood.
+- [`shadow_casters.gd`](../src/render/shadow_casters.gd) **ShadowCasters** - WHAT CASTS A CANDLE'S SHADOW, CUT FINE ENOUGH TO BE DRAWN IN A PARABOLOID.
 - [`shadow_filter.gd`](../src/render/shadow_filter.gd) **ShadowFilter** - a positional light's shadow, softened by a filter of a set width and never by the light's size.
+- [`tonemaps.gd`](../src/render/tonemaps.gd) **Tonemaps** - how a 3D set's light is brought down to what a screen can show: Filmic, AgX or ACES, each with a preset of its own and three adjustments kept for each (the Look card's Tonemapper rows).
 - [`tri_batch.gd`](../src/render/tri_batch.gd) **TriBatch** - one canvas draw call for thousands of shapes.
 
 ### `motion/` - Motion & simulation
@@ -225,14 +228,17 @@ The note as a file: where notes live, a document kept in step with its file, the
 What every note's panel is built from, and what it asks of the window it is in: a side panel that cannot outgrow the window and its "+", a component's folding card in its family's color and the chips over the cards, the cards a note's components bring (built from the registry's rows, attached and detached), the one list of what is made for a note (`PipelineCard`), the Script card every note has (its editor window and highlighter), rows drawn from a table of fields, two small controls, and `Shell` - the bottom-right row, room along the bottom edge, the way back to the notes. Above `notes/` because it is a kit for a note's components.
 
 - [`agent_pick.gd`](../src/ui/agent_pick.gd) **AgentPick** - who does one job, as one row: the AGENT (a CLI from a backend registry, `TextGen` for a writer, `ImageGen` for a painter), the MODEL it runs and how hard it REASONS - each list the chosen agent's own, read from its backend (`TextGen.Backend.models`, `efforts`). Every card that runs agents ...
+- [`armed_delete.gd`](../src/ui/armed_delete.gd) **ArmedDelete** - A DELETE PRESSED TWICE, because it cannot be undone: the first press arms it for `ARMED` seconds ("Delete?", in red), the second calls what it deletes. A dialog for every bad picture would make clearing a run of them a chore, which is exactly when it is used. One button for whatever a card ...
 - [`card.gd`](../src/ui/card.gd) **Card** - one component's settings on a side panel: a titled box that folds, bordered in its FAMILY's color (next/notes.md, "A card").
 - [`card_row.gd`](../src/ui/card_row.gd) **CardRow** - the chips under a panel's title, one per `Card` in its color (next/notes.md, "The component row"). A click opens or closes that card; Ctrl-click opens it alone and folds the rest, as Blender's panel headers do. A chip shows ● while its card is open and ○ while it is folded, so the row also answers ...
+- [`graphics_panel.gd`](../src/ui/graphics_panel.gd) **GraphicsPanel** - how finely the picture is drawn, live and in an export, above the bottom-right row (Chrome's framed-picture button, beside the Environment's).
 - [`icons.gd`](../src/ui/icons.gd) **Icons** - the few pictures a button wears in place of words (2026-10-31, the user, of the notes list: "remove the 'New' and 'Existing note...' buttons and just replace them plain icons, no text").
 - [`note_cards.gd`](../src/ui/note_cards.gd) **NoteCards** - a note's component cards, built ONE way on whichever panel shows the note, and the two edits that change what a note is made of: attach and detach.
 - [`note_editor.gd`](../src/ui/note_editor.gd) **NoteEditor** - a note opened as a notes app opens one (2026-10-31, the user: "a new note with no components automatically gets the 'title' and 'content' fields, akin to how Google `Keep` does it. Once we've opened a note, and we're editing those fields, we should expand description to fit the content - breaking ...
 - [`note_grid.gd`](../src/ui/note_grid.gd) **NoteGrid** - the notes, as a notes app shows them (2026-10-31, the user: "a Google Keep kind of look: extremely simple, centered with wide margins, a search bar at the top, and a 2-3 columns of sticky notes"): the name, a search field with the owner's icon buttons beside it (`actions`, `Icons`), and ...
 - [`note_tile.gd`](../src/ui/note_tile.gd) **NoteTile** - one note on the notes list, a square card (2026-10-31, the user: "something closer to what a notes app should look like ... a Google Keep kind of look ... Literal square shapes, in different colors, perhaps keyed to the underlying, dominant components"). Every tile is the same size ([method ...
 - [`panel_deck.gd`](../src/ui/panel_deck.gd) **PanelDeck** - A SIDE PANEL'S CARDS AS A DECK (next/panel_deck.md; the user, 2026-11-02: "a kind of card-fanning approach, where cards stack or unstack, overlap or expand"; of the pinned Pipeline card, "It's weird that there are now two panels on the left ... They should all be scrollable").
+- [`picture_window.gd`](../src/ui/picture_window.gd) **PictureWindow** - ONE PICTURE AT FULL SIZE, in a window of its own: the picture, the words it was made from under it, and a bar - its versions stepped through (‹ previous, "version 2 of 3", next ›), then whatever its owner adds (delete the one shown, Regenerate, Import…). What a click on a picture opens on the ...
 - [`pipeline_card.gd`](../src/ui/pipeline_card.gd) **PipelineCard** - EVERYTHING AGENTS AND TOOLS MAKE FOR A NOTE, ONE LIST IN ONE PLACE (next/pipeline.md; the user, 2026-11-02: "I would always be able to find that one, stable card, to regenerate various things").
 - [`schema_form.gd`](../src/ui/schema_form.gd) **SchemaForm** - rows of controls built from a TABLE OF FIELDS, for editing one map of data.
 - [`script_highlighter.gd`](../src/ui/script_highlighter.gd) **ScriptHighlighter** - colors a script by the marks the panel reading it understands.
@@ -277,7 +283,7 @@ What the show is carried on: the `Medium` base and its registry, each medium ([m
 - [`film.gd`](../src/media/film.gd) **FilmScene** - a panel of real footage, cut into the comic among the drawn ones.
 - [`films.gd`](../src/media/films.gd) **Films** - the library of imported video clips a comic panel can be filled with.
 - [`full.gd`](../src/media/full.gd) **FullMedium** - one scene, filling the frame. What ghost has always done.
-- [`illustration_panel.gd`](../src/media/illustration_panel.gd) **IllustrationPanel** - the Generative panel's controls for a book's pictures (`Illustrations`).
+- [`illustration_panel.gd`](../src/media/illustration_panel.gd) **IllustrationPanel** - THE NOTE'S PICTURES, listed and made: what the Pictures card (`PicturesCard`) holds, whatever the note is shown in (`Illustrations`, the library that paints and keeps them).
 - [`illustrations.gd`](../src/media/illustrations.gd) **Illustrations** - the library of generated pictures a book prints.
 - [`medium.gd`](../src/media/medium.gd) **Medium** - what the show is carried ON. The presentation axis.
 - [`notebook.gd`](../src/media/notebook.gd) **NotebookMedium** - the reading as a research notebook, written by hand, open on a desk.
@@ -296,7 +302,8 @@ The player: the Director's schedule and transitions, the one transport, karaoke 
 - [`director.gd`](../src/show/director.gd) **director** - 
 - [`filters.gd`](../src/show/filters.gd) **Filters** - the LOOK the whole picture is put through, after the scenes have drawn.
 - [`look_card.gd`](../src/show/look_card.gd) **LookCard** - the Look: a post-process over the whole picture, one row per filter in `Filters.REGISTRY` (next/notes.md step 5: one card per section, in every panel that has it - the Generative panel built it and the Cards panel borrowed it by inheriting the whole panel).
-- [`picture_card.gd`](../src/show/picture_card.gd) **PictureCard** - the picture a reading is shown in: the MEDIUM (what the show is carried on), the FILMS a comic cuts to, the book's PICTURES (`IllustrationPanel`), and the Director's dials - scene hold, flourishes, camera, handwriting (next/notes.md step 5: one card per section). Its block in a document is ...
+- [`picture_card.gd`](../src/show/picture_card.gd) **PictureCard** - the picture a reading is shown in: the MEDIUM (what the show is carried on), the FILMS a comic cuts to, and the Director's dials - scene hold, flourishes, camera, handwriting (next/notes.md step 5: one card per section). Its block in a document is `picture:`. The pictures a book, a notebook or a ...
+- [`pictures_card.gd`](../src/show/pictures_card.gd) **PicturesCard** - THE NOTE'S PICTURES, ONE CARD (2026-11-06, the user: "if we are generating images, we are doing it from a unified place: not from a bunch of disparate cards. And the reason is maintainability"). Every picture the note's words describe is painted, painted again, stepped between, deleted or replaced ...
 - [`song_card.gd`](../src/show/song_card.gd) **SongCard** - the note's song (2026-10-06): which file it is, and a way to choose one. Importing a song is a component of a note, not a button on the notes list - "if we want to import an audio file or a video file - then we should add those relevant components/attachments to the note".
 - [`subtitle_sea.gd`](../src/show/subtitle_sea.gd) **SubtitleSea** - the water the subtitles' color moves on.
 - [`subtitles.gd`](../src/show/subtitles.gd) **Subtitles** - the karaoke overlay, session-owned rather than editor-owned.
@@ -455,6 +462,19 @@ A note read as a letter written by hand at a desk: the card that pins its medium
 - [`letter_card.gd`](../src/letter/letter_card.gd) **LetterCard** - the Letter component's card: the note read as a letter, written by hand at a desk while the voice reads it (next/letter.md, `LetterMedium`).
 - [`letter_sketches.gd`](../src/letter/letter_sketches.gd) **LetterSketches** - a letter's sketches, made: each `<!-- sketch: ... -->` drawn as SVG by an agent from its words (`RULES`), then laid out by ghost's own TeX and figure reader (hosts/math/typeset.py, the Proof pad's ink step) into what the pen draws (`LetterMedium`).
 - [`letter_walk.gd`](../src/letter/letter_walk.gd) **LetterWalk** - a letter reads its own words, as the desk writes them: the voice is handed the letter with the pen's rests in it (`LetterScript.speakable`) - a turn of the page, a strike, a tap, a drawing the pen owes after its paragraph, a line written and never said - sized from what the Letter card made ...
+
+### `dispatch/` - Dispatch desk
+
+A note played at a desk late at night in a hollow under the ground, seen from the chair: the script's marks read into the desk's actions and the voice's rests (calls, rings, texts, pings, the terminal's typed and shown blocks, the printer, the static), the desk and everything on it built by code (a beige terminal, a dozen labeled flip phones, a radar, a shortwave receiver, a printer, small screens), the roots grown over and across it, every sound synthesized, the medium that turns its camera to whatever is active, and the card that pins it and paints its pictures. Design: next/dispatch.md.
+
+- [`dispatch.gd`](../src/dispatch/dispatch.gd) **DispatchMedium** - ONE DESK, LATE AT NIGHT, IN A HOLLOW UNDER THE GROUND, SEEN FROM THE CHAIR (next/dispatch.md; the user's Targeted Individuality: "the desk, with the terminal-style computer, and the cell phones, and the gadgets on the table - with the ability to shift between the different things ... look left and ...
+- [`dispatch_card.gd`](../src/dispatch/dispatch_card.gd) **DispatchCard** - the Dispatch desk component's card: the note played at a desk late at night, seen from the chair - a terminal that types, a dozen labeled phones that ring and are held to the ear, a radar, a receiver, a printer, small screens, roots growing across the desk (`DispatchMedium`, next/dispatch.md).
+- [`dispatch_roots.gd`](../src/dispatch/dispatch_roots.gd) **DispatchRoots** - THE ROOTS OF THE HOLLOW (next/dispatch.md; the user: "large roots crawling downward from the ceiling, as if we are underground. Some of the roots should extend past/below the table, while others should reach ON to the table, and grow across it toward us, the camera/actor. Just simple roots, ...
+- [`dispatch_screens.gd`](../src/dispatch/dispatch_screens.gd) **DispatchScreens** - WHAT THE DESK'S SCREENS AND LABELS SHOW, drawn in 2D (next/dispatch.md): the terminal's pale green text on black (asleep, dark), the radar's sweep and its blip with the place written beside it, the oscilloscope's trace, a phone's two little screens, the printer's paper as it feeds; and, drawn once, ...
+- [`dispatch_script.gd`](../src/dispatch/dispatch_script.gd) **DispatchScript** - a note as the dispatch desk plays it (next/dispatch.md): what the voice reads, the words it says, and everything the desk does between and alongside them.
+- [`dispatch_set.gd`](../src/dispatch/dispatch_set.gd) **DispatchSet** - THE DESK AND EVERYTHING ON IT, built (next/dispatch.md): one heavy dark desk with a worn green blotter in a hollow under the ground, seen from the chair - the terminal (a deep beige CRT on a flat desktop case with a floppy slot, a narrow keyboard on a coiled cable), the dozen flip phones in two ...
+- [`dispatch_sounds.gd`](../src/dispatch/dispatch_sounds.gd) **DispatchSounds** - THE DESK, HEARD (next/dispatch.md): a phone flipped open and snapped shut, its keys dialing and the ring in its earpiece, a phone buzzing and rattling against its neighbors in the row, the terminal's keys, the printer's screech, the radar's ping, the toggle's click, the mug set down, the receiver's ...
+- [`dispatch_walk.gd`](../src/dispatch/dispatch_walk.gd) **DispatchWalk** - the dispatch desk reads its note as the desk plays it: the voice is handed the script with the desk's rests in it and every voice through a phone marked so (`DispatchScript.speakable`) - a phone dialed and ringing, a ping, the printer, the static - the typed blocks said as they are typed and ...
 
 ### `likeness/` - Likeness
 

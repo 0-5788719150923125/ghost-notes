@@ -25,7 +25,8 @@ class_name NoteCards
 ## The components whose settings are a card any workspace can show, in the order they stand:
 ## the rows of [constant Components.REGISTRY] that name a `script`. Cards' and Proof's episodes
 ## first, then the voice that reads them: what produces the text stands above what shows it.
-const KEYS := ["table", "proof", "voice", "voice_training", "picture", "letter", "actor", "storyboard", "look", "bookends", "youtube"]
+const KEYS := ["table", "proof", "voice", "voice_training", "picture", "letter", "dispatch", "illustrations", "actor", "storyboard",
+	"look", "bookends", "youtube"]
 
 
 ## A card for each of [param attached] that is one of [constant KEYS] (and of [param ctx]'s
@@ -41,9 +42,9 @@ static func build(panel: SidePanel, attached: Array, ctx := {}) -> Dictionary:
 		var card := make(key, ctx)
 		var row: Dictionary = Components.REGISTRY[key]
 		# the card's id is its row's `card` (the panel keeps each card's fold under it), its title
-		# the row's `heading` where it has one
+		# the row's `heading` where it has one; a part that only comes with another has no × of its own
 		var body := panel.add_card(String(row.get("card", card.KEY)), String(row.get("heading", row["label"])),
-			row["family"], key)
+			row["family"], key if not Components.attach_blocks(key).is_empty() else "")
 		var why := Components.needs_note(key, attached)
 		if not why.is_empty():
 			body.add_child(_waiting(why))

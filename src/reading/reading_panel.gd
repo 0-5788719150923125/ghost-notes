@@ -356,11 +356,6 @@ func _note_cards(producers: bool) -> void:
 	var built := NoteCards.build(_panel, have, with)
 	for key in built:
 		_add_block(built[key])
-	# THE BOOK'S PICTURES are set inside a card - the Picture's, the Letter's - and keep a block of their own
-	for key in built:
-		var card: Object = built[key]
-		if card.has_method("illustrations"):
-			_add_block(card.call("illustrations"))
 
 
 ## Which of a note's component cards this workspace shows, of [constant NoteCards.KEYS]: its row's
@@ -380,9 +375,10 @@ func _components() -> Array:
 ## ...AND ITS VOICE, ALWAYS, for the cards and the blocks they keep: a reading is the voice's
 ## workspace, and a show of cards or a proof requires one - before its note carries the block. AND
 ## WHAT ITS COMPONENTS BRING ([method Components.with_required]): a Likeness brings an Actor, whose card
-## stands beside it from the first open (attaching writes the Likeness's block alone).
+## stands beside it from the first open (attaching writes the Likeness's block alone). AND WHAT COMES WITH
+## THEM ([method Components.with_parts]): the Pictures card beside a Picture, a Letter or a Dispatch desk.
 func _voiced() -> Array:
-	var have: Array = Components.with_required(_components())
+	var have: Array = Components.with_parts(Components.with_required(_components()))
 	if not have.has("voice"):
 		have.append("voice")
 	return have
@@ -786,11 +782,12 @@ func _doc_apply(blocks: Dictionary) -> void:
 		voice.apply(blocks[VoiceCard.KEY] as Dictionary)
 
 
-## The script's text, whenever the cast is read from it: the book's pictures follow it.
+## The script's text, whenever the cast is read from it: the cards that follow the words (the note's pictures) follow it.
 func _script_text_changed(body: String) -> void:
-	var picture := _block_cards.get("picture") as PictureCard
-	if picture != null:
-		picture.set_script_text(body)
+	for key in _block_cards:
+		var card: Object = _block_cards[key]
+		if card != null and card.has_method("set_script_text"):
+			card.call("set_script_text", body)
 
 
 ## What [method export_take] hands the book medium, and what main gives a live one: the
@@ -1122,6 +1119,7 @@ func _render_take() -> String:
 			cfg = _cast.cfg_of(String(m["speaker"]))
 			leans = leans or float(cfg["lean"]) > 0.0 or absf(float(cfg.get("seat", 0.0))) > 0.5
 			Delivery.apply_fx(fx, cfg)
+			fx.heard = String(m.get("heard", ""))
 		if m.has("near"):
 			Delivery.near_to(fx, m["near"])
 		var a := int(m["at"])

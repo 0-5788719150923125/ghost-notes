@@ -18,8 +18,9 @@ extends SceneTree
 ##     big enough to lift every shadow off the plane would pass all of the above.
 ##
 ## Two-sided: the same scenes lit as the candles were before (a 1.5 cm light, PCSS, on a 4096 atlas without
-## debanding) shade the deck's open top and stair past the bounds; and the candle's filter without its
-## normal bias rings.
+## debanding) shade the deck's open top, ring and stair past the bounds; and a thin thing at a graze, its shadow
+## drawn as a cube copied into the paraboloids, strays from its line (feedback 0024). (Drawn straight into its
+## paraboloids, a candle's cloth keeps its light without the normal bias too: that control is gone.)
 ##
 ##   tests/run_quiet.sh table_shadow_check
 ##
@@ -31,11 +32,13 @@ const H := 480
 const POOL := Rect2(0.04, -0.15, 0.6, 0.3)
 const FLAME := Vector3(0.0, 0.072, 0.0)
 const DECK := AABB(Vector3(0.315, 0.0, -0.06), Vector3(0.07, 0.02, 0.12))
-const OPEN_LEAST := 0.97
+const OPEN_LEAST := 0.99
 const RINGS_MOST := 0.001
 const PLATE_H := 0.006
 ## Pixels of the plate's picture (0.04 mm each): a fifth of a millimeter, where the old stairs strayed two.
 const STAIRS_MOST := 5.0
+## ...and of the thin thing's (0.08 mm each).
+const ROD_STAIRS_MOST := 4.0
 ## The rows read together for each point of an edge: the filter's own grain is finer than a stair.
 const EDGE_ROWS := 8
 
@@ -56,24 +59,32 @@ func _run() -> void:
 	var off := await _shoot(POOL, _flame("off"), true)
 	var off_before := await _shoot(POOL, _flame("off"), false)
 	var candle := _pool(await _shoot(POOL, _flame("candle"), true), off)
-	var bare := _pool(await _shoot(POOL, _flame("bare"), true), off)
 	var before := _pool(await _shoot(POOL, _flame("before"), false), off_before)
 	_ok(float(candle["plane"]) >= OPEN_LEAST and float(candle["deck"]) >= OPEN_LEAST,
 		"open cloth and a deck's top keep their light: %.3f and %.3f of it unshadowed" % [float(candle["plane"]), float(candle["deck"])])
 	_ok(float(before["deck"]) < OPEN_LEAST, "the control shades the deck's own top: %.3f" % float(before["deck"]))
 	_ok(float(candle["rings"]) < RINGS_MOST, "no rings round the flame: %.3f%% off a running mean, over %d mm" % [float(candle["rings"]) * 100.0, int(candle["bins"])])
-	_ok(float(bare["rings"]) > RINGS_MOST * 2.0, "the control rings (no normal bias): %.3f%%" % (float(bare["rings"]) * 100.0))
+	_ok(float(before["rings"]) > RINGS_MOST * 2.0, "the control rings (as the candles were): %.3f%%" % (float(before["rings"]) * 100.0))
 	var edge := await _plate("candle", true)
 	var edge_was := await _plate("before", false)
 	_ok(float(edge["stairs"]) < STAIRS_MOST, "a close caster's shadow keeps to a smooth edge: %.2f px off it" % float(edge["stairs"]))
 	_ok(float(edge["dark"]) < 0.5, "the plate's shadow is there: %.2f of the lit plane" % float(edge["dark"]))
 	_ok(float(edge_was["stairs"]) > STAIRS_MOST * 3.0, "the control stairs: %.2f px off a smooth edge" % float(edge_was["stairs"]))
+	# A THIN THING LYING AT A GRAZE (feedback 0024: a brush in a tray, a candle 30 cm behind it): its shadow's far edge a straight line - drawn
+	# straight into the candle's paraboloids, its casters cut fine ([ShadowCasters]); the control, the candle's shadow drawn as a cube and
+	# copied into them, which Godot reads through a linear sampler and smears into lumps
+	var rod := await _rod("candle")
+	var rod_cube := await _rod("cube")
+	_ok(float(rod["stairs"]) < ROD_STAIRS_MOST and float(rod["dark"]) < 0.6,
+		"a thin thing's shadow at a graze keeps to a straight edge: %.2f px off it, %.2f of the lit plane" % [float(rod["stairs"]), float(rod["dark"])])
+	_ok(float(rod_cube["stairs"]) > float(rod["stairs"]) * 2.0, "THE CONTROL: drawn as a cube, the thin thing's shadow strays only %.2f px" % float(rod_cube["stairs"]))
 	print("table_shadow_check: %s" % ("ALL OK" if _fails == 0 else "%d FAILED" % _fails))
 	quit(0 if _fails == 0 else 1)
 
 
 ## A candle's light at [constant FLAME]: as the table makes it (`candle`), casting nothing (`off`), its
-## filter with no normal bias (`bare`), or as the candles were before (`before`).
+## filter with no normal bias (`bare`), as the candles were before (`before`: a cube, sized), or as the table made it before its shadow was
+## drawn straight into its paraboloids (`cube`).
 func _flame(kind: String) -> OmniLight3D:
 	var light := OmniLight3D.new()
 	light.omni_range = 1.4
@@ -84,10 +95,14 @@ func _flame(kind: String) -> OmniLight3D:
 			light.shadow_enabled = false
 		"bare":
 			light.shadow_normal_bias = 0.0
-		"before":
-			light.light_size = 0.015
-			light.shadow_blur = 2.0
-			light.shadow_normal_bias = 0.3
+		"cube", "before":
+			light.omni_shadow_mode = OmniLight3D.SHADOW_CUBE
+			light.basis = Basis.IDENTITY
+			ShadowFilter.filter(light, Lights.SHADOW_TEXELS)
+			if kind == "before":
+				light.light_size = 0.015
+				light.shadow_blur = 2.0
+				light.shadow_normal_bias = 0.3
 	return light
 
 
@@ -142,6 +157,9 @@ func _shoot(rect: Rect2, light: OmniLight3D, table: bool, also: Array = []) -> I
 	for n in also:
 		world.add_child(n)
 	world.add_child(light)
+	# ...WHAT CASTS CUT AS THE TABLE CUTS IT ([ShadowCasters]): a paraboloid draws a big triangle's depth wrong
+	if table:
+		ShadowCasters.cut_under(world)
 	for i in 8:
 		await RenderingServer.frame_post_draw
 	var img := vp.get_texture().get_image()
@@ -196,6 +214,75 @@ func _pool(lit: Image, off: Image) -> Dictionary:
 	# a millimeter a bin from 10 to past 60 cm: fewer, and the pool was not read
 	return {"plane": float(plane[0]) / maxf(float(plane[1]), 1e-6), "deck": float(deck[0]) / maxf(float(deck[1]), 1e-6),
 		"rings": sqrt(sq / float(n)) if n > 400 else INF, "bins": n}
+
+
+## A THIN THING LYING ON THE PLANE, a rod 6 mm thick 30 cm from a flame [constant FLAME] up, across the way the light comes: how far its
+## shadow's far edge strays from a line (`stairs`, pixels of 0.08 mm) and how dark the shadow is (`dark`, of the lit plane beyond it).
+func _rod(kind: String) -> Dictionary:
+	var rect := Rect2(-0.04, 0.29, 0.08, 0.04)
+	var light := _flame(kind)
+	light.position = Vector3(0.0, 0.09, 0.0)
+	var rod := MeshInstance3D.new()
+	var cm := CylinderMesh.new()
+	cm.top_radius = 0.003
+	cm.bottom_radius = 0.003
+	cm.height = 0.15
+	rod.mesh = cm
+	var dark_mat := StandardMaterial3D.new()
+	dark_mat.albedo_color = Color(0.3, 0.3, 0.3)
+	dark_mat.roughness = 1.0
+	rod.material_override = dark_mat
+	# (turned off square to the light, as a brush lies in a tray: an edge along the map's own rows draws no stairs)
+	rod.transform = Transform3D(Basis(Vector3.UP, deg_to_rad(12.0)) * Basis(Vector3.BACK, PI / 2.0), Vector3(0.0, 0.003, 0.30))
+	var img := await _shoot(rect, light, true, [rod])
+	# the lit plane beyond the shadow (the picture's foot) and the shadow under the rod's far side
+	var lit := 0.0
+	for x in W:
+		for y in range(H - 16, H):
+			lit += img.get_pixel(x, y).get_luminance()
+	lit /= float(W * 16)
+	# where the plane comes out of the shadow going out from the light, to a fraction of a pixel, in every few columns read together
+	var xs := PackedFloat32Array()
+	var ys := PackedFloat32Array()
+	var dark := 0.0
+	var dark_n := 0
+	for x0 in range(0, W, EDGE_ROWS):
+		var col := PackedFloat32Array()
+		col.resize(H)
+		for x in range(x0, mini(x0 + EDGE_ROWS, W)):
+			for y in H:
+				col[y] += img.get_pixel(x, y).get_luminance() / float(EDGE_ROWS)
+		var lo := INF
+		for y in H:
+			lo = minf(lo, col[y])
+		var mid := (lo + lit) * 0.5
+		for y in range(H - 2, 0, -1):
+			if col[y + 1] >= mid and col[y] < mid:
+				xs.append(float(y) + (mid - col[y]) / maxf(col[y + 1] - col[y], 1e-6))
+				ys.append(float(x0) + EDGE_ROWS * 0.5)
+				# (the shadow itself, a millimeter inside its edge)
+				if y - 12 >= 0:
+					dark += col[y - 12]
+					dark_n += 1
+				break
+	dark /= maxf(float(dark_n), 1.0)
+	var mx := 0.0
+	var my := 0.0
+	for i in xs.size():
+		mx += xs[i]
+		my += ys[i]
+	mx /= maxf(float(xs.size()), 1.0)
+	my /= maxf(float(xs.size()), 1.0)
+	var sxy := 0.0
+	var syy := 0.0
+	for i in xs.size():
+		sxy += (ys[i] - my) * (xs[i] - mx)
+		syy += (ys[i] - my) * (ys[i] - my)
+	var slope := sxy / maxf(syy, 1e-6)
+	var sq := 0.0
+	for i in xs.size():
+		sq += pow(xs[i] - (mx + slope * (ys[i] - my)), 2.0)
+	return {"stairs": sqrt(sq / maxf(float(xs.size()), 1.0)) if xs.size() > W / EDGE_ROWS / 2 else INF, "dark": dark / maxf(lit, 1e-6)}
 
 
 func _px(rect: Rect2, at: Vector2) -> Vector2:

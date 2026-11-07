@@ -84,7 +84,7 @@ const WORKSPACES := {
 	"reading": {"label": "Reading", "section": "generative",
 		"blurb": "A voice reads the note: the cast, each speaker's delivery and room, the stream.",
 		"hint": "Write or open a chapter. It is spoken in chunks, so the show starts while the rest is still being made. Edit lists every mark the reading understands - speakers, hesitations, pictures, pronunciations.",
-		"hosts": ["voice", "voice_training", "picture", "letter", "actor", "storyboard", "look", "bookends"],
+		"hosts": ["voice", "voice_training", "picture", "letter", "dispatch", "illustrations", "actor", "storyboard", "look", "bookends"],
 		"classic": ["text", "voice", "picture", "illustrations", "look", "bookends"]},
 	# (its settings keep the section they had as Cards: renamed, the workspace would forget them)
 	"table": {"label": "Table", "section": "cards", "mode": "table",
@@ -145,11 +145,15 @@ const REGISTRY := {
 		"needs": ["picture"], "provides": ["places"], "requires": ["scenes"], "slots": ["presentation"], "workspace": "",
 		"capabilities": ["forward_plus"], "marks": ["typography", "tablet"], "block": "picture", "card": "picture",
 		"script": "res://src/show/picture_card.gd"},
-	"illustrations": {"label": "Illustrations", "family": &"picture",
-		"blurb": "The book's pictures, painted by an agent from the marks in the text, or imported.",
-		"needs": ["text", "places"], "provides": ["picture"], "requires": [], "comes_with": ["picture", "letter"],
+	# THE NOTE'S PICTURES, ONE CARD (2026-11-06): whatever presents the note, its pictures are painted, stepped between or
+	# imported here - which marks are pictures is the presentation's to say (Medium.pictures_of). It comes with each
+	# presentation that can show them and is never attached by itself.
+	"illustrations": {"label": "Pictures", "family": &"picture",
+		"blurb": "The note's pictures, painted by an agent from the image marks in its words or imported from a file - one card, whatever the note is shown in: a novel, a notebook, a tablet, a letter, a dispatch desk.",
+		"needs": ["text"], "provides": ["picture"], "requires": [], "comes_with": ["picture", "letter", "dispatch"],
 		"slots": [], "workspace": "",
-		"capabilities": ["forward_plus"], "marks": ["pictures"], "block": "illustrations", "card": "picture"},
+		"capabilities": ["forward_plus"], "marks": ["pictures"], "block": "illustrations", "card": "pictures",
+		"script": "res://src/show/pictures_card.gd"},
 	"look": {"label": "Look", "family": &"look",
 		"blurb": "A post-process over the whole picture: grain, noir, a vignette, and the rest.",
 		"needs": ["picture"], "provides": [], "requires": [], "slots": [], "workspace": "",
@@ -186,8 +190,8 @@ const REGISTRY := {
 		"intro_tip": "Seconds the desk holds before the teacher speaks.",
 		"outro_tip": "Seconds held after the last word, the page on the desk, fading picture and sound out together."},
 	# A LETTER WRITTEN AT A DESK (next/letter.md, 2026-10-26): the note's words are the letter, written by
-	# hand while the voice reads them; its card draws the sketches and paints the pictures its marks
-	# describe, and pins its medium. It brings a Voice.
+	# hand while the voice reads them; its card draws the sketches and pins its medium, and the Pictures card
+	# comes with it for the pictures its marks describe. It brings a Voice.
 	"letter": {"label": "Letter", "family": &"picture",
 		"blurb": "The note read as a letter written by hand at a desk: the pen writes each paragraph as the voice reads it, crosses lines out, draws the sketches the letter describes, taps while the writer thinks, and a picture takes the screen for a passage read over it.",
 		"needs": ["reading"], "provides": ["picture"], "requires": ["voice"],
@@ -196,6 +200,18 @@ const REGISTRY := {
 		"block": "letter", "card": "letter", "script": "res://src/letter/letter_card.gd",
 		"intro_tip": "Seconds the desk holds before the letter is begun, its title over it.",
 		"outro_tip": "Seconds held after the pen's last stroke, the page on the desk, fading picture and sound out together."},
+	# A DESK LATE AT NIGHT, SEEN FROM THE CHAIR (next/dispatch.md, 2026-11-06): the note's words are the script, played
+	# at a desk in a hollow under the ground - a terminal, labeled phones, a radar, a receiver, a printer, small screens,
+	# the camera turning to whatever is active; its card pins its medium, and the Pictures card comes with it for the
+	# pictures its marks describe. It brings a Voice.
+	"dispatch": {"label": "Dispatch desk", "family": &"picture",
+		"blurb": "The note played at a desk late at night, seen from the chair: an old terminal types what is said and shows what is written, a dozen labeled flip phones ring and are held to the ear (every voice but the room's heard through one), a radar pings, a receiver crackles, a printer prints, small screens show pictures - the camera turning gently to whatever is active, roots growing across the desk.",
+		"needs": ["reading"], "provides": ["picture"], "requires": ["voice"],
+		"slots": ["presentation"], "workspace": "",
+		"capabilities": ["forward_plus"], "marks": ["dispatch"],
+		"block": "dispatch", "card": "dispatch", "script": "res://src/dispatch/dispatch_card.gd",
+		"intro_tip": "Seconds the desk holds before the first word, its title over it.",
+		"outro_tip": "Seconds held after the last word, the desk in the dark, fading picture and sound out together."},
 	# AN ACTOR READS THE NOTE (next/likeness.md): its card builds them from their own videos - the footage
 	# surveyed and cut into sets, a still of the set in use, a model of them and their voice from every
 	# video - and puts them on the stage, the still moved by their own motion, the mouth and eyes drawn
@@ -271,6 +287,8 @@ static func attach_blocks(key: String) -> Dictionary:
 			return {"actor": {}}
 		"letter":
 			return {"letter": {}}
+		"dispatch":
+			return {"dispatch": {}}
 		"voice_training":
 			return {"voice_training": {}}
 		"song":
@@ -364,6 +382,17 @@ static func with_required(keys: Array) -> Array:
 			continue
 		out.append(k)
 		todo.append_array((REGISTRY[k] as Dictionary)["requires"])
+	return out
+
+
+## [param keys] and what COMES WITH them ([member REGISTRY]'s `comes_with`): a part never attached by itself, stood beside
+## whichever of its hosts a note has - the Pictures card beside a Picture, a Letter or a Dispatch desk.
+static func with_parts(keys: Array) -> Array:
+	var out := keys.duplicate()
+	for k in REGISTRY:
+		var hosts: Array = (REGISTRY[k] as Dictionary).get("comes_with", [])
+		if not out.has(k) and hosts.any(func(h: String) -> bool: return keys.has(h)):
+			out.append(k)
 	return out
 
 

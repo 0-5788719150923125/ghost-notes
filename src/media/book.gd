@@ -262,7 +262,8 @@ func _build_world() -> void:
 	_env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	_env.ambient_light_color = Color(0.55, 0.5, 0.45)
 	_env.ambient_light_energy = 0.32
-	_env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	# THE TONEMAPPER, as the Look has it ([Tonemaps]): Filmic unless a note picks another, at the exposure tuned under Filmic
+	Tonemaps.dress(_env, 1.0)
 	_env.adjustment_enabled = true
 	_cam = Camera3D.new()
 	_cam.fov = VFOV
@@ -300,6 +301,8 @@ func _build_world() -> void:
 	dmat.albedo_color = Color(0.40, 0.24, 0.15)
 	dmat.albedo_texture = _grime(0x5EED, 0.02, 5, 0.16)
 	dmat.uv1_scale = Vector3(8.0, 8.0, 1.0)
+	# the desk is seen at a slant: filtered across it (Graphics' Texture filtering)
+	dmat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	dmat.roughness = 0.62
 	dmat.roughness_texture = dmat.albedo_texture
 	desk.material_override = dmat

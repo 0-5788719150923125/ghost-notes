@@ -28,6 +28,8 @@ var _normals0 := PackedVector3Array()  # each vertex's normal as built: what it 
 
 ## [param mi]'s mesh made ready to bend by [param points], where [param built] carries the mesh's space to the table's as the sheet was built. Null: not a mesh this can bend.
 static func of(mi: MeshInstance3D, built: Transform3D, points: PackedVector3Array) -> SheetBend:
+	# (bent again every frame, it casts its own shadow: a twin cut once would keep it flat - ShadowCasters)
+	mi.set_meta("shadow_own", true)
 	var mesh := mi.mesh as ArrayMesh
 	if mesh == null or mesh.get_surface_count() != 1 or mesh.surface_get_primitive_type(0) != Mesh.PRIMITIVE_TRIANGLES:
 		return null

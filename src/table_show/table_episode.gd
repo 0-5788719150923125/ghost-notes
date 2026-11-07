@@ -25,6 +25,9 @@ const INTRO_CHAPTER := "Intro"
 const CLOSE_CHAPTER := "The close"
 ## What a game's session asks to have painted: a list of [method game] -> the pictures' step word.
 const GAME_PICTURES := {"maps": "map", "figures": "figure", "reveals": "reveal"}
+## WHAT COMES WITH THE FACE PAINTED FIRST (`image:face`, `face.png`): the bare surface it was painted on, where the surface lies in it
+## and which one it is, and the painting as the surface wears it ([method TableProducer._make_image], [method TableProducer._land_face]).
+const FACE_FILES := ["face_bare.png", "face.json", "face_ref.png"]
 
 ## Where shows live. Moved aside under test, so a gate never touches the author's episodes.
 static var root := ROOT
@@ -289,6 +292,8 @@ func steps() -> Array:
 		out.append_array(["image:surface", "image:backdrop", "table"])
 		if wants_height():
 			out.append("image:height")
+		if wants_face():
+			out.append_array(["image:face", "check:face"])
 		if wants_skin():
 			out.append("skin")
 		if not work_plan().is_empty():
@@ -311,6 +316,8 @@ func steps() -> Array:
 	# THE WORK AT THE TABLE, where the plan has any (next/table_work.md): the puppeteer blocks it once the
 	# table is set and the cards are drawn
 	var works := work_plan()
+	if wants_face():
+		out.append_array(["image:face", "check:face"])
 	if wants_skin():
 		out.append("skin")
 	if not works.is_empty():
@@ -434,6 +441,9 @@ func needs(step: String) -> Array:
 			var k := int(parts[1])
 			return ["draw"] if k <= 1 else ["draw", "design:%d" % (k - 1)]
 		"check":
+			# ...and at the face painted first, as it was asked for
+			if String(parts[1]) == "face":
+				return ["image:face"]
 			# the art director looks at a card's painting as it is described and printed
 			var k := int(parts[1])
 			return ["design:%d" % k, "image:card:%d" % k]
@@ -457,6 +467,9 @@ func needs(step: String) -> Array:
 			if String(parts[1]) == "height":
 				# the painting's depth is painted FROM the painting, once the table says it is wanted
 				return ["image:surface", "table"]
+			if String(parts[1]) == "face":
+				# what is painted, painted first ON the surface the table stands it on (feedback 0023)
+				return ["plan", "table"]
 			return ["plan"]
 		"say":
 			var who := String(parts[1])
@@ -492,8 +505,8 @@ func needs(step: String) -> Array:
 		"model":
 			return ["plan"]
 		"skin":
-			# what is painted is designed on the surface the table stands it on
-			return ["plan", "table"]
+			# what is painted is designed on the surface the table stands it on - copied from the face painted on it first, looked at
+			return ["plan", "table"] + (["image:face", "check:face"] if wants_face() else [])
 		"table":
 			# the table is set from the plan, LOOKING AT the cloth it stands on - and at the room, which
 			# its light must agree with (where the windows are, which side the sun comes from)
@@ -599,6 +612,16 @@ func wants_skin() -> bool:
 	return p is Dictionary and not String((p as Dictionary).get("painted", "")).strip_edges().is_empty()
 
 
+## WHETHER WHAT IS PAINTED IS PAINTED FIRST AS A PICTURE, AND COPIED (feedback 0023; next/painted_surface.md): an episode that designs what is
+## painted, with no design yet - one designed before there were paintings goes on as it was made, and designing it again starts from one.
+func wants_face() -> bool:
+	if has("image:face"):
+		return true
+	if has("skin"):
+		return false
+	return wants_skin()
+
+
 ## WHETHER THIS EPISODE DESIGNS WHAT IT BUILDS FIRST ([AssemblyModel]): a plan that builds, unless its work was blocked before there were models to build to - a finished episode goes on as it was made, and blocking its work again starts from a model.
 func wants_model() -> bool:
 	if has("model"):
@@ -654,7 +677,7 @@ func invalidate(step: String, keep_sent := false) -> Array:
 					or fs.begins_with("check_") or fs.begins_with("sent_back_") \
 					or fs == "script.md" or fs == "acts.json" or fs == "game.json" or fs == "prep.json" or fs.begins_with("events_") \
 					or fs.begins_with("map_") or fs.begins_with("figure_") or fs.begins_with("reveal_") or (step == "plan" and (fs in ["draw.json", "back.png", "surface.png",
-					"backdrop.png", "height.png", "height.json"] or fs.begins_with("back_"))):
+					"backdrop.png", "height.png", "height.json"] or fs.begins_with("back_") or fs.begins_with("face"))):
 				DirAccess.remove_absolute(dir.path_join(fs))
 	for s in gone:
 		var p := file_of(String(s))
@@ -663,23 +686,30 @@ func invalidate(step: String, keep_sent := false) -> Array:
 		# the height map's fit goes with it
 		if String(s) == "image:height" and FileAccess.file_exists(dir.path_join("height.json")):
 			DirAccess.remove_absolute(dir.path_join("height.json"))
+		# ...and the face's canvas, where it lies and what the surface wears of it ([method TableProducer._land_face]); and what was sent back
+		# of it, unless the art director sent it back
+		if String(s) == "image:face":
+			for f in FACE_FILES:
+				DirAccess.remove_absolute(dir.path_join(String(f)))
+			if not keep_sent:
+				DirAccess.remove_absolute(_sent_back_file("face"))
 		var card := String(s).trim_prefix("image:card:").trim_prefix("design:")
 		if not keep_sent and card != String(s) and card.is_valid_int():
 			DirAccess.remove_absolute(_sent_back_file(int(card)))
 	return gone
 
 
-## WHAT THE ART DIRECTOR SENT BACK of card [param k]'s paintings so far, a list of faults per
+## WHAT THE ART DIRECTOR SENT BACK of card [param k]'s paintings so far (or "face", the face painted first's), a list of faults per
 ## painting sent back, oldest first - kept beside the episode, not a step: the painting it was said of
 ## is gone, and the painter of the next is told it ([method TableProducer._make_image]).
-func sent_back(k: int) -> Array:
+func sent_back(k: Variant) -> Array:
 	var raw := FileAccess.get_file_as_string(_sent_back_file(k))
 	var j := JSON.new()
 	return j.data if not raw.is_empty() and j.parse(raw) == OK and j.data is Array else []
 
 
 ## Card [param k]'s painting sent back for [param faults]: added to [method sent_back]. "" written.
-func send_back(k: int, faults: Array) -> String:
+func send_back(k: Variant, faults: Array) -> String:
 	var rounds := sent_back(k)
 	rounds.append(faults)
 	var p := _sent_back_file(k)
@@ -692,8 +722,8 @@ func send_back(k: int, faults: Array) -> String:
 	return "" if DirAccess.rename_absolute(p + ".part", p) == OK else "could not move %s into place" % p
 
 
-func _sent_back_file(k: int) -> String:
-	return dir.path_join("sent_back_%d.json" % k)
+func _sent_back_file(k: Variant) -> String:
+	return dir.path_join("sent_back_%s.json" % str(k))
 
 
 ## THE PRINTINGS in the full collection, including ones none of tonight's cards came from,

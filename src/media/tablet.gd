@@ -245,7 +245,8 @@ func _build_world() -> void:
 	_env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	_env.ambient_light_color = Color(0.55, 0.5, 0.45)
 	_env.ambient_light_energy = 0.3
-	_env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	# THE TONEMAPPER, as the Look has it ([Tonemaps]): Filmic unless a note picks another, at the exposure tuned under Filmic
+	Tonemaps.dress(_env, 1.0)
 	_env.adjustment_enabled = true
 	_cam = Camera3D.new()
 	_cam.fov = VFOV
@@ -278,6 +279,8 @@ func _build_world() -> void:
 	dmat.albedo_color = Color(0.40, 0.24, 0.15)
 	dmat.albedo_texture = BookMedium._grime(0x7AB1, 0.02, 5, 0.16)
 	dmat.uv1_scale = Vector3(8.0, 8.0, 1.0)
+	# the desk is seen at a slant: filtered across it (Graphics' Texture filtering)
+	dmat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	dmat.roughness = 0.62
 	dmat.roughness_texture = dmat.albedo_texture
 	desk.material_override = dmat
@@ -516,6 +519,12 @@ func layout(p: int, o: int) -> TabletPage:
 		lp.build(_doc, p, L.x, (L.y - TOP) * 2.4)
 		_lays[k] = lp
 	return _lays[k]
+
+
+## WHAT THIS MEDIUM SHOWS AS PICTURES ([method Medium.pictures_of], the note's Pictures card): the chapter's pictures,
+## then its REAL pages, captured from the web and never painted (a row with a `url`).
+static func pictures_in(body: String) -> Array:
+	return Manuscript.images(body) + TabletScript.snapshots(body)
 
 
 static func logical(o: int) -> Vector2:

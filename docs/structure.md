@@ -5,15 +5,16 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 589 references inside a folder, 1001 down the stack, 0 up it.
+Between scripts today: 607 references inside a folder, 1058 down the stack, 0 up it.
 
 ## The stack, top first
 
 | folder | what it is | scripts | names |
 | --- | --- | --- | --- |
-| `app/` | The shell | 13 | `masking`, `letter`, `table_show`, `table`, `reading`, `export`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `audio`, `platform`, `data` |
+| `app/` | The shell | 13 | `masking`, `letter`, `table_show`, `table`, `reading`, `export`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `render`, `audio`, `platform`, `data` |
 | `masking/` | Masking | 15 | `timeline`, `voice`, `ui`, `notes`, `platform`, `data` |
 | `likeness/` | Likeness | 15 | `table`, `reading`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `scene_kit`, `platform`, `data` |
+| `dispatch/` | Dispatch desk | 8 | `desk`, `table`, `reading`, `show`, `media`, `scene_kit`, `render`, `data` |
 | `letter/` | Letter | 3 | `desk`, `reading`, `show`, `media`, `ui`, `notes`, `agents`, `platform`, `data` |
 | `proof/` | Proof | 6 | `desk`, `reading`, `export`, `show`, `ui`, `notes`, `agents`, `platform`, `data` |
 | `desk/` | The desk | 9 | `table`, `media`, `scene_kit`, `render`, `data` |
@@ -22,10 +23,10 @@ Between scripts today: 589 references inside a folder, 1001 down the stack, 0 up
 | `reading/` | The voice's workspaces | 12 | `export`, `show`, `media`, `voice`, `ui`, `notes`, `audio`, `platform`, `data` |
 | `export/` | Export | 5 | `show`, `media`, `voice`, `ui`, `notes`, `agents`, `stage`, `scene_kit`, `audio`, `platform`, `data` |
 | `timeline/` | The storyboard's editor | 5 | `show`, `ui`, `scenes`, `stage`, `audio`, `data` |
-| `show/` | The show | 9 | `media`, `ui`, `scenes`, `stage`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
+| `show/` | The show | 10 | `media`, `ui`, `notes`, `scenes`, `stage`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
 | `media/` | Media | 20 | `voice`, `ui`, `notes`, `agents`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
 | `voice/` | Synthesis (voice) | 14 | `audio`, `platform`, `data` |
-| `ui/` | The panel kit | 19 | `notes`, `agents`, `platform`, `data` |
+| `ui/` | The panel kit | 22 | `notes`, `agents`, `render`, `platform`, `data` |
 | `notes/` | Notes | 10 | `agents`, `stage`, `platform`, `data` |
 | `agents/` | Agents | 6 | `platform`, `data` |
 | `scenes/` | Scenes | 59 | `stage`, `scene_kit`, `geometry`, `motion`, `render`, `audio` |
@@ -33,7 +34,7 @@ Between scripts today: 589 references inside a folder, 1001 down the stack, 0 up
 | `scene_kit/` | Scene substrate | 8 | `geometry`, `motion`, `render`, `audio`, `data` |
 | `geometry/` | Generative form | 12 | `motion`, `render` |
 | `motion/` | Motion & simulation | 13 | `render`, `audio` |
-| `render/` | Drawing | 8 | nothing |
+| `render/` | Drawing | 11 | `data` |
 | `audio/` | Audio & analysis | 7 | `platform` |
 | `platform/` | The machine | 11 | `data` |
 | `data/` | Plain data | 7 | nothing |
@@ -62,7 +63,7 @@ From a song file to the typed per-frame `AudioFeatures` every scene consumes - l
 
 How things get drawn and how a heavy scene stays interactive: thousands of shapes in one draw call, geometry built off the main thread, the lens, planes and meshes of the software 3D path, color, and how soft a light's shadow is.
 
-[`frame_forge`](../src/render/frame_forge.gd), [`lens3d`](../src/render/lens3d.gd), [`mesh3d`](../src/render/mesh3d.gd), [`palette`](../src/render/palette.gd), [`plane3d`](../src/render/plane3d.gd), [`scheme`](../src/render/scheme.gd), [`shadow_filter`](../src/render/shadow_filter.gd), [`tri_batch`](../src/render/tri_batch.gd)
+[`frame_forge`](../src/render/frame_forge.gd), [`graphics`](../src/render/graphics.gd), [`lens3d`](../src/render/lens3d.gd), [`mesh3d`](../src/render/mesh3d.gd), [`palette`](../src/render/palette.gd), [`plane3d`](../src/render/plane3d.gd), [`scheme`](../src/render/scheme.gd), [`shadow_casters`](../src/render/shadow_casters.gd), [`shadow_filter`](../src/render/shadow_filter.gd), [`tonemaps`](../src/render/tonemaps.gd), [`tri_batch`](../src/render/tri_batch.gd)
 
 ### `motion/` - Motion & simulation
 
@@ -108,7 +109,7 @@ The note as a file: where notes live, a document kept in step with its file, the
 
 What every note's panel is built from, and what it asks of the window it is in: a side panel that cannot outgrow the window and its "+", a component's folding card in its family's color and the chips over the cards, the cards a note's components bring (built from the registry's rows, attached and detached), the one list of what is made for a note (`PipelineCard`), the Script card every note has (its editor window and highlighter), rows drawn from a table of fields, two small controls, and `Shell` - the bottom-right row, room along the bottom edge, the way back to the notes. Above `notes/` because it is a kit for a note's components.
 
-[`agent_pick`](../src/ui/agent_pick.gd), [`card`](../src/ui/card.gd), [`card_row`](../src/ui/card_row.gd), [`icons`](../src/ui/icons.gd), [`note_cards`](../src/ui/note_cards.gd), [`note_editor`](../src/ui/note_editor.gd), [`note_grid`](../src/ui/note_grid.gd), [`note_tile`](../src/ui/note_tile.gd), [`panel_deck`](../src/ui/panel_deck.gd), [`pipeline_card`](../src/ui/pipeline_card.gd), [`schema_form`](../src/ui/schema_form.gd), [`script_highlighter`](../src/ui/script_highlighter.gd), [`script_writer`](../src/ui/script_writer.gd), [`shell`](../src/ui/shell.gd), [`side_panel`](../src/ui/side_panel.gd), [`tag_field`](../src/ui/tag_field.gd), [`text_field`](../src/ui/text_field.gd), [`touch_text`](../src/ui/touch_text.gd), [`volume_knob`](../src/ui/volume_knob.gd)
+[`agent_pick`](../src/ui/agent_pick.gd), [`armed_delete`](../src/ui/armed_delete.gd), [`card`](../src/ui/card.gd), [`card_row`](../src/ui/card_row.gd), [`graphics_panel`](../src/ui/graphics_panel.gd), [`icons`](../src/ui/icons.gd), [`note_cards`](../src/ui/note_cards.gd), [`note_editor`](../src/ui/note_editor.gd), [`note_grid`](../src/ui/note_grid.gd), [`note_tile`](../src/ui/note_tile.gd), [`panel_deck`](../src/ui/panel_deck.gd), [`picture_window`](../src/ui/picture_window.gd), [`pipeline_card`](../src/ui/pipeline_card.gd), [`schema_form`](../src/ui/schema_form.gd), [`script_highlighter`](../src/ui/script_highlighter.gd), [`script_writer`](../src/ui/script_writer.gd), [`shell`](../src/ui/shell.gd), [`side_panel`](../src/ui/side_panel.gd), [`tag_field`](../src/ui/tag_field.gd), [`text_field`](../src/ui/text_field.gd), [`touch_text`](../src/ui/touch_text.gd), [`volume_knob`](../src/ui/volume_knob.gd)
 
 ### `voice/` - Synthesis (voice)
 
@@ -126,7 +127,7 @@ What the show is carried on: the `Medium` base and its registry, each medium ([m
 
 The player: the Director's schedule and transitions, the one transport, karaoke subtitles, the Look over the whole picture, and the cards of the show's own settings.
 
-[`bookends_card`](../src/show/bookends_card.gd), [`director`](../src/show/director.gd), [`filters`](../src/show/filters.gd), [`look_card`](../src/show/look_card.gd), [`picture_card`](../src/show/picture_card.gd), [`song_card`](../src/show/song_card.gd), [`subtitle_sea`](../src/show/subtitle_sea.gd), [`subtitles`](../src/show/subtitles.gd), [`transport`](../src/show/transport.gd)
+[`bookends_card`](../src/show/bookends_card.gd), [`director`](../src/show/director.gd), [`filters`](../src/show/filters.gd), [`look_card`](../src/show/look_card.gd), [`picture_card`](../src/show/picture_card.gd), [`pictures_card`](../src/show/pictures_card.gd), [`song_card`](../src/show/song_card.gd), [`subtitle_sea`](../src/show/subtitle_sea.gd), [`subtitles`](../src/show/subtitles.gd), [`transport`](../src/show/transport.gd)
 
 ### `timeline/` - The storyboard's editor
 
@@ -175,6 +176,12 @@ A ghost doing math, made by agents: a note's problem fixed, worked at the desk w
 A note read as a letter written by hand at a desk: the card that pins its medium, draws its sketches (an agent's SVG, laid out by the Proof pad's ink step) and paints its pictures (the Illustrations library's), and hands the reading the letter with the pen's rests in it. Design: next/letter.md.
 
 [`letter_card`](../src/letter/letter_card.gd), [`letter_sketches`](../src/letter/letter_sketches.gd), [`letter_walk`](../src/letter/letter_walk.gd)
+
+### `dispatch/` - Dispatch desk
+
+A note played at a desk late at night in a hollow under the ground, seen from the chair: the script's marks read into the desk's actions and the voice's rests (calls, rings, texts, pings, the terminal's typed and shown blocks, the printer, the static), the desk and everything on it built by code (a beige terminal, a dozen labeled flip phones, a radar, a shortwave receiver, a printer, small screens), the roots grown over and across it, every sound synthesized, the medium that turns its camera to whatever is active, and the card that pins it and paints its pictures. Design: next/dispatch.md.
+
+[`dispatch`](../src/dispatch/dispatch.gd), [`dispatch_card`](../src/dispatch/dispatch_card.gd), [`dispatch_roots`](../src/dispatch/dispatch_roots.gd), [`dispatch_screens`](../src/dispatch/dispatch_screens.gd), [`dispatch_script`](../src/dispatch/dispatch_script.gd), [`dispatch_set`](../src/dispatch/dispatch_set.gd), [`dispatch_sounds`](../src/dispatch/dispatch_sounds.gd), [`dispatch_walk`](../src/dispatch/dispatch_walk.gd)
 
 ### `likeness/` - Likeness
 

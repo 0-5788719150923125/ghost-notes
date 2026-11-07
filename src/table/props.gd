@@ -1029,7 +1029,9 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 					var txf: Transform3D = mine[0]
 					var up_v := txf.basis * Vector3.UP
 					var tuft := {"kind": String(part.get("kind", "round")), "mm": float(part.get("width", 0.7)) * 10.0,
-						"len": float(part.get("length", 2.0)) * 0.01 * up_v.length(), "root": txf * Vector3.ZERO, "axis": up_v.normalized()}
+						"len": float(part.get("length", 2.0)) * 0.01 * up_v.length(), "root": txf * Vector3.ZERO, "axis": up_v.normalized(),
+						# (the way a flat one is wide: its hairs are laid across its own x)
+						"across": (txf.basis * Vector3.RIGHT).normalized()}
 					mat.set_shader_parameter("bristle_root", tuft["root"])
 					mat.set_shader_parameter("bristle_axis", tuft["axis"])
 					mat.set_shader_parameter("bristle_len", tuft["len"])

@@ -814,6 +814,7 @@ func _fx_admit(avail: int) -> int:
 		if m.has("speaker"):
 			_fx_live_name = String(m["speaker"])
 			Delivery.apply_fx(fx, panel._cast.cfg_of(_fx_live_name))
+			fx.heard = String(m.get("heard", ""))
 		if m.has("near"):
 			Delivery.near_to(fx, m["near"])
 	if marks.is_empty():

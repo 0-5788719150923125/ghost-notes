@@ -1,23 +1,25 @@
 extends VBoxContainer
 class_name IllustrationPanel
 
-## IllustrationPanel - the Generative panel's controls for a book's pictures ([Illustrations]).
+## IllustrationPanel - THE NOTE'S PICTURES, listed and made: what the Pictures card ([PicturesCard]) holds, whatever the
+## note is shown in ([Illustrations], the library that paints and keeps them).
 ##
-## Four things, top to bottom: which painter, its model and its effort ([AgentPick]); the STYLE
-## every picture shares; the REFERENCE images that show that style rather than describe it; and
-## the chapter's own pictures, one row each, with what exists and a button to make or remake it, where
-## it can be judged. THE SAME PICTURES ARE ROWS OF THE NOTE'S PIPELINE CARD ([Section]; next/pipeline.md), with what
+## Top to bottom: which painter, its model and its effort ([AgentPick]); the STYLE every picture shares; the REFERENCE images
+## that show that style rather than describe it; Generate all (every picture with none yet); and the note's own pictures,
+## one row each, with what exists and buttons to make or remake it, or to use a file of the author's instead (Import…),
+## where it can be judged. THE SAME PICTURES ARE ROWS OF THE NOTE'S PIPELINE CARD ([Section]; next/pipeline.md), with what
 ## is being painted, Generate, and the one that paints them all again.
 ##
-## THE LIST FOLLOWS THE TEXT, not the library. [method set_script_text] is called with the
-## chapter whenever it is read, so the rows are exactly the `<!-- image: -->` markers in it,
-## in reading order - a picture whose description was edited is a new row, and the old one
-## simply stops being listed (its files stay in the cache in case the edit is undone).
+## THE LIST FOLLOWS THE TEXT, not the library. [method set_pictures] is handed the pictures the note's words call for
+## whenever they are read - which marks those are is the presentation's to say ([method Medium.pictures_of]: a letter's
+## sketches are its pen's, a tablet's pages are captured) - so the rows are exactly those, in reading order: a picture
+## whose description was edited is a new row, and the old one simply stops being listed (its files stay in the cache in
+## case the edit is undone).
 ##
 ## Nothing here generates on its own. See [Illustrations] for why.
 
 ## The block this panel keeps under a document's `ghost:` key (next/notes.md step 5): the pictures'
-## look - painter, styles, references - which travels with the chapter. Shown on the Picture card.
+## look - painter, styles, references - which travels with the note. Kept by the Pictures card.
 const KEY := "illustrations"
 
 ## A line for the panel's status: a reference image the document names is not on this machine.
@@ -28,8 +30,10 @@ signal noted(msg: String)
 const THUMB := 112
 const REF_THUMB := 44
 
-var _images: Array = []            # [Manuscript.images] rows for the current text
+var _images: Array = []            # the pictures the note's words call for ([Manuscript.images] rows, pages captured)
 var _list: VBoxContainer
+var _kind_row: HBoxContainer       # the style kind picker's row: shown once the note has a sketch to paint
+var _all: Button                   # Generate all: every picture with none yet
 var _refs: HFlowContainer
 var _refs_none: Label              # what stands in for the references while there are none
 var _style: TextField
@@ -39,7 +43,7 @@ var _self_ref: CheckBox
 var _pick: AgentPick
 ## WHAT IT HANDS THE NOTE'S PIPELINE CARD ([method pipeline]).
 var _section := Section.new(self)
-var _preview: Window = null
+var _preview: PictureWindow = null
 var _status: Label
 var _dialog: FileDialog = null
 var _thumbs := {}                  # path|mtime|px -> ImageTexture, so a rebuild does not re-decode
@@ -49,14 +53,13 @@ var _live := {}                    # key -> [its status label, the line under th
 
 func _ready() -> void:
 	add_theme_constant_override("separation", 6)
-	var head := Label.new()
-	head.text = "Illustrations"
-	head.add_theme_font_size_override("font_size", 12)
-	head.tooltip_text = ("Pictures for the book, painted from the chapter's own "
-		+ "<!-- image: ... --> markers. Each is made once and cached - relaunching never "
-		+ "repaints anything. Nothing is generated until you press a button, because every "
-		+ "picture spends your image quota.")
-	add_child(head)
+	var hint := Label.new()
+	hint.text = ("Painted from the image marks in the note's words, or a file of yours imported for one. Each is made "
+		+ "once and kept; nothing is painted until you ask, because every picture spends your image quota.")
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.add_theme_font_size_override("font_size", 11)
+	hint.modulate = Color(1, 1, 1, 0.6)
+	add_child(hint)
 
 	# THE PAINTER IS EVERY CARD'S ROW ([AgentPick]: the agent, its model, how hard it reasons), kept in
 	# the look; this panel's own list of agents had no model and no effort (2026-10-27)
@@ -72,6 +75,7 @@ func _ready() -> void:
 	var srow := HBoxContainer.new()
 	srow.add_theme_constant_override("separation", 8)
 	add_child(srow)
+	_kind_row = srow
 	var sl := Label.new()
 	sl.text = "Style"
 	sl.add_theme_font_size_override("font_size", 12)
@@ -93,7 +97,7 @@ func _ready() -> void:
 	_self_ref.text = "Match earlier"
 	_self_ref.focus_mode = Control.FOCUS_NONE
 	_self_ref.tooltip_text = ("Send each picture of this kind the ones already made before it in "
-		+ "the chapter (the first and the most recent few), so they read as one hand. Works "
+		+ "the note (the first and the most recent few), so they read as one hand. Works "
 		+ "alongside the references below and never adds to them. Saved in the document.")
 	_self_ref.button_pressed = Illustrations.self_reference(_style_kind)
 	_self_ref.toggled.connect(func(on: bool) -> void:
@@ -124,7 +128,7 @@ func _ready() -> void:
 	imp.tooltip_text = ("Pick images whose STYLE this kind (the dropdown above) should share. "
 		+ "They are attached to every request of that kind as style references only - their "
 		+ "subjects are never copied. With none, each picture is matched to the ones already "
-		+ "made before it in the chapter instead. Copied into Ghost Notes' own folder, so moving the "
+		+ "made before it in the note instead. Copied into Ghost Notes' own folder, so moving the "
 		+ "originals changes nothing.")
 	imp.pressed.connect(_open_dialog)
 	rrow.add_child(imp)
@@ -148,6 +152,13 @@ func _ready() -> void:
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	# ITS OWN ROW: a wrapping label given a sliver wraps every character, one letter a line.
 	add_child(_status)
+
+	# GENERATE ALL, on the card as on the Pipeline card's heading ([Section]): one function behind both, so neither can
+	# be left without it
+	_all = Button.new()
+	_all.focus_mode = Control.FOCUS_NONE
+	_all.pressed.connect(_generate_missing)
+	add_child(_all)
 
 	_list = VBoxContainer.new()
 	_list.add_theme_constant_override("separation", 4)
@@ -182,16 +193,20 @@ func sync_from_library() -> void:
 	_seen = ""
 
 
-## The chapter's text, whenever it is read. Cheap enough to call on every edit.
-func set_script_text(body: String) -> void:
-	_images = Manuscript.images(body)
-	Illustrations.set_chapter(_images)
-	# a tablet chapter's REAL pages, after its pictures: captured, never painted, and never in
-	# the painter's self-reference chain
-	_images.append_array(TabletScript.snapshots(body))
+## THE PICTURES THE NOTE'S WORDS CALL FOR, whenever they are read: [Manuscript.images] rows (a captured page's has a
+## `url`), in reading order - as the presentation shows them ([method Medium.pictures_of]). Cheap enough on every edit.
+func set_pictures(rows: Array) -> void:
+	_images = rows.duplicate(true)
+	# the painter's self-reference chain is the painted ones alone: a page is captured, never painted
+	Illustrations.set_chapter(_images.filter(func(im: Dictionary) -> bool: return not im.has("url")))
 	_seen = ""
 	if is_inside_tree():
 		_refresh()
+
+
+## Every image mark in [param body], as a book prints them.
+func set_script_text(body: String) -> void:
+	set_pictures(Manuscript.images(body))
 
 
 func _process(_delta: float) -> void:
@@ -225,7 +240,7 @@ func _refresh() -> void:
 		_list.add_child(_row(im))
 	if _images.is_empty():
 		var none := Label.new()
-		none.text = "  (no <!-- image: ... --> markers in this text)"
+		none.text = "  (no image marks in the note's words - Edit lists them)"
 		none.add_theme_font_size_override("font_size", 11)
 		none.modulate = Color(1, 1, 1, 0.6)
 		_list.add_child(none)
@@ -233,6 +248,33 @@ func _refresh() -> void:
 	_status.text = ("⏳  Painting %d…" % n) if n > 0 else ""
 	if not PageCapture.doing().is_empty():
 		_status.text = "⏳  " + PageCapture.doing() + "…"
+	_show_all()
+	_show_kinds()
+
+
+## GENERATE ALL says how many it would paint, and is grayed with nothing to paint.
+func _show_all() -> void:
+	var owed := _owed().size()
+	var painted := _images.filter(func(im: Dictionary) -> bool: return not im.has("url")).size()
+	_all.visible = painted > 0
+	_all.text = ("Generate all (%d)" % owed) if owed > 0 else "Generate all"
+	_all.disabled = owed == 0 or Illustrations.read_only()
+	_all.tooltip_text = ("Paint every picture that has none yet - %d of %d, one request each against your image quota. "
+		% [owed, painted] + "Those already made are kept as they are: to paint one again, its Regenerate; all of them, "
+		+ "the Pipeline card's All pictures.") if owed > 0 else ("Every picture has one. To paint one again, its "
+		+ "Regenerate; all of them again, the Pipeline card's All pictures.")
+
+
+## THE KIND PICKER ONLY WHERE THERE IS A CHOICE: sketches have a style of their own (a notebook's `<!-- sketch: -->`),
+## and a note with none, its look unset, has nothing for the picker to choose - a control that does nothing teaches
+## nothing.
+func _show_kinds() -> void:
+	if _kind_row == null:
+		return
+	var any := _images.any(func(im: Dictionary) -> bool:
+		return Illustrations.kind_of(String(im.get("placement", ""))) == "sketch")
+	var set := not Illustrations.style("sketch").is_empty() or not Illustrations.references("sketch").is_empty()
+	_kind_pick.visible = any or set or _style_kind == "sketch"
 
 
 func _row(im: Dictionary) -> Control:
@@ -272,6 +314,7 @@ func _row(im: Dictionary) -> Control:
 	var st := Illustrations.status(key)
 	var meta := Label.new()
 	var parts := PackedStringArray([_placement_label(im), String(im.get("side", "")), st])
+	parts = PackedStringArray(Array(parts).filter(func(p: String) -> bool: return not p.is_empty()))
 	var vs := Illustrations.versions(key)
 	if vs.size() > 1:
 		parts.append("v%d/%d" % [Illustrations.current_index(key) + 1, vs.size()])
@@ -366,133 +409,78 @@ func _generate_all() -> void:
 	_seen = ""
 
 
-## THE PREVIEW: the picture at full size in a window of its own, with its description and
-## its versions, so a repaint can be judged against the one before without leaving it.
+## THE PREVIEW: the picture at full size in a window of its own ([PictureWindow]), with its description and its
+## versions, so a repaint can be judged against the one before without leaving it.
 func _open_preview(im: Dictionary) -> void:
 	var key := String(im["key"])
 	if _preview == null or not is_instance_valid(_preview):
-		_preview = Window.new()
-		_preview.close_requested.connect(func() -> void: _preview.hide())
-		_preview.window_input.connect(func(e: InputEvent) -> void:
-			if e is InputEventKey and e.pressed and (e as InputEventKey).keycode == KEY_ESCAPE:
-				_preview.hide())
+		_preview = PictureWindow.new()
 		add_child(_preview)
-	for c in _preview.get_children():
-		c.queue_free()
-	var vp := get_viewport().get_visible_rect().size
-	_preview.size = Vector2i(int(vp.x * 0.8), int(vp.y * 0.85))
-	_preview.title = "Illustration  ·  %s" % (_placement_label(im))
-	var bg := PanelContainer.new()
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_preview.add_child(bg)
-	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 8)
-	bg.add_child(col)
-	var pic := TextureRect.new()
-	pic.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	var img := Image.new()
-	var path := Illustrations.path_for(key)
-	if img.load(path) == OK:
-		pic.texture = ImageTexture.create_from_image(img)
-	col.add_child(pic)
-	var desc := Label.new()
-	desc.text = String(im["prompt"])
-	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	desc.add_theme_font_size_override("font_size", 12)
-	col.add_child(desc)
-	var bar := HBoxContainer.new()
-	bar.alignment = BoxContainer.ALIGNMENT_CENTER
-	bar.add_theme_constant_override("separation", 8)
-	col.add_child(bar)
-	var vs := Illustrations.versions(key)
 	var at := Illustrations.current_index(key)
-	for step in [-1, 1]:
-		var b := Button.new()
-		b.text = "‹ previous" if step < 0 else "next ›"
-		b.disabled = at + step < 0 or at + step >= vs.size()
-		b.pressed.connect(func() -> void:
-			Illustrations.select_version(key, at + step)
-			_open_preview(im))
-		bar.add_child(b)
-		if step < 0:
-			var v := Label.new()
-			v.text = "version %d of %d%s" % [at + 1, vs.size(),
-				"  (stale)" if Illustrations.is_stale(key) else ""]
-			bar.add_child(v)
+	var extras: Array = []
 	if at >= 0:
-		var del := _delete_button("Delete this version", key, at)
-		del.pressed.connect(func() -> void:
-			if bool(del.get_meta("gone", false)):
-				if Illustrations.versions(key).is_empty():
-					_preview.hide()
-				else:
-					_open_preview(im))
-		bar.add_child(del)
+		extras.append(_delete_button("Delete this version", key, at, func() -> void:
+			if Illustrations.versions(key).is_empty():
+				_preview.hide()
+			else:
+				_open_preview(im)))
 	var again := Button.new()
 	again.text = "Regenerate"
+	again.focus_mode = Control.FOCUS_NONE
 	again.disabled = Illustrations.status(key) in ["queued", "running"] or Illustrations.read_only()
 	again.pressed.connect(func() -> void:
 		_ask(im)
 		_preview.hide())
-	bar.add_child(again)
+	extras.append(again)
 	var imp := _import_button(im)
 	imp.pressed.connect(func() -> void: _preview.hide())
-	bar.add_child(imp)
-	_preview.popup_centered()
+	extras.append(imp)
+	_preview.fill("Picture  ·  %s" % _placement_label(im), Illustrations.path_for(key), String(im["prompt"]), at,
+		Illustrations.versions(key).size(), "(stale)" if Illustrations.is_stale(key) else "",
+		func(dir: int) -> void:
+			Illustrations.select_version(key, at + dir)
+			_open_preview(im),
+		extras)
+	if not _preview.visible:
+		_preview.open_over(self)
 
 
-## DELETE TAKES TWO CLICKS, because it cannot be undone: the first arms the button for a few
-## seconds, the second deletes. A dialog for every bad picture would make clearing a run of
-## them a chore, which is exactly when this is used.
-func _delete_button(label: String, key: String, version: int) -> Button:
-	var b := Button.new()
-	b.text = label
-	b.focus_mode = Control.FOCUS_NONE
-	b.tooltip_text = ("Delete this version of the picture - the file too. The one before it is "
-		+ "shown instead, or none. Later pictures stop being matched to it.")
-	b.disabled = Illustrations.read_only()
-	# The disarm timer is the BUTTON'S CHILD, not a SceneTree timer: the delete rebuilds the list
-	# and frees this button, and a tree timer still holding it fired into a freed capture.
-	var disarm := Timer.new()
-	disarm.one_shot = true
-	disarm.wait_time = 3.0
-	disarm.timeout.connect(func() -> void:
-		b.set_meta("armed", false)
-		b.text = label
-		b.remove_theme_color_override("font_color"))
-	b.add_child(disarm)
-	b.pressed.connect(func() -> void:
-		if not bool(b.get_meta("armed", false)):
-			b.set_meta("armed", true)
-			b.text = "Delete?"
-			b.add_theme_color_override("font_color", Color(1.0, 0.55, 0.5))
-			disarm.start()
-			return
-		disarm.stop()
-		b.set_meta("gone", Illustrations.delete_version(key, version))
+## DELETE TAKES TWO CLICKS ([ArmedDelete]): version [param version] of [param key]'s picture, its file too; then
+## [param after], where something stands on what was deleted (the preview).
+func _delete_button(label: String, key: String, version: int, after := Callable()) -> Button:
+	var b := ArmedDelete.button(label, func() -> void:
+		Illustrations.delete_version(key, version)
 		_thumbs.clear()
-		_seen = "")
+		_seen = ""
+		if after.is_valid():
+			after.call(),
+		"Delete this version of the picture - the file too. The one before it is shown instead, or none. Later "
+		+ "pictures stop being matched to it.")
+	b.disabled = Illustrations.read_only()
 	return b
 
 
+## GENERATE ALL: every picture that can be painted and has none, in reading order - the card's button and the Pipeline
+## card's Generate alike.
 func _generate_missing() -> void:
-	for im in _images:
-		if im.has("url"):
-			continue
-		if Illustrations.status(String(im["key"])) in ["missing", "error"]:
-			var err := Illustrations.generate(im)
-			if not err.is_empty():
-				_status.text = "⚠  " + err
-				return
+	for im in _owed():
+		var err := Illustrations.generate(im)
+		if not err.is_empty():
+			_status.text = "⚠  " + err
+			return
 	_seen = ""
+
+
+## The pictures that can be painted and have none (or failed). A page is captured, never painted: its own Capture.
+func _owed() -> Array:
+	return _images.filter(func(im: Dictionary) -> bool:
+		return not im.has("url") and Illustrations.status(String(im["key"])) in ["missing", "error"])
 
 
 # --- on the Pipeline card ------------------------------------------------------------------------
 
 ## WHAT THIS PANEL MAKES, on the note's one list ([PipelineCard]): a row a picture, and all of them again. Listed while the
-## panel is shown (a Picture card shows it under the media that print a reading) and its text calls for any.
+## panel is shown (the Pictures card shows it while the note's presentation shows pictures) and its words call for any.
 class Section extends PipelineSection:
 	var panel: IllustrationPanel
 
@@ -511,7 +499,7 @@ class Section extends PipelineSection:
 		panel._generate_missing()
 
 	func make_tip() -> String:
-		return "Paint every picture in this chapter that does not have one yet."
+		return "Paint every picture in this note that does not have one yet."
 
 	func stop() -> void:
 		Illustrations.stop(panel._images.map(func(im: Dictionary) -> String: return String(im["key"])))
@@ -535,15 +523,12 @@ func _painting() -> bool:
 	return false
 
 
-## Whether a picture of the chapter that can be painted has none. (A page is captured, never painted: its own ⟳.)
+## Whether a picture of the note that can be painted has none. (A page is captured, never painted: its own ⟳.)
 func _missing() -> bool:
-	for im in _images:
-		if not im.has("url") and Illustrations.status(String(im["key"])) in ["missing", "error"]:
-			return true
-	return false
+	return not _owed().is_empty()
 
 
-## A ROW A PICTURE, ITS WORDS ITS NAME - and, with more than one, all of them again, which costs a chapter of quota and asks.
+## A ROW A PICTURE, ITS WORDS ITS NAME - and, with more than one, all of them again, which costs a note's worth of quota and asks.
 func _step_rows() -> Array:
 	var out: Array = []
 	if _images.is_empty():
@@ -553,7 +538,7 @@ func _step_rows() -> Array:
 	if _images.size() > 1:
 		var all := PipelineRow.new("all", "All pictures")
 		all.state = "none"
-		all.again = "Paint every picture in this chapter again"
+		all.again = "Paint every picture in this note again"
 		all.open = not ro and not painting
 		all.asks = ("That is all %d pictures, one request each against your image quota. Pictures already made are kept as "
 			+ "earlier versions.") % _images.size()
@@ -619,7 +604,7 @@ func _refresh_refs() -> void:
 	_refs.visible = not list.is_empty()
 	_refs_none.visible = list.is_empty()
 	if list.is_empty():
-		_refs_none.text = ("  (none - each is matched to the ones made before it in the chapter)"
+		_refs_none.text = ("  (none - each is matched to the ones made before it in the note)"
 			if Illustrations.self_reference(_style_kind) else "  (none - the style text alone decides the look)")
 		return
 	for i in list.size():

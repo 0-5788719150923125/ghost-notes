@@ -66,3 +66,40 @@ prompt:
       "verdict": "keep or repaint",
       "faults": ["when repaint: one fault per line, said to the painter - what is wrong and where, and what it must be instead"]
     }
+
+# THE FACE PAINTED FIRST (feedback 0023; TablePrompts.face_check fills it in, TableProducer._land_check acts on the verdict): the plan's
+# `painted`, painted onto a picture of the surface bare from its front, which the decorator copies element by element and the paint
+# laid by hand carries. It names no kind of surface and no kind of painting.
+#
+# The code gives: {{thing}}, {{painted}}, {{premise}}.
+face:
+  - >-
+      You are the ART DIRECTOR of this show. Before anything is painted at the table, {{thing}} was painted as a picture -
+      what will be copied onto it by hand, stage by stage, on camera. Nothing is copied until you pass it.
+  - ""
+  - "WHAT IT WAS ASKED TO BE: {{painted}}"
+  - "The episode's angle on it: {{premise}}"
+  - ""
+  - "The first attached image is the painting to check; the second, the bare surface it was painted on."
+  - ""
+  - "SEND IT BACK FOR A FAULT A VIEWER WOULD SEE - and only for these:"
+  - >-
+      1. IT IS NOT ON THE SURFACE. The surface moved, grew, shrank, turned or was cropped from where it is in the bare
+      picture; paint past its edge onto the black around it; a painted shape off the feature it is meant for.
+  - >-
+      2. IT IS NOT PAINT. Hair, cloth, jewelry, objects, hands, a background, text, or light and shadow painted in -
+      anything a hand with paint could not lay on the surface itself.
+  - >-
+      3. IT IS NOT WHAT WAS ASKED, or not worth watching being made: a part of what was asked missing or shown
+      otherwise, a lopsided pair where the two sides should match, a design so plain or so muddy that nothing in it
+      would be worth a close look.
+  - >-
+      Never send it back for taste alone, or for anything small nobody watching would notice. A painting good enough to
+      copy is kept.
+  - ""
+  - "Reply with ONLY a JSON object, no other text:"
+  - |-
+    {
+      "verdict": "keep or repaint",
+      "faults": ["when repaint: one fault per line, said to the painter - what is wrong and where, and what it must be instead"]
+    }

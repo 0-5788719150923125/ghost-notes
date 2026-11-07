@@ -4,7 +4,8 @@ shader_type spatial;
 // has got, 0 to 1. Lit as the sheet is, laid just over it.
 render_mode blend_mix, depth_draw_never, cull_disabled;
 
-uniform sampler2D words : filter_linear_mipmap, repeat_disable;
+// anisotropic: a sheet lies flat on the table, seen at a slant (Graphics' Texture filtering)
+uniform sampler2D words : filter_linear_mipmap_anisotropic, repeat_disable;
 uniform vec3 ink : source_color = vec3(0.14, 0.11, 0.086);
 uniform float written = 1.0;
 

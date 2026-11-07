@@ -17,9 +17,13 @@ const SIZE := Vector3(15.0, 21.0, 8.0)
 const SIZE_LEAST := Vector3(4.0, 5.0, 1.5)
 const SIZE_MOST := Vector3(40.0, 50.0, 25.0)
 ## How far apart the face's points are (centimeters, at its size when none is given - a larger face is cut as finely in
-## points, so a crease is as sharp at any size), and the rim's points round.
+## points, so a crease is as sharp at any size).
 const STEP := 0.1
-const RIM_SEGMENTS := 240
+## How many ways round the rim's distance from the middle is found, between which it is drawn ([method _rim_reach]).
+const RIM_REACH := 2048
+## How far out of the middle the grid over the front is left as it is (a share of the way to the rim): past it, it is pulled in
+## so its edge lies on the rim ([method _pulled_in]). Every feature is inside it.
+const PULL_FROM := 0.72
 ## The back's depth behind the rim (centimeters), when none is given.
 const THICK := 0.6
 ## Where the middle of the face is, up from the chin (a share of its height), and how the outline narrows to the chin.
@@ -175,74 +179,114 @@ static var _kept := {}
 static var _lock := Mutex.new()
 
 
+## THE FACE IS CUT TO ITS OWN OUTLINE (feedback 0025: "ridge-marks along the chin ... like we stretched a plastic mask over the
+## mannequin"): a grid over the front had been cut where the outline crossed it, its points outside moved in onto the rim, and the
+## face's height falls to the rim ever more steeply - so the last point inside stood anywhere from 1 to 5 mm high as the rows
+## happened to meet the outline: a sawtooth all round the rim, plainest where the outline runs along the grid (the chin, the
+## sides). Now every point of the grid is kept and its outer band PULLED IN along its way from the middle ([method _pulled_in]):
+## the grid's edge lands on the rim, every row near it runs smoothly into it, and inside [constant PULL_FROM] - every feature -
+## the grid is as it was, its rows along the creases (a grid pushed out in copies of the outline whole crossed the mouth's line
+## aslant and drew it in stairs). Its normals are the surface's own, across the two ways the grid runs; the rim's, the height's
+## slope there.
 static func _built(size: Vector3, relief: float, thick: float) -> Props.Tris:
 	var g := Props.Tris.new()
 	var step := STEP * maxf(size.x / SIZE.x, 1.0)
 	var nx := int(ceil(size.x / step))
 	var ny := int(ceil(size.y / step))
-	# THE HEIGHTS on a regular grid, each found once (0 outside the outline) - the normals from their differences
-	var hz := PackedFloat32Array()
-	hz.resize((nx + 1) * (ny + 1))
+	var reach := _rim_reach()
+	var w := nx + 1
+	var pts := PackedVector3Array()
+	var sts := PackedVector2Array()
+	pts.resize(w * (ny + 1))
+	sts.resize(w * (ny + 1))
 	for j in ny + 1:
 		for i in nx + 1:
-			var s := -1.0 + 2.0 * float(i) / float(nx)
-			var t := float(j) / float(ny)
-			hz[j * (nx + 1) + i] = height(s, t, relief) * size.z
-	var dx := size.x / float(nx)
-	var dy := size.y / float(ny)
-	var vert := func(i: int, j: int) -> Array:
-		var s := -1.0 + 2.0 * float(i) / float(nx)
-		var t := float(j) / float(ny)
-		var r := outside(s, t)
-		if r > 1.0:
-			# outside the outline: moved in to the rim along the way to the middle
-			s /= r
-			t = MIDDLE + (t - MIDDLE) / r
-			var x := s * size.x * 0.5
-			var y := t * size.y
-			return [point(x, y, size, relief) * 0.01, normal(x, y, size, relief), Vector2(s, t), Vector2(0.0, 0.0)]
-		var c := hz[j * (nx + 1) + i]
-		var zl := hz[j * (nx + 1) + maxi(i - 1, 0)]
-		var zr := hz[j * (nx + 1) + mini(i + 1, nx)]
-		var zd := hz[maxi(j - 1, 0) * (nx + 1) + i]
-		var zu := hz[mini(j + 1, ny) * (nx + 1) + i]
-		var n := Vector3(-(zr - zl) / (2.0 * dx), -(zu - zd) / (2.0 * dy), 1.0).normalized()
-		return [Vector3(s * size.x * 0.5, t * size.y, c) * 0.01, n, Vector2(s, t), Vector2(0.0, cavity(s, t))]
-	var memo := {}
+			var q := _pulled_in(-1.0 + 2.0 * float(i) / float(nx), float(j) / float(ny), reach)
+			var p := point(q.x * size.x * 0.5, q.y * size.y, size, relief)
+			if i == 0 or j == 0 or i == nx or j == ny:
+				p.z = 0.0
+			sts[j * w + i] = q
+			pts[j * w + i] = p * 0.01
+	var nrm := PackedVector3Array()
+	nrm.resize(pts.size())
+	for j in ny + 1:
+		for i in nx + 1:
+			var k := j * w + i
+			if i == 0 or j == 0 or i == nx or j == ny:
+				nrm[k] = normal(sts[k].x * size.x * 0.5, sts[k].y * size.y, size, relief)
+				continue
+			nrm[k] = (pts[k + 1] - pts[k - 1]).cross(pts[k + w] - pts[k - w]).normalized()
+	var cav := PackedVector2Array()
+	cav.resize(pts.size())
+	for k in pts.size():
+		cav[k] = Vector2(0.0, cavity(sts[k].x, sts[k].y))
 	for j in ny:
 		for i in nx:
-			var any := false
-			for q in [[i, j], [i + 1, j], [i + 1, j + 1], [i, j + 1]]:
-				if outside(-1.0 + 2.0 * float(q[0]) / float(nx), float(q[1]) / float(ny)) <= 1.0:
-					any = true
-			if not any:
-				continue
-			var c: Array = []
-			for q in [[i, j], [i + 1, j], [i + 1, j + 1], [i, j + 1]]:
-				var key: int = q[1] * (nx + 1) + q[0]
-				if not memo.has(key):
-					memo[key] = vert.call(q[0], q[1])
-				c.append(memo[key])
-			g.tri(c[0][0], c[1][0], c[2][0], c[0][1], c[1][1], c[2][1], c[0][2], c[1][2], c[2][2], c[0][3], c[1][3], c[2][3])
-			g.tri(c[0][0], c[2][0], c[3][0], c[0][1], c[2][1], c[3][1], c[0][2], c[2][2], c[3][2], c[0][3], c[2][3], c[3][3])
-	# THE RIM, round the outline from the face's edge back to the back's, and THE BACK, flat: a fan from its middle
-	var rim: Array = []
-	for k in RIM_SEGMENTS:
-		rim.append(_rim_point(TAU * float(k) / float(RIM_SEGMENTS)))
+			var a := j * w + i
+			var b := a + 1
+			var c := a + w + 1
+			var d := a + w
+			g.tri(pts[a], pts[b], pts[c], nrm[a], nrm[b], nrm[c], sts[a], sts[b], sts[c], cav[a], cav[b], cav[c])
+			g.tri(pts[a], pts[c], pts[d], nrm[a], nrm[c], nrm[d], sts[a], sts[c], sts[d], cav[a], cav[c], cav[d])
+	# THE RIM, the grid's own edge round from the face back to the back's, and THE BACK, flat: a fan from its middle
+	var ring := PackedInt32Array()
+	for i in nx:
+		ring.append(i)
+	for j in ny:
+		ring.append(j * w + nx)
+	for i in range(nx, 0, -1):
+		ring.append(ny * w + i)
+	for j in range(ny, 0, -1):
+		ring.append(j * w)
 	var back := Vector3(0.0, 0.0, -thick * 0.01)
 	var mid := Vector3(0.0, MIDDLE * size.y * 0.01, 0.0) + back
 	var z0 := Vector2.ZERO
-	for k in RIM_SEGMENTS:
-		var a: Vector2 = rim[k]
-		var b: Vector2 = rim[(k + 1) % RIM_SEGMENTS]
-		var pa := Vector3(a.x * size.x * 0.005, a.y * size.y * 0.01, 0.0)
-		var pb := Vector3(b.x * size.x * 0.005, b.y * size.y * 0.01, 0.0)
+	for k in ring.size():
+		var ka := ring[k]
+		var kb := ring[(k + 1) % ring.size()]
+		var pa := pts[ka]
+		var pb := pts[kb]
 		var na := Vector3(pa.x, pa.y - MIDDLE * size.y * 0.01, 0.0).normalized()
 		var nb := Vector3(pb.x, pb.y - MIDDLE * size.y * 0.01, 0.0).normalized()
-		g.quad(pa, pb, pb + back, pa + back, na, nb, nb, na, a, b, b, a, 0.0, 0.0, 0.0, 0.0)
-		g.tri(mid, pb + back, pa + back, Vector3.FORWARD, Vector3.FORWARD, Vector3.FORWARD, Vector2(0.0, MIDDLE), b, a, z0, z0, z0)
+		g.quad(pa, pb, pb + back, pa + back, na, nb, nb, na, sts[ka], sts[kb], sts[kb], sts[ka], 0.0, 0.0, 0.0, 0.0)
+		g.tri(mid, pb + back, pa + back, Vector3.FORWARD, Vector3.FORWARD, Vector3.FORWARD, Vector2(0.0, MIDDLE), sts[kb], sts[ka], z0, z0, z0)
 	g.measure()
 	return g
+
+
+## The grid's point (s, t) of the front's box (s -1 to 1, t 0 to 1) PULLED IN onto the face: along its way from the middle, as it
+## was out to [constant PULL_FROM] of the way to the rim, and from there to the box's edge laid evenly over what is left of the
+## way to the rim - the box's edge on the rim. [param reach] is [method _rim_reach].
+static func _pulled_in(s: float, t: float, reach: PackedFloat32Array) -> Vector2:
+	var d := Vector2(s, t - MIDDLE)
+	var far := d.length()
+	if far <= 0.0:
+		return Vector2(0.0, MIDDLE)
+	var dir := d / far
+	var f := (atan2(dir.y, dir.x) + PI) / TAU * float(RIM_REACH)
+	var k := int(floor(f))
+	var rim := lerpf(reach[k % RIM_REACH], reach[(k + 1) % RIM_REACH], f - float(k))
+	var box := INF
+	if absf(dir.x) > 1e-9:
+		box = 1.0 / absf(dir.x)
+	if dir.y > 1e-9:
+		box = minf(box, (1.0 - MIDDLE) / dir.y)
+	elif dir.y < -1e-9:
+		box = minf(box, MIDDLE / -dir.y)
+	var out := far / rim
+	var edge := box / rim
+	if out > PULL_FROM and edge > PULL_FROM:
+		out = PULL_FROM + (out - PULL_FROM) * (1.0 - PULL_FROM) / (edge - PULL_FROM)
+	return Vector2(0.0, MIDDLE) + dir * minf(out, 1.0) * rim
+
+
+## How far the rim is from the middle (in (s, t)) at RIM_REACH ways round from -PI ([method _rim_point]).
+static func _rim_reach() -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	out.resize(RIM_REACH)
+	for k in RIM_REACH:
+		out[k] = (_rim_point(-PI + TAU * float(k) / float(RIM_REACH)) - Vector2(0.0, MIDDLE)).length()
+	return out
 
 
 ## The rim's point at angle [param a] round the middle, as (s, t).

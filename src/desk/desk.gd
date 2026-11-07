@@ -410,8 +410,11 @@ func _build_world() -> void:
 	_env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	_env.ambient_light_color = AMBIENT
 	_env.ambient_light_energy = AMBIENT_ENERGY
-	_env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	# THE TONEMAPPER, as the Look has it ([Tonemaps]): Filmic unless a note picks another, at the exposure tuned under Filmic
+	Tonemaps.dress(_env, 1.0)
 	_env.adjustment_enabled = true
+	# BOUNCE LIGHT, as the Graphics panel has it (off unless chosen: it changes the look)
+	Graphics.dress(_env)
 	_cam = Camera3D.new()
 	_cam.fov = VFOV
 	_cam.near = 0.05
@@ -481,6 +484,8 @@ func _dress() -> void:
 	_env.ambient_light_energy = AMBIENT_ENERGY
 	_light.build(look, dressed["lit"], _seed)
 	_fill.visible = not _light.lights_room()
+	# ...what casts a candle's shadow cut fine enough for its paraboloids ([ShadowCasters], [method TableLight.candle_shadow])
+	ShadowCasters.cut_under(_root3)
 	var pen: Dictionary = look["pen"]
 	_lacquer.albedo_color = pen["body"]
 	_trim.albedo_color = pen["trim"]

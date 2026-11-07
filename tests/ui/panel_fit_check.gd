@@ -113,7 +113,10 @@ func _run() -> void:
 	if letter_card != null:
 		letter_card.set("_seen", FileAccess.get_file_as_string(_letter.note_path))
 		letter_card.set("_listed", LetterScript.sketches(String(letter_card.get("_seen"))))
-		letter_card.call("illustrations").set_script_text(LetterScript.pictures_only(String(letter_card.get("_seen"))))
+		# THE NOTE'S PICTURES ARE A CARD OF THEIR OWN beside it ([PicturesCard]): its list, as the reading hands it the words
+		var pictures: Object = _letter._block_cards.get("illustrations")
+		if pictures != null:
+			pictures.call("set_script_text", String(letter_card.get("_seen")))
 	_ok(letter_card != null, "a Letter note's panel has the Letter card")
 	# a voice list as the host fills it - its longest name is what a picker sized to its items
 	# would be as wide as

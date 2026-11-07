@@ -54,6 +54,8 @@ const STEPS := {
 	"image:surface": {"label": "Cloth", "again": "Paint a new cloth"},
 	"image:backdrop": {"label": "Room", "again": "Paint a new room"},
 	"model": {"label": "Model", "again": "Design the model again"},
+	"image:face": {"label": "Picture to copy", "again": "Paint a new picture to copy"},
+	"check:face": {"label": "Art check", "again": ""},
 	"skin": {"label": "What is painted", "again": "Design what is painted again"},
 	"prep": {"label": "Preparation", "again": "Prepare the game again"},
 	"table": {"label": "Set", "again": "Set the table again"},
@@ -1041,8 +1043,10 @@ func _step_rows() -> Array:
 		out.append(_row_of(st, st, "Table", busy, f))
 	if bool(f["depth"]):
 		out.append(_row_of("image:height", "image:height", "Table", busy, f))
-	if has.has("skin"):
-		out.append(_row_of("skin", "skin", "", busy, f))
+	# ...WHAT IS PAINTED, painted first as a picture and looked at, then copied (TableEpisode.wants_face)
+	for st in ["image:face", "check:face", "skin"]:
+		if has.has(st):
+			out.append(_row_of(st, st, "", busy, f))
 	if has.has("acts"):
 		out.append(_row_of("acts", "acts", "", busy, f))
 	out.append(_row_of("say:intro", "say:intro", "", busy, f))

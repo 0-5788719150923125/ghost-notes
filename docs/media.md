@@ -15,7 +15,7 @@ host_for(incoming)   - the node an arriving scene is added to. `full` returns th
 
 A medium is a Node2D mounted INSIDE the stage SubViewport, so the stage governor still owns it: when the governor stops the stage, it stops the medium and every panel viewport nested under it, together.
 
-Registry: `Medium.REGISTRY` in [src/media/medium.gd](../src/media/medium.gd) (10 entries). Select with `--medium NAME`, or the Medium picker in the Generative panel (persisted to `user://ghost.cfg`, `[director] medium`).
+Registry: `Medium.REGISTRY` in [src/media/medium.gd](../src/media/medium.gd) (11 entries). Select with `--medium NAME`, or the Medium picker in the Generative panel (persisted to `user://ghost.cfg`, `[director] medium`).
 
 ## `auto` - Auto
 
@@ -168,6 +168,24 @@ THE SUBTITLES CAPTION ONLY WHAT CANNOT BE READ ON THE PAGE (2026-10-27, the user
 THE LETTER ENDS WHEN THE PEN DOES: an unspoken line after the last word ("Dear Ink," on a new page) is written before the camera stands back and the picture goes to black.
 
 Source: [src/desk/letter.gd](../src/desk/letter.gd)
+
+## `dispatch` - Dispatch desk
+
+_One desk late at night in a hollow under the ground, seen from the chair: an old terminal that types what is said, a dozen labeled flip phones that ring and are held to the ear, a radar, a shortwave receiver, a printer, small screens - the camera turning to whatever is active, roots growing across the desk. The Dispatch desk component's own medium._
+
+DispatchMedium - ONE DESK, LATE AT NIGHT, IN A HOLLOW UNDER THE GROUND, SEEN FROM THE CHAIR (next/dispatch.md; the user's Targeted Individuality: "the desk, with the terminal-style computer, and the cell phones, and the gadgets on the table - with the ability to shift between the different things ... look left and right, or shift left and right - as well as in/out, and possibly even tilting forward/back. But as before, we're looking for gentle transitions"). The man who works it is never seen: the viewer sits where he sits, and everything on the desk moves on its own.
+
+WHAT IT DRAWS FROM: the reading's document - its `source`, the note with its marks (`DispatchScript`); its `dispatch`, what the Dispatch desk's card hands (`DispatchCard.document`): the desk's `seed` and each picture's file (`pictures`). The desk itself (`DispatchSet`) is built from the note's `desk:` block (the phones' labels) and the seed; the roots (`DispatchRoots`) from the seed.
+
+THE DESK ACTS IN THE RESTS THE VOICE LEAVES FOR IT (`_place`): each action of the script before its spoken word, placed back from that word by what the script wrote after it in the same silence - or on from the word before when the next is not heard yet - and, begun, kept where it began (`_held`; a live reading's words arrive a sentence at a time). Everything on the desk is then a pure function of show time (`_pose`), so a render draws what the live reading drew, and a scrub lands where the reading is.
+
+THE CAMERA SITS IN THE CHAIR AND TURNS TO WHAT IS ACTIVE (`_attention`, `SPOTS`): a phone ringing, the terminal while it types or shows something, the radar on a ping, the receiver while it plays static, a picture landing on a screen, the printer printing; `look:` turns it on purpose and it stays. It leans toward what it looks at and its lens closes in on the small things (the terminal's text is read on it), on critically damped springs (`SPRING_TAU`) - nothing jumps, nothing whips; with nothing new for a while it eases back to the whole desk; a slow breath of wander under it. WHAT IT TURNS TO IS SEEN: every look holds long enough to settle (`LOOK_LEAST`), a ping to the end of the sentence said over it (`PING_HOLD`), and it never leaves a thing only to come straight back to it (`AWAY_LEAST`).
+
+A PHONE IN HAND IS HELD TO THE EAR: it rises out of its row, flips open and floats up beside the camera, in the frame's lower right, its screen saying who is on it and for how long - and goes back the same way. A CALL IS SPEED-DIALED: the phone comes up before the eye, 1 is held and Send pressed, then it goes to the ear for the rings. One on hold lies open on the desk in front of the rows, ON HOLD on its screen. A phone ringing buzzes and rattles in its row. A TEXT chimes, and the phone comes up open before the eye, the message on its screen - never captioned; a reply is typed into it as it is said, under the message, and sent; then it goes home (2026-11-06, the author: "It would be better to ding with a notification sound, then pick up the cell phone, open it, and look at the message on the screen").
+
+THE SUBTITLES CAPTION WHAT CANNOT BE READ ON THE DESK, the letter's rule: speech, never the words typed on the terminal as they are said (`_captioned`); a text is read on its phone and nowhere else.
+
+Source: [src/dispatch/dispatch.gd](../src/dispatch/dispatch.gd)
 
 ## `desk` - Desk
 

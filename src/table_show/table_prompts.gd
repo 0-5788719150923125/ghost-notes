@@ -450,11 +450,15 @@ static func modeler(title: String, brief: String, plan: Dictionary, seed: int, e
 
 ## THE DECORATOR designs what is painted at the table ([DecoratorTools], [Skins]; next/painted_surface.md): told the plan's words for it,
 ## each surface the table has to paint, the language a design is written in, and what earlier episodes painted.
-static func decorator(title: String, brief: String, plan: Dictionary, seed: int, surfaces: Array, earlier: Array, looks := 0) -> Dictionary:
+static func decorator(title: String, brief: String, plan: Dictionary, seed: int, surfaces: Array, earlier: Array, looks := 0,
+		palette: Array = []) -> Dictionary:
 	var vars := {"seed": seed, "episode_title": String(plan.get("episode_title", "")), "premise": String(plan.get("premise", "")),
 		"painted": String(plan.get("painted", "")), "language": Skins.describe(), "earlier": "; ".join(PackedStringArray(earlier)),
 		"has_earlier": not earlier.is_empty(), "tools": looks > 0, "looks": looks,
-		"surfaces": surfaces.map(func(s: Dictionary) -> Dictionary: return {"told": Skins.told(s)})}
+		"surfaces": surfaces.map(func(s: Dictionary) -> Dictionary: return {"told": Skins.told(s)}),
+		# ...THE FACE PAINTED FIRST, to copy (feedback 0023): its colors, most of it first
+		"copies": not palette.is_empty(), "px": int(Skins.FACE_PX),
+		"palette": palette.map(func(c: Dictionary) -> Dictionary: return {"hex": String(c["hex"]), "percent": maxi(roundi(float(c["share"]) * 100.0), 1)})}
 	return {"system": show_context(title, brief), "prompt": Rules.say("table/decorator.prompt", vars)}
 
 
@@ -1199,6 +1203,24 @@ static func surface_image(look: Dictionary, target: String) -> String:
 	var vars := _look_vars(look, target)
 	vars.merge({"width": int(CardTable.CLOTH_PICTURE.x), "height": int(CardTable.CLOTH_PICTURE.y)}, true)
 	return Rules.say("table/painter.surface", vars)
+
+
+## THE FACE PAINTED FIRST (feedback 0023): what the plan paints, painted onto the attached picture of [param skin] bare from its front
+## ([method Skins.face_canvas]) - told what the art director sent back of the paintings before ([param sent_back]).
+static func face_image(look: Dictionary, plan: Dictionary, skin: Dictionary, target: String, sent_back := PackedStringArray()) -> String:
+	var vars := _look_vars(look, target)
+	var frame: Vector2 = skin.get("frame", Vector2.ZERO)
+	vars.merge({"painted": String(plan.get("painted", "")).strip_edges(), "premise": String(plan.get("premise", "")).strip_edges(),
+		"thing": String(skin.get("thing", "")), "width_mm": roundi(frame.x), "height_mm": roundi(frame.y), "sent_back": Array(sent_back)}, true)
+	return Rules.say("table/painter.face", vars)
+
+
+## THE ART DIRECTOR'S LOOK at the face painted first ([method TableProducer._make_face_check]): what it was asked to be, on [param skin] -
+## the painting and the bare surface go with the job.
+static func face_check(title: String, brief: String, plan: Dictionary, skin: Dictionary) -> Dictionary:
+	var vars := {"painted": String(plan.get("painted", "")).strip_edges(), "premise": String(plan.get("premise", "")).strip_edges(),
+		"thing": String(skin.get("thing", "the surface"))}
+	return {"system": show_context(title, brief), "prompt": Rules.say("table/art_director.face", vars)}
 
 
 ## THE PAINTING'S HEIGHT MAP: the same surface redrawn as depth, from the cloth's painting attached.

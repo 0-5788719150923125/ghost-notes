@@ -30,8 +30,9 @@ const ROW_GAP := 4.0
 ## this order, closes up around a hidden one, and is lifted as one by [method claim_bottom].
 ## The Environment button is at the LEFT end so the three that were there keep their places, and
 ## the ⌂ left of it for the same reason (hidden on the home screen, where there is nothing to
-## leave). Masking's own ⤓ takes the export slot while it suppresses the shared one.
-const ROW_ORDER := [&"home", &"environment", &"console", &"mask_export", &"export", &"assistant"]
+## leave). Masking's own ⤓ takes the export slot while it suppresses the shared one. Graphics beside the
+## Environment: the two panels about the machine the picture is drawn on.
+const ROW_ORDER := [&"home", &"environment", &"graphics", &"console", &"mask_export", &"export", &"assistant"]
 ## The layer the row draws on: above the home screen (200) and every panel that opens above it,
 ## so a button is never under something - the 💬 sat on 126, under the home screen, unseen.
 const ROW_LAYER := 253

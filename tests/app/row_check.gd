@@ -14,7 +14,7 @@ extends Node
 ## edge once seeked instead - and settles back when the show is untimed (a reported repeat,
 ## 2026-10-09). The control: a row on the margin alone is inside that zone.
 ##
-## ONE PANEL ABOVE THE ROW AT A TIME: the Environment, the console's log and the Assistant's panel,
+## ONE PANEL ABOVE THE ROW AT A TIME: the Environment, the Graphics, the console's log and the Assistant's panel,
 ## each opened in turn by its own button, and every other one closed by it.
 ##
 ## `[deps] open`, READ BACK AFTER A RESTART: closing the Environment with its button is remembered
@@ -168,6 +168,9 @@ func _one_at_a_time(ch: Chrome) -> void:
 		env_btn.pressed.emit()
 	await _frames(2)
 	_ok(ch.environment.visible and _open(ch) == ["environment"], "⚙ opens the Environment (%s)" % str(_open(ch)))
+	(ch._row_buttons[&"graphics"] as Button).pressed.emit()
+	await _frames(2)
+	_ok(_open(ch) == ["graphics"], "the picture opens the Graphics and closes the rest (%s)" % str(_open(ch)))
 	con_btn.pressed.emit()
 	await _frames(2)
 	_ok(_open(ch) == ["console"], ">_ opens the log and closes the rest (%s)" % str(_open(ch)))
@@ -191,6 +194,8 @@ func _open(ch: Chrome) -> Array:
 	var out: Array = []
 	if ch.environment.visible:
 		out.append("environment")
+	if ch.graphics.visible:
+		out.append("graphics")
 	if ch.console._panel.visible:
 		out.append("console")
 	if ch.assistant._panel.visible:

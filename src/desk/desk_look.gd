@@ -483,6 +483,16 @@ static func _chosen(seed: int, mood: String, kinds: Array, card := "", hand := "
 	return out
 
 
+## ONE OF THE DESK'S THINGS, BUILT: a [constant THINGS] row of [param kind], drawn from [param seed] and made by [method
+## Props.build] (`{node, size, ...}`, meters, its base on y = 0, its front toward +z) - for another desk that sets the same
+## things out (the dispatch desk's mug and pencil cup: one way of making a mug, where two had grown).
+static func made(kind: String, seed: int) -> Dictionary:
+	var safe := Props.sanitize(_thing(kind, _rng(seed, "made " + kind), seed), ["#888888"])
+	if (safe["things"] as Array).is_empty():
+		return {}
+	return Props.build((safe["things"] as Array)[0], safe["materials"], hash([seed, "made", kind]))
+
+
 ## One thing of [param kind], its sizes and colors drawn from [param r] (centimeters, as [Props] reads) - a dog tag's
 ## name from the desk's [param seed] (none for -1), handed back as `engraving` ([method _engrave]); index cards with
 ## [param written] on them, handed back as `writing` ({text, card: its size}, [method _write]).
@@ -741,7 +751,7 @@ static func _engrave(node: Node3D, e: Dictionary) -> void:
 	label.modulate = ENGRAVE_COLOR
 	label.shaded = true
 	label.alpha_cut = Label3D.ALPHA_CUT_DISCARD
-	label.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	label.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	# its capitals the cap height asked, never wider than the bone's middle allows
@@ -797,7 +807,7 @@ static func _write(node: Node3D, w: Dictionary, turn: float, ink: Color, r: Rand
 	label.outline_size = 0
 	label.modulate = ink
 	label.shaded = true
-	label.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	label.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

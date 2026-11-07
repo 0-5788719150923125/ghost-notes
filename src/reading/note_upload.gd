@@ -37,7 +37,7 @@ var _tags_field: TagField
 var _steps: EpisodeSteps          # what the YouTube card makes from the note, as the Pipeline card lists it
 var _words := ""
 var _pictures := PackedStringArray()
-var _pictures_of := []            # what they were found for: the words' hash and the library's revision
+var _pictures_of := []            # what they were found for: the words' hash, the medium and the library's revision
 var _t := 0.0
 
 
@@ -165,17 +165,19 @@ func upload_of(base: Dictionary) -> Dictionary:
 
 
 ## THE NOTE'S OWN PICTURES, absolute, in the order it shows them: each its words call for that is painted
-## ([Illustrations]) - a letter's pictures over the screen, a book's. A note read as it is written had handed
-## its steps none, and its thumbnail was painted blind to them (2026-10-30, the user: "just random weird
-## pictures, completely different from the video"). Found again only when the words or the library change.
+## ([Illustrations]) - a letter's pictures over the screen, a book's, a dispatch desk's on its screens - as its
+## presentation shows them, the Pictures card's list ([method Medium.pictures_of]). A note read as it is written had
+## handed its steps none, and its thumbnail was painted blind to them (2026-10-30, the user: "just random weird
+## pictures, completely different from the video"). Found again only when the words, the medium or the library change.
 func pictures() -> PackedStringArray:
 	var box := reading.source_box()
 	var body := box.text if box != null else ""
-	var key := [body.hash(), Illustrations.revision]
+	var med := Director.resolved_medium()
+	var key := [body.hash(), med, Illustrations.revision]
 	if key != _pictures_of:
 		_pictures_of = key
 		_pictures = PackedStringArray()
-		for im in Manuscript.images(body):
+		for im in Medium.pictures_of(med, body):
 			var path := Illustrations.path_for(String((im as Dictionary)["key"]))
 			var abs := ProjectSettings.globalize_path(path) if not path.is_empty() else ""
 			if not abs.is_empty() and not _pictures.has(abs):

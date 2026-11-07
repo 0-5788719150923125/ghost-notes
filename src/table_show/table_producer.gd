@@ -183,7 +183,10 @@ func _make(step: String) -> void:
 		"design":
 			_make_design(int(parts[1]))
 		"check":
-			_make_check(int(parts[1]))
+			if String(parts[1]) == "face":
+				_make_face_check()
+			else:
+				_make_check(int(parts[1]))
 		"image":
 			_make_image(step)
 		"say":
@@ -461,6 +464,8 @@ func _make_image(step: String) -> void:
 		_submit_image(step, TablePrompts.game_image(look, String(parts[1]), thing, target), [])
 		return
 	match String(parts[1]):
+		"face":
+			_make_face(step, look, target)
 		"back":
 			_submit_image(step, TablePrompts.back_image(look, target, CardTable.reads_reversed(_plan()), printed), [])
 		"surface":
@@ -620,6 +625,75 @@ func _make_check(k: int) -> void:
 	_submit_text("check:%d" % k, p, "best")
 
 
+## THE FACE PAINTED FIRST (feedback 0023; next/painted_surface.md - the user, of a face the decorator drew from nothing: "a rather
+## terrible and unimpressive mask ... It might even be worth generating reference artwork from the painter, which we could copy from"):
+## the table's first surface shown bare from its front ([method Skins.face_canvas], kept beside the episode with where it lies in it), and
+## the painter asked to paint the plan's `painted` onto that picture - so its features are the surface's own and every mark lands on them -
+## told what the art director sent back of its earlier paintings.
+func _make_face(step: String, look: Dictionary, target: String) -> void:
+	var surfaces := Skins.skins_of(episode.read_json("table"))
+	if surfaces.is_empty():
+		_errors[step] = "the table has no surface to paint (no part with `skin`)"
+		return
+	var skin: Dictionary = surfaces[0]
+	var canvas := Skins.face_canvas(skin)
+	var bare := episode.dir.path_join("face_bare.png")
+	DirAccess.make_dir_recursive_absolute(episode.dir)
+	if (canvas["image"] as Image).save_png(bare) != OK:
+		_errors[step] = "could not write " + bare
+		return
+	var at: Vector2i = canvas["at"]
+	var size: Vector2i = canvas["size"]
+	var err := TextGen.put(episode.dir.path_join("face.json"), JSON.stringify({"on": "%s/%s" % [skin["thing"], skin["part"]],
+		"at": [at.x, at.y], "size": [size.x, size.y], "px": float(canvas["px"])}, "\t"))
+	if not err.is_empty():
+		_errors[step] = err
+		return
+	var faults := PackedStringArray()
+	for round in episode.sent_back("face"):
+		for f in DataPath.strings(round):
+			if not faults.has(f):
+				faults.append(f)
+	_submit_image(step, TablePrompts.face_image(look, _plan(), skin, target, faults), [bare])
+
+
+## THE FACE PAINTED FIRST, KEPT ONLY IF IT LIES ON THE SURFACE ([method Skins.face_fit]) - then cut back to the surface's millimeters as it
+## wears it (`face_ref.png`, [method Skins.face_reference]), which the table reads; or removed, and why said - to the painter of the next too
+## ([method TableEpisode.send_back]).
+func _land_face() -> String:
+	var painted := Image.load_from_file(episode.file_of("image:face"))
+	var bare := Image.load_from_file(episode.dir.path_join("face_bare.png"))
+	var meta: Variant = JSON.parse_string(FileAccess.get_file_as_string(episode.dir.path_join("face.json")))
+	var surfaces := Skins.skins_of(episode.read_json("table"))
+	if painted == null or bare == null or painted.is_empty() or bare.is_empty() or not (meta is Dictionary) or surfaces.is_empty():
+		DirAccess.remove_absolute(episode.file_of("image:face"))
+		return "the face, its canvas or the surface could not be read"
+	var wrong := Skins.face_fit(bare, painted)
+	if not wrong.is_empty():
+		# ...and the painter of the next told why, as the art director's faults are told it
+		print("ghost: table image:face - %s" % wrong)
+		DirAccess.remove_absolute(episode.file_of("image:face"))
+		episode.send_back("face", [wrong])
+		return "the face did not lie on the surface: " + wrong
+	var m: Dictionary = meta
+	var canvas := {"at": Vector2i(int((m["at"] as Array)[0]), int((m["at"] as Array)[1])),
+		"size": Vector2i(int((m["size"] as Array)[0]), int((m["size"] as Array)[1]))}
+	var ref := Skins.face_reference(painted, bare, canvas, surfaces[0])
+	return "" if ref.save_png(episode.dir.path_join("face_ref.png")) == OK else "could not write face_ref.png"
+
+
+## THE ART DIRECTOR looks at the face painted first before anything is copied from it ([method _land_check]): shown it and the bare surface it
+## was painted on, it keeps it or sends it back with what is wrong.
+func _make_face_check() -> void:
+	var images: Array = [{"path": episode.file_of("image:face"), "label": "THE PAINTING to check:", "flip": false},
+		{"path": episode.dir.path_join("face_bare.png"), "label": "The bare surface it was painted on:", "flip": false}]
+	var surfaces := Skins.skins_of(episode.read_json("table"))
+	var p := TablePrompts.face_check(String(spec.get("title", "")), String(spec.get("brief", "")), _plan(),
+		surfaces[0] if not surfaces.is_empty() else {})
+	p["images"] = images
+	_submit_text("check:face", p, "best")
+
+
 ## THE SET DRESSER sets the table from the plan, looking at the cloth, told the things earlier
 ## episodes' tables held so this one holds others. A writer that takes tools works with
 ## [SetDresserTools]: it builds the table a few things at a time, LOOKS at what it built and at the
@@ -724,10 +798,15 @@ func _make_skin() -> void:
 			for g in (d as Dictionary).get("designs", []):
 				if g is Dictionary and not String((g as Dictionary).get("name", "")).is_empty():
 					earlier.append(String((g as Dictionary)["name"]))
+	# ...COPYING THE FACE PAINTED FIRST, where there is one: shown it as the surface wears it, told its colors
+	var face := episode.dir.path_join("face_ref.png")
+	var ref := Image.load_from_file(face) if FileAccess.file_exists(face) else null
+	var palette: Array = Skins.face_palette(ref) if ref != null and not ref.is_empty() else []
 	var extra := {}
 	var looks := 0
 	if TextGen.make(String(spec.get("writer", "claude"))).takes_tools():
 		var toolset := DecoratorTools.new(episode.job_dir("skin"), surfaces)
+		toolset.reference = face if not palette.is_empty() else ""
 		var url := AgentTools.open(episode.job_dir("skin"), toolset)
 		if not url.is_empty():
 			_tools["skin"] = {"url": url, "set": toolset}
@@ -735,7 +814,10 @@ func _make_skin() -> void:
 			looks = DecoratorTools.LOOKS
 		else:
 			toolset.release()
-	_submit_text("skin", TablePrompts.decorator(String(spec.get("title", "")), String(spec.get("brief", "")), _plan(), episode.seed, surfaces, earlier, looks), "best", extra)
+	var p := TablePrompts.decorator(String(spec.get("title", "")), String(spec.get("brief", "")), _plan(), episode.seed, surfaces, earlier, looks, palette)
+	if not palette.is_empty():
+		p["images"] = [{"path": face, "label": "THE PAINTING TO COPY, the surface straight from its front (%d pixels a millimeter, its top-left corner at x 0, y 0):" % int(Skins.FACE_PX), "flip": false}]
+	_submit_text("skin", p, "best", extra)
 
 
 ## WHAT THE DECORATOR HANDED IN ([param text]: `{"designs": [...]}`, or one design for the table's first surface) made safe on the
@@ -1067,6 +1149,8 @@ func _land(step: String, res: Dictionary) -> void:
 				err = "" if episode.has(step) else "the picture did not arrive"
 				if err.is_empty() and step == "image:height":
 					err = _land_height()
+				if err.is_empty() and step == "image:face":
+					err = _land_face()
 			"model":
 				err = _land_model(String(res.get("text", "")))
 				if not err.is_empty() and had_tools:
@@ -1387,7 +1471,7 @@ func _land_box(v: Variant, n: int) -> Array:
 	return out if out.size() >= int(r[0]) else []
 
 
-## THE ART DIRECTOR'S WORD on a card's painting ([param step] `check:K`): kept, or SENT BACK - its
+## THE ART DIRECTOR'S WORD on a card's painting ([param step] `check:K`; or `check:face`, the face painted first's): kept, or SENT BACK - its
 ## faults added to [method TableEpisode.send_back] for the painter of the next, and the painting deleted
 ## with what was made from it, so the producer paints it again and looks again - while it has been sent
 ## back fewer than [constant REPAINTS] times. Past that the last painting stands, and its faults are
@@ -1396,7 +1480,9 @@ func _land_check(step: String, text: String) -> String:
 	var d: Variant = TextGen.extract_json(text)
 	if not (d is Dictionary) or not (String((d as Dictionary).get("verdict", "")) in ["keep", "repaint"]):
 		return "the art director's reply was not a verdict"
-	var k := int(step.split(":")[1])
+	var who := step.split(":")[1]
+	var k: Variant = int(who) if who.is_valid_int() else who
+	var painting := "image:card:%d" % k if who.is_valid_int() else "image:%s" % who
 	var faults := Array(DataPath.strings((d as Dictionary).get("faults", [])))
 	var rounds := episode.sent_back(k).size()
 	if String((d as Dictionary)["verdict"]) == "keep" or faults.is_empty():
@@ -1408,10 +1494,10 @@ func _land_check(step: String, text: String) -> String:
 	if not err.is_empty():
 		return err
 	print("ghost: table %s - sent back: %s" % [step, "; ".join(faults)])
-	episode.invalidate("image:card:%d" % k, true)
+	episode.invalidate(painting, true)
 	# a new painting, and a new look at it: neither is a retry of a failed job
 	_tries.erase(step)
-	_tries.erase("image:card:%d" % k)
+	_tries.erase(painting)
 	return ""
 
 

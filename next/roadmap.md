@@ -52,6 +52,9 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
 - [ ] **Windows and macOS, for real**
       Ghost Notes is developed on Linux. Nothing needs a Unix shell, and the Windows launcher was checked under PowerShell 7 on Linux, but neither Windows nor macOS has run it.
 
+- [ ] **The dispatch desk, watched and heard**
+      Built 2026-11-06 (next/dispatch.md); the author's eye and ear, a real voice and an export, the pictures painted, and agents dressing the desk from a note's `desk:` block.
+
 - [ ] **Spectral determinism, phase 2**
       A perceptual fingerprint that survives a re-encode, so like-sounding audio maps to the same imagery. The seed is the exact file's today; `Echo` already keeps a manual session aligned to its content.
 
@@ -78,6 +81,12 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
 
 - [ ] **A desktop build that runs everything**
       An exported build cannot yet run the Python hosts, relaunch itself to render, or write into `res://`, and the Steam list is open: URL import left out of a store build, the export's excludes, a GPL FFmpeg on Linux, the Assistant stripped, third-party notices. See [binary_export_and_steam.md](binary_export_and_steam.md).
+
+- [ ] **Bounce light, by eye**
+      The Graphics panel's Bounce light (screen-space indirect light, `Graphics.dress`) is off until judged (true-tarot 279427: subtle at strength 1, 2.5 ms a frame). The tonemapper is a choice on the Look card since 2026-11-06 (`Tonemaps`: Filmic the default, AgX and ACES at the presets the user was shown, three adjustments kept for each); the user preferred AgX there, and its preset may want tuning per set once watched.
+
+- [ ] **Computing faster**
+      Threads, the GPU and tiny networks. A show is a pure function of seed and time, so only simulation is truly sequential; first measure where a frame goes, then move exact functions to shaders, bake by islands, and run the particle solver in its paper's parallel form. Tiny networks last, for one expensive shader function; parareal with a learned coarse step for the bake. Asked 2026-11-06; nothing built. See [compute.md](compute.md).
 
 - [ ] **Cards, generalized**
       Built: the rename (Cards, 2026-10-06), the table's verbs as one registry, positions as data, a dealer's tools and the reader's guard (step 9). Open: card state over show time; decks and faces read from the show's guide (the rules are every show's since 2026-10-08 - a tarot show is its brief; the card's size and face are still the tarot's); a dealer run by a real agent (the tools exist, and no episode step calls them yet); pick-a-pile episodes.

@@ -112,7 +112,7 @@ const LAWS := {
 			["rinse", "a vessel of water the tool is rinsed in before it takes another color, and when it is done - the water clouds a little with each rinse (left out: never)"],
 			["dry", "a cloth it is touched to and wiped on after each rinse (left out: never)"],
 			["manner", "\"blend\" to go over elements already laid, softening their edges with nothing on the tool; or for a fill, how it is laid - \"sweep\" (a brush), \"stipple\" (a sponge), \"pat\" (a puff) - left out: as the tool is"],
-			["size", "how wide the tool works, millimeters (left out: as it is built)"]]},
+			["size", "how wide the tool works, millimeters (left out: as it is built; a tool that presses - a sponge stippling, a puff patting - lays what of it touches, whatever this says)"]]},
 }
 ## The hands a `write` may be in ([constant CardTable.HANDS], a typewriter's aside), and its ink unless it says.
 const WRITING_HANDS := ["neat", "quick", "print"]

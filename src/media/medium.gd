@@ -97,8 +97,11 @@ const REGISTRY := {
 		"uses": [], "frames": ["landscape"], "needs": ["reading"], "mode": "likeness",
 		"blurb": "An actor reading the note in their own room, from their own footage: their real takes, joined where two frames nearly match, the mouth drawn from their own mouths to the voice's sounds through one mesh over the frame, their gestures on the words a director placed them. The Likeness component's own medium."},
 	"letter": {"label": "Letter", "script": "res://src/desk/letter.gd",
-		"uses": ["opening"], "frames": ["landscape"], "needs": ["reading"], "mode": "letter",
+		"uses": ["opening", "illustrations"], "frames": ["landscape"], "needs": ["reading"], "mode": "letter",
 		"blurb": "Somebody writing a letter at a desk, reading it aloud as the pen puts it down in a cursive hand: a thought said and not written, a line crossed out, a sketch drawn as it is described, the pen tapped while the writer thinks or pointed at whoever watches, and a picture over the whole screen for a passage read over it. The Letter component's own medium."},
+	"dispatch": {"label": "Dispatch desk", "script": "res://src/dispatch/dispatch.gd",
+		"uses": ["opening", "illustrations"], "frames": ["landscape"], "needs": ["reading"], "mode": "dispatch",
+		"blurb": "One desk late at night in a hollow under the ground, seen from the chair: an old terminal that types what is said, a dozen labeled flip phones that ring and are held to the ear, a radar, a shortwave receiver, a printer, small screens - the camera turning to whatever is active, roots growing across the desk. The Dispatch desk component's own medium."},
 	"desk": {"label": "Desk", "script": "res://src/desk/desk.gd",
 		"uses": ["opening"], "frames": ["landscape"], "mode": "proof",
 		"blurb": "A ghost doing math at a desk: a legal pad under a lamp, and a pen that writes each formula on it by itself while the teacher talks, in a hand drawn from TeX's own layout. The Proof component's own medium - what it writes comes from the lesson its agents made."},
@@ -144,6 +147,38 @@ static func uses(key: String, feature: String) -> bool:
 	if not REGISTRY.has(key):
 		return true
 	return feature in (Registry.field(REGISTRY, key, "uses", []) as Array)
+
+
+## WHAT A MEDIUM SHOWS AS PICTURES, for the one Pictures card every presentation shares (2026-11-06, the user: "if we are
+## generating images, we are doing it from a unified place: not from a bunch of disparate cards"): [param body]'s
+## pictures as [param key]'s medium shows them - [Manuscript.images] rows, a captured page's with its `url` - asked of
+## its script's own static `pictures_in(body)` where it has one (a letter's sketches are drawn by its pen, never painted;
+## a tablet's pages are captured; a dispatch desk shows each on a screen), else every image mark in it. [] for a medium
+## that shows none (a row whose `uses` has no "illustrations").
+static func pictures_of(key: String, body: String) -> Array:
+	if not uses(key, "illustrations"):
+		return []
+	var own := _pictures_script(key)
+	if own != null:
+		return own.call("pictures_in", body) as Array
+	return Manuscript.images(body)
+
+
+## Each medium's script, where it says for itself what it shows as pictures (null where it does not), found once.
+static var _pictures_scripts := {}
+
+static func _pictures_script(key: String) -> GDScript:
+	if _pictures_scripts.has(key):
+		return _pictures_scripts[key]
+	var own: GDScript = null
+	var path := String(Registry.field(REGISTRY, key, "script", ""))
+	var script: GDScript = load(path) as GDScript if not path.is_empty() else null
+	if script != null:
+		for m in script.get_script_method_list():
+			if String((m as Dictionary)["name"]) == "pictures_in":
+				own = script
+	_pictures_scripts[key] = own
+	return own
 
 
 ## Each frame's size at 1080p, in pixels.

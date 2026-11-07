@@ -21,6 +21,11 @@ extends Node
 ## `--atlas 8192` the stage's shadow atlas, `--quality 4` the soft shadow filter's quality
 ## (RenderingServer.ShadowQuality). Each photograph's line says what the stage's last frame took on the GPU;
 ## `--timing N` plays N frames on past the last one and prints their median.
+## `--graphics export` draws at the Export column's defaults ([Graphics]; `live` the viewer's), and `--graphics
+## supersample=2,anisotropy=4` tells rows outright (laid over either); without it the stage is as Godot leaves it.
+## `--env tonemap_mode=4,ssil_enabled=true` sets those properties on the table's Environment (4 is AgX) - a look
+## tried without editing the medium.
+## `--tonemap agx` shows the table through that tonemapper at its preset ([Tonemaps], as the Look card would).
 ## `--wash W` makes the shuffle one wash (seed W, its longest) and `--clip A,B` writes EVERY frame
 ## from A to B seconds into it (`<out>_c0000.png`...) - motion is judged in motion:
 ##   ffmpeg -framerate 30 -i <out>_c%04d.png -pix_fmt yuv420p wash.mp4
@@ -55,6 +60,8 @@ var _candle := {}       # --candle k=v,...: properties set on every candle's lig
 var _atlas := 0         # --atlas N: the stage's positional shadow atlas
 var _quality := -1      # --quality Q: the positional soft shadow filter's quality
 var _timing := 0        # --timing N: N frames played on past the last photograph, their median GPU time
+var _graphics := ""     # --graphics live|export|k=v,...: the stage drawn as Graphics has it
+var _env := {}          # --env k=v,...: properties set on the table's Environment
 
 
 func _ready() -> void:
@@ -102,6 +109,12 @@ func _run() -> void:
 			"--atlas": _atlas = int(args[i + 1])
 			"--quality": _quality = int(args[i + 1])
 			"--timing": _timing = int(args[i + 1])
+			"--graphics": _graphics = args[i + 1]
+			"--tonemap": Tonemaps.choose(args[i + 1], {})
+			"--env":
+				for kv in String(args[i + 1]).split(","):
+					var pair := kv.split("=")
+					_env[pair[0]] = str_to_var(pair[1])
 			"--clip":
 				var ab := String(args[i + 1]).split(",")
 				_clip = Vector2(float(ab[0]), float(ab[1]))
@@ -121,6 +134,17 @@ func _run() -> void:
 	stage.transparent_bg = false
 	stage.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	add_child(stage)
+	if not _graphics.is_empty():
+		for part in _graphics.split(","):
+			if part.contains("="):
+				var kv := part.split("=")
+				Graphics.overrides[kv[0]] = str_to_var(kv[1])
+			else:
+				Graphics.tier_override = part
+		# before the medium is mounted: a light takes its shadow's width from the filter's quality as it is made
+		Graphics.bind_stage(stage)
+		print("table_look_probe: graphics %s - supersampling %.2f (%dx%d), filtering level %d" % [Graphics.tier(),
+			stage.scaling_3d_scale, W, H, stage.anisotropic_filtering_level])
 	RenderingServer.viewport_set_measure_render_time(stage.get_viewport_rid(), true)
 	Director.detach()
 	var medium: Medium = Medium.make("table")
@@ -155,6 +179,8 @@ func _run() -> void:
 	medium.bind_captions(subs)
 	if _glow >= 0.0:
 		(medium as TableMedium)._env.glow_hdr_threshold = _glow
+	for key in _env:
+		(medium as TableMedium)._env.set(key, _env[key])
 	if _foil >= 0.0:
 		(medium as TableMedium)._plan.foil = _foil
 	var end := float((subs.words.back() as Dictionary)["t1"]) + 4.0

@@ -32,12 +32,14 @@ uniform vec2 half_size = vec2(60.0, 36.0);   // half the surface's flat extent, 
 uniform float border = 0.0;             // a band along the hem: its width, cm (0: none)
 uniform float border_inset = 0.0;       // ...how far in from the hem, cm
 uniform vec3 border_color : source_color = vec3(0.8, 0.65, 0.3);
-uniform sampler2D painting : source_color, filter_linear_mipmap, repeat_disable;
+uniform sampler2D painting : source_color, filter_linear_mipmap_anisotropic, repeat_disable;
 uniform float has_painting = 0.0;
 uniform vec4 crop = vec4(0.0, 0.0, 1.0, 1.0);   // the part of the painting laid here: offset, size (UV)
 // THE PAINTER'S HEIGHT MAP of the painting (Tables.height_fit), when one lined up with it: white
 // highest; read at the painting's own UV plus its shift
-uniform sampler2D height_map : filter_linear_mipmap, repeat_disable;
+// filtered as the painting is: [method smooth_tex] reads both, and Godot refuses one function handed two samplers
+// filtered apart (its reads take an explicit level, so the filter's anisotropy does nothing to them)
+uniform sampler2D height_map : filter_linear_mipmap_anisotropic, repeat_disable;
 uniform float has_height = 0.0;
 uniform vec2 height_shift = vec2(0.0);
 // Tables.RELIEFS: 0 none, 1 natural (the material's own alone), 2 raised, 3 sunk, 4 quilted,
@@ -108,6 +110,21 @@ int sett(float x) {
 
 vec2 painting_uv(vec2 p) {
 	return crop.xy + (p / (2.0 * max(half_size, vec2(0.1))) + 0.5) * crop.zw;
+}
+
+// THE PAINTING READ ACROSS THE PIXEL'S FOOTPRINT: its two axes kept apart (textureGrad), so the sampler's anisotropic
+// filtering (Graphics' Texture filtering) keeps a cloth sharp toward the table's far side, where one mip level for both
+// axes had blurred it along the near one. The footprint is never wider than [param lod], the level the plain read took:
+// a parallaxed point's slope jumps where its layers do.
+vec3 painting_at(vec2 p, float lod) {
+	vec2 uv = painting_uv(p);
+	vec2 ts = vec2(textureSize(painting, 0));
+	vec2 gx = dFdx(uv) * ts;
+	vec2 gy = dFdy(uv) * ts;
+	float most = exp2(lod);
+	gx *= min(1.0, most / max(length(gx), 1e-6));
+	gy *= min(1.0, most / max(length(gy), 1e-6));
+	return textureGrad(painting, uv, gx / ts, gy / ts).rgb;
 }
 
 // A MAP READ WHOSE SLOPE IS SMOOTH. The relief's normal is the slope of what a map holds, and
@@ -257,7 +274,7 @@ vec4 pattern_at(vec2 p, float aa, float lod) {
 	} else if (pattern == 9) {
 		// THE PAINTING
 		if (has_painting > 0.5) {
-			c = textureLod(painting, painting_uv(p), lod).rgb;
+			c = painting_at(p, lod);
 			fig = painting_detail(p, lod);
 		}
 	}

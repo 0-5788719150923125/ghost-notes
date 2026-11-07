@@ -220,10 +220,13 @@ func build(look: Dictionary, page: Texture2D, turning: Texture2D) -> void:
 		_over_mat = _sheet_material(null, false)
 		_turning = MeshInstance3D.new()
 		_turning.material_override = _turn_mat
+		# (a sheet given a new shape as it turns casts its own shadow: a twin cut once would keep the first - ShadowCasters)
+		_turning.set_meta("shadow_own", true)
 		_body.add_child(_turning)
 		for _k in KEPT:
 			var m := MeshInstance3D.new()
 			m.material_override = _over_mat
+			m.set_meta("shadow_own", true)
 			_body.add_child(m)
 			_over.append(m)
 	_page.material_override = _sheet_material(page, true)

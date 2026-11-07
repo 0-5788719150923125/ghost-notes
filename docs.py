@@ -185,6 +185,13 @@ FOLDERS: List[Tuple[str, str, str]] = [
      "A note read as a letter written by hand at a desk: the card that pins its medium, draws its sketches (an agent's "
      "SVG, laid out by the Proof pad's ink step) and paints its pictures (the Illustrations library's), and hands the "
      "reading the letter with the pen's rests in it. Design: next/letter.md."),
+    ("dispatch", "Dispatch desk",
+     "A note played at a desk late at night in a hollow under the ground, seen from the chair: the script's marks read "
+     "into the desk's actions and the voice's rests (calls, rings, texts, pings, the terminal's typed and shown blocks, "
+     "the printer, the static), the desk and everything on it built by code (a beige terminal, a dozen labeled flip "
+     "phones, a radar, a shortwave receiver, a printer, small screens), the roots grown over and across it, every sound "
+     "synthesized, the medium that turns its camera to whatever is active, and the card that pins it and paints its "
+     "pictures. Design: next/dispatch.md."),
     ("likeness", "Likeness",
      "An actor played from their own footage: the library of actors, each built from their videos (a folder, or links "
      "fetched) - surveyed, grouped into sets by camera and look, the agent that audits them, a still of each set and a "

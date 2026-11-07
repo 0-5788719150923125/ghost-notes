@@ -162,6 +162,42 @@ surface:
   - "Its colors belong to this palette: {{palette}}."
   - "FORMAT: LANDSCAPE 3:2 (1536x1024). No border, no vignette, no watermark, no text."
 
+# WHAT IS PAINTED, PAINTED FIRST AS A PICTURE (feedback 0023; next/painted_surface.md): the plan's `painted` put onto the attached
+# picture of the surface bare from its front (Skins.face_canvas) - which the decorator then copies, and the paint laid on the surface
+# carries (skin_paint.gdshader). Like `height`, an edit of the attached image in its own frame; Skins.face_fit checks it lies on the
+# surface. It names no kind of surface and no kind of painting: the plan says what is painted.
+#
+# The code gives: {{thing}}, {{width_mm}}, {{height_mm}}, {{painted}}, {{premise}}; `sent_back`, a fault each.
+face:
+  - include: head
+  - ""
+  - >-
+      THE ATTACHED IMAGE is {{thing}}, bare, seen straight from its front and lit evenly from the front - a surface
+      {{width_mm}} mm across and {{height_mm}} mm tall, on black. PAINT ON IT what is to be painted on it by hand:
+  - "{{painted}}"
+  - "The episode's angle on it: {{premise}}"
+  - >-
+      PAINTED ON IT, IN ITS OWN FRAME: the same picture with paint on the surface - every feature of the surface where it
+      is in the attached image, the same size and the same shape, and every painted shape on the feature it is meant for,
+      following its form. No crop, no zoom, no turn, no flip: laid over the attached image, the surface's edge falls on
+      its edge.
+  - >-
+      ONLY THE PAINT IS NEW. Nothing past the surface's edge - the black around it stays black. Nothing on the surface
+      that is not paint: no hair, no cloth, no jewelry, no objects, no hands, no text, and no light or shadow beyond the
+      attached image's own soft shading.
+  - >-
+      PAINT A HAND COULD LAY WITH A SPONGE AND BRUSHES: shapes of flat color with clean edges, crisp lines and dots, and
+      where something should shine or glint, a highlight as a shape of its own; soft only at an edge a sponge would soften.
+      A striking, finished design that reads from across a room, with fine work in it that rewards a close look.
+  - when: sent_back
+    say: "IT WAS PAINTED BEFORE, and the art director sent it back for:"
+  - each: sent_back
+    say: "  - {{it}}"
+  - when: sent_back
+    say: "Paint it again with every one of these put right."
+  - >-
+      FORMAT: the same size and shape as the attached image (PORTRAIT 2:3). No border, no text, no watermark.
+
 # THE PAINTING'S HEIGHT MAP: the same surface redrawn as depth, from the cloth's painting attached - for
 # the relief the table's light rakes (Tables.height_fit checks it lies under it)
 height:

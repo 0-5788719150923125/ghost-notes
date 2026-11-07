@@ -118,11 +118,15 @@ static func make(body: String, title: String, ask: Dictionary, from_sentence := 
 					(w as Dictionary)["sentence"] = prev_sentence
 		var fade := bool((seg as Dictionary).get("fade", false))
 		var leans: Array = (seg as Dictionary).get("leans", [])
+		var heard := String((seg as Dictionary).get("heard", ""))
 		var cursor := 0
 		for c in chunks:
 			(c as Dictionary)["speaker"] = who
 			if fade:
 				(c as Dictionary)["fade"] = true
+			# ...HEARD THROUGH WHAT ITS TURN SAYS ([constant Manuscript.HEARD]): every chunk of it
+			if not heard.is_empty():
+				(c as Dictionary)["heard"] = heard
 			# A CHUNK'S DELIVERY is the one marked where its first word is in the passage
 			var aim := Vector4.ZERO
 			if not leans.is_empty():
@@ -193,6 +197,10 @@ static func passages(body: String, title: String, ask: Dictionary) -> Array:
 		if om != null:
 			parts = [t.substr(0, om.get_start()), t.substr(om.get_end())]
 		var name := String((p as Dictionary)["speaker"])
+		# HEARD THROUGH SOMETHING: the turn's own mark, which every piece of it keeps (an outro mark splits a turn, never
+		# the line it comes down)
+		var hm := Manuscript._rx(Manuscript.HEARD).search(t)
+		var heard := hm.get_string(1).to_lower() if hm != null and VoiceFX.HEARD.has(hm.get_string(1).to_lower()) else ""
 		for k in parts.size():
 			if k == 1:
 				fading = true
@@ -209,7 +217,8 @@ static func passages(body: String, title: String, ask: Dictionary) -> Array:
 			# A passage of nothing but hesitations: its rests would have no word to sit on.
 			if not out.replace(TextNorm.HOLD_MARK, "").strip_edges().is_empty():
 				kept.append({"speaker": reader if name == Manuscript.NARRATOR else name, "text": out,
-					"fade": fading, "leans": res["leans"], "holds": res["holds"], "over": over, "together": together})
+					"fade": fading, "leans": res["leans"], "holds": res["holds"], "over": over, "together": together,
+					"heard": heard})
 	# A TABLET'S OPENING RUN (wake, open the browser, type) comes AFTER the intro, end to end:
 	# the intro is the tablet lying dark on the desk, and its rest is the run's own, whole
 	return kept

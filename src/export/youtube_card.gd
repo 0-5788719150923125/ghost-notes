@@ -145,7 +145,7 @@ var _thumb_back: Button
 var _thumb_at: Label
 var _thumb_on: Button
 var _thumb_del: Button
-var _thumb_window: Window = null  # the thumbnail at full size, opened by a click on it
+var _thumb_window: PictureWindow = null  # the thumbnail at full size, opened by a click on it
 ## The step that paints each episode's thumbnail, while the Thumbnail is Painted.
 var _thumb: YouTubeThumbnail
 var _thumb_seen := []           # what the thumbnail's rows were last drawn for
@@ -958,109 +958,43 @@ func _delete_thumb() -> void:
 	_refresh_thumbnail()
 
 
-## A DELETE PRESSED TWICE, as a book's picture is deleted ([IllustrationPanel]): the first press arms it for
-## 3 s ("Delete?"), the second calls [param act].
+## A DELETE PRESSED TWICE ([ArmedDelete]), as a picture's version is deleted on the Pictures card: the first press arms
+## it for 3 s ("Delete?"), the second calls [param act].
 func _armed_delete(text: String, act: Callable, tip := "Delete this thumbnail - its painting too. The one before it goes up instead, or none.") -> Button:
-	var b := Button.new()
-	b.text = text
-	b.tooltip_text = tip
-	b.focus_mode = Control.FOCUS_NONE
+	var b := ArmedDelete.button(text, act, tip)
 	b.add_theme_font_size_override("font_size", 12)
-	var disarm := Timer.new()
-	disarm.one_shot = true
-	disarm.wait_time = 3.0
-	var calm := func() -> void:
-		b.set_meta("armed", false)
-		b.text = text
-		b.remove_theme_color_override("font_color")
-	disarm.timeout.connect(calm)
-	b.add_child(disarm)
-	b.pressed.connect(func() -> void:
-		if not bool(b.get_meta("armed", false)):
-			b.set_meta("armed", true)
-			b.text = "Delete?"
-			b.add_theme_color_override("font_color", Color(1.0, 0.55, 0.5))
-			if disarm.is_inside_tree():
-				disarm.start()
-			return
-		disarm.stop()
-		calm.call()
-		act.call())
 	return b
 
 
-## THE THUMBNAIL AT FULL SIZE, in a window of its own as a book's pictures open ([IllustrationPanel]): the
-## one chosen, what the writer asked of it, and its versions to step through or delete there. Escape or
-## the window's close hides it.
+## THE THUMBNAIL AT FULL SIZE, in the window a picture opens in on the Pictures card ([PictureWindow]): the one chosen,
+## what the writer asked of it, and its versions to step through or delete there. Escape or the window's close hides it.
 func open_thumbnail() -> void:
 	if _thumb_feed() == null or not is_inside_tree():
 		return
 	_fill_thumb_window()
-	var vp := get_viewport().get_visible_rect().size
-	_thumb_window.size = Vector2i(int(vp.x * 0.8), int(vp.y * 0.85))
-	_thumb_window.popup_centered()
+	_thumb_window.open_over(self)
 
 
 ## What the full-size window holds for the thumbnail chosen now - drawn again whenever the card's is
 ## ([method _refresh_thumbnail]) - and hidden once there is none.
 func _fill_thumb_window() -> void:
 	if _thumb_window == null:
-		_thumb_window = Window.new()
-		_thumb_window.visible = false
-		_thumb_window.close_requested.connect(_thumb_window.hide)
-		_thumb_window.window_input.connect(func(e: InputEvent) -> void:
-			if e is InputEventKey and (e as InputEventKey).pressed and (e as InputEventKey).keycode == KEY_ESCAPE:
-				_thumb_window.hide())
+		_thumb_window = PictureWindow.new()
 		add_child(_thumb_window)
-	for c in _thumb_window.get_children():
-		_thumb_window.remove_child(c)
-		c.queue_free()
 	var feed := _thumb_feed()
 	var vs := _thumb.versions(feed) if feed != null else []
 	if vs.is_empty():
+		_thumb_window.clear()
 		_thumb_window.hide()
 		return
 	var at := _thumb.chosen(feed)
 	var v: Dictionary = vs[at]
-	_thumb_window.title = "Thumbnail  ·  %s" % (feed.episode_title() if not feed.episode_title().is_empty() else "this episode")
-	var bg := PanelContainer.new()
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_thumb_window.add_child(bg)
-	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 8)
-	bg.add_child(col)
-	var pic := TextureRect.new()
-	pic.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	var path := _thumb.image(feed)
-	var img := Image.load_from_file(path) if not path.is_empty() else null
-	if img != null and not img.is_empty():
-		pic.texture = ImageTexture.create_from_image(img)
-	col.add_child(pic)
 	var words := String(v.get("words", ""))
-	var desc := Label.new()
-	desc.text = ("Its words: \"%s\"\n\n" % words if not words.is_empty() else "No words on it.\n\n") + String(v.get("picture", ""))
-	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	desc.add_theme_font_size_override("font_size", 12)
-	col.add_child(desc)
-	var bar := HBoxContainer.new()
-	bar.alignment = BoxContainer.ALIGNMENT_CENTER
-	bar.add_theme_constant_override("separation", 8)
-	col.add_child(bar)
-	for step in [-1, 1]:
-		var b := Button.new()
-		b.text = "‹ previous" if step < 0 else "next ›"
-		b.focus_mode = Control.FOCUS_NONE
-		b.disabled = at + step < 0 or at + step >= vs.size()
-		b.pressed.connect(_choose_thumb.bind(step))
-		bar.add_child(b)
-		if step < 0:
-			var n := Label.new()
-			n.text = "version %d of %d%s" % [at + 1, vs.size(), "  (painted before the words were written again)"
-				if not _thumb.fresh(feed) else ""]
-			bar.add_child(n)
-	bar.add_child(_armed_delete("Delete this version", _delete_thumb))
+	_thumb_window.fill("Thumbnail  ·  %s" % (feed.episode_title() if not feed.episode_title().is_empty() else "this episode"),
+		_thumb.image(feed), ("Its words: \"%s\"\n\n" % words if not words.is_empty() else "No words on it.\n\n")
+		+ String(v.get("picture", "")), at, vs.size(),
+		"(painted before the words were written again)" if not _thumb.fresh(feed) else "", _choose_thumb,
+		[_armed_delete("Delete this version", _delete_thumb)])
 
 
 ## The painted thumbnail at [param path] on the card, read again only when it changes; none for "".

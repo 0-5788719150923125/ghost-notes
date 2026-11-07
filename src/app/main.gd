@@ -669,6 +669,9 @@ func _stage_host() -> Node:
 	_stage.transparent_bg = false
 	_stage.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	add_child(_stage)
+	# HOW FINELY IT IS DRAWN (see graphics.gd), the live viewer's choice or an export's - before a medium is mounted
+	# on it, since a light made then takes its shadow's width from the filter's quality
+	Graphics.bind_stage(_stage)
 	_stage_view = TextureRect.new()
 	_stage_view.texture = _stage.get_texture()
 	_stage_view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE

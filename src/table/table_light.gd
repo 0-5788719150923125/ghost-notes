@@ -135,11 +135,14 @@ func light_flames(flames: Array, own: int) -> void:
 ## itself on a card's back and drew a clock's rim on its face in stairs (feedback 0007). The filter's
 ## normal bias keeps the cloth out of its own shadow; the depth bias stays small (a tabletop's: at
 ## Godot's own a deck's shadow began centimeters in front of it), which is what keeps a card's own
-## shadow. Its cube, as every omni light's here.
+## shadow. DRAWN STRAIGHT INTO TWO PARABOLOIDS, their poles up and down (feedback 0024: a brush in a tray drew a jagged smear - Godot
+## draws a cube and copies it into them through a linear sampler, averaging a thin thing's depth with what is behind it), the table about
+## the flame at their rims, where they are finest; what casts is cut fine enough for a paraboloid to draw it true ([ShadowCasters]).
 static func candle_shadow(light: OmniLight3D) -> void:
+	light.omni_shadow_mode = OmniLight3D.SHADOW_DUAL_PARABOLOID
+	light.basis = Basis(Vector3.RIGHT, PI / 2.0)
 	ShadowFilter.filter(light, Lights.SHADOW_TEXELS)
 	light.shadow_bias = 0.004
-	light.omni_shadow_mode = OmniLight3D.SHADOW_CUBE
 	light.shadow_enabled = true
 
 
@@ -560,7 +563,10 @@ func tick_props(t: float) -> void:
 		var n := maxf(float(((l as Dictionary)["flames"] as Array).size()), 1.0)
 		var light: OmniLight3D = (l as Dictionary)["light"]
 		light.light_energy = float((l as Dictionary)["energy"]) * bright / n
-		# the light leans with its flames, so the shadows breathe with them
-		light.position = ((l as Dictionary)["light_base"] as Vector3) + leans / n
+		# the light leans with its flames, so the shadows breathe with them - IN A DRAFT, OR ABOARD SOMETHING THAT MOVES, never in still
+		# air (feedback 0024 again: "if you watch the topmost brush through sequential frames, you will see that it's flickering, even though
+		# no light source is apparently moving"): a still flame's own flicker leaned it 1.5 mm, and its shadow map's texels with it -
+		# 2.5 of them across a brush 30 cm off, the stairs of every thin thing's shadow crawling while nothing seen moved
+		light.position = ((l as Dictionary)["light_base"] as Vector3) + (leans / n if blows or riding else Vector3.ZERO)
 	for g in _glows:
 		(g["light"] as OmniLight3D).light_energy = float(g["energy"]) * _flame_at(g["flicker"], t).x

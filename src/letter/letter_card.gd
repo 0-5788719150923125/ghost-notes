@@ -6,10 +6,10 @@ class_name LetterCard
 ##
 ## THE NOTE IS THE LETTER, word for word: nothing writes it but its author. What this card makes is what
 ## the words only describe - each SKETCH, drawn as SVG by an agent and laid out by ghost's own TeX
-## ([LetterSketches]), so the pen draws it; and each PICTURE a passage is read over, painted by the
-## Illustrations library's painter from its mark ([IllustrationPanel], handed the letter's pictures and
-## never its sketches). A letter plays without either: a sketch not drawn yet is not drawn, the words round it
-## as they are, a picture not painted leaves its passage over the desk.
+## ([LetterSketches]), so the pen draws it. Each PICTURE a passage is read over is the note's Pictures card's
+## ([PicturesCard]: the letter's pictures and never its sketches, [method LetterMedium.pictures_in]). A letter plays
+## without either: a sketch not drawn yet is not drawn, the words round it as they are, a picture not painted leaves
+## its passage over the desk.
 ##
 ## A CARD ON THE READING, as the Actor's and Proof's are: built by [NoteCards] from the `letter` row, it
 ## PINS ITS MEDIUM while it is up ([member Director.medium_override]) and HANDS the reading what is read
@@ -67,7 +67,6 @@ var _card_box: TextField         # what is written on the index cards, shown whi
 var _card_due := 0.0             # seconds till a playing letter's desk takes the cards' words, 0 for nothing waiting
 var _hand_pick: OptionButton
 var _writer: AgentPick
-var _pictures: IllustrationPanel
 
 
 static func for_note(ctx: Dictionary) -> LetterCard:
@@ -113,7 +112,6 @@ func _process(delta: float) -> void:
 	var body := _body()
 	if body != _seen:
 		_seen = body
-		_pictures.set_script_text(LetterScript.pictures_only(body))
 		_listed = LetterScript.sketches(_seen)
 	_lay_out_when_drawn()
 
@@ -141,11 +139,6 @@ func apply(cfg: Dictionary) -> void:
 				kinds.append(k)
 		_knobs["things"] = kinds
 	_show_knobs()
-
-
-## The pictures' look - a block of its own (`illustrations:`), kept by the reading as the Picture card's is.
-func illustrations() -> IllustrationPanel:
-	return _pictures
 
 
 # --- what it hands the reading -------------------------------------------------------------------
@@ -188,7 +181,7 @@ func document() -> Dictionary:
 		if records.has(String(DeskScript.item("draw", String(all[key]))["id"])):
 			svgs[key] = all[key]
 	var pictures := {}
-	for im in Manuscript.images(LetterScript.pictures_only(body)):
+	for im in LetterMedium.pictures_in(body):
 		var path := Illustrations.path_for(String((im as Dictionary)["key"]))
 		if not path.is_empty():
 			pictures[String(im["key"])] = ProjectSettings.globalize_path(path)
@@ -507,10 +500,6 @@ func _build() -> void:
 		DirAccess.make_dir_recursive_absolute(_sketches.dir)
 		OS.shell_open(_sketches.dir))
 	brow.add_child(folder)
-
-	# THE PICTURES, the Illustrations library's: handed the letter's picture marks alone
-	_pictures = preload("res://src/media/illustration_panel.gd").new()
-	add_child(_pictures)
 	_show_knobs()
 
 

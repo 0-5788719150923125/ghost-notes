@@ -6,7 +6,8 @@
 # every time.
 #
 # The code gives: {{episode_title}}, {{premise}}, {{painted}}; `surfaces` ({{told}} each); {{language}}; `has_earlier`, {{earlier}};
-# `tools`, {{looks}}.
+# `tools`, {{looks}}; `copies`, {{px}} and `palette` ({{hex}}, {{percent}} each) where the surface was painted first as a picture (feedback
+# 0023: the face painted first, attached).
 prompt:
   - >-
       You are the DECORATOR. Before any tool touches it, you design what is painted at the table this episode, element by element,
@@ -23,6 +24,8 @@ prompt:
   - each: surfaces
     say: "{{told}}"
   - ""
+  - when: copies
+    include: copying
   - insert: language
   - ""
   - >-
@@ -51,12 +54,28 @@ prompt:
   - when: "!tools"
     include: in_one
 
+# THE FACE PAINTED FIRST, attached: the design is a copy of it, taken apart into what a hand lays, in its own order
+copying:
+  - >-
+      THE SURFACE WAS PAINTED FIRST AS A PICTURE, and the attached image is it: the surface straight from its front, {{px}}
+      pixels a millimeter, its top-left corner at x 0, y 0 of your millimeters. YOUR DESIGN IS A COPY OF IT, taken apart into
+      what a hand lays one element at a time: every shape of it where it is in the picture, its size and its form, measured
+      off the picture in millimeters, each in the picture's own color. Where the picture shades a shape or lights it, lay
+      that as its own element over it. The paint laid carries the picture's own detail wherever its color is near the
+      element's, so a shape in the picture's color shows the picture's shading and fine marks as it goes on.
+  - "ITS COLORS, most of the surface first:"
+  - each: palette
+    say: "  - {{hex}} ({{percent}}%)"
+  - ""
+
 with_tools:
   - >-
       HOW YOU WORK: `design` writes or rewrites elements and answers with the whole design as it stands and anything wrong with
       what you wrote. `look` shows it painted on the surface, straight from the front, with a millimeter grid, the outline and
       the landmarks over it - all of it, or as far as a stage. `submit` hands it in. Every look counts against the {{looks}} you
       have; words cost nothing.
+  - when: copies
+    say: "Each look shows the painting you copy beside it, at the same size: look until the two are alike."
   - >-
       Start with the big shapes and look. Then keep looking and keep improving: ask of each picture whether every shape sits where
       you meant it on the surface's features, whether the two sides match, what is crude or empty or wrong, and what would make it

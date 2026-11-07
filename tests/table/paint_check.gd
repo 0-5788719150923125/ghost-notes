@@ -24,6 +24,10 @@ extends SceneTree
 ##   base is pressed onto the face too. Each element is laid while its act runs, the base before the line drawn over it. The control:
 ##   the liner's tip at rest is far from the face. NOTHING IS LIFTED ALONG A STROKE IT PRESSES (feedback 0019, 0021: a liner 11 mm and a
 ##   flat brush 17 mm over a mask's rim, painting in the air); the control, the lifts between strokes, are found.
+##   ITS HAIRS ARE BENT ONTO THE FACE wherever it is pressed (a forehead's stars painted with nothing, a lower lip's outline drawn up on
+##   the lip): the bent tip within a touch of it at nine places in ten over the whole face; the control, the bend counted along the
+##   face's normal, at far fewer. IT GOES BACK OVER WHAT IT MISSED (feedback 0035): what the brow's strokes left bare dabbed until under
+##   half is; the control, the first look, left some.
 ##   The sponge stipples BY ITS CORNER (the user: "dab with the corner of the sponge, not with the flat side"), stood off only where the
 ##   face round it leaves the corner no room, and never more than 4 mm.
 ## - A HELD TOOL STANDS IN NOTHING (feedback 0016: "This sponge is clipping right through the nose", and through a pot as it took its
@@ -242,10 +246,32 @@ func _reveal() -> bool:
 	var mid: float = w2.get_pixel(int((75.0 - r2.position.x) * Skins.WHEN_PX), int((85.0 - r2.position.y) * Skins.WHEN_PX)).r
 	var edge: float = w2.get_pixel(int((103.0 - r2.position.x) * Skins.WHEN_PX), int((85.0 - r2.position.y) * Skins.WHEN_PX)).r
 	_ok(mid < edge, "a stipple does not go from its middle (%.2f) outward (%.2f)" % [mid, edge])
-	_ok(edge < 0.6, "a stipple's first pass reaches its rim only at %.2f of its time" % edge)
+	# ...AN AREA FINISHED BEFORE THE NEXT (feedback 0034: "dabbing around the outside of the face now, when there are huge, visible gaps
+	# still at and around the nose"): no press comes back far inside where the presses have already been - where two passes one after
+	# the other, out to the rim and back from the middle, did
+	var bd := {"id": "bd", "kind": "fill", "d": "M 75 35 A 70 70 0 1 1 75 175 A 70 70 0 1 1 75 35 Z", "stage": "", "paint": "#ffffff", "finish": "matte", "opacity": 1.0, "soft": 0.0}
+	var rbd := Skins.rect_of(bd, frame, 2.0)
+	var cbd := Skins.cover(bd, rbd, Skins.WHEN_PX, "", frame)
+	var gap := 12.0 * Skins.DABS
+	var pbd := Skins.program(bd, "stipple", 12.0, cbd, rbd)
+	var order: Array = (pbd["strokes"] as Array).map(func(st: Dictionary) -> Vector2: return (st["pts"] as PackedVector2Array)[0])
+	var passes: Array = Skins._dabs(cbd, rbd, gap, 0) + Skins._dabs(cbd, rbd, gap, 1)
+	var back := func(o: Array) -> float:
+		var far := 0.0
+		var worst := 0.0
+		for q in o:
+			var d := (q as Vector2).distance_to(o[0] as Vector2)
+			worst = maxf(worst, far - d)
+			far = maxf(far, d)
+		return worst / gap
+	_ok(back.call(order) < 3.0, "a stipple comes back %.1f presses inside where it has been" % back.call(order))
+	_ok(back.call(passes) > 5.0, "THE CONTROL: two passes one after the other come back only %.1f presses inside" % back.call(passes))
 	# IT RUNS DRY: back to its paint after a load's presses - EACH LOAD ITS OWN LENGTH (the user: "every 16 dabs is going to be strange
-	# ... because it's constant"), within LOAD_SPREAD of RELOAD_DABS - each laying less than the first of its load, and the same design
-	# drawn the same way again
+	# ... because it's constant"), a load as much of the face as LOAD_AREA_DABS, give or take - each laying less than the first of its
+	# load, and the same design drawn the same way again: a face's worth of it, several loads
+	var big := {"id": "big", "kind": "fill", "d": "M 75 35 A 70 70 0 1 1 75 175 A 70 70 0 1 1 75 35 Z", "stage": "", "paint": "#ffffff", "finish": "matte", "opacity": 1.0, "soft": 0.0}
+	var rb := Skins.rect_of(big, frame, 2.0)
+	p2 = Skins.program(big, "stipple", 12.0, Skins.cover(big, rb, Skins.WHEN_PX, "", frame), rb)
 	var trips: Array = []
 	for k in range(1, (p2["keys"] as Array).size()):
 		if int((p2["keys"][k] as Array)[5]) == 1 and int((p2["keys"][k - 1] as Array)[5]) != 1:
@@ -271,7 +297,7 @@ func _reveal() -> bool:
 				if float(r[i]) > float(r[i - 1]) + 0.05:
 					return true
 			return false), "every press lays less than the one before it, as if each took the same share")
-	var again := Skins.program(disc, "stipple", 12.0, c2, r2)
+	var again := Skins.program(big, "stipple", 12.0, Skins.cover(big, rb, Skins.WHEN_PX, "", frame), rb)
 	_ok(str(again["keys"]) == str(p2["keys"]), "the same design is not painted the same way twice")
 	var lo := 1.0
 	var hi := 0.0
@@ -321,6 +347,40 @@ func _hairs() -> bool:
 	_ok((late[0] as Vector3).length() < 1e-4, "the hairs have not settled 1.5 s after they were let go: %s" % late[0])
 	var none: Array = Bristles.response(func(_t: float) -> Array: return Bristles.target(Vector3.ZERO, 0.0, 0.02, Vector3.UP), 1.0)
 	_ok((none[0] as Vector3).length() < 1e-9 and float(none[1]) < 1e-9, "THE CONTROL: a brush neither dragged nor pressed is bent")
+	# HAIRS HAVE ONE LENGTH (feedback 0030): lifted straight off its surface, a brush's hairs are not pulled out after it - and pressed,
+	# leaning, they fold across themselves the way its tip goes, never up into the handle (feedback 0029, 6 mm off the face)
+	var lifted: Array = Bristles.target(Vector3(0.0, 0.08, 0.0), 1.0, 0.02, Vector3.UP)
+	_ok((lifted[0] as Vector3).length() < 1e-9, "lifted straight off, the hairs are pulled along themselves: %s" % lifted[0])
+	var axis := Vector3(0.0, 0.8, 0.6).normalized()
+	var pressed: Array = Bristles.target(Vector3.ZERO, 1.0, 0.02, axis, Vector3(0.0, 0.0, -1.0))
+	var pb: Vector3 = pressed[0]
+	_ok(absf(pb.dot(axis)) < 1e-6 and pb.length() > 0.002 and pb.z < 0.0,
+		"pressed, leaning, the hairs fold aside the way the tip goes: %s, %.6f m of it along them" % [pb, pb.dot(axis)])
+	var old_fold := axis * Bristles.PRESS_BEND * 0.02
+	_ok(absf(old_fold.dot(axis)) > 0.004, "THE CONTROL: the fold as it was, the handle's way, is along the hairs: %.4f m" % old_fold.dot(axis))
+	# ...and bent aside, a hair is as long as it was (to a two-hundredth), where the bend as drawn before grew it
+	var worst := 0.0
+	var worst_was := 0.0
+	for k in 7:
+		var bend := 0.02 * 0.1 * float(k)
+		var run := 0.0
+		var run_was := 0.0
+		var last := Vector2.ZERO
+		var last_was := Vector2.ZERO
+		for i in range(1, 201):
+			var s := float(i) / 200.0
+			var q := Bristles.bent_at(s, bend, 0.02)
+			var q_was := Vector2(bend * s * s, 0.02 * s - 0.5 * bend * bend / 0.02 * s * s * s)
+			run += q.distance_to(last)
+			run_was += q_was.distance_to(last_was)
+			last = q
+			last_was = q_was
+		worst = maxf(worst, absf(run / 0.02 - 1.0))
+		worst_was = maxf(worst_was, absf(run_was / 0.02 - 1.0))
+	_ok(worst < 0.005, "a hair bent aside keeps its length to %.2f%%" % (worst * 100.0))
+	_ok(worst_was > 0.02, "THE CONTROL: bent as it was drawn before, a hair grew by %.1f%%" % (worst_was * 100.0))
+	var tip := Bristles.bent_at(1.0, 0.008, 0.02)
+	_ok(absf(tip.x - 0.008) < 1e-5, "a hair bent 8 mm aside has its tip 8 mm aside: %.5f m" % tip.x)
 	return true
 
 
@@ -462,6 +522,55 @@ func _paints() -> bool:
 	m._work.tick(float(brow[1]) + 0.5)
 	var home := m._work._world_of((m._work.works[lw] as Dictionary)["node"]) * tip_l
 	_ok(home.distance_to(rest_tip) < 0.002, "the liner is not back where it rests: %.1f mm off" % (home.distance_to(rest_tip) * 1000.0))
+	# ...ITS HAIRS BENT ONTO THE FACE WHEREVER IT IS PRESSED (the forehead's stars and brows, painted with nothing; a lower lip's outline
+	# drawn 2-8 mm up on the lip): held by its tip and pressed at places all over the face, the tip as its hairs are bent lies within a
+	# touch of it at nearly every one - where the bend had been counted along the face's normal and stepped to by the slope alone (the
+	# control), off it by more at many
+	var tip_on := [0, 0, 0]
+	var frame: Vector2 = tp.skins[si]["frame"]
+	var g_face := tp._obstacles(tp.skins[si])
+	var to_part: Transform3D = g_face["to_part"]
+	for gy in range(1, 16):
+		for gx in range(1, 12):
+			var xy := Vector2(frame.x * float(gx) / 12.0, frame.y * float(gy) / 16.0)
+			var cl := tp._cleared(si, xy, tool, "tip")
+			var hh := tp._skin_hold(si, xy, 0.0, 1.0, 0.0, tool, "tip", cl, cl, 0.0)
+			var node := tp._node_at(hh, tool, tool["x0"])
+			if TablePaint._front_z(g_face, to_part * (node * tip_l)) == -INF:
+				continue
+			var axis: Vector3 = (hh[1] as Vector3).normalized()
+			var n: Vector3 = hh[7]
+			var fold: Vector3 = Bristles.target(Vector3.ZERO, 1.0, float(tool["len"]), axis, -(axis - n * axis.dot(n)))[0]
+			var bent := tp._bend_to_surface(si, tool, hh, fold)
+			var tip_now := to_part * (node * TablePaint._bent_tip(tool, node.basis.inverse() * bent))
+			# (the control, as it was: how far over the face the straight tip is, read off the cell it is in, taken back along the normal)
+			var mv := (n - axis * axis.dot(n)).normalized()
+			var straight := to_part * (node * tip_l)
+			var at_g: Vector2 = g_face["at"]
+			var cells: Vector2i = g_face["n"]
+			var zs: PackedFloat32Array = g_face["z"]
+			var ci := clampi(int((straight.x - at_g.x) / TablePaint.CLEAR_CELL), 0, cells.x - 1)
+			var cj := clampi(int((straight.y - at_g.y) / TablePaint.CLEAR_CELL), 0, cells.y - 1)
+			var toward := clampf(-(straight.z - zs[cj * cells.x + ci]) / maxf(mv.dot(n), 0.2), -float(tool["len"]) * 0.6, float(tool["len"]) * 0.6)
+			var tip_was := to_part * (node * TablePaint._bent_tip(tool, node.basis.inverse() * (fold - mv * fold.dot(mv) + mv * toward)))
+			tip_on[0] += 1
+			if absf(tip_now.z - TablePaint._front_z(g_face, tip_now)) <= TablePaint.TOUCH_BAND:
+				tip_on[1] += 1
+			if absf(tip_was.z - TablePaint._front_z(g_face, tip_was)) <= TablePaint.TOUCH_BAND:
+				tip_on[2] += 1
+	print("  the liner's bent tip within a touch of the face at %d of %d places (bent along the normal, %d)" % [tip_on[1], tip_on[0], tip_on[2]])
+	_ok(tip_on[0] >= 60 and tip_on[1] >= tip_on[0] * 0.9,
+		"the liner's bent tip lies within a touch of the face at %d of %d places it is pressed" % [tip_on[1], tip_on[0]])
+	_ok(tip_on[2] < tip_on[1] - tip_on[0] * 0.1,
+		"THE CONTROL: bent along the face's normal, the liner's tip lay within a touch of it at %d of %d places" % [tip_on[2], tip_on[0]])
+	# ...AND IT GOES BACK OVER WHAT IT MISSED (feedback 0035, as a sponge does): what its hairs, bent as they are drawn, left bare of the
+	# brow looked at and dabbed again until little is - the first look the control
+	var brow_made: Dictionary = ((tp.skins[si]["items"] as Dictionary).get("brow", {}) as Dictionary).get("made", {})
+	var brow_bare: PackedFloat32Array = brow_made.get("gaps", PackedFloat32Array())
+	print("  the brow left bare at each look: %s mm2" % [brow_bare])
+	_ok(brow_bare.size() >= 2 and brow_bare[brow_bare.size() - 1] < brow_bare[0] * 0.5,
+		"what the liner left bare of the brow was not put right: %s mm2 at each look" % [brow_bare])
+	_ok(brow_bare.size() >= 1 and brow_bare[0] > 0.0, "THE CONTROL: the brow's strokes as planned left nothing bare to put right")
 	# THE SPONGE stippling the base is on the face as it presses
 	var sw: int = m._work._work_of(m._work._thing_named("sponge"), "wedge")
 	var stool: Dictionary = tp.tools.get("w%d:pose" % sw, {})
@@ -483,15 +592,20 @@ func _paints() -> bool:
 		var k := (float(pd["b"]) - float(pd["a"])) / float(prog["natural"])
 		var keys: Array = prog["keys"]
 		var held: PackedVector4Array = ((tp.skins[si]["held"] as Dictionary).get(TablePaint._held_key(prog, "w%d:pose" % sw, "corner"), {}) as Dictionary).get("held", PackedVector4Array())
-		for j in range(0, keys.size(), maxi(keys.size() / 40, 1)):
+		# (forty of its pressed keys, spread through it - a stride over all its keys had fallen on its lifts alone)
+		var pressed_at: Array = []
+		for j in keys.size():
+			if float((keys[j] as Array)[4]) >= 0.99 and int((keys[j] as Array)[5]) == 0:
+				pressed_at.append(j)
+		for pj in range(0, pressed_at.size(), maxi(pressed_at.size() / 40, 1)):
+			var j: int = pressed_at[pj]
 			var kk: Array = keys[j]
-			if float(kk[4]) < 0.99 or int(kk[5]) != 0:
-				continue
 			m._work.tick(float(base[0]) + float(pd["a"]) + float(kk[0]) * k)
 			# ...BY ITS CORNER, where the foam gives back to as it is pressed ([constant TablePaint.GIVE]) - stood off where the face round
 			# it leaves its corner no room ([method TablePaint._cleared])
 			var nx := m._work._world_of((m._work.works[sw] as Dictionary)["node"])
-			var tip := nx * corner_tip + (nx.basis * (corner_grip - corner_tip)).normalized() * TablePaint.GIVE
+			# (as hard as it presses: a press put in where the first missed is harder, TablePaint.PRESS_HARD)
+			var tip := nx * corner_tip + (nx.basis * (corner_grip - corner_tip)).normalized() * TablePaint.GIVE * float(kk[4])
 			var off := _off_face(face_mesh, tp, si, tip)
 			var owed := held[j].w if j < held.size() else 0.0
 			stood_off = maxf(stood_off, owed)
@@ -520,6 +634,25 @@ func _paints() -> bool:
 	var said: Dictionary = m._work.check("brow")
 	_ok(String(said["text"]).contains("it paints") and String(said["text"]).contains("\"brow\""), "`act` does not say what it paints:\n%s" % said["text"])
 	_ok(m._work.parts_report().contains("surface to paint"), "the parts report does not say what can be painted")
+	# THE FACE PAINTED FIRST CARRIED BY THE PAINT (feedback 0023): a design copied from a painting lays each element with the painting
+	# beside its own paint, knowing where its picture lies on the surface - THE CONTROL: a design with none lays its paint alone
+	var with_ref: Dictionary = design()
+	var ref := Image.create(450, 630, false, Image.FORMAT_RGBA8)
+	ref.fill(Color(0.8, 0.1, 0.1))
+	with_ref["_reference"] = ref
+	with_ref["_reference_on"] = "mask/face"
+	tp.set_designs(with_ref)
+	tp._canvas(si)
+	var brow_mats: Array = ((tp.skins[si]["items"] as Dictionary).get("brow", {}) as Dictionary).get("mats", [])
+	var ruv: Vector4 = (brow_mats[0] as ShaderMaterial).get_shader_parameter("rect_uv") if not brow_mats.is_empty() else Vector4.ZERO
+	_ok(not brow_mats.is_empty() and (brow_mats[0] as ShaderMaterial).get_shader_parameter("referenced") == true
+		and (brow_mats[0] as ShaderMaterial).get_shader_parameter("reference") is Texture2D and ruv.x > 0.0 and ruv.y > 0.0 and ruv.x + ruv.z <= 1.0 and ruv.y + ruv.w <= 1.0,
+		"the brow is not laid with the painting it was copied from, where its picture lies (%s)" % ruv)
+	tp.set_designs(design())
+	tp._canvas(si)
+	var plain_mats: Array = ((tp.skins[si]["items"] as Dictionary).get("brow", {}) as Dictionary).get("mats", [])
+	_ok(not plain_mats.is_empty() and (plain_mats[0] as ShaderMaterial).get_shader_parameter("referenced") != true,
+		"THE CONTROL: a design copied from no painting lays the brow with one")
 	return true
 
 
@@ -596,6 +729,94 @@ func _held() -> bool:
 	var unheld: Vector2 = deepest.call("blend")
 	tp.skins[0]["held"] = kept
 	_ok(unheld.x > 0.008, "THE CONTROL: blended flat with nothing held clear, the sponge stands only %.1f mm in the face" % (unheld.x * 1000.0))
+	# WHAT A PRESS TOUCHES IS WHAT IT PAINTS (feedback 0032: "barely touching the mask with a corner - yet the entire area around it
+	# splatters with paint"): the stipple's first press shows no more than about what its corner touches, pressed - where a reveal from
+	# its program alone showed every point nearest it; and what no press touched never shows
+	var item: Dictionary = (tp.skins[0]["items"] as Dictionary).get("base", {})
+	_ok(not item.is_empty(), "the stippled base has no picture")
+	if not item.is_empty():
+		var made: Dictionary = item["made"]
+		var wm: Image = made["when"]
+		var prog: Dictionary = made["program"]
+		var u0 := float(((prog["strokes"] as Array)[0] as Dictionary)["t"][0]) / float(prog["natural"])
+		var wide := tp._touch_width(tp.tools["w%d:pose" % sw], "corner")
+		var first_mm2 := func(img: Image) -> float:
+			var n := 0
+			for y in img.get_height():
+				for x in img.get_width():
+					if img.get_pixel(x, y).r <= u0 + 1e-4:
+						n += 1
+			return float(n) / (Skins.WHEN_PX * Skins.WHEN_PX)
+		var touched: float = first_mm2.call(wm)
+		var disc := PI * wide * wide * 0.25
+		_ok(touched > disc * 0.2 and touched < disc * 2.0,
+			"the first press shows %.0f mm2 where its corner touches %.0f (%.1f mm across)" % [touched, disc, wide])
+		var never_of := func(img: Image) -> int:
+			var n := 0
+			for y in img.get_height():
+				for x in img.get_width():
+					if img.get_pixel(x, y).r >= Skins.NEVER:
+						n += 1
+			return n
+		# A HAND GOES BACK OVER WHAT IT MISSED (feedback 0035): what its presses left bare looked at, and pressed again, until little is -
+		# the first look, before any press was put in, the control
+		var bare: PackedFloat32Array = made.get("gaps", PackedFloat32Array())
+		_ok(bare.size() >= 2 and bare[bare.size() - 1] < bare[0] * 0.7,
+			"what the stipple left bare was not put right: %s mm2 at each look" % [bare])
+		_ok(bare.size() >= 1 and bare[0] > 0.0, "THE CONTROL: the presses as planned left nothing bare to put right")
+		# ...AND PUT RIGHT AS SOON AS IT IS SEEN (the user: "They would fix the gaps soon after they first see them ... before moving on to
+		# the rest of the face"): a hole the paint has closed round is pressed within seconds, most of them - where the old way, two passes
+		# one after the other, held and touched as they would be, left its holes for the second pass to come round to (the control)
+		var track := _track_of(m, "stipple")
+		var tool_s: Dictionary = tp.tools["w%d:pose" % sw]
+		var mm_s := float(tp._layers["0|base"]["mm"])
+		var cov_s := Skins.cover(tp.element(0, "base"), made["rect"], Skins.WHEN_PX, String(tp.skins[0].get("outline", "")), tp.skins[0]["frame"])
+		# ...ITS EDGE'S MOMENT CARRIED PAST ITS EDGE (520084: a ragged bare band along the rim, 3 mm wide - a press's ragged edge reads the
+		# map up to 1.6 mm off each point, and past the face's edge it read points no tool touched): the points two out from what it covers,
+		# as far from a point shown, hold a moment - THE CONTROL: the map of the same touches with nothing carried out holds few there (the
+		# ring beside the edge is the edge's own, its pixels half covered)
+		var shown_at := func(img: Image, x: int, y: int) -> bool:
+			return x >= 0 and y >= 0 and x < mini(img.get_width(), cov_s.get_width()) and y < mini(img.get_height(), cov_s.get_height()) \
+				and cov_s.get_pixel(x, y).a > 0.5 and img.get_pixel(x, y).r < Skins.NEVER
+		var past_edge := func(img: Image) -> Vector2i:
+			var n := Vector2i.ZERO
+			for y in range(2, mini(img.get_height(), cov_s.get_height()) - 2):
+				for x in range(2, mini(img.get_width(), cov_s.get_width()) - 2):
+					if cov_s.get_pixel(x, y).a > 0.5:
+						continue
+					var near := 3
+					for dy in range(-2, 3):
+						for dx in range(-2, 3):
+							if shown_at.call(img, x + dx, y + dy):
+								near = mini(near, maxi(absi(dx), absi(dy)))
+					if near == 2:
+						n.x += 1
+						if img.get_pixel(x, y).r < Skins.NEVER:
+							n.y += 1
+			return n
+		var edge_now: Vector2i = past_edge.call(wm)
+		var edge_was: Vector2i = past_edge.call(Skins.touch_map(made.get("touches", []), made["rect"]))
+		print("  two points past the stipple's edge: %d of %d hold a moment (with nothing carried out, %d of %d)" % [edge_now.y, edge_now.x, edge_was.y, edge_was.x])
+		_ok(edge_now.x > 50 and edge_now.y >= edge_now.x * 0.95, "two points past the stipple's edge, %d of %d hold a moment" % [edge_now.y, edge_now.x])
+		_ok(edge_was.y < edge_was.x * 0.5, "THE CONTROL: with nothing carried out, %d of %d did" % [edge_was.y, edge_was.x])
+		var two: Array = []
+		for k in 2:
+			for c in Skins._dabs(cov_s, made["rect"], mm_s * Skins.DABS, k):
+				two.append(Vector3((c as Vector2).x, (c as Vector2).y, 1.0))
+		var old_way := Skins.pressed(tp.element(0, "base"), "stipple", mm_s, two)
+		old_way["id"] = "two passes"
+		(tp.skins[0]["held"] as Dictionary)[TablePaint._held_key(old_way, "w%d:pose" % sw, "corner")] = tp._held_keys(0, old_way, tool_s, "corner")
+		var touches0: Array = []
+		for st in old_way["strokes"]:
+			var t0s: PackedFloat32Array = (st as Dictionary)["t"]
+			touches0.append({"u": t0s[0] / float(old_way["natural"]), "pts": tp._touched(0, tool_s, TablePaint._hold_of(tp._surface_hold(0, old_way, t0s[0], 0.0, track), tool_s))})
+		var held_now := _holes(wm, cov_s, float(prog["natural"]))
+		var held_was := _holes(Skins.touch_map(touches0, made["rect"]), cov_s, float(old_way["natural"]))
+		_ok(held_now.x >= 0.8, "of the holes paint closed round, only %.0f%% were pressed within 5 s" % (held_now.x * 100.0))
+		_ok(held_was.x < held_now.x - 0.1, "THE CONTROL: two passes one after the other pressed %.0f%% of their holes within 5 s" % (held_was.x * 100.0))
+		var never: int = never_of.call(wm)
+		_ok(never > 0, "every point of the picture shows at some time: what no press touched is shown all the same")
+		_ok(never_of.call(Skins.when_map(prog, made["rect"])) == 0, "THE CONTROL: shown by its program alone, some point is never shown")
 	# ...DIPPED INTO ITS PAINT BY ITS END'S CORNER, inside the pot's mouth AS IT IS DRAWN: nothing of it under the rim past the wall
 	var mouth := m._work._mouth_of("white pot", 0.0)
 	var rim: Vector3 = mouth["at"]
@@ -749,6 +970,40 @@ static func _box_points(node: Node3D, w: TableWork) -> PackedVector3Array:
 					if not hit.is_empty():
 						out.append(hit["position"])
 	return out
+
+
+## THE HOLES IN WHAT A PRESSING TOOL LAID ([param wm], a touch map over [param cov], a program [param natural] seconds long): every point the
+## paint had closed round (the points 4 mm about it all shown before it) - the share of those shown within 5 s of it, and how many are
+## never shown.
+static func _holes(wm: Image, cov: Image, natural: float) -> Vector2:
+	var quick := 0
+	var all := 0
+	var never := 0
+	for y in range(4, wm.get_height() - 4):
+		for x in range(4, wm.get_width() - 4):
+			if cov.get_pixel(x, y).a <= 0.5:
+				continue
+			var up := wm.get_pixel(x, y).r
+			var closed := -1.0
+			var round_it := true
+			for k in 16:
+				var a := TAU * float(k) / 16.0
+				var qx := x + int(round(cos(a) * 4.0))
+				var qy := y + int(round(sin(a) * 4.0))
+				var uq := wm.get_pixel(qx, qy).r
+				if cov.get_pixel(qx, qy).a <= 0.5 or uq >= Skins.NEVER:
+					round_it = false
+					break
+				closed = maxf(closed, uq)
+			if not round_it or up <= closed:
+				continue
+			if up >= Skins.NEVER:
+				never += 1
+				continue
+			all += 1
+			if (up - closed) * natural <= 5.0:
+				quick += 1
+	return Vector2(float(quick) / float(maxi(all, 1)), float(never))
 
 
 static func _track_of(m: TableMedium, act: String) -> Dictionary:

@@ -49,6 +49,11 @@ const DRAG_BEND := 0.42
 const DRAG_FULL := 0.06
 const PRESS_BEND := 0.22
 const PRESS_SPLAY := 0.35
+## ...a handle leaning this far off the surface's normal (the sine) folds them as far as they fold ([method target]).
+const LEAN_FULL := 0.3
+## A HAIR BENT ASIDE KEEPS ITS LENGTH: it is bent as an arc of a circle ([method bent_at]), its tip at most this share of its length
+## aside - about as far as an arc can take it (the most is 0.72, half way round and more).
+const ASIDE_MOST := 0.7
 
 
 ## Whatever an agent wrote for a tuft, made safe (sizes centimeters).
@@ -168,16 +173,49 @@ static func _core(g: Props.Tris, hw: float, hd: float, L: float, row: Dictionary
 
 
 ## WHERE THE HAIRS WANT THEIR TIPS at one moment (meters, the table's space): leaning back against [param velocity] (the
-## brush's tip, meters a second, along the surface), and folded aside and splayed as hard as it is [param pressed] (0-1) - a
-## brush [param length] meters long whose handle leans along [param lean] (unit, the table's space). Returns [bend, splay].
-static func target(velocity: Vector3, pressed: float, length: float, lean: Vector3) -> Array:
-	var speed := velocity.length()
-	var drag := Vector3.ZERO
+## brush's tip, meters a second), and folded aside and splayed as hard as it is [param pressed] (0-1) - a brush [param length]
+## meters long whose hairs run back to the handle along [param axis] (unit, the table's space), its tip going [param ahead] along
+## the surface as it is pressed (the way from where the handle leans over it to the tip; none for a brush held upright, or off a
+## surface). Returns [bend, splay].
+##
+## A BEND IS ALWAYS ASIDE, ACROSS THE HAIRS, NEVER ALONG THEM (feedback 0030: "The bristles on this brush are stretching and
+## contracting. But bristles don't do that: they have one size"): the fold had been the handle's own way out of the surface, so a
+## pressed brush drew its hairs up into it, 6 mm off the face it painted (feedback 0029: "that brush is not touching the mask"), and
+## a brush lifted off pulled its hairs out after it to meet the face. Only what goes across the hairs drags them; pressed, they fold
+## the way the tip goes along the surface, and bent either way they keep their length ([method bent_at]).
+static func target(velocity: Vector3, pressed: float, length: float, axis: Vector3, ahead := Vector3.ZERO) -> Array:
+	var a := axis.normalized()
+	var across := velocity - a * velocity.dot(a)
+	var speed := across.length()
+	var bend := Vector3.ZERO
 	if speed > 1e-5:
-		drag = -velocity / speed * DRAG_BEND * length * clampf(speed / DRAG_FULL, 0.0, 1.0) * (0.35 + 0.65 * pressed)
-	# pressed with no drag, the hairs fold the way the handle leans, away from the surface
-	var fold := lean * PRESS_BEND * length * pressed
-	return [drag + fold, PRESS_SPLAY * pressed]
+		bend = -across / speed * DRAG_BEND * length * clampf(speed / DRAG_FULL, 0.0, 1.0) * (0.35 + 0.65 * pressed)
+	var fold := ahead - a * ahead.dot(a)
+	if fold.length() > 1e-5:
+		bend += fold / maxf(fold.length(), LEAN_FULL) * PRESS_BEND * length * pressed
+	return [bend, PRESS_SPLAY * pressed]
+
+
+## A POINT [param s] (0-1) up a hair [param length] long bent [param bend] aside (meters, across it): (how far aside, how far along
+## it from its root) - AS prop_common.gdshaderinc DRAWS IT (`bristle_bend`, the same arithmetic): an arc of a circle through the
+## root, as long as the hair, its tip [param bend] aside.
+static func bent_at(s: float, bend: float, length: float) -> Vector2:
+	var th := arc_angle(minf(bend / maxf(length, 1e-6), ASIDE_MOST))
+	if th < 1e-4:
+		return Vector2(0.0, length * s)
+	var r := length / th
+	return Vector2(r * (1.0 - cos(th * s)), r * sin(th * s))
+
+
+## The angle an arc turns through (radians) whose end is [param q] of its length aside of where it began: (1 - cos th) / th = q, by
+## Newton's way from twice it (the small arc's own).
+static func arc_angle(q: float) -> float:
+	var th := 2.0 * q
+	for _i in 4:
+		var f := (1.0 - cos(th)) / maxf(th, 1e-4) - q
+		var df := (th * sin(th) - (1.0 - cos(th))) / maxf(th * th, 1e-8)
+		th -= f / maxf(df, 1e-4)
+	return maxf(th, 0.0)
 
 
 ## THE SPRING's weights over the last [constant SPRING_STEPS] steps (newest first), summing to 1: a damped spring's own

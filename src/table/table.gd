@@ -432,8 +432,8 @@ func _build_world() -> void:
 	_env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	_env.ambient_light_color = Color(0.5, 0.46, 0.44)
 	_env.ambient_light_energy = 0.18
-	_env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	_env.tonemap_exposure = 0.82
+	# THE TONEMAPPER, as the Look has it ([Tonemaps]): Filmic unless a note picks another, at the exposure tuned under Filmic
+	Tonemaps.dress(_env, 0.82)
 	_env.adjustment_enabled = true
 	# THE BLOOM the foil and the flames bleed through: only what is brighter than white glows
 	_env.glow_enabled = true
@@ -449,6 +449,8 @@ func _build_world() -> void:
 	_env.set_glow_level(2, 1.0)
 	_env.set_glow_level(3, 0.8)
 	_env.set_glow_level(4, 0.4)
+	# BOUNCE LIGHT, as the Graphics panel has it (off unless chosen: it changes the look)
+	Graphics.dress(_env)
 	_cam = Camera3D.new()
 	_cam.fov = VFOV
 	_cam.near = 0.02
@@ -992,6 +994,8 @@ func _build_episode() -> void:
 	_plan_moves()
 	_place_backdrop()
 	_poll_pictures()
+	# ...WHAT CASTS A CANDLE'S SHADOW CUT FINE ENOUGH FOR ITS PARABOLOIDS ([ShadowCasters], [method TableLight.candle_shadow])
+	ShadowCasters.cut_under(_root3)
 	for vp in _faces:
 		CardFaces.redraw(vp)
 	CardFaces.redraw(_back_vp)
@@ -1672,12 +1676,23 @@ func rework(raw: Variant) -> void:
 ## THE DESIGNS PAINTED ON THIS TABLE ([TablePaint]): the episode's `skin.json` as parsed, read from the FILE as the acts are - and
 ## its time noted, so a design that lands live is painted.
 func _skin_json() -> Dictionary:
-	var path := String(_plan.pay.get("dir", "")).path_join("skin.json")
+	var dir := String(_plan.pay.get("dir", ""))
+	var path := dir.path_join("skin.json")
 	_skin_mt = FileAccess.get_modified_time(path) if FileAccess.file_exists(path) else -1
 	if _skin_mt >= 0:
 		var j := JSON.new()
 		if j.parse(FileAccess.get_file_as_string(path)) == OK and j.data is Dictionary:
-			return j.data
+			var doc: Dictionary = j.data
+			# ...AND THE FACE PAINTED FIRST that it was copied from, as the surface wears it ([method Skins.face_reference]), and on which
+			# surface (`face.json`, [method TableProducer._make_image])
+			var ref_path := dir.path_join("face_ref.png")
+			var meta := JSON.new()
+			if FileAccess.file_exists(ref_path) and meta.parse(FileAccess.get_file_as_string(dir.path_join("face.json"))) == OK and meta.data is Dictionary:
+				var ref := Image.load_from_file(ref_path)
+				if ref != null and not ref.is_empty():
+					doc["_reference"] = ref
+					doc["_reference_on"] = String((meta.data as Dictionary).get("on", ""))
+			return doc
 	return {}
 
 

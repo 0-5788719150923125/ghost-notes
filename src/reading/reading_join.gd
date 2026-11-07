@@ -31,7 +31,8 @@ const TOGETHER_MOST := 0.26
 var sr := 22050
 ## Frames joined so far: the lead and every seam and chunk.
 var frames := 0
-## WHEN THE ROOM CHANGES, ascending, in frames of the take: `{at, speaker}` dials a voice's room in,
+## WHEN THE ROOM CHANGES, ascending, in frames of the take: `{at, speaker, heard}` dials a voice's room in (and what it
+## is heard through, [constant VoiceFX.HEARD], "" the room),
 ## `{at, near}` moves the reader (see [method Delivery.near_mark]). The first voice's is at 0, so a
 ## lead is heard in the opening voice's room rather than in nobody's.
 var marks: Array = []
@@ -57,6 +58,7 @@ var side: Array = []
 # the next voice.
 var _opened := false
 var _voice := ""           # the voice the last room mark dialed
+var _heard := ""           # ...and what it was heard through
 var _near := {}            # the distance the last near mark set
 var _last_at := 0          # where the last chunk joined, line or side, begins and ends
 var _last_end := 0
@@ -103,9 +105,13 @@ func add(chunks: Array, idx: int, pcm: PackedFloat32Array, spans: Array, s: Dict
 	# leaving it, whose reverb is still decaying through it. Dialing the new room at the start of
 	# the rest would cut that tail over to a different space halfway down, which is the one thing
 	# a room never does. The mark carries the frame; whoever plays the take dials it there.
-	if opening or who != _voice:
+	# ...AND WHAT IT IS HEARD THROUGH, A CHANGE OF ROOM TOO ([constant Manuscript.HEARD]): a voice through a phone, then
+	# the same voice from a phone lying on the desk
+	var heard := String(ch.get("heard", ""))
+	if opening or who != _voice or heard != _heard:
 		_voice = who
-		marks.append({"at": 0 if opening else frames, "speaker": who})
+		_heard = heard
+		marks.append({"at": 0 if opening else frames, "speaker": who, "heard": heard})
 	if opening:
 		Delivery.near_mark(marks, near, frames, _near)
 	_opened = true

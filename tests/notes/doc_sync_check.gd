@@ -557,7 +557,7 @@ func _check_the_look_travels() -> void:
 	_ok(Illustrations.style("sketch") == "Ballpoint: schematic, \"plain\".",
 		"the sketch style came back as %s" % JSON.stringify(Illustrations.style("sketch")))
 	_ok(Illustrations.references().size() == 1, "the reference images did not come back from the document")
-	_ok(String((_ed._block_cards.get("picture") as PictureCard).illustrations()._style.text) == style, "the panel's style box does not show the document's style")
+	_ok(String((_ed._block_cards.get("illustrations") as PicturesCard).list()._style.text) == style, "the panel's style box does not show the document's style")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(ref))
 
 
@@ -581,7 +581,7 @@ func _check_a_letters_look_travels() -> void:
 	letter._doc._fields = {}
 	letter._doc._on_picked(path)
 	await get_tree().process_frame
-	_ok(letter._block_cards.get("illustrations") is IllustrationPanel and letter._doc_blocks().has("illustrations"),
+	_ok(letter._block_cards.get("illustrations") is PicturesCard and letter._doc_blocks().has("illustrations"),
 		"a Letter's panel does not keep its pictures' look: %s" % str(letter._doc_blocks()))
 	Illustrations.set_style("Pen and wash: \"loose\".")
 	Illustrations.set_painter("codex", "gpt-image-1", "high")
@@ -601,7 +601,7 @@ func _check_a_letters_look_travels() -> void:
 	_ok(FileAccess.get_file_as_string(path) != raw, "the control is wrong - the outside edit changed nothing")
 	letter._doc._saved = letter._doc._snapshot()      # no flush: the file must win
 	letter._doc.pull()
-	var card: IllustrationPanel = letter._block_cards["illustrations"]
+	var card: IllustrationPanel = (letter._block_cards["illustrations"] as PicturesCard).list()
 	_ok(Illustrations.style() == "Charcoal on gray paper." and Illustrations.painter_effort() == "low"
 		and card._style.text == "Charcoal on gray paper." and String(card._pick.choice()["effort"]) == "low",
 		"an outside edit of the letter's look did not reach the library and the card: %s, %s"

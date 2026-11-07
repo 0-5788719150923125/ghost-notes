@@ -146,7 +146,7 @@ void fragment() {
 		rough = 1.0;
 		spec = 0.2;
 	} else if (kind == -1) {
-		albedo = has_painting > 0.5 ? textureLod(painting, painting_uv(q), lod).rgb : color * (0.9 + 0.15 * fbm(opos * 0.3));
+		albedo = has_painting > 0.5 ? painting_at(q, lod) : color * (0.9 + 0.15 * fbm(opos * 0.3));
 		rough = mix(0.9, 0.3, polish);
 	} else {
 		// PAINTED or lacquered, rubbed through to `color2` along the edge where hands go

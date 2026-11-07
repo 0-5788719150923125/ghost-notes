@@ -78,7 +78,10 @@ Each step leaves the episodes already made playing as they did, and has a gate w
 ## Status
 
 *2026-11-05: built, gated, and looked at on the GPU with a design and acts written by hand. No real agent has designed a face or
-painted one, nobody has heard a reading over it, and nothing has been exported.* Step by step:
+painted one, nobody has heard a reading over it, and nothing has been exported.* *2026-11-07: since 520084 was watched, paint is laid
+only where a tool touches, and every tool - sponge, puff and brush - goes back over what it missed right after it misses it (the
+sections from "Watched a fifth time" on); the user has not seen it since. 0023's redesign is built to its first stage - a face painted
+first, checked and copied - and no real painter has painted one yet.* Step by step:
 
 1. **A mask form** - built. `FaceForm` (`src/table/face_form.gd`): a relief over its own front (heights on a regular grid, 0.1 cm
    apart, normals from their differences; an egg-shaped outline; a flat back and a rim), cached by size (the first build is about a
@@ -330,7 +333,171 @@ simulated through transparency and blurring".
   that builds (rift's joker-motivation.md). Still open: the liner 14 mm into the face once at 748 s; the sponge and the puff stood 11-26 mm off
   the mask's very rim, against its cradle's board.
 
-## Back to the drawing board (feedback 0023, 2026-11-06 - PLANNED, nothing built)
+## Watched a fifth time (2026-11-06, 520084, feedback 0024-0031)
+
+- **The brushes' shadows on their tray (0024: "heavy aliasing, and it almost feels like they aren't even casting in the right
+  direction").** They were the chamberstick's, behind the tray and hidden from that view behind the water glass (switched off, they were
+  gone; with the lamp off, still there) - so they fall toward the camera, rightly. The lumps: Godot draws an omni light's cube at HALF its
+  atlas slot and the filter's width is counted in the slot's texels, so a candle's filter spanned a texel and a half of what it reads, and
+  a low flame stretched each stair four times along the lacquer. An omni light's filter is counted in its cube's own texels now
+  (`ShadowFilter.OMNI_MAP`, its normal bias with it): smooth, softer shadows. Turning the light so the paraboloids' poles point away from
+  the table did next to nothing once the cube limited it - not done. table_shadow_check's controls: the old candle rings, and the new
+  filter without its normal bias darkens its own cloth (wide enough, it no longer rings without it).
+  WATCHED AGAIN, still wrong ("all we've done is feather/blur the edges more ... it's flickering, even though no light source is
+  apparently moving"). Two causes, both Godot's omni shadow. THE FLICKER: a still flame's own flicker leaned its light 1.5 mm and the
+  map's texels with it, 2.5 texels across a brush 30 cm off - a candle's light stays put in still air now (`TableLight.tick_props`; it
+  leans in a draft or aboard). THE SHAPES: Godot copies the cube into the slot's paraboloids through a LINEAR sampler (copy_effects.cpp
+  `copy_cubemap_to_dp`, cube_to_dp.glsl - read in Godot's source), averaging a thin caster's depth with the far tray behind it at every
+  silhouette: depths in between that cast too, drawn out along a grazing light into the jagged smears. A 16384 atlas (the cube at 2048)
+  kept them; `SHADOW_DUAL_PARABOLOID` turned to face down (rendered straight into the slot, no copy) drew the brushes' shadows clean - and
+  failed table_shadow_check (a 40 cm plate cast nothing: a big triangle's depth is drawn wrong in a paraboloid, as Godot warns), on a
+  finely cut floor too. The sponge's shadow is the spot lamp's, rendered straight into its own map. SETTLED (the user's go-ahead): A
+  CANDLE'S SHADOW IS DRAWN STRAIGHT INTO ITS PARABOLOIDS, their poles up and down (`TableLight.candle_shadow`: the table about the flame at
+  their rims, where they are finest; its filter counted in the slot's own texels, `ShadowFilter._cubed`), and WHAT CASTS IS CUT FINE
+  ENOUGH FOR A PARABOLOID (`ShadowCasters`, render/: no edge over 1.5 cm) - by a shadow-only TWIN of its points alone, cut once a mesh, the
+  mesh itself no longer casting (cutting every attribute of a scene's meshes took 7 s; its points, 0.2); a mesh that only casts (a foot's
+  slab) cut in place (turned to casting nothing it was drawn - grey discs in the dishes); a sheet given a new shape as it plays (a page
+  turning, a sheet bending) says `shadow_own` and casts itself. Run over the table as it is built (`TableMedium._build_episode`) and the
+  desk as it is dressed. The brushes' shadows straight bands; table_shadow_check: a 6 mm rod 30 cm from the flame, its edge 3.1 px off a
+  line where the cube's strays 7.0 (control), the plate's shadow there again, no rings, the cloth whole.
+- **Ridges along the chin and the side (0025: "like we stretched a plastic mask over the mannequin").** The face's grid was cut where the
+  outline crossed it, its outside points moved in onto the rim; the face falls to the rim ever more steeply, so the last point inside
+  stood 1-5 mm high as the rows met the outline - a sawtooth all round, plainest where the outline runs along the grid. Every grid point is
+  kept now and its outer band PULLED IN along its way from the middle (`FaceForm._pulled_in`): its edge on the rim, its rows running into
+  it, the grid untouched inside `PULL_FROM` (0.72 of the way out, past every feature). A grid pushed out in copies of the outline whole was
+  tried first and drew the mouth's line in stairs (it crossed it aslant). It showed a fault under it: the surface's grid of where it faces
+  (`TablePaint._surface_of`) took each normal from the one facet its ray landed on - and its rays land on the face's own points, a vertex
+  six facets share - so a mesh 1.5 microns narrower turned its normals by up to 30 degrees at the nose's tip and 83 at the rim, and a sponge
+  laid flat on the nose stood 6.7 mm in it (paint_check). It faces as its surface SLOPES now, from the points either side.
+- **Powder that twirls (0026: "Real life dust wouldn't make much of any effect, at all ... more like a cloud ... billowing and falling").**
+  Every burst wanders on a sine and cosine whose size grows with its age - circles opening out, smoke's. Powder wanders not at all, sinks,
+  and is one faint cloud of many soft puffs over each other (`Effects.BURSTS` `powder`, `TableWork`'s paint dust) - and rises only off the
+  puff's first press after it took up its powder (`Skins._Prog.dab`: `pats` at a load's first press), none off a sweep.
+- **The puff slid and tapped (0027: "would they rapidly tap it over and over, gently?").** A pat is quick and light now - about two a second,
+  lifted 4 mm (`Skins.PAT`, `PAT_LIFT`) - and a puff's second pass (a powder's excess taken off) PRESSES again where it lies, never slides
+  (`Skins.blend_manner`, manner `press`): a brush and a sponge's flat face still blend by strokes (the user, 2026-11-05: the flat side "to
+  smear it and spread it").
+- **Hairs that stretch and contract (0030), and a liner over its line (0029).** The hairs' bend had a part ALONG them: pressed, they folded
+  the way the handle leans out of the surface - drawn up into it, the tip 6 mm off the face it painted - and lifted off, the brush's motion
+  away from the face pulled them out after it. A bend is across the hairs alone now (`Bristles.target`): dragged, back against the way the
+  tip goes across them; pressed, along the surface the way the tip goes (away from where the handle leans over it - a skin hold carries
+  the surface's normal, its eighth entry). And bent, a hair is AN ARC OF A CIRCLE as long as it was (`Bristles.bent_at`, the shader's same
+  arithmetic; the old bend grew a hair 2-8%). Gate: paint_check `_hairs`.
+
+- **The sponge painting far past its corner (0032: "barely touching the mask with a corner - yet the entire area around it splatters
+  with paint ... It would be even better if we truly only painted what was touched").** A reveal map gave every point the moment of
+  the NEAREST place the program reached (`Skins.when_map`: stamps, then the rest filled from the nearest), so each dab showed all of the
+  face nearest it, and a dab was a disc three quarters of the sponge across. WHAT A PRESSING TOOL TOUCHES IS WHAT IT PAINTS now - the
+  first of the plan below, for the sponge's stipple and the puff's pats (`TablePaint.TOUCHED`): its surface found every millimeter
+  (`tool_of`'s `touch`), held at each press as it is drawn (`_surface_hold`, its corner pushed in as far as it gives), and every bit of it
+  within 0.6 mm of the face or in it stamped (`_touched`, `Skins.touch_map`); a point no press touched is never shown (`Skins.NEVER`). It
+  lays as wide as it touches (`_touch_width`: 520084's sponge corner 15 mm, its puff 18 - whatever width its track says, 32), a load
+  covers an area of the face (`Skins.LOAD_AREA_DABS`, `_PATS`), and a sponge bounces quicker (`Skins.DAB`). Left bare: where the corner
+  never touched (beside the nose, where it cannot press without meeting it) - still to come, a hand going back over what it missed, and a
+  blend spreading paint where it touches. Gate: paint_check (the first press shows about what its corner touches; control: shown by its
+  program alone, every point shows).
+- **Dabbing the rim with gaps at the nose (0034: "a real artist would probably try to fill-in empty spots, before they move to completely
+  new areas").** A stipple was two passes, each out from the middle to the rim, the second filling what the first left - minutes later.
+  Its presses are one now, round and round out from the middle, every press within a ring before the next (`Skins._grown`). Gate:
+  paint_check (no press comes back more than three inside where it has been; control: two passes one after the other, seven). Still bare
+  after it: spots on the nose's own ridge and sides, which the sponge's corner cannot press without its body meeting the nose.
+- (0033, the dispatch desk's roots, is the dispatch desk's - another session was in the middle of it, its dispatch.gd not compiling.)
+- **Still huge gaps (0035: "Do we need some kind of detection mechanism, such that the dabs are not just pre-planned actions, but
+  actually made in response to the gaps in coverage? Like a self-correcting mechanism").** Yes: A HAND GOES BACK OVER WHAT IT MISSED
+  (`TablePaint._cover_gaps`), as the table stands, before any act's length is known: the presses planned (`Skins.press_places`), held as
+  they will be drawn, WHAT THEY TOUCHED looked at (`_gaps_left`), and every gap of 2 mm2 or more given presses of its own - as many as it is
+  large, spread over it - each put in right after the press nearest it (put right while the hand is there), AIMED SO WHAT IT TOUCHES LANDS
+  ON IT (a corner touches to one side of where it is aimed), pressed harder after the first look (`PRESS_HARD`); five looks
+  (`GAP_ROUNDS`). What it found under the gaps: the touch test read a rim's wall as the board beside it (`TOUCH_STEEP`; a band all round
+  the rim) and skipped a cell part off the surface; and the puff was STIFF - a 45 mm flat face held 5-23 mm off a curved face, painting
+  almost nothing - so a pad gives now (`PAD_GIVE` 8 mm), is drawn squashed as a sponge is, and tips onto its edge where its face cannot
+  reach (`tool_of`'s pad `corner`). 520084, bare at each look (mm2): the stipple 238, 148, 77, 58, 52, 52 (502 presses); the pats 3536,
+  2440, 1411, 1245, 598, 175. What is left is what the tool cannot reach (beside the nose). Found once and kept by what it was found from
+  (`_clear_memo`, `_arc_memo`, `_touch_memo`): the table stands in about the time it did before. Gate: paint_check (what the stipple left
+  bare put right; control, the first look). AND PUT RIGHT AS SOON AS IT IS SEEN (the user: "a second pass is too late ... They would fix
+  the gaps soon after they first see them"): a gap's presses go in right after the press that last laid paint round it (`_gaps_left`'s
+  `closed`) - after the press it was nearest, some had waited a minute; 520084's holes are pressed half a second after paint closes round
+  them (the slowest, single-pixel seams between two rings, which the next ring lays). Gate: paint_check (of the holes paint closed round,
+  most pressed within 5 s; control: two passes one after the other).
+- **Flecks on the nose (0039: "Look at all the huge gaps in paint on the nose ... wouldn't it be possible to just treat this like a
+  transparency map ... where our job is to fill all the gaps in it everywhere?").** It is one: the reveal is the face's own flat map, and
+  the loop looks for every gap in it. What was left were holes under 2 mm2 the loop let be, and slivers a millimeter wide beside the nose's
+  steep sides (wide where the side is steep) - grown by a press's ragged edge (1.6 mm) into orange flecks and lines. CREAM SPREADS UNDER
+  THE FOAM: a point all but closed in by what is laid round it (5 of its 8 neighbours) is laid as its last neighbour is, twice
+  (`Skins.closed_in`, in the reveal map and in the loop's look alike); the loop chases gaps down to 1 mm2 (`GAP_LEAST`); a press put in
+  where the first missed may be held by the sponge's long end, along its length, where that reaches nearer (`WAYS`). 520084: no hole the
+  paint closes round is left bare; what is left is 49 mm2 along the rim.
+
+- **Brushes paint where their hairs touch (0028, 0031; the user: "Continue on the brushes").** A brush laying a fill or blending is held
+  LOW, by the side of its hairs (`belly`: `HELD_LOW`, about 30 degrees off the face) and pressed deeper (`BELLY_PUSH`, a fifth of its
+  hairs); every key knows the way its stroke goes (`_dirs_of`, the hold's ninth entry), and A FLAT BRUSH IS TURNED TO IT - broadside across
+  a fill, on its edge along a line, whichever way round is nearer so it never turns over (`_node_at`, a tuft's `across`). ITS HAIRS PAINT
+  WHAT OF THEM TOUCHES (`tool_of`'s hair points, the lower two thirds, bent in `_touched` by the shader's own arc; each stroke looked at
+  every half millimeter; `BRUSH_TOUCHED`), on a map four pixels a millimeter (`BRUSH_PX` - at a sponge's one, a liner's line was drawn in
+  steps). And a pressed brush's hairs BEND NO FURTHER THAN KEEPS THEIR TIP ON THE FACE (`_bend_to_surface`, the shader's and the touch
+  test's alike): a fold of a fifth of their length, tilted with the brush, had carried a liner's tip 2.5 mm up off the face, and it painted
+  nothing. 520084, bare of each element: the outline 16% (a liner pressed lightly touches a band narrower than the line drawn), the
+  diamond's fill 0%, its foot 1%, the lips 10%, the haze 1%.
+- **A brush goes back over what it missed too** (`_brush_gaps`, as the sponge does): each line and fill's strokes looked at as they will
+  be drawn (`_stroke_touches`), every gap of a square millimeter or more given a dab right after the planned stroke that last laid paint
+  round it (`Skins.program`'s `inserts`), five looks, the dabs after the first pressed harder, and no further once a hard look puts
+  little more right. What the looks found under it, each a class of fault, not one place:
+  - THE FOREHEAD AND BROWS WERE NEVER PAINTED (the halo, the big star, the facets, both brows: 100% bare). The bend that keeps a tip on the
+    face read how far over it the tip stood along the mask's own depth, and moved it that far along the face's normal; where the face
+    slopes back from that depth (a forehead), a tip 4.7 mm deep by depth was under 2 mm by the normal, and was lifted clear. It is counted
+    along the depth now.
+  - A LOWER LIP'S OUTLINE WAS DRAWN UP ON THE LIP (2-8 mm off the line it was aimed at). On the steep underside the face was read as high
+    as its cell's highest corner (right for counting a touch at a wall's foot, wrong for putting a tip on it), and the bend stepped to by
+    the slope alone went over the edge and came back 8 mm. The face is read between the cells for it, and the bend is the least either
+    way that brings the tip onto the face - found in growing steps, then halved (`TIP_STEP`, `TIP_HALVES`) - and no more than twice what a
+    flat face would ask (`TIP_REACH`): a brush held near upright in the crease between the lips had slid its tip 4 mm up the lower one to
+    find the face, where its hairs would spread.
+  - A DAB AIMED AT WHAT A FILL MISSED UNDER A LIP'S BULGE TOUCHED THE BULGE AGAIN. Each dab is tried before it is laid (`_dab_miss`): at
+    the gap, and off by as much as the hairs aimed nearest it touched off their aim where they missed it - whichever lands nearer. Aimed off
+    always, a wide fill brush (which touches all round its aim) missed the forehead's stars.
+  520084, bare after the looks (mm2): the stars, brows, horizon, wave crests, cracks, grin and the lip's shine 0; the outlines 1-3; the lip
+  line 2.9 (8.7 at the first look, 24.5 before the tip was put on the face); the lips' fill 4.6; the seam between the lips 16.5 (the
+  middle of the crease); the frost 4-10. The table stands in about 33 s (the looks were 48 s until the gap finders read a picture's cover
+  once instead of a point at a time, and closed it in only inside it; the stipple keeps what its last look touched for its reveal).
+  Gate: paint_check (a liner pressed all over a face, its bent tip on it at 165 of 165 places - the control, bent along the normal, 75;
+  the brow's gaps put right - the control, the first look). Open: the crease between the lips (16.5 mm2, under the lips' red and
+  not seen in a render), and the frost's fan brush on the cheeks.
+- **A ragged bare band along the rim (seen in 520084's render, 2026-11-07; the user asked whether a sponge pressed harder would curve
+  round the edge).** Not the sponge: its touch map reached the edge everywhere but a hairline (49 mm2), and the face falls steeply enough
+  to fade the skin's paint (prop.gdshader, the normal 0.02-0.25 of the front) only in its last millimeter. A PRESS'S RAGGED EDGE READ
+  PAST THE FACE: skin_paint.gdshader reads a pressed element's reveal map up to 1.6 mm off each point (`RAGGED`) while its cover is read
+  where it is, and past the outline no tool touched - so paint laid to the rim did not show, in a band as wide as the read wanders. The
+  edge's moment is carried out past what the element covers as far as that (`Skins.touch_map`'s spread, `PRESS_RAGGED`), where nothing
+  ever shows. Gate: paint_check (two points past the stipple's edge, 517 of 521 hold a moment; the control, the same touches with nothing
+  carried out, 46 of 523).
+
+## Painted where the tool touches (feedback 0028, 0031, 0032, 2026-11-06 - BUILT for presses and brushes)
+
+The user: "do makeup artists really paint with the tip of the brush like this? ... You don't paint with the tip of the bristles, you
+paint with the side of them, back and forth, and in many directions" (0028); "the whole brush is touching the eye, but paint is only
+coming out from one side of that brush. There are also all of the ways a person can turn a brush, to the fat side for wide strokes, to the
+corner for fine strokes ... we really want to focus on proper physics, where lines, paint, foundations and otherwise are applied
+accurately, relative to the tool that applied them" (0031).
+
+Why: a program says where the TIP goes, and paint is laid as a disc of the tool's width round that path (`Skins.when_map`); the tool is
+then posed to put its unbent tip there, held as a hand holds a pen. So paint and tool agree only at one point, a flat brush lays the same
+disc whichever way it is turned, and nothing ever lays the hairs' side on the face.
+
+The plan - THE TOOL'S CONTACT IS THE PAINT:
+
+1. **A tool's contact patch**, from its pose and its hairs' bend (the shader's own arithmetic, `Bristles.bent_at`): the part of the bent
+   hairs within a fraction of a millimeter of the surface - the belly of a pressed round brush, the chisel of a flat one across its width
+   or along its edge as it is turned, the tip of a liner held up; a sponge's corner or face; a puff's disc.
+2. **Programs move the patch, not the tip**: a fill swept with the belly, the handle low (25-35 degrees to the surface), back and forth in
+   changing directions, a flat brush broadside for cover and on its edge to cut a border; a blend buffed in small circles and wiper strokes;
+   a line pulled with the tip, the handle higher; a puff pressed and rolled.
+3. **The pose is found from the patch**: where the hand must hold the tool so its bent hairs lie where the program puts the patch - never
+   floating, never stretched.
+4. **Paint is laid where the patch has been**, each moment's patch stamped along its real path (the reveal map from the posed tool, not
+   from the program's line). Accurate by construction: the paint is where the tool was.
+5. **With the drawing board (below)**: the patch reveals the reference painting's own pixels.
+
+## Back to the drawing board (feedback 0023, 2026-11-06 - FIRST STAGE BUILT 2026-11-07; no real painting made yet)
 
 The user, of 209459's finished face: "a rather terrible and unimpressive mask. Bad design, it doesn't look professional at all ... learn
 from what we did with the LEGO brick-building mode. We might need to start with a blueprint or a plan, something with true style and
@@ -363,7 +530,34 @@ The plan - A PAINTING FIRST, COPIED:
 
 Open questions for the user: whether the painting may carry soft shading and highlights (truer to a makeup artist's work, harder to copy
 by hand) or should be told to keep to flat colors and clean lines (truer to cream paint); and whether a face may be sent back to the
-painter by the decorator as well as the art director.
+painter by the decorator as well as the art director. Taken for now, until the user says otherwise: flat colors with clean edges, a
+highlight as a shape of its own, soft only where a sponge softens an edge (what takes apart cleanly); the art director alone sends it
+back, as with a card.
+
+**Built (2026-11-07), steps 1, 2 and 4 in a first form; step 3 not:**
+
+- **The face painted first (`image:face`, then `check:face`)**, between the table and the design, on a show whose plan paints
+  (`TableEpisode.wants_face`: an episode designed before goes on as it was made; designed again, it starts from one). The table's first
+  surface is shown bare from its front, lit evenly from the front, on black, three pixels a millimeter, in the middle of an upright 2:3
+  canvas (`Skins.face_canvas`, kept as `face_bare.png` with where it lies, `face.json`); the painter paints the plan's `painted` onto it
+  (rules/table/painter.yaml `face`: in its own frame, only paint, a hand's paint), and a painting that does not lie on the surface - its
+  box off the surface's by more than 5% of the canvas, or past its edge - is removed and painted again (`Skins.face_fit`). What is kept
+  is cut back to the surface's millimeters with the bare light taken out (`face_ref.png`, `Skins.face_reference`). The art director
+  looks at it beside the bare surface (art_director.yaml `face`) and keeps it or sends it back with its faults (`sent_back_face.json`),
+  as with a card. Pipeline rows "Picture to copy" (⟳ paints a new one) and "Art check".
+- **The decorator copies it**: shown it on its own millimeter grid, told its colors (`Skins.face_palette`, most of the surface first),
+  told its design is a copy taken apart into what a hand lays (decorator.yaml `copying`), and each `look` shows the painting beside
+  what it has laid (`DecoratorTools.reference`).
+- **The paint carries it**: where the painting's color is near an element's paint, the element lays the painting's own pixel - its
+  shading, highlights and fine marks - and its own paint elsewhere (`skin_paint.gdshader` `reference`, `rect_uv`, `REFERENCE_NEAR`), so
+  a base over the whole surface is white under what goes on later and the finished surface takes the painting's detail. The table reads
+  `face_ref.png` and `face.json` with `skin.json`, and a preview copies them (`TablePreview.PICTURES`).
+- Gates: skin_step_check (the steps and their order, the controls of an episode designed before and designed again; the canvas, the fit
+  and its controls, the light taken out and its control, the palette; landing, sending back and keeping; the prompts whole), paint_check
+  (each element laid with the painting and where its picture lies; the control, a design with none). Rendered once by hand under xvfb:
+  over the painting's near-white the paint lays the painting's, over its red its own.
+- Not built: step 3, code taking the painting apart into elements (`Skins.separate`) - the decorator traces it by eye for now. And no
+  real painter has painted a face: the first one is for the user to see.
 
 ## Open
 

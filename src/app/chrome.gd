@@ -20,6 +20,8 @@ class_name Chrome
 ## - **environment** - the Environment panel (deps_panel.gd) behind the row's ⚙: what
 ##                     ghost runs on and what it is installing. Open until the user
 ##                     first closes it (`[deps] open`).
+## - **graphics**    - the Graphics panel ([GraphicsPanel]) behind the row's picture: how
+##                     finely the stage is drawn, live and in an export ([Graphics]).
 ## - **exporter**    - the ⤓ render-to-video button + background pipeline
 ##                     (persistent: an in-flight export survives session churn).
 ## - **assistant**   - the feedback browser / dispatch backend, and the picker for
@@ -42,10 +44,12 @@ var console: Node
 var transport: Node
 var provision: Node
 var environment: DepsPanel
+var graphics: GraphicsPanel
 
 var _env_layer: CanvasLayer
 var _env_button: Button
 var _env_dot: Label
+var _gfx_layer: CanvasLayer
 
 
 ## The Chrome in this tree, or null - for `app/`'s own, which reach the furniture through it.
@@ -57,6 +61,7 @@ static func of(n: Node) -> Chrome:
 func _ready() -> void:
 	super._ready()
 	_build_environment()
+	_build_graphics()
 	exporter = preload("res://src/export/exporter.gd").new()
 	add_child(exporter)
 	assistant = preload("res://src/app/assistant.gd").new()
@@ -81,6 +86,7 @@ func _inset_changed() -> void:
 		if n != null and n.has_method("set_bottom_inset"):
 			n.set_bottom_inset(bottom_inset)
 	_place_environment()
+	_place_graphics()
 
 
 func _export_suppressed(on: bool) -> void:
@@ -162,6 +168,48 @@ func _paint_environment_button() -> void:
 	var line := environment.state_line()
 	_env_button.tooltip_text = line + "\n\nClick to %s the Environment panel." % ("close" if environment.visible else "open")
 	_env_dot.add_theme_color_override("font_color", environment.state_color())
+
+
+# --- the graphics -------------------------------------------------------------------------------
+
+## THE GRAPHICS PANEL, behind the picture beside the ⚙: closed until it is opened, every time - it is a
+## place to go, not a state to watch.
+func _build_graphics() -> void:
+	_gfx_layer = CanvasLayer.new()
+	_gfx_layer.layer = ROW_LAYER - 1
+	add_child(_gfx_layer)
+	graphics = GraphicsPanel.new()
+	graphics.visible = false
+	_gfx_layer.add_child(graphics)
+	_place_graphics()
+	var b := Button.new()
+	b.icon = Icons.texture("graphics", 20)
+	b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	b.focus_mode = Control.FOCUS_NONE
+	b.custom_minimum_size = Vector2(40, 40)
+	b.tooltip_text = "Graphics: how finely the picture is drawn, live and in an export."
+	b.pressed.connect(func() -> void: set_graphics_open(not graphics.visible))
+	row_button(&"graphics", b)
+	register_panel(&"graphics", func() -> void: _show_graphics(false))
+
+
+## Open or close the Graphics panel.
+func set_graphics_open(on: bool) -> void:
+	_show_graphics(on)
+	if on:
+		panel_opened(&"graphics")
+
+
+func _show_graphics(on: bool) -> void:
+	graphics.visible = on
+	if not on:
+		panel_closed(&"graphics")
+
+
+func _place_graphics() -> void:
+	if graphics != null:
+		graphics.offset_top = -ROW_TOP - 8.0 - bottom_inset
+		graphics.offset_bottom = -ROW_TOP - 8.0 - bottom_inset
 
 
 # --- the feedback console -----------------------------------------------------------------------

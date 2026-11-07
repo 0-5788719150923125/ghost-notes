@@ -1106,7 +1106,13 @@ func _note_steps() -> bool:
 	Image.create(8, 8, false, Image.FORMAT_RGB8).save_png(painted)
 	ed._text.text = "Words. <!-- image: A harbor at dawn. --> More. <!-- image: A storm not yet painted. --> <!-- image: A harbor at dawn. -->"
 	Illustrations.use_for_test({"index": {Manuscript.image_key("A harbor at dawn."): {"versions": [{"file": painted, "sig": ""}], "current": 0}}}, true)
+	# AS ITS PRESENTATION SHOWS THEM (the Pictures card's list, Medium.pictures_of): a novel prints them
+	var pin := RefCounted.new()
+	root.get_node("Director").pin_medium("book", pin)
 	_ok(Array(up._feed.pictures()) == [painted], "the note hands the step its painted pictures, each once - one not painted, none (%s)" % str(up._feed.pictures()))
+	root.get_node("Director").pin_medium("full", pin)
+	_ok(up._feed.pictures().is_empty(), "the control: shown in a medium that shows no pictures, the video has none to hand (%s)" % str(up._feed.pictures()))
+	root.get_node("Director").unpin_medium(pin)
 	ed.free()
 	_wipe(ROOT + "_readings")
 	load("res://src/reading/note_upload.gd").root = keep

@@ -727,9 +727,10 @@ func _build_cues() -> void:
 		moments.append("paint mist")
 	if paint != null and paint.raises("dust"):
 		_paint_bursts.append("dust")
-		# (a few soft puffs of haze, never many small bright ones - feedback 0018)
-		fxs.append({"kind": "burst", "name": "paint dust", "on": "paint dust", "look": "powder", "count": 14, "size": 7.0,
-			"speed": 0.12, "spread": 150.0, "life": 2.4, "glow": 0.0, "colors": ["#f4efe8", "#e6dfd6"]})
+		# (one faint cloud of many soft puffs laid over each other, never a few bright ones - feedback 0018 - nor puffs that wander in
+		# loops: it billows out a little and sinks - feedback 0026, "They twirl and spin. Real life dust wouldn't do that")
+		fxs.append({"kind": "burst", "name": "paint dust", "on": "paint dust", "look": "powder", "count": 20, "size": 9.0,
+			"speed": 0.08, "spread": 150.0, "life": 3.0, "glow": 0.0, "colors": ["#f4efe8", "#e6dfd6"]})
 		moments.append("paint dust")
 	if not fxs.is_empty():
 		var made_fx := Effects.sanitize(fxs, [], [], moments)
