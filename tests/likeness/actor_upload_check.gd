@@ -192,8 +192,8 @@ func _check() -> void:
 	_ok(step.state(feed) == "missing" and (r["text"] as Label).text.contains("so does Generate, or an export that goes up"),
 		"words written again make them stale, and the row says Generate makes them again (%s)" % (r["text"] as Label).text)
 	# THE ⟳ ON THE ACTOR'S OWN STEPS ASKS: what they make is hours of the processor's time
-	_ok(not pipe.row("survey", "Actor").is_empty() and (pipe.row("survey", "Actor")["redo"] as Button).modulate == pipe.AMBER,
-		"the actor's own steps are the Actor section's, and their ⟳ goes amber: it asks, what it makes is hours of work")
+	_ok(not pipe.row("survey", "Actor").is_empty() and pipe.asks_first("survey", "Actor"),
+		"the actor's own steps are the Actor section's, and their ⟳ asks first: what it makes is hours of work")
 	card.free()
 	ed.free()
 

@@ -691,7 +691,8 @@ func _share(i: int, t: float) -> float:
 ## lens's blur go that long before the pen first touches the page - planned, else its first word less the
 ## voice's head start for it - not at the first word, so the empty pad is seen.
 func _opening() -> float:
-	var t := super._opening()
+	# (from its first word itself: its blank page is its settle, never the desk's as well)
+	var t := _word_t0(0)
 	if t == INF:
 		return INF
 	var touch := float(_plan[0]["start"]) if not _plan.is_empty() else INF

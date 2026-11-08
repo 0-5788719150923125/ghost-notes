@@ -12,9 +12,10 @@ extends SceneTree
 ## THE END AT THE END, the last of them in sight (the user: Generate "can insert new steps ... requiring me to scroll again";
 ## THE CONTROL: a view anywhere else stays where it is).
 ## ONE ⟳: a plain Button, never a menu (THE CONTROL: a MenuButton is what the walk would find). Pressed, it does its one
-## thing at once, and opens nothing. WHAT THROWS OTHER WORK AWAY SAYS SO BEFORE IT IS PRESSED: amber, the tooltip saying what,
-## and it asks a yes or a no - nothing runs until yes, and no runs nothing. A row with no ⟳ keeps its place and takes no
-## press; one not open now takes none.
+## thing at once, and opens nothing. WHAT THROWS OTHER WORK AWAY SAYS SO BEFORE IT IS PRESSED, in words and in the color of
+## every other ⟳ (the user could not read the amber it once wore): the tooltip saying what, and it asks a yes or a no -
+## nothing runs until yes, and no runs nothing. A row with no ⟳ keeps its place and takes no press; one not open now takes
+## none.
 ## ONE GENERATE: top to bottom, a section started only once the one before it is done (THE CONTROL: while the first is busy
 ## the second is not started), asked at its turn whether it has anything to make (words written by the section before it
 ## count), a section with nothing missing passed by; while it walks every ⟳ waits; Stop stops all of it. Generate is grayed
@@ -152,15 +153,17 @@ func _one_redo() -> void:
 	_ok(_menus(card) == 0 and _menus(a_menu) == 1, "no ⟳ is a menu (the control: the walk finds one in a menu)")
 	a_menu.free()
 	var r: Dictionary = card.row("plain")
-	_ok(r["redo"] is Button and (r["redo"] as Button).tooltip_text == "Make it again" and (r["redo"] as Button).modulate == Color.WHITE,
-		"its tooltip says what it does")
+	_ok(r["redo"] is Button and (r["redo"] as Button).tooltip_text == "Make it again" and not card.asks_first("plain"),
+		"its tooltip says what it does, and it does not ask (the control)")
 	(r["redo"] as Button).pressed.emit()
 	_ok(ran == ["plain"] and card.asking == null, "pressed, it does its one thing at once, and opens nothing")
 	ran.clear()
 	var c: Dictionary = card.row("costly")
 	var redo: Button = c["redo"]
-	_ok(redo.modulate == _Card.AMBER and redo.tooltip_text.contains("the little thing"),
-		"what throws other work away is amber, and says what before it is pressed (%s)" % redo.tooltip_text.replace("\n", " "))
+	_ok(card.asks_first("costly") and redo.tooltip_text.contains("the little thing"),
+		"what throws other work away asks first, and says what before it is pressed (%s)" % redo.tooltip_text.replace("\n", " "))
+	_ok(redo.modulate == (r["redo"] as Button).modulate,
+		"and wears the color every ⟳ does (the user, of the amber: \"it's not clear why\")")
 	redo.pressed.emit()
 	_ok(ran.is_empty() and card.asking != null and card.asking.dialog_text.contains("the little thing"),
 		"pressed, it runs nothing yet and asks, naming what goes")

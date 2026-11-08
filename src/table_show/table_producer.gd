@@ -658,7 +658,7 @@ func _make_face(step: String, look: Dictionary, target: String) -> void:
 
 
 ## THE FACE PAINTED FIRST, KEPT ONLY IF IT LIES ON THE SURFACE ([method Skins.face_fit]) - then cut back to the surface's millimeters as it
-## wears it (`face_ref.png`, [method Skins.face_reference]), which the table reads; or removed, and why said - to the painter of the next too
+## wears it (`face_ref.png`, [method Skins.face_reference]), which the decorator copies; or removed, and why said - to the painter of the next too
 ## ([method TableEpisode.send_back]).
 func _land_face() -> String:
 	var painted := Image.load_from_file(episode.file_of("image:face"))
@@ -840,7 +840,7 @@ func _land_skin(text: String) -> String:
 		for sf in surfaces:
 			if on.to_lower() == ("%s/%s" % [(sf as Dictionary)["thing"], (sf as Dictionary)["part"]]).to_lower() or String(gd.get("thing", "")).to_lower() == String((sf as Dictionary)["thing"]).to_lower():
 				skin = sf
-		var made := Skins.sanitize(gd, skin["frame"])
+		var made := Skins.sanitize(gd, skin["frame"], String(skin.get("outline", "")))
 		if (made["elements"] as Array).is_empty():
 			continue
 		out.append({"thing": skin["thing"], "part": skin["part"], "frame": [(skin["frame"] as Vector2).x, (skin["frame"] as Vector2).y],

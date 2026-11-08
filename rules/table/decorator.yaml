@@ -48,6 +48,19 @@ prompt:
       WHAT GOES ON MUST SHOW GOING ON. An element is seen being laid only where it differs from what it is laid over - the bare
       surface's own color, or what went on before it there - in color, or in finish (a gloss over its own red, a powder over a
       satin). One in nearly the color and the finish of what is under it shows nothing for as long as it takes to lay.
+  # 2026-11-07, joker-motivation 257002 (feedback 0050): its second base, "left thinner at the right temple and jaw" by a shape that
+  # stopped short of the chin, was laid whole and read as a spot the hand had missed - "We missed a spot of the white layering at the
+  # right side of the chin here, and a little at the bottom and left."
+  - >-
+      A BASE COVERS ALL OF WHAT IT IS THE BASE OF, to its edges all round. Where the design is thinner, darker or warmer toward an
+      edge, that is an element of its own laid over the base, never a base that stops short of the edge: one that stops short
+      reads as a spot the hand missed.
+  # 2026-11-07 (feedback 0057, 0059, 0062-0064): a lighter plum from the one plum pot, two coats of white - "There ought to be one
+  # application of white, no more". Each element is laid in its pot's paint, thinner for a lighter one.
+  - >-
+      THE TABLE'S PAINTS ARE YOUR COLORS. Each element is laid in the paint of the pot it is taken from - a lighter one as a
+      thinner layer of it, never a color mixed between two pots - so one paint over the whole surface is one coat, and a second
+      of it over the first shows nothing.
   - ""
   - when: tools
     include: with_tools
@@ -61,8 +74,8 @@ copying:
       pixels a millimeter, its top-left corner at x 0, y 0 of your millimeters. YOUR DESIGN IS A COPY OF IT, taken apart into
       what a hand lays one element at a time: every shape of it where it is in the picture, its size and its form, measured
       off the picture in millimeters, each in the picture's own color. Where the picture shades a shape or lights it, lay
-      that as its own element over it. The paint laid carries the picture's own detail wherever its color is near the
-      element's, so a shape in the picture's color shows the picture's shading and fine marks as it goes on.
+      that as its own element over it. Only what you lay is painted: the picture is never laid on the surface, so its
+      texture, cracks, streaks and fine marks are there only as elements of yours.
   - "ITS COLORS, most of the surface first:"
   - each: palette
     say: "  - {{hex}} ({{percent}}%)"

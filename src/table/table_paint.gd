@@ -35,14 +35,22 @@ const QUICK_MOST := 0.4
 ## The least an act that paints is hurried to, of its natural length: hardly at all - a face is never rushed (at 0.6, 856886's was
 ## done in 9:22 under ten minutes of words).
 const LEAST := 0.85
-## How far over a surface a tool's tip is held as it touches (meters) and how far into it a brush is pressed at its hardest,
-## and how high it lifts on its way from where it rests (meters).
+## How far over a surface a tool's tip is held as it touches (meters), and how high it lifts on its way from where it rests (meters).
 const TOUCH := 0.00025
-const PRESS_INTO := 0.0006
+## A BRUSH'S TIP PRESSED PAST ITS POINT (feedback 0052, 2026-11-07: "Why are we painting with the very tip of it? There is something like
+## a needlepoint's worth of brush actually touching the mask here. Yet when we move the brush back and forth, it bends a lot ... We need to
+## push a little BEYOND that tip, such that it is FORCED to bend in one direction or another, and such that a larger (or smaller) portion
+## of the bristles are touching the mask at any given time we're painting, depending upon how much we want to apply"): at its hardest
+## this share of its hairs' length, as deep as its belly is laid ([constant BELLY_PUSH]); a line presses it as far as the share of the
+## brush it is wide ([method Skins.program], `LINE_PRESS_LEAST` at the least) - it had been 0.6 mm whatever the line.
+const TIP_PUSH := 0.2
+## A KEY IS PRESSED at more than this (0-1): a line pressed as far as it is wide, a fill eased off its edge, are pressed however
+## lightly - more than half had been, and a fine line went unpulled and lifted along its way.
+const PRESSED := 0.05
 const FETCH_LIFT := 0.08
 ## HOW A TOOL IS HELD over the surface: its handle out of the surface, up along it and out to the side its work is on - never
 ## toward the camera, where it would hide the work, and never across what it has painted (shares, then made a direction); and over
-## its paint, upright and leaning toward the camera.
+## its paint, upright and leaning toward the camera. A brush drawn along a stroke leans the way it goes instead ([constant HELD_PULL]).
 const HELD_OUT := 0.55
 const HELD_UP := 0.35
 ## ...A BRUSH LAYING A FILL OR BLENDING held low, on the side of its hairs (`belly`): this much out of the surface where HELD_OUT is
@@ -52,6 +60,15 @@ const HELD_LOW := 0.2
 const BELLY_PUSH := 0.2
 const HELD_SIDE := 0.6
 const HELD_SIDE_EDGE := 0.15
+## A BRUSH IS PULLED THROUGH ITS STROKE (the user, 2026-11-07: "a real artist would turn the brush, to pull THROUGH the stroke at the
+## same angle" - held up and out to one side whichever way it went, it was pushed through half its lines): along a stroke its handle
+## leans the way it goes, this far along the surface for [constant HELD_OUT] (or [constant HELD_LOW]) out of it, so its hairs trail
+## behind it at one angle to the stroke ([method _pulls_of]). Back and forth along a fill's rows the wrist rocks it over between them,
+## as a wall is painted - never turned round. Drawing a line toward the camera it stands up this share more, hiding less of what it
+## paints; laid low on its belly it stays as low whichever way it goes (stood up on the rows toward the camera, a flat brush laid half
+## as much of its belly on the face, and left streaks between its rows that the next look had to put right).
+const HELD_PULL := 0.45
+const PULL_TOWARD := 0.5
 ## A TRIP (to the paint, the water, the towel): how far over its place a tool comes and leaves (meters), how far across a towel it is
 ## wiped, and the trips there are - a dry is the towel's.
 const TRIP_LIFT := 0.012
@@ -70,8 +87,52 @@ const TOPS_MARGIN := 0.08
 const TOPS_BESIDE := 0.005
 const TRIPS := ["load", "rinse", "dry"]
 const DRY := 2.6
-## WATER CLOUDS AS A BRUSH IS RINSED IN IT: each rinse takes it this far toward the color rinsed out of the brush.
-const CLOUD := 0.1
+## A SPONGE RINSED AS A HAND RINSES ONE (feedback 0050: "we're dipping the entire sponge into the water, but not ringing it out over
+## the cup ... holding it in the water for longer, so that it can actually soak up some of the liquid, for us to ring out? Then, when
+## we press it against the board ... push harder, and more than just one quick press. Like, press it a few times, in and out"):
+## lowered into the water and squeezed there as it soaks, lifted over the cup and wrung out, then blotted on the towel in firm
+## presses, each on a fresh place ([method _sponge_trip]). Its rinse and its dry take this long (seconds), the carry there this much
+## of it; it is squeezed this many times on the cup's floor under the water (where a rinse goes, [method _source_of]), between this
+## little (its own shape between squeezes) and this much of a full squeeze, and wrung this many times; blotted this many times, held pressed this much of each, lifted
+## this far between (meters) and stepped this far across the towel.
+const SPONGE_RINSE := 8.0
+const SPONGE_DRY := 4.6
+const SPONGE_GO := 0.2
+const SOAKS := 3
+const SOAK_EASE := 0.0
+const SOAK_PRESS := 0.8
+const WRINGS := 2
+const BLOTS := 3
+const BLOT_HELD := 1.6
+const BLOT_LIFT := 0.008
+const BLOT_STEP := 0.012
+## ...going over to the next place in this much of each blot, lifted
+const BLOT_OVER := 0.15
+## ...and squeezed in the hand, at its hardest, this much thinner across its broad faces ([method _squeeze_of])
+const SQUEEZE_MOST := 0.5
+## A DESIGN'S COLORS ARE THE TABLE'S PAINTS (the user's choice, 2026-11-07, of feedback 0057 and 0059 - "Pot paint, thinned": a lighter plum
+## had come from the one plum pot, "It's not clear how that would have happened, when the brush only has one color"; a watery band and a
+## crisp line from one liner, "The physics aren't making sense to me here"; the first base's tan from the white pot): an element is laid
+## in the paint of the pot it is taken from ([method _pot_of]), as thick as brings that paint over a face this light to the design's
+## lightness ([method _thickness], [constant THIN_LEAST] at the least); one laid thinner than [constant THIN_WET] is taken up on a brush
+## wetted in the water first; one with an edge this soft (millimeters) or softer goes on crisp and is softened as its tool goes back over
+## it, nothing more taken up.
+const FACE_LIGHT := 0.85
+const THIN_LEAST := 0.2
+const THIN_WET := 0.75
+const SOFT_GONE_OVER := 2.0
+## WATER CLOUDS BY WHAT IS RINSED INTO IT ([method cloud_at]), never at once (2026-11-07, the user: "start clear, and inherit colors
+## based upon the volume coming off of brushes and sponges ... accumulate color over time, not immediately"; each rinse had taken
+## it a tenth of the way to the color, a liner's as much as a sponge's): the paint a rinse carries out - a sponge's face this deep a
+## film of it (meters), a brush's belly this share of its hairs' bulk - its share of the water then turning the water's color
+## toward it (1 - e^(-TINTS * share)) and clouding it (its clearness times e^(-CLOUDS * share)). A sponge's rinse in a glass of
+## water clouds it about a tenth; a liner's, hardly at all.
+const RINSED_FILM := 0.0005
+const RINSED_BELLY := 0.05
+const TINTS := 90.0
+const CLOUDS := 60.0
+## ...in this much water where its vessel's is not known (milliliters)
+const WATER_ML := 250.0
 ## A SPRAY: how long its tool is held ready before and after, how far off the surface (millimeters), and the mist's puffs.
 const SPRAY_STANDOFF := 120.0
 ## ...and which way from it: out of the surface, to its right, up along it (shares, then made a direction).
@@ -82,6 +143,23 @@ const GIVE := 0.003
 ## ...AND A PAD (a powder puff) THIS FAR, drawn squashed onto it as a sponge is: stiff, it stood off a curved face on its flat one, 5-23 mm,
 ## and painted nothing once what touches is what paints (feedback 0035; 520084's puff left 17,000 mm2 of the face bare).
 const PAD_GIVE := 0.008
+## PRESSED ONTO A SKIN, A PAD OR A SPONGE TAKES ITS SHAPE (feedback 0041, of 520084's puff: "the pad is clipping through the nose ...
+## the pad is always perfectly flat: it never seems to bend or compress ... when pressing into eye sockets for example ... pads like this
+## are very soft and should be easy to bend"): squashed back along the way it was pushed, as a share of its depth, its pressed face had
+## stood flat and 3.5 mm in a flat forehead and more in a nose. So each bit of it is drawn from the skin's own heights
+## ([method press_lands], prop_common.gdshaderinc's `press_lands`, the same arithmetic): what would go in it lies on it, PRESS_LIFT
+## over it, softened over PRESS_SOFT; a pad's face sags into a hollow within PRESS_REACH of it, PRESS_SAG of what it gives as it is
+## pressed (a sponge's denser foam does not); its back is kept PRESS_THIN of its own depth over the skin, so pushed past that the whole
+## of it bends away. What of it is drawn as low as a bit standing [constant TOUCH_BAND] over the skin is, touches.
+const PRESS_SOFT := 0.0003
+const PRESS_LIFT := 0.0002
+const PRESS_THIN := 0.3
+const PRESS_REACH := 0.008
+const PRESS_SAG := 0.4
+## ...ITS SHAPE READ THIS FINELY (meters), this far past the skin's frame all round: read every 2 mm, as the way a tool is held reads it,
+## a nose's ridge peaking between them stood 2.7 mm through a sponge laid on it ([method _press_field]).
+const PRESS_CELL := 0.001
+const PRESS_BEYOND := 0.012
 ## ...AND IS PUSHED INTO ITS PAINT this far to take it up (meters), a puff into its powder this far, held there for this share of the
 ## dip (the user, 2026-11-06: "the sponge barely touched the foundation case ... we should have really pushed the sponge into the
 ## foundation, to pick-up a lot of the dust").
@@ -98,6 +176,9 @@ const LOAD_EASE := 0.35
 ## A BRUSH DIPS INTO ITS PAINT this far (meters), its hairs in it as it turns (feedback 0019, joker-motivation 209459: "When it dips
 ## into the container, it didn't touch there either" - it had been taken to a millimeter over the paint's surface and no further).
 const BRUSH_DIP := 0.003
+## ...and WORKED INTO IT ([method _brush_load]): swirled round this many times, out this far from where it went in (meters).
+const LOAD_TURNS := 2.0
+const LOAD_SWIRL := 0.004
 ## ...AND IS NEVER STOOD OFF WHAT IT PAINTS FURTHER THAN THIS (meters, [method _cleared]): its hairs bend against what it meets.
 const BRUSH_STAND_MOST := 0.0015
 const FLAT_BAND := 0.008
@@ -165,18 +246,31 @@ const AIM_MET := 1.0
 const TIP_STEP := 0.00025
 const TIP_HALVES := 5
 const TIP_REACH := 2.0
+## A BRUSH KEEPS INSIDE WHAT IT FILLS ([method _keep_inside]): its hairs may touch this far past its shape (millimeters), a moment
+## touching past that at this many points or more has run past it (three had let a lip's fill lay 24 mm2 past it, a bit or two at a
+## time along its top), and its ways are looked at this many times;
+const SPILL_MOST := 0.5
+const SPILL_LEAST := 1
+const SPILL_ROUNDS := 6
+## ...eased off where it runs past, at the least this hard (a share of how hard it lays the rest).
+const SPILL_LIGHTEST := 0.25
 ## A HAND GOES BACK OVER WHAT IT MISSED ([method _cover_gaps]): this many looks at what its presses touched, a gap as large as this
 ## worth a press (square millimeters), and a press put in after the first look this much harder (a soft sponge pushed into a crease).
 const GAP_ROUNDS := 5
 const GAP_LEAST := 1.0
+## ...a point reached by one press only, with less than this of a load left on it (0-1), is thin, and wants filling as a bare one does
+const GAP_THIN_LOAD := 0.5
 const PRESS_HARD := 1.8
 ## The ways a key may be held other than its program's own ([method _held_keys]' `ways`): 1 a sponge's or pad's corner, 2 a sponge's
-## long end, held along its length.
-const WAYS := ["", "corner", "end"]
+## long end, held along its length, 3 its face, flat.
+const WAYS := ["", "corner", "end", "face"]
+## ...and a press put in where the first missed, held its own way, touching no nearer where it is aimed than [constant AIM_MET], is held
+## another way where that touches this much nearer it (millimeters, [method _press_miss]).
+const REACH_BETTER := 0.3
 ## THE PAINT ON A BRUSH'S TIP: as much as it shows just loaded, what never comes out until it is rinsed, and how long it takes to
 ## lay most of it (seconds).
 const TIP_FULL := 0.9
-const TIP_LEFT := 0.35
+const TIP_LEFT := 0.5
 const TIP_LASTS := 18.0
 ## How long a tool's hairs take to settle after its act (seconds): it is posed that long after.
 const SETTLE := 0.6
@@ -309,19 +403,13 @@ func set_designs(doc: Dictionary) -> void:
 	for s in skins:
 		var sd: Dictionary = s
 		sd["design"] = {}
-		sd.erase("reference")
-		# ...THE FACE PAINTED FIRST that its design was copied from, where there is one ([method Skins.face_reference]; the table's
-		# `_reference`, on the surface `_reference_on` names)
-		var ref: Variant = doc.get("_reference")
-		if ref is Image and String(doc.get("_reference_on", "")).to_lower() == ("%s/%s" % [sd["name"], sd["part"]]).to_lower():
-			sd["reference"] = ImageTexture.create_from_image(ref as Image)
 		for d in doc.get("designs", []):
 			if not (d is Dictionary):
 				continue
 			var dd: Dictionary = d
 			if String(dd.get("thing", "")).to_lower() == String(sd["name"]).to_lower() and (String(dd.get("part", "")).is_empty()
 					or String(dd.get("part", "")).to_lower() == String(sd["part"]).to_lower()):
-				sd["design"] = Skins.sanitize(dd, sd["frame"])
+				sd["design"] = Skins.sanitize(dd, sd["frame"], String(sd.get("outline", "")))
 		if sd.get("surface") == null:
 			sd["surface"] = _surface_of(sd)
 
@@ -331,7 +419,19 @@ func set_designs(doc: Dictionary) -> void:
 ## the least it is hurried to `_min_length`), which the schedule and the readers go by.
 func prepare() -> void:
 	_layers = {}
+	# THE PAINTS ON THE TABLE, where each is taken up from - before the elements are given theirs ([method _pot_of])
+	_creams = []
+	var cream := int((Props.MATERIALS["cream"] as Dictionary)["code"])
+	for ti in work.things.size():
+		for m in (work.things[ti] as Dictionary)["meshes"]:
+			var mi := m as MeshInstance3D
+			var mat := mi.material_override as ShaderMaterial
+			if mat == null or mat.get_shader_parameter("kind") == null or int(mat.get_shader_parameter("kind")) != cream:
+				continue
+			var box: AABB = work._world_of(mi) * mi.get_aabb()
+			_creams.append({"color": mat.get_shader_parameter("color"), "at": Vector3(box.get_center().x, box.end.y + 0.001, box.get_center().z), "ti": ti})
 	# WHO LAYS EACH ELEMENT: the first act that paints it, in the order the reading comes to them; any later one goes over it
+	var pots := {}
 	for a in _in_reading_order(work.acts):
 		for tr in (a as Dictionary)["tracks"]:
 			var t: Dictionary = tr
@@ -353,21 +453,17 @@ func prepare() -> void:
 					# width its track says (520084's sponge was written 32 mm, its whole face; its corner touches 15)
 					if manner in TOUCHED and tool.has("touch"):
 						mm = _touch_width(tool, _contact_for(tool, manner))
-					_layers[key] = {"act": String((a as Dictionary)["name"]), "manner": manner, "mm": mm}
+					# ...IN THE PAINT OF ITS POT, as thick as its color asks ([method _pot_of], [method _thickness]) - a smear the paint it drags
+					var pot := _pot_of(t, el) if String(el["kind"]) != "smear" else String(pots.get(String(el["paint"]), el["paint"]))
+					pots[String(el["paint"])] = pots.get(String(el["paint"]), pot)
+					var thick := _thickness(Color.html(String(el["paint"])), Color.html(pot)) if String(el["kind"]) in ["fill", "line", "dots"] else 1.0
+					_layers[key] = {"act": String((a as Dictionary)["name"]), "manner": manner, "mm": mm, "pot": pot, "thick": thick,
+						"soft_over": float(el.get("soft", 0.0)) >= SOFT_GONE_OVER and String(el["kind"]) in ["fill", "line"] and String(tool["kind"]) in ["brush", "sponge"]}
+	_one_coat()
+	_one_after_another()
 	for si in skins.size():
 		(skins[si] as Dictionary)["_rest"] = work._world_of((skins[si] as Dictionary)["holder"])
 		_canvas(si)
-	# THE PAINTS ON THE TABLE, where each is taken up from
-	_creams = []
-	var cream := int((Props.MATERIALS["cream"] as Dictionary)["code"])
-	for ti in work.things.size():
-		for m in (work.things[ti] as Dictionary)["meshes"]:
-			var mi := m as MeshInstance3D
-			var mat := mi.material_override as ShaderMaterial
-			if mat == null or mat.get_shader_parameter("kind") == null or int(mat.get_shader_parameter("kind")) != cream:
-				continue
-			var box: AABB = work._world_of(mi) * mi.get_aabb()
-			_creams.append({"color": mat.get_shader_parameter("color"), "at": Vector3(box.get_center().x, box.end.y + 0.001, box.get_center().z), "ti": ti})
 	# ...what stands where the tools go, for their ways over it
 	_map_tops()
 	# ...A HAND GOING BACK OVER WHAT IT MISSED, before any act's length is known ([method _cover_gaps])
@@ -392,6 +488,14 @@ func prepare() -> void:
 	_hold_all()
 	# ...and what a pressing tool touches, held so, is what it paints ([method _touch_all])
 	_touch_all()
+	# ...and where a blending brush goes over what was laid, softened there alone ([method _blend_touches])
+	_blend_touches()
+	# ...AND WHAT A PAD OR A SPONGE PRESSED ONTO A SKIN TAKES THE SHAPE OF, found here, on this thread, never as it plays ([method _press_field])
+	for a in work.acts:
+		for tr in (a as Dictionary)["tracks"]:
+			var t: Dictionary = tr
+			if String(t["law"]) == "paint" and int(t.get("_skin", -1)) >= 0 and t.has("_ch") and tool_of(String(t["_ch"]), t).has("touch_n"):
+				_press_field(skins[int(t["_skin"])])
 
 
 ## How wide tool [param tool] lays paint for track [param tr] in [param manner] (millimeters): the track's `size`, else its own
@@ -658,6 +762,7 @@ func tool_of(ch: String, tr: Dictionary) -> Dictionary:
 		# shader bends them, what of them touches the face is what it paints ([method _touched])
 		var hp := PackedVector3Array()
 		var hs := PackedFloat32Array()
+		var hc := PackedByteArray()
 		var seen_h := {}
 		for td in tufts:
 			var tmi: MeshInstance3D = (td as Dictionary)["mesh"]
@@ -666,6 +771,7 @@ func tool_of(ch: String, tr: Dictionary) -> Dictionary:
 			var arr := tmi.mesh.surface_get_arrays(0)
 			var tv: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
 			var tu2: PackedVector2Array = arr[Mesh.ARRAY_TEX_UV2] if arr[Mesh.ARRAY_TEX_UV2] != null else PackedVector2Array()
+			var tu: PackedVector2Array = arr[Mesh.ARRAY_TEX_UV] if arr[Mesh.ARRAY_TEX_UV] != null else PackedVector2Array()
 			if tu2.size() != tv.size():
 				continue
 			var tn := inv * work._world_of(tmi)
@@ -679,9 +785,12 @@ func tool_of(ch: String, tr: Dictionary) -> Dictionary:
 				seen_h[key] = true
 				hp.append(q)
 				hs.append(tu2[i].x)
+				# (...the core's drawn in and down under the hairs as they splay - [method Bristles.core_at])
+				hc.append(1 if i < tu.size() and tu[i].x > Bristles.CORE_MARK - 0.5 else 0)
 		if not hp.is_empty():
 			out["touch"] = hp
 			out["touch_s"] = hs
+			out["touch_core"] = hc
 			out["hair_root"] = root
 			out["hair_axis"] = axis
 	elif not sponges.is_empty():
@@ -738,7 +847,7 @@ func tool_of(ch: String, tr: Dictionary) -> Dictionary:
 	out["center"] = c
 	out["points"] = _surface_points(tm, box)
 	var kind := String(out["kind"])
-	var held := {"tip": out["tip"], "grip": out["grip"], "give": GIVE if kind == "sponge" else (PRESS_INTO if kind == "brush" else (PAD_GIVE if bool(out.get("flat", false)) else 0.0)),
+	var held := {"tip": out["tip"], "grip": out["grip"], "give": GIVE if kind == "sponge" else (float(out["len"]) * TIP_PUSH if kind == "brush" else (PAD_GIVE if bool(out.get("flat", false)) else 0.0)),
 		"bend": float(out["len"]) if kind == "brush" else 0.001}
 	out["ch"] = ch
 	out["contact"] = "face" if kind == "sponge" or bool(out.get("flat", false)) else "tip"
@@ -770,15 +879,17 @@ func tool_of(ch: String, tr: Dictionary) -> Dictionary:
 			"reach": maxf(((hit_p["position"] if not hit_p.is_empty() else corner_p) as Vector3 - c).length(), 0.002)}
 	# ...AND ITS SURFACE FOUND FINELY, for what of it touches the face ([method _touched]): a sponge's, a pad's
 	if kind == "sponge" or bool(out.get("flat", false)):
-		out["touch"] = _surface_points(tm, box, TOUCH_EVERY, 90)
+		var tn: Array = []
+		out["touch"] = _surface_points(tm, box, TOUCH_EVERY, 90, tn)
+		out["touch_n"] = PackedVector3Array(tn)
 	tools[ch] = out
 	return out
 
 
 ## WHERE A TOOL'S OWN SURFACE IS (its node's space): rays straight in from across each face of its box [param box], every
 ## [constant POINTS_EVERY], where each meets [param tm] - a box's corners and its faces to their edges alike, which its corners alone are
-## not (and rays aimed at its middle met a face's edges from the side).
-static func _surface_points(tm: TriangleMesh, box: AABB, every := POINTS_EVERY, most := 12) -> PackedVector3Array:
+## not (and rays aimed at its middle met a face's edges from the side). Given an Array [param normals], the way each faces is put in it.
+static func _surface_points(tm: TriangleMesh, box: AABB, every := POINTS_EVERY, most := 12, normals: Variant = null) -> PackedVector3Array:
 	var out := PackedVector3Array()
 	if tm == null:
 		return out
@@ -800,6 +911,10 @@ static func _surface_points(tm: TriangleMesh, box: AABB, every := POINTS_EVERY, 
 					var hit := TableWork._ray(tm, q, into)
 					if not hit.is_empty():
 						out.append(hit["position"])
+						# (...and, asked for, which way it faces there - out, against the ray that found it)
+						if normals != null:
+							var hn: Vector3 = hit["normal"]
+							(normals as Array).append(-hn if hn.dot(into) > 0.0 else hn)
 	return out
 
 
@@ -822,6 +937,7 @@ func _touched(si: int, tool: Dictionary, h: Array, bend := Vector3.ZERO, splay :
 	# `bristle_bend` draws them: an arc as long as each hair, spread out from the middle
 	if tool.has("touch_s") and (bend.length_squared() > 1e-12 or splay > 0.0):
 		var hs: PackedFloat32Array = tool["touch_s"]
+		var hc: PackedByteArray = tool.get("touch_core", PackedByteArray())
 		var root: Vector3 = tool["hair_root"]
 		var ax: Vector3 = tool["hair_axis"]
 		var hl := maxf(float(tool["len"]), 1e-4)
@@ -836,20 +952,52 @@ func _touched(si: int, tool: Dictionary, h: Array, bend := Vector3.ZERO, splay :
 			var sv := hs[i]
 			var p := pts[i]
 			var off := p - root
-			var q := p + (off - ax * off.dot(ax)) * splay * sv * 1.2
+			var out_by := splay * sv * 1.2
+			if i < hc.size() and hc[i] == 1:
+				var core := Bristles.core_at(sv, splay)
+				p -= ax * off.dot(ax) * core.y
+				sv = core.x
+				out_by = core.z
+			var q := p + (off - ax * off.dot(ax)) * out_by
 			if th > 1e-4:
 				q += ax * (rr * sin(th * sv) - hl * sv) + along * rr * (1.0 - cos(th * sv))
 			bent[i] = q
 		pts = bent
 	var sd: Dictionary = skins[si]
 	var g := _obstacles(sd)
-	var qs: PackedVector3Array = ((g["to_part"] as Transform3D) * _node_at(h, tool, tool["x0"])) * pts
+	var to_front: Transform3D = (g["to_part"] as Transform3D) * _node_at(h, tool, tool["x0"])
+	var qs: PackedVector3Array = to_front * pts
 	var box: AABB = sd["box"]
 	var at: Vector2 = g["at"]
 	var n: Vector2i = g["n"]
 	var Z: PackedFloat32Array = g["z"]
 	var top: PackedFloat32Array = g["top"]
 	var bn: Vector2i = g["bn"]
+	# ...A PAD PRESSED ONTO IT TAKES ITS SHAPE as it is drawn ([method _press_point]): what of it is drawn within the band of it touches,
+	# where it is drawn - its face sagged into a hollow beside what it is pressed onto, what would go into it laid on it. (A sponge, whose
+	# foam does not sag, touches by the reading below, its stipple's go-back loop tuned to it: read as a pad's, a stippled base left 911
+	# mm2 bare at its first look where it had left 213, and 29 never painted on a nose's steep sides.)
+	var nn: PackedVector3Array = tool.get("touch_n", PackedVector3Array())
+	if nn.size() == pts.size() and h.size() > 3 and bool(h[3]) and bool(tool.get("flat", false)):
+		var ps := _press_of(tool, h, to_front)
+		var pf := _press_field(sd)
+		# (looked at closer under what stands highest round it read every 2 mm, and as far over it as a ridge between those stands)
+		var reach := TOUCH_BAND + float(ps["sag"]) + CLEAR_CELL
+		var low := _press_touches()
+		for idx in qs.size():
+			var q := qs[idx]
+			var fx := (q.x - at.x) / CLEAR_CELL
+			var fy := (q.y - at.y) / CLEAR_CELL
+			if fx < 0.0 or fy < 0.0 or fx > float(n.x - 1) or fy > float(n.y - 1):
+				continue
+			if q.z - top[(mini(int(fy), n.y - 2) / CLEAR_BLOCK) * bn.x + mini(int(fx), n.x - 2) / CLEAR_BLOCK] > reach:
+				continue
+			var lands := _press_point(pf, ps, q, nn[idx])
+			if not is_nan(lands.w) and lands.w <= low:
+				out.append(Vector2((lands.x - box.position.x) * 1000.0, (box.end.y - lands.y) * 1000.0))
+		if keep:
+			_touch_memo[tk] = out
+		return out
 	for q in qs:
 		var fx := (q.x - at.x) / CLEAR_CELL
 		var fy := (q.y - at.y) / CLEAR_CELL
@@ -894,10 +1042,23 @@ func _touch_width(tool: Dictionary, contact: String) -> float:
 		return float(tool["mm"])
 	var axis := (Vector3.UP * CORNER_HELD.x + Vector3.BACK * CORNER_HELD.y).normalized() if contact == "corner" else Vector3.UP
 	var give := float(_contact(tool, contact)["give"])
-	var x := _node_at([Vector3(0.0, TOUCH, 0.0) - axis * give, axis, 1.0, true, TRIP_LIFT, contact], tool, tool["x0"])
+	var hold := [Vector3(0.0, TOUCH, 0.0) - axis * give, axis, 1.0, true, TRIP_LIFT, contact]
+	var x := _node_at(hold, tool, tool["x0"])
+	# (...drawn as it takes the shape of what it is pressed onto - [method press_lands] - in the flat's own front: across, along, out)
+	var nn: PackedVector3Array = tool.get("touch_n", PackedVector3Array())
+	var ps := _press_of(tool, hold, Transform3D(Basis(Vector3.RIGHT, Vector3.FORWARD, Vector3.UP).inverse(), Vector3.ZERO) * x) \
+		if nn.size() == pts.size() and bool(tool.get("flat", false)) else {}
 	var cells := {}
-	for q in x * pts:
-		if q.y <= TOUCH_BAND:
+	var qs := x * pts
+	var low := _press_touches() if not ps.is_empty() else TOUCH_BAND
+	for i in qs.size():
+		var q := qs[i]
+		var hh := q.y
+		if not ps.is_empty():
+			var qf := Vector3(q.x, -q.z, q.y)
+			hh = press_lands(q.y, maxf((qf - (ps["tip"] as Vector3)).dot(ps["up"] as Vector3), 0.0),
+				smoothstep(-0.2, 0.2, nn[i].normalized().dot(ps["up_own"] as Vector3)), float(ps["sag"]))
+		if hh <= low:
 			cells[Vector2i(floori(q.x / TOUCH_EVERY), floori(q.z / TOUCH_EVERY))] = true
 	var mm2 := float(cells.size()) * pow(TOUCH_EVERY * 1000.0, 2.0)
 	return clampf(sqrt(mm2 * 4.0 / PI), 2.0, float(tool["mm"]))
@@ -935,6 +1096,7 @@ func _cover_gaps() -> void:
 				if item.is_empty():
 					continue
 				var made: Dictionary = item["made"]
+				_as_planned(made)
 				var ed := element(si, String(id))
 				var manner := String(lay["manner"])
 				var mm := float(lay["mm"])
@@ -944,6 +1106,7 @@ func _cover_gaps() -> void:
 				if cov == null:
 					continue
 				var inside := covered_in(cov)
+				var last_look := {}
 				var places: Array = Skins.press_places(manner, mm, cov, rect)
 				var named := String((made["program"] as Dictionary)["id"])
 				# (what was left bare at each look, square millimeters - for a probe to say)
@@ -957,6 +1120,7 @@ func _cover_gaps() -> void:
 						sd["held"] = held
 					var left := _gaps_left(si, prog, t, tool, cov, rect, mm, inside)
 					made["touches"] = left["touches"]
+					last_look = left
 					var gaps: Array = left["at"]
 					var aside: Array = left["aside"]
 					bare_at.append(float(left["bare"]))
@@ -986,6 +1150,8 @@ func _cover_gaps() -> void:
 					var again := Skins.pressed(ed, manner, mm, places)
 					again["id"] = "%s|again %d" % [named, round + 1]
 					made["program"] = again
+				# ...AND WHAT NO PRESS REACHED, PAINTED ALL THE SAME by the press nearest it ([method _painted_anyway])
+				made["touches"] = _painted_anyway(made.get("touches", []), last_look.get("islands", []))
 
 
 ## A BRUSH GOES BACK OVER WHAT IT MISSED ([method _cover_gaps], as a sponge does): element [param id] of skin [param si] laid by track
@@ -999,8 +1165,13 @@ func _brush_gaps(si: int, tr: Dictionary, tool: Dictionary, id: String, lay: Dic
 	if item.is_empty():
 		return
 	var made: Dictionary = item["made"]
+	_as_planned(made)
 	var ed := element(si, id)
 	var manner := String(lay["manner"])
+	# ...A LINE IS NEVER PUT RIGHT AFTER: laid as the band its hairs sweep, it leaves no gaps to go back for ([method Skins.band_map]; feedback
+	# 0060: "The brush is fixing jagged edges in this line by tapping at each jagged place, quickly. That's too precise, and to inefficient")
+	if manner == "line":
+		return
 	var mm := float(lay["mm"])
 	var rect: Rect2 = made["rect"]
 	var contact := _contact_for(tool, manner)
@@ -1012,6 +1183,20 @@ func _brush_gaps(si: int, tr: Dictionary, tool: Dictionary, id: String, lay: Dic
 	var named := String((made["program"] as Dictionary)["id"])
 	var inserts := {}
 	var bare_at := PackedFloat32Array()
+	var last_look := {}
+	# ...A FILL'S STROKES KEPT INSIDE IT FIRST, and every dab put in after that would run past a fill or a line left out ([method
+	# _keep_inside]): laid where they touch, dabs along a line's bare edge had stood out of it as blobs (feedback 0043: "rough edges")
+	var allowed := _allowed(si, ed, rect) if manner in ["sweep", "line"] else PackedByteArray()
+	var as_planned: Dictionary = made["program"]
+	var ways: Variant = _keep_inside(si, tr, tool, made, ed, manner, mm, cov1, contact, allowed) if manner == "sweep" else null
+	# ...BUT A FILL TOO FINE FOR ITS BRUSH, nothing of it left that keeps inside even eased off (520084's five small stars, 7 mm across,
+	# under the round brush): laid as it was planned, its paint cut to its shape as it had always been ([method _touch_all]) - a hand
+	# would take a finer brush, or pull each point out with the tip, and neither is built
+	if ways is Array and (ways as Array).is_empty():
+		made["program"] = as_planned
+		made["too_fine"] = true
+		ways = null
+		allowed = PackedByteArray()
 	for round in GAP_ROUNDS + 1:
 		var prog: Dictionary = made["program"]
 		var key := _held_key(prog, String(tr["_ch"]), contact)
@@ -1022,6 +1207,7 @@ func _brush_gaps(si: int, tr: Dictionary, tool: Dictionary, id: String, lay: Dic
 		var touches := _stroke_touches(si, prog, tr, tool, manner)
 		made["touches"] = touches
 		var left := _gaps_in(touches, cov, rect, BRUSH_PX, mm, float(tool["len"]) * 1000.0, inside)
+		last_look = left
 		bare_at.append(float(left["bare"]))
 		made["gaps"] = bare_at
 		var gaps: Array = left["at"]
@@ -1044,10 +1230,62 @@ func _brush_gaps(si: int, tr: Dictionary, tool: Dictionary, id: String, lay: Dic
 			var aim := gv
 			if off.length_squared() > 1e-6 and _dab_miss(si, tool, contact, gv, press, gv) > _dab_miss(si, tool, contact, gv - off, press, gv):
 				aim = gv - off
+			if not allowed.is_empty() and _spills(_dab_touch(si, tool, contact, aim, press), rect, allowed) >= SPILL_LEAST:
+				continue
 			(inserts[planned_k] as Array).append(Vector3(aim.x, aim.y, press))
-		var again := Skins.program(ed, manner, mm, cov1, rect, inserts)
+		var again := Skins.program(ed, manner, mm, cov1, rect, inserts, ways, (skins[si] as Dictionary)["frame"])
 		again["id"] = "%s|again %d" % [named, round + 1]
 		made["program"] = again
+	# ...AND WHAT NO HAIR REACHED, PAINTED ALL THE SAME by the moment nearest it ([method _painted_anyway])
+	made["touches"] = _painted_anyway(made.get("touches", []), last_look.get("islands", []))
+
+
+## AN ELEMENT'S MAKING [param made] ([method _made_for], kept between builds) BACK AS IT WAS PLANNED, before a hand goes back over what it
+## missed ([method _cover_gaps], [method _brush_gaps]): what the last build put in, and what it found, left out. Built again (its acts
+## reworked), a stipple had started from the presses the last build put in - 36 - against the 16 places it plans afresh, and put its
+## new ones in past the end of them; and each rework would have put in more over the last.
+static func _as_planned(made: Dictionary) -> void:
+	if made.has("planned"):
+		made["program"] = made["planned"]
+	for k in ["touches", "gaps", "spill", "too_fine"]:
+		made.erase(k)
+
+
+## WHAT NO TOOL REACHED, PAINTED ALL THE SAME (the user, 2026-11-07, of a chin's underside the sponge could not touch: "One way or another,
+## we have to cover that chin area. If more pressure can do it, great. If not - just dab in that area, and paint it anyway"): [param touches]
+## ([method _stroke_touches]'s, each with its `aim`) with every point of [param islands] - what the last look found bare - laid as the touch
+## aimed nearest IT is laid: when the press or stroke put in for it, or the nearest, comes down there (a gap given the moment of the touch
+## nearest its middle would come in all at once). Each such touch says `anyway`.
+static func _painted_anyway(touches: Array, islands: Array) -> Array:
+	if islands.is_empty() or touches.is_empty():
+		return touches
+	var aims := PackedVector2Array()
+	var of: Array = []
+	for tc in touches:
+		if (tc as Dictionary).has("aim"):
+			aims.append((tc as Dictionary)["aim"])
+			of.append(tc)
+	if aims.is_empty():
+		return touches
+	var given := {}
+	for isl in islands:
+		for q in (isl as PackedVector2Array):
+			var best := 0
+			var bd := INF
+			for i in aims.size():
+				var dd := aims[i].distance_squared_to(q)
+				if dd < bd:
+					bd = dd
+					best = i
+			# (a packed array read out of a dictionary is a copy: added to, it is put back)
+			var got: PackedVector2Array = given.get(best, PackedVector2Array())
+			got.append(q)
+			given[best] = got
+	var out := touches.duplicate()
+	for i in given:
+		var d: Dictionary = of[i]
+		out.append({"u": d["u"], "load": d.get("load", 1.0), "pts": given[i], "st": d.get("st", 0), "aim": d["aim"], "anyway": true})
+	return out
 
 
 ## Which points of picture [param cov] are covered (one a point, row by row; its alpha over a half), read at once.
@@ -1068,23 +1306,146 @@ static func covered_in(cov: Image) -> PackedByteArray:
 ## [param press], on skin [param si] (millimeters; INF where it touches nothing) - its hairs bent as [method _stroke_touches] bends them at a
 ## dab's bottom, standing still.
 func _dab_miss(si: int, tool: Dictionary, contact: String, xy: Vector2, press: float, at: Vector2) -> float:
+	var near := INF
+	for q in _dab_touch(si, tool, contact, xy, press):
+		near = minf(near, q.distance_to(at))
+	return near
+
+
+## What a brush dabbed at [param xy] millimeters of skin [param si], pressed [param press], touches there ([method _touched]).
+func _dab_touch(si: int, tool: Dictionary, contact: String, xy: Vector2, press: float) -> PackedVector2Array:
 	var cl := _cleared(si, xy, tool, contact)
 	var h := _skin_hold(si, xy, 0.0, press, 0.0, tool, contact, cl, cl, 0.0)
 	var axis: Vector3 = (h[1] as Vector3).normalized()
 	var n: Vector3 = h[7]
 	var tg := Bristles.target(Vector3.ZERO, press, float(tool["len"]), axis, -(axis - n * axis.dot(n)))
 	var bend: Vector3 = _node_at(h, tool, tool["x0"]).basis.inverse() * _bend_to_surface(si, tool, h, tg[0] as Vector3)
-	var near := INF
-	for q in _touched(si, tool, h, bend, float(tg[1])):
-		near = minf(near, q.distance_to(at))
-	return near
+	return _touched(si, tool, h, bend, float(tg[1]))
+
+
+## A BRUSH KEEPS INSIDE WHAT IT FILLS ([constant Skins.CUT_IN]; feedback 0042, 0043): element [param ed]'s sweep looked at as it will be
+## drawn ([method _stroke_touches]) and each of its ways EASED OFF where its hairs touch the face past its shape by more than [constant
+## SPILL_MOST] millimeters at [constant SPILL_LEAST] points or more - pressed half as hard there, as a hand lightens near an edge, down to
+## [constant SPILL_LIGHTEST] - and cut back where it still does so lightly ([method _ease_off]); looked at again, up to [constant
+## SPILL_ROUNDS] times. A star's points narrower than the round brush laying it had been cut away whole, and the rows came back as they
+## were (520084: 506 mm2 of copper round five small stars). What is left bare is for the looks after to put right ([method _brush_gaps]).
+## The ways kept; `made`'s `spill` says how many moments ran past at each look.
+func _keep_inside(si: int, tr: Dictionary, tool: Dictionary, made: Dictionary, ed: Dictionary, manner: String, mm: float, cov1: Image,
+		contact: String, allowed: PackedByteArray) -> Variant:
+	var sd: Dictionary = skins[si]
+	var rect: Rect2 = made["rect"]
+	var named := String((made["program"] as Dictionary)["id"])
+	var ways: Array = (made["program"] as Dictionary).get("ways", [])
+	var spilt := PackedInt32Array()
+	if ways.is_empty() or allowed.is_empty():
+		return null
+	for round in SPILL_ROUNDS + 1:
+		var prog: Dictionary = made["program"]
+		var key := _held_key(prog, String(tr["_ch"]), contact)
+		var held: Dictionary = sd.get("held", {})
+		if not held.has(key):
+			held[key] = _held_keys(si, prog, tool, contact)
+			sd["held"] = held
+		var bad := PackedVector2Array()
+		for tc in _stroke_touches(si, prog, tr, tool, manner):
+			if (tc as Dictionary).has("aim") and _spills(tc["pts"], rect, allowed) >= SPILL_LEAST:
+				bad.append(tc["aim"])
+		spilt.append(bad.size())
+		made["spill"] = spilt
+		if bad.is_empty() or round == SPILL_ROUNDS:
+			break
+		ways = _ease_off(ways, bad, Skins.ROW_KEYS * 0.5)
+		var again := Skins.program(ed, manner, mm, cov1, rect, {}, ways, (skins[si] as Dictionary)["frame"])
+		again["id"] = "%s|inside %d" % [named, round + 1]
+		made["program"] = again
+	return ways
+
+
+## How many of [param pts] (millimeters of skin) lie outside what [param allowed] holds over [param rect] at [constant BRUSH_PX] pixels a
+## millimeter (one a point, row by row) - or past its rect.
+static func _spills(pts: PackedVector2Array, rect: Rect2, allowed: PackedByteArray) -> int:
+	var w := maxi(int(ceil(rect.size.x * BRUSH_PX)), 1)
+	var h := maxi(int(ceil(rect.size.y * BRUSH_PX)), 1)
+	var n := 0
+	for q in pts:
+		var px := Vector2i(((q - rect.position) * BRUSH_PX).floor())
+		if px.x < 0 or px.y < 0 or px.x >= w or px.y >= h or allowed[px.y * w + px.x] == 0:
+			n += 1
+	return n
+
+
+## [param ways] (`{pts, press}`, millimeters) EASED OFF where they ran past: each point within [param reach] of any of [param bad] pressed
+## half as hard, and one already as light as [constant SPILL_LIGHTEST] taken out, the way broken there into what is left - none shorter
+## than [constant Skins.CUT_LEAST].
+static func _ease_off(ways: Array, bad: PackedVector2Array, reach: float) -> Array:
+	var out: Array = []
+	for w in ways:
+		var pts: PackedVector2Array = (w as Dictionary)["pts"]
+		var press: PackedFloat32Array = (w as Dictionary)["press"]
+		var cur := PackedVector2Array()
+		var cur_p := PackedFloat32Array()
+		var runs: Array = []
+		for k in pts.size():
+			var near := false
+			for b in bad:
+				if pts[k].distance_squared_to(b) <= reach * reach:
+					near = true
+					break
+			var pr := press[k]
+			if near and pr <= SPILL_LIGHTEST + 1e-4:
+				if cur.size() >= 2:
+					runs.append({"pts": cur, "press": cur_p})
+				cur = PackedVector2Array()
+				cur_p = PackedFloat32Array()
+				continue
+			cur.append(pts[k])
+			cur_p.append(maxf(pr * 0.5, SPILL_LIGHTEST) if near else pr)
+		if cur.size() >= 2:
+			runs.append({"pts": cur, "press": cur_p})
+		for r in runs:
+			# (a fine fill's spine keeps its line's pace - [method Skins._spine])
+			if (w as Dictionary).has("speed"):
+				(r as Dictionary)["speed"] = (w as Dictionary)["speed"]
+			var rp: PackedVector2Array = (r as Dictionary)["pts"]
+			var length := 0.0
+			for k in range(1, rp.size()):
+				length += rp[k - 1].distance_to(rp[k])
+			if length >= Skins.CUT_LEAST:
+				out.append(r)
+	return out
+
+
+## WHAT A BRUSH MAY TOUCH laying element [param ed] over [param rect] ([constant BRUSH_PX] pixels a millimeter, one a point, row by row):
+## its shape and [constant SPILL_MOST] millimeters round it.
+func _allowed(si: int, ed: Dictionary, rect: Rect2) -> PackedByteArray:
+	var sd: Dictionary = skins[si]
+	var cov := Skins.cover(ed, rect, BRUSH_PX, String(sd.get("outline", "")), sd["frame"])
+	if cov == null:
+		return PackedByteArray()
+	var inside := covered_in(cov)
+	var w := cov.get_width()
+	var h := cov.get_height()
+	var rp := SPILL_MOST * BRUSH_PX
+	var r := ceili(rp)
+	var out := inside.duplicate()
+	for y in h:
+		for x in w:
+			if inside[y * w + x] == 0:
+				continue
+			for dy in range(-r, r + 1):
+				for dx in range(-r, r + 1):
+					var qx := x + dx
+					var qy := y + dy
+					if qx >= 0 and qy >= 0 and qx < w and qy < h and dx * dx + dy * dy <= rp * rp:
+						out[qy * w + qx] = 1
+	return out
 
 
 ## WHAT NONE OF [param touches] TOUCHED of what [param cov] covers over [param rect] ([param px] pixels a millimeter; each touch's `st` the
 ## stroke it was laid by, `aim` where it was aimed): each gap apart of at least [constant GAP_LEAST] square millimeters as the places a tool
 ## touching [param mm] across would dab it, with the stroke that last laid paint round it and how far the hairs aimed nearest it touched
 ## off their aim where they missed it (the middle of what they touched less their aim, as far as [param reach_mm]; none where they touched
-## it) - `{at: [[Vector2(x, y), stroke, Vector2 off]], bare: mm2}` ([method _gaps_left]'s).
+## it) - `{at: [[Vector2(x, y), stroke, Vector2 off]], bare: mm2, islands: [every point of each gap, however small]}` ([method _gaps_left]'s).
 func _gaps_in(touches: Array, cov: Image, rect: Rect2, px: float, mm: float, reach_mm := INF, inside := PackedByteArray()) -> Dictionary:
 	var aims := PackedVector2Array()
 	var offs := PackedVector2Array()
@@ -1119,6 +1480,7 @@ func _gaps_in(touches: Array, cov: Image, rect: Rect2, px: float, mm: float, rea
 						first[y * w + x] = st
 	Skins.closed_in(first, PackedFloat32Array(), w, h, inside)
 	var out: Array = []
+	var islands: Array = []
 	var bare := 0.0
 	var seen := PackedByteArray()
 	seen.resize(w * h)
@@ -1146,6 +1508,10 @@ func _gaps_in(touches: Array, cov: Image, rect: Rect2, px: float, mm: float, rea
 					seen[nk] = 1
 					island.append(nk)
 		var mm2 := float(island.size()) / (px * px)
+		var where := PackedVector2Array()
+		for c in island:
+			where.append(Vector2(rect.position.x + (float(c % w) + 0.5) / px, rect.position.y + (float(c / w) + 0.5) / px))
+		islands.append(where)
 		if mm2 < GAP_LEAST:
 			continue
 		bare += mm2
@@ -1176,7 +1542,7 @@ func _gaps_in(touches: Array, cov: Image, rect: Rect2, px: float, mm: float, rea
 				if near < 0 or aims[i].distance_squared_to(gv) < aims[near].distance_squared_to(gv):
 					near = i
 			out.append([gv, closed, offs[near] if near >= 0 else Vector2.ZERO])
-	return {"at": out, "bare": bare}
+	return {"at": out, "bare": bare, "islands": islands}
 
 
 ## WHAT NO PRESS OF PROGRAM [param prog] TOUCHED of what [param cov] covers over [param rect] (track [param tr]'s tool [param tool] held at
@@ -1184,7 +1550,8 @@ func _gaps_in(touches: Array, cov: Image, rect: Rect2, px: float, mm: float, rea
 ## touching [param mm] across would press it - the point of it nearest its middle, then each the point of it furthest from those, as many
 ## as it is large, and the press that last laid paint round it (when a hand would see it, -1 none) - `{at: [[Vector2(x, y), that press]],
 ## bare: mm2 of every such gap, aside: [how far off its own place each press touched, the middle of what it touched less where it was aimed
-## (millimeters)], touches: what each press touched, as [method _stroke_touches] gives it}`.
+## (millimeters)], touches: what each press touched, as [method _stroke_touches] gives it, islands: [every point of each gap, however small
+## (millimeters)]}`.
 func _gaps_left(si: int, prog: Dictionary, tr: Dictionary, tool: Dictionary, cov: Image, rect: Rect2, mm: float,
 		inside := PackedByteArray()) -> Dictionary:
 	var w := cov.get_width()
@@ -1197,6 +1564,14 @@ func _gaps_left(si: int, prog: Dictionary, tr: Dictionary, tool: Dictionary, cov
 	var first := PackedInt32Array()
 	first.resize(w * h)
 	first.fill(-1)
+	# (how many presses reached each point, and what of a load the first had on it - [constant GAP_THIN_LOAD])
+	var times_hit := PackedByteArray()
+	times_hit.resize(w * h)
+	var last_hit := PackedInt32Array()
+	last_hit.resize(w * h)
+	last_hit.fill(-1)
+	var first_load := PackedFloat32Array()
+	first_load.resize(w * h)
 	var si_k := -1
 	# (a press found before - the same place, as hard, held the same way - is what it touched before: only a press put in is looked at anew)
 	var contact := _contact_for(tool, String(prog.get("manner", "")))
@@ -1225,7 +1600,7 @@ func _gaps_left(si: int, prog: Dictionary, tr: Dictionary, tool: Dictionary, cov
 			got = _touched(si, tool, _hold_of(_surface_hold(si, prog, ts[0], 0.0, tr), tool))
 			if not gk.is_empty():
 				_touch_memo[gk] = got
-		touches.append({"u": ts[0] / natural, "load": ld[0] if not ld.is_empty() else 1.0, "pts": got, "st": si_k})
+		touches.append({"u": ts[0] / natural, "load": ld[0] if not ld.is_empty() else 1.0, "pts": got, "st": si_k, "aim": aim})
 		var mid_t := Vector2.ZERO
 		for p in got:
 			mid_t += p
@@ -1237,6 +1612,10 @@ func _gaps_left(si: int, prog: Dictionary, tr: Dictionary, tool: Dictionary, cov
 					hit[y * w + x] = 1
 					if first[y * w + x] < 0:
 						first[y * w + x] = si_k
+						first_load[y * w + x] = ld[0] if not ld.is_empty() else 1.0
+					if last_hit[y * w + x] != si_k:
+						last_hit[y * w + x] = si_k
+						times_hit[y * w + x] = mini(int(times_hit[y * w + x]) + 1, 2)
 	# ...as it will show: what presses spread into, closed in where it is all but surrounded ([method Skins.closed_in])
 	var times := PackedFloat32Array()
 	times.resize(w * h)
@@ -1247,7 +1626,14 @@ func _gaps_left(si: int, prog: Dictionary, tr: Dictionary, tool: Dictionary, cov
 		if hit[k] == 0 and times[k] >= 0.0:
 			hit[k] = 1
 			first[k] = int(times[k])
+	# ...AND WHAT IS THIN WANTS FILLING TOO, put right while the hand is there (the user, 2026-11-07: "Why can't the heuristic just correct
+	# specks as they appear, localized ... If an area of makeup is thin, they would fill it out before moving on to new areas"): a point one
+	# press reached, and that one all but run dry, is as good as bare - it had stayed a peach speck in a white coat
+	for k in w * h:
+		if hit[k] == 1 and times_hit[k] == 1 and first_load[k] < GAP_THIN_LOAD:
+			hit[k] = 0
 	var out: Array = []
+	var islands: Array = []
 	var bare := 0.0
 	var seen := PackedByteArray()
 	seen.resize(w * h)
@@ -1276,6 +1662,10 @@ func _gaps_left(si: int, prog: Dictionary, tr: Dictionary, tool: Dictionary, cov
 					seen[nk] = 1
 					island.append(nk)
 		var mm2 := float(island.size()) / (Skins.WHEN_PX * Skins.WHEN_PX)
+		var where := PackedVector2Array()
+		for c in island:
+			where.append(Vector2(rect.position.x + (float(c % w) + 0.5) / Skins.WHEN_PX, rect.position.y + (float(c / w) + 0.5) / Skins.WHEN_PX))
+		islands.append(where)
 		if mm2 < GAP_LEAST:
 			continue
 		bare += mm2
@@ -1301,7 +1691,7 @@ func _gaps_left(si: int, prog: Dictionary, tr: Dictionary, tool: Dictionary, cov
 			chosen.append(pick)
 		for c in chosen:
 			out.append([Vector2(rect.position.x + (float(c % w) + 0.5) / Skins.WHEN_PX, rect.position.y + (float(c / w) + 0.5) / Skins.WHEN_PX), closed])
-	return {"at": out, "bare": bare, "aside": aside, "touches": touches}
+	return {"at": out, "bare": bare, "aside": aside, "touches": touches, "islands": islands}
 
 
 ## WHAT A PRESSING TOOL TOUCHES IS WHAT IT PAINTS (feedback 0032): each element a sponge stipples or a puff pats shown only where the
@@ -1333,8 +1723,15 @@ func _touch_all() -> void:
 				# (a brush's last look at what it missed has them already, for this program - [method _brush_gaps])
 				var touches: Array = made["touches"] if made.has("touches") else _stroke_touches(si, prog, t, tool, String(lay["manner"]))
 				var wm: Image
-				if brush:
-					wm = Skins.touch_map(touches, made["rect"], BRUSH_PX, BRUSH_SPOT)
+				var foot: Array = []
+				if brush and String(lay["manner"]) == "line":
+					# ...A LINE THE BAND ITS HAIRS SWEEP, smooth, its tail thinning ([method Skins.band_map]; "a proper brush stroke is more often
+					# than not very smooth, with clean edges")
+					wm = Skins.band_map(prog, made["rect"], BRUSH_PX, foot)
+				elif brush:
+					# ...A BRUSH LAYS ITS PAINT WHERE ITS HAIRS TOUCHED, its element's shape or not (feedback 0042) - the shape is what its
+					# strokes keep to ([method _keep_inside]), never what cuts its paint off; a fill too fine for its brush cut to it still
+					wm = Skins.touch_map(touches, made["rect"], BRUSH_PX, BRUSH_SPOT, PackedByteArray(), 0.0, null if bool(made.get("too_fine", false)) else foot)
 				else:
 					# ...a press's, its edge's moment carried past the element's edge as far as its ragged edge reads ([method Skins.touch_map])
 					var cov := Skins.cover(element(si, String(id)), made["rect"], Skins.WHEN_PX, String((skins[si] as Dictionary).get("outline", "")), (skins[si] as Dictionary)["frame"])
@@ -1342,8 +1739,47 @@ func _touch_all() -> void:
 						Skins.PRESS_RAGGED)
 				made["when"] = wm
 				made["when_tex"] = ImageTexture.create_from_image(wm)
+				if not foot.is_empty():
+					made["foot"] = foot[0]
+					made["foot_tex"] = ImageTexture.create_from_image(foot[0])
 				for m in item["mats"]:
 					(m as ShaderMaterial).set_shader_parameter("when_map", made["when_tex"])
+					if not foot.is_empty():
+						(m as ShaderMaterial).set_shader_parameter("foot", made["foot_tex"])
+						(m as ShaderMaterial).set_shader_parameter("footed", true)
+
+
+## WHERE A BLENDING BRUSH GOES OVER WHAT WAS LAID, AND THERE ALONE, IT IS SOFTENED (feedback 0046, of lips gone over with the blending
+## brush: "now the lips are fainter at the top, while smearing outside the lines at the bottom" - every edge of an element blended had
+## softened at once, wherever the brush went): each element a brush's act goes over and another lays, its blend held as it is drawn
+## ([method plan_of]'s blend, [method _stroke_touches]) and what its hairs touched mapped by when ([method Skins.touch_map]) over the
+## element's own picture - skin_paint.gdshader's `blend_map`.
+func _blend_touches() -> void:
+	for a in work.acts:
+		for tr in (a as Dictionary)["tracks"]:
+			var t: Dictionary = tr
+			if String(t["law"]) != "paint" or int(t.get("_skin", -1)) < 0 or not t.has("_ch"):
+				continue
+			var si := int(t["_skin"])
+			var tool := tool_of(String(t["_ch"]), t)
+			if String(tool.get("kind", "")) != "brush":
+				continue
+			for id in t["paint"]:
+				var lay: Dictionary = _layers.get("%d|%s" % [si, String(id).to_lower()], {})
+				var item: Dictionary = ((skins[si] as Dictionary).get("items", {}) as Dictionary).get(String(id).to_lower(), {})
+				var ed := element(si, String(id))
+				if lay.is_empty() or item.is_empty() or String(ed.get("finish", "")) == "powder" \
+						or (lay.get("act") == (a as Dictionary)["name"] and not bool(lay.get("soft_over", false))):
+					continue
+				var manner := Skins.blend_manner(String(tool["kind"]))
+				var prog: Dictionary = _made_for(si, ed, manner, _width(tool, t, manner))["program"]
+				var made: Dictionary = item["made"]
+				var bm := Skins.touch_map(_stroke_touches(si, prog, t, tool, manner), made["rect"], BRUSH_PX, BRUSH_SPOT)
+				made["blend_when"] = bm
+				made["blend_tex"] = ImageTexture.create_from_image(bm)
+				for m in item["mats"]:
+					(m as ShaderMaterial).set_shader_parameter("blend_map", made["blend_tex"])
+					(m as ShaderMaterial).set_shader_parameter("blend_touched", true)
 
 
 ## A BRUSH'S HAIRS BENT [param bend] (the table's space, [method Bristles.target]) HELD [param h] ON SKIN [param si], made to keep their tip ON
@@ -1442,8 +1878,9 @@ static func _front_z(g: Dictionary, q: Vector3) -> float:
 	var at: Vector2 = g["at"]
 	var n: Vector2i = g["n"]
 	var Z: PackedFloat32Array = g["z"]
-	var fx := (q.x - at.x) / CLEAR_CELL
-	var fy := (q.y - at.y) / CLEAR_CELL
+	var cell := float(g.get("cell", CLEAR_CELL))
+	var fx := (q.x - at.x) / cell
+	var fy := (q.y - at.y) / cell
 	if fx < 0.0 or fy < 0.0 or fx > float(n.x - 1) or fy > float(n.y - 1):
 		return -INF
 	var i := mini(int(fx), n.x - 2)
@@ -1479,7 +1916,7 @@ func _stroke_touches(si: int, prog: Dictionary, tr: Dictionary, tool: Dictionary
 		var rel := PackedFloat32Array()
 		for v in ts:
 			rel.append(snappedf(v - ts[0], 0.0001))
-		var mk := hash([si, tool.get("ch", ""), manner, sp, rel, ld])
+		var mk := hash([si, tool.get("ch", ""), manner, sp, rel, ld, s.get("press", PackedFloat32Array())])
 		if _stroke_memo.has(mk):
 			for e in _stroke_memo[mk]:
 				touches.append({"u": (ts[0] + float((e as Dictionary)["dt"])) / natural, "load": (e as Dictionary)["load"], "pts": (e as Dictionary)["pts"], "st": sk, "aim": (e as Dictionary)["aim"]})
@@ -1769,7 +2206,12 @@ func _canvas(si: int) -> void:
 		if made.is_empty() or made.get("cover") == null:
 			continue
 		var fin: Dictionary = Skins.FINISHES[String(ed["finish"])]
-		var lods := Vector2(_lod(float(ed["soft"])), _lod(maxf(float(ed["soft"]), Skins.BLEND_SOFT)))
+		# (...a fill blended, softened no further than its own middle allows - [constant Skins.BLEND_SHARE]; a line feathered as it was)
+		var reach := float(made.get("reach", INF)) if String(ed["kind"]) == "fill" else INF
+		var lods := Vector2(_lod(float(ed["soft"])), _lod(maxf(float(ed["soft"]), minf(Skins.BLEND_SOFT, reach * Skins.BLEND_SHARE))))
+		# (...a soft edge goes on crisp, and softens as its tool goes back over it - [constant SOFT_GONE_OVER])
+		if bool(lay.get("soft_over", false)):
+			lods.x = _lod(0.0)
 		var item := {"el": ed, "made": made, "sprites": [], "mats": []}
 		for k in 2:
 			var sp := Sprite2D.new()
@@ -1780,19 +2222,14 @@ func _canvas(si: int) -> void:
 			mat.shader = _CANVAS
 			mat.set_shader_parameter("cover", made["cover_tex"])
 			mat.set_shader_parameter("when_map", made["when_tex"])
-			mat.set_shader_parameter("paint", Color.html(String(ed["paint"])))
+			mat.set_shader_parameter("paint", Color.html(String(lay.get("pot", ed["paint"]))))
 			mat.set_shader_parameter("finish", Color(float(fin["rough"]), float(fin["metal"]), float(fin["glitter"]), 1.0))
 			mat.set_shader_parameter("finish_pass", k == 1)
-			mat.set_shader_parameter("opacity", float(ed["opacity"]))
+			mat.set_shader_parameter("opacity", float(ed["opacity"]) * float(lay.get("thick", 1.0)))
 			mat.set_shader_parameter("pressed", {"stipple": 1, "pat": 2}.get(String(lay["manner"]), 0))
 			mat.set_shader_parameter("lods", lods)
 			mat.set_shader_parameter("swept", Skins.SWEPT if String(ed["finish"]) == "powder" else 1.0)
 			mat.set_shader_parameter("mm", (made["rect"] as Rect2).size)
-			if sd.has("reference"):
-				var rr: Rect2 = made["rect"]
-				mat.set_shader_parameter("reference", sd["reference"])
-				mat.set_shader_parameter("referenced", true)
-				mat.set_shader_parameter("rect_uv", Vector4(rr.position.x / frame.x, rr.position.y / frame.y, rr.size.x / frame.x, rr.size.y / frame.y))
 			# A MIST lays no color: only its sheen, which dries down
 			if String(ed["kind"]) == "mist":
 				mat.set_shader_parameter("color_alpha", 0.0)
@@ -1824,13 +2261,14 @@ func _made_for(si: int, ed: Dictionary, manner: String, mm: float) -> Dictionary
 		return _made[key]
 	var frame: Vector2 = sd["frame"]
 	var outline := String(sd.get("outline", ""))
-	var margin := maxf(float(ed["soft"]), Skins.BLEND_SOFT) * 1.5
+	# (...and a brush's paint as far past it as its hairs reach: laid where they touch - [method _touch_all])
+	var margin := maxf(float(ed["soft"]), Skins.BLEND_SOFT) * 1.5 + (mm if manner in BRUSH_TOUCHED else 0.0)
 	var rect := Skins.rect_of(ed, frame, margin)
 	var cov1 := Skins.cover(ed, rect, Skins.WHEN_PX, outline, frame)
-	var prog := Skins.program(ed, manner, mm, cov1, rect)
+	var prog := Skins.program(ed, manner, mm, cov1, rect, {}, null, frame)
 	# (by which its holds are kept, [method _held_keys])
 	prog["id"] = key
-	var out := {"program": prog, "rect": rect}
+	var out := {"program": prog, "planned": prog, "rect": rect, "reach": Skins.inner_reach(cov1)}
 	if String(ed["kind"]) != "stones":
 		var cov := Skins.cover(ed, rect, CANVAS_PX, outline, frame)
 		if cov != null:
@@ -1907,7 +2345,8 @@ func plan_of(tr: Dictionary, d: float) -> Dictionary:
 	var ch := String(tr.get("_ch", ""))
 	var tool := tool_of(ch, tr)
 	var parts: Array = []
-	var loaded := ""
+	# (...still holding the paint its last act ended with, where this one begins in it - [method _one_after_another])
+	var loaded := String(tr.get("_loaded", ""))
 	for id in tr.get("paint", []):
 		var ed := element(si, String(id))
 		if ed.is_empty():
@@ -1922,20 +2361,32 @@ func plan_of(tr: Dictionary, d: float) -> Dictionary:
 		var prog: Dictionary = made["program"]
 		var role := "paint" if mine else ("sweep" if String(ed["finish"]) == "powder" else "blend")
 		var pre: Array = []
-		if role == "paint" and not String(ed["kind"]) in ["stones", "smear", "mist"] and String(ed["paint"]) != loaded:
-			if not loaded.is_empty() and tr.has("rinse"):
-				pre.append({"kind": "rinse", "len": RINSE, "out": loaded})
-				if tr.has("dry"):
-					pre.append({"kind": "dry", "len": DRY})
-			pre.append({"kind": "load", "len": LOAD, "paint": String(ed["paint"]), "from": String(tr.get("from", ""))})
-			loaded = String(ed["paint"])
+		var pot := String(lay.get("pot", ed["paint"]))
+		if role == "paint" and not String(ed["kind"]) in ["stones", "smear", "mist"] and pot != loaded:
+			# (...a thin one taken up on a brush wetted first - rinsed and not dried, or dipped clean - [constant THIN_WET]; never one still
+			# damp from the rinse that ended its last act)
+			var thin := float(ed["opacity"]) * float(lay.get("thick", 1.0)) < THIN_WET and not (loaded.is_empty() and bool(tr.get("_damp", false)))
+			if tr.has("rinse") and (not loaded.is_empty() or thin):
+				pre.append({"kind": "rinse", "len": _trip_len("rinse", tool), "out": loaded})
+				if tr.has("dry") and not thin:
+					pre.append({"kind": "dry", "len": _trip_len("dry", tool)})
+			pre.append({"kind": "load", "len": LOAD, "paint": pot, "from": String(tr.get("from", ""))})
+			loaded = pot
 		parts.append({"el": String(ed["id"]).to_lower(), "pre": pre, "prog": prog, "role": role, "finish": String(ed["finish"])})
-	# ...AND CLEANED BEFORE IT GOES BACK, where there is water for it
+		# ...AND A SOFT EDGE GONE OVER AGAIN as soon as it is laid, nothing more taken up ([constant SOFT_GONE_OVER])
+		if mine and bool(lay.get("soft_over", false)):
+			var bm := Skins.blend_manner(String(tool["kind"]))
+			parts.append({"el": String(ed["id"]).to_lower(), "pre": [], "prog": _made_for(si, ed, bm, _width(tool, tr, bm))["program"], "role": "blend",
+				"finish": String(ed["finish"])})
+	# ...AND CLEANED BEFORE IT GOES BACK, where there is water for it - unless its next act begins in the paint it holds
 	var clean: Array = []
-	if tr.has("rinse") and not loaded.is_empty():
-		clean.append({"kind": "rinse", "len": RINSE, "out": loaded})
+	if tr.has("rinse") and not loaded.is_empty() and not bool(tr.get("_keep", false)):
+		clean.append({"kind": "rinse", "len": _trip_len("rinse", tool), "out": loaded})
 		if tr.has("dry"):
-			clean.append({"kind": "dry", "len": DRY})
+			clean.append({"kind": "dry", "len": _trip_len("dry", tool)})
+	# ...NOTHING TO LAY OR GO OVER, nothing taken up: the tool stays where it rests ([method _one_coat] - an act whose coat is the one before's)
+	if parts.is_empty() and clean.is_empty():
+		return {"phases": [], "natural": 0.1, "d": d, "si": si}
 	var natural := FETCH + RETURN
 	for q in clean:
 		natural += float((q as Dictionary)["len"])
@@ -1977,25 +2428,46 @@ func plan_of(tr: Dictionary, d: float) -> Dictionary:
 		add.call("rest", rest, {"el": p["el"], "prog": p["prog"]})
 	for q in clean:
 		add.call(String((q as Dictionary)["kind"]), float((q as Dictionary)["len"]), q as Dictionary)
-	add.call("back", RETURN, {})
+	# (...and never put down where its next act goes straight on with it - [method _one_after_another]: "the sponge went into the dish, then
+	# came back to the mask and started dabbing again", feedback 0063)
+	if not bool(tr.get("_keep", false)):
+		add.call("back", RETURN, {})
 	if after > 0.0:
 		add.call("still", after, {})
 	return {"phases": phases, "natural": natural, "d": d, "si": si}
 
 
-## THE WATER A BRUSH IS RINSED IN, at [param tau] into paint track [param tr]'s act of [param d] seconds, from [param from] (as it was
-## as the act began): a little toward the color each rinse takes out of the brush, as it is swished there - a pure function of time.
-func cloud_at(tr: Dictionary, from: Color, tau: float, d: float) -> Color:
+## THE WATER A TOOL IS RINSED IN, at [param tau] into paint track [param tr]'s act of [param d] seconds, from [param from] (as it was
+## as the act began), [param water_ml] of it: toward the color each rinse takes out of the tool and clouded by it, by how much paint
+## that is in that much water ([constant TINTS], [constant CLOUDS]), as it is swished there - a pure function of time. Its alpha is
+## how clear it is left (1 clean; prop_liquid.gdshaderinc's `murk` is the rest).
+func cloud_at(tr: Dictionary, from: Color, tau: float, d: float, water_ml := WATER_ML) -> Color:
 	var plan := plan_of(tr, d)
+	var share := rinsed_ml(tools.get(String(tr.get("_ch", "")), {})) / maxf(water_ml, 1.0)
 	var c := from
 	for p in plan["phases"]:
 		var pd: Dictionary = p
 		if String(pd["kind"]) != "rinse" or String(pd.get("out", "")).is_empty() or tau <= float(pd["a"]):
 			continue
 		var w := clampf((tau - float(pd["a"])) / maxf(float(pd["b"]) - float(pd["a"]), 1e-4), 0.0, 1.0)
-		var into := Hands.smooth(clampf((w - 0.4) / 0.6, 0.0, 1.0))
-		c = c.lerp(Color.html(String(pd["out"])), CLOUD * into)
+		c = clouded(c, Color.html(String(pd["out"])), share, Hands.smooth(clampf((w - 0.4) / 0.6, 0.0, 1.0)))
 	return c
+
+
+## WATER [param c] (its alpha how clear it is) with [param share] of its volume of [param paint] rinsed into it, [param into] of the
+## way through the rinse: toward the paint's color, and clouded ([constant TINTS], [constant CLOUDS]).
+static func clouded(c: Color, paint: Color, share: float, into := 1.0) -> Color:
+	var rgb := Color(c.r, c.g, c.b).lerp(paint, (1.0 - exp(-TINTS * share)) * into)
+	return Color(rgb.r, rgb.g, rgb.b, c.a * exp(-CLOUDS * share * into))
+
+
+## THE PAINT A RINSE TAKES OUT OF TOOL [param tool] ([method tool_of]), milliliters: a brush's belly ([constant RINSED_BELLY] of its
+## hairs' bulk), anything else's face ([constant RINSED_FILM] deep).
+static func rinsed_ml(tool: Dictionary) -> float:
+	var w := float(tool.get("mm", 6.0)) / 1000.0
+	if String(tool.get("kind", "")) == "brush":
+		return w * w * maxf(float(tool.get("len", 0.012)), 0.002) * RINSED_BELLY * 1e6
+	return w * w * RINSED_FILM * 1e6
 
 
 ## The paint act [param act]'s length at a hand's pace: its longest paint track's.
@@ -2050,7 +2522,8 @@ func _held_at(plan: Dictionary, tr: Dictionary, tau: float, T: float, from: Tran
 			var b := _node_at(_end_of(plan, tr, T, 0), tool, x0)
 			if String(ph["kind"]) != "fetch":
 				if String(ph["kind"]) == "still":
-					return from
+					# (held where it is, kept in hand for the act straight after - else back where it rests)
+					return _node_at(_end_of(plan, tr, T, i - 1), tool, x0) if bool(tr.get("_keep", false)) and i > 0 else from
 				a = _node_at(_end_of(plan, tr, T, i - 1), tool, x0)
 				b = from
 			var tip_l: Vector3 = tool["tip"]
@@ -2266,9 +2739,10 @@ func _skin_hold(si: int, xy: Vector2, lift: float, press: float, T: float, tool:
 
 
 ## HOW A HAND HOLDS TOOL [param tool] by [param contact] at (x, y) millimeters of skin [param si], whose surface faces [param n] there
-## (the holder's space): a brush's handle out of the surface, up along it and out to the side its work is on; a sponge's corner nearer
-## upright ([constant CORNER_HELD]); a face flat on it.
-func _held_axis(si: int, xy: Vector2, n: Vector3, tool: Dictionary, contact: String) -> Vector3:
+## (the holder's space): a brush's handle out of the surface, up along it and out to the side its work is on - drawn along the surface
+## [param pull] (millimeters across and down the skin's front, unit), leaning the way it goes ([constant HELD_PULL]); a sponge's corner
+## nearer upright ([constant CORNER_HELD]); a face flat on it.
+func _held_axis(si: int, xy: Vector2, n: Vector3, tool: Dictionary, contact: String, pull := Vector2.ZERO) -> Vector3:
 	if contact == "face":
 		# ...FLAT ON WHAT IS UNDER ALL OF IT, never on the one point it is over (under a nose, the surface faces down)
 		var r := float(tool.get("mm", 20.0)) * 0.6
@@ -2285,6 +2759,17 @@ func _held_axis(si: int, xy: Vector2, n: Vector3, tool: Dictionary, contact: Str
 	var side := clampf((xy.x - frame.x * 0.5) / maxf(frame.x * HELD_SIDE_EDGE, 1e-3), -1.0, 1.0)
 	if contact == "corner":
 		return (n * CORNER_HELD.x + up * CORNER_HELD.y + right * side * CORNER_HELD.z).normalized()
+	if pull.length_squared() > 0.5 and String(tool.get("kind", "")) == "brush":
+		var nn := n.normalized()
+		var goes := xf.basis * Vector3(pull.x, -pull.y, 0.0)
+		goes -= nn * goes.dot(nn)
+		var up_on := up - nn * up.dot(nn)
+		if goes.length_squared() > 1e-10:
+			goes = goes.normalized()
+			var toward := maxf(-goes.dot(up_on.normalized()), 0.0) if up_on.length_squared() > 1e-10 else 0.0
+			if contact == "belly":
+				return (nn * HELD_LOW + goes * HELD_PULL).normalized()
+			return (nn * HELD_OUT + goes * HELD_PULL * (1.0 - PULL_TOWARD * toward)).normalized()
 	if contact == "belly":
 		return (n * HELD_LOW + up * HELD_UP + right * side * HELD_SIDE).normalized()
 	return (n * HELD_OUT + up * HELD_UP + right * side * HELD_SIDE).normalized()
@@ -2442,13 +2927,13 @@ static func _ways_round(about: Array, want: Vector3, contact: String) -> Array:
 ## in nothing: the way it points nearest how a hand holds it there ([method _held_axis]) - each other way it is tried costing its turn
 ## ([constant CLEAR_TURN]) and how far it must stand off the surface, back along itself, to be clear ([method _sunk]): resting on its
 ## edge beside a nose beats hovering flat a finger over it - `Vector4(axis (the holder's space), off (meters))`. Pressed in as far as
-## it ever is.
-func _cleared(si: int, xy: Vector2, tool: Dictionary, contact: String) -> Vector4:
+## it ever is; a brush drawn [param pull] leaning the way it goes.
+func _cleared(si: int, xy: Vector2, tool: Dictionary, contact: String, pull := Vector2.ZERO) -> Vector4:
 	var sd: Dictionary = skins[si]
 	var g := _obstacles(sd)
 	var on := at_mm(si, xy)
 	var n_l: Vector3 = (on[1] as Vector3).normalized()
-	var want := _held_axis(si, xy, n_l, tool, contact)
+	var want := _held_axis(si, xy, n_l, tool, contact, pull)
 	if tool.is_empty() or (tool.get("points", PackedVector3Array()) as PackedVector3Array).is_empty():
 		return Vector4(want.x, want.y, want.z, 0.0)
 	var hw: Transform3D = sd["_rest"]
@@ -2488,6 +2973,15 @@ func _cleared(si: int, xy: Vector2, tool: Dictionary, contact: String) -> Vector
 	return Vector4(best.x, best.y, best.z, off)
 
 
+## How far from (x, y) millimeters [param xy] of skin [param si] the nearest of what tool [param tool] touches is, held [param way] clear as
+## [param held] says ([method _cleared]) and pressed [param press] there (millimeters; INF where it touches nothing).
+func _press_miss(si: int, xy: Vector2, tool: Dictionary, way: String, held: Vector4, press: float) -> float:
+	var near := INF
+	for q in _touched(si, tool, _skin_hold(si, xy, 0.0, press, 0.0, tool, way, held, held, 0.0)):
+		near = minf(near, q.distance_to(xy))
+	return near
+
+
 ## EACH KEY OF PROGRAM [param prog] on skin [param si] held clear ([method _cleared]) by tool [param tool] held [param contact], in
 ## order - a key where the one before it is, as that one; a spray's, none (it is held off the surface) - `{held: [Vector4 ...], ways:
 ## [1 where it is held by its corner instead], arcs: [how high it is lifted on its way to the next (meters, at the middle)]}`. A SPONGE SPREADING FLAT TURNS TO ITS CORNER where its face would stand off the surface
@@ -2499,6 +2993,9 @@ func _held_keys(si: int, prog: Dictionary, tool: Dictionary, contact: String) ->
 	var last := Vector4.ZERO
 	var last_way := 0
 	var all_keys: Array = prog["keys"]
+	# (a brush drawn along the surface leans the way it goes - [constant HELD_PULL])
+	var pulls := _pulls_of(all_keys) if String(tool.get("kind", "")) == "brush" else PackedVector2Array()
+	var last_pull := Vector2.INF
 	for ki in all_keys.size():
 		var kk: Array = all_keys[ki]
 		_breathe()
@@ -2507,7 +3004,8 @@ func _held_keys(si: int, prog: Dictionary, tool: Dictionary, contact: String) ->
 			ways.append(0)
 			continue
 		var xy := Vector2(float(kk[1]), float(kk[2]))
-		if xy != last_xy:
+		var pull := pulls[ki] if ki < pulls.size() else Vector2.ZERO
+		if xy != last_xy or pull != last_pull:
 			# (how hard it presses here: the keys at this place, its way down and up among them)
 			var hard := 0.0
 			var kj := ki
@@ -2515,27 +3013,39 @@ func _held_keys(si: int, prog: Dictionary, tool: Dictionary, contact: String) ->
 				hard = maxf(hard, float((all_keys[kj] as Array)[4]))
 				kj += 1
 			var hard_press := hard > PRESS_HARD - 0.01
-			var mk := "%d|%s|%s|%s|%s" % [si, xy, contact, tool.get("ch", ""), hard_press]
+			var mk := "%d|%s|%s|%s|%s|%s" % [si, xy, contact, tool.get("ch", ""), hard_press, pull]
 			if _clear_memo.has(mk):
 				last = (_clear_memo[mk] as Array)[0]
 				last_way = (_clear_memo[mk] as Array)[1]
 			else:
-				last = _cleared(si, xy, tool, contact)
+				last = _cleared(si, xy, tool, contact, pull)
 				last_way = 0
 				if contact == "face" and (String(tool.get("kind", "")) == "sponge" or bool(tool.get("flat", false))) and last.w > FLAT_MOST:
 					var by_corner := _cleared(si, xy, tool, "corner")
 					if _held_cost(si, xy, tool, "corner", by_corner) < _held_cost(si, xy, tool, contact, last):
 						last = by_corner
 						last_way = 1
-				# ...A PRESS PUT IN WHERE THE FIRST MISSED, HELD BY ITS LONG END TOO if that reaches nearer (a wedge's point into the crease
-				# beside a nose, held along its length as a pencil is - feedback 0039: the corner, held off the nose by its body, left it bare)
-				if hard_press and (tool.get("contacts", {}) as Dictionary).has("end") and last.w > 0.0005:
-					var by_end := _cleared(si, xy, tool, "end")
-					if _held_cost(si, xy, tool, "end", by_end) < _held_cost(si, xy, tool, WAYS[last_way] if last_way > 0 else contact, last):
-						last = by_end
-						last_way = 2
+				# ...A PRESS PUT IN WHERE THE FIRST MISSED, HELD THE WAY THAT REACHES IT, looked at before it is laid ([method _press_miss]):
+				# by its long end into the crease beside a nose, as a pencil is held (feedback 0039: the corner, held off the nose by its body,
+				# left it bare); flat under a chin (520084, 2026-11-07: the corner, come at it from above, met the chin 8 mm up its slope and
+				# stood 1.4-6.5 mm off its underside - pressed five times as hard it got there, squashed 15 mm; flat, it reached it as pressed)
+				if hard_press and String(tool.get("kind", "")) != "brush":
+					var own: String = WAYS[last_way] if last_way > 0 else contact
+					var miss := _press_miss(si, xy, tool, own, last, hard)
+					# (only where its own way misses it: a puff's face that touches where it is aimed covers more of a gap than its corner)
+					for w in (range(1, WAYS.size()) if miss > AIM_MET else []):
+						var wn: String = WAYS[w]
+						if wn == own or not (tool.get("contacts", {}) as Dictionary).has(wn):
+							continue
+						var by_way := _cleared(si, xy, tool, wn)
+						var m := _press_miss(si, xy, tool, wn, by_way, hard)
+						if m < miss - REACH_BETTER:
+							miss = m
+							last = by_way
+							last_way = w
 				_clear_memo[mk] = [last, last_way]
 			last_xy = xy
+			last_pull = pull
 		out.append(last)
 		ways.append(last_way)
 	# ...AND LIFTED ON ITS WAY FROM ONE TO THE NEXT where it would go into the surface between them, as a hand lifts a tool between
@@ -2560,7 +3070,7 @@ func _held_keys(si: int, prog: Dictionary, tool: Dictionary, contact: String) ->
 			continue
 		# (ALONG A STROKE, pressed the whole way - a line, a sweep's row - every pose is on the surface: lifted there it painted in the air,
 		# a liner 11 mm and a flat brush 17 mm over a mask's rim; feedback 0019, 0021)
-		if float(a[4]) > 0.5 and float(b[4]) > 0.5:
+		if float(a[4]) > PRESSED and float(b[4]) > PRESSED:
 			continue
 		var xa := Vector2(float(a[1]), float(a[2]))
 		var xb := Vector2(float(b[1]), float(b[2]))
@@ -2612,6 +3122,48 @@ static func _dirs_of(keys: Array) -> PackedVector2Array:
 	for k in range(out.size() - 2, -1, -1):
 		if out[k] == Vector2.ZERO:
 			out[k] = out[k + 1]
+	return out
+
+
+## THE WAY A BRUSH IS DRAWN AT EACH KEY OF [param keys] across the skin (millimeters, unit), for its handle to lean ([constant HELD_PULL]):
+## pressed, the way it goes on from there and came to it (at a corner, between the two); lifted where it was last pressed, the way it went
+## there - else the way it next goes, so it comes down already turned to its stroke. None for a dab, which goes nowhere.
+static func _pulls_of(keys: Array) -> PackedVector2Array:
+	var n := keys.size()
+	var seg := PackedVector2Array()
+	seg.resize(n)
+	var pressed := PackedByteArray()
+	pressed.resize(n)
+	for k in n:
+		var a: Array = keys[k]
+		pressed[k] = 1 if float(a[4]) > PRESSED and int(a[5]) == 0 else 0
+	for k in range(n - 1):
+		var a: Array = keys[k]
+		var b: Array = keys[k + 1]
+		var d := Vector2(float(b[1]) - float(a[1]), float(b[2]) - float(a[2]))
+		if pressed[k] == 1 and pressed[k + 1] == 1 and d.length() > 0.05:
+			seg[k] = d.normalized()
+	var out := PackedVector2Array()
+	out.resize(n)
+	for k in n:
+		if pressed[k] == 1:
+			var came := seg[k - 1] if k > 0 else Vector2.ZERO
+			var both := came + seg[k]
+			out[k] = both.normalized() if both.length() > 0.1 else (seg[k] if seg[k] != Vector2.ZERO else came)
+	# ...and lifted: where it was last pressed, as it was there; elsewhere as it is when it is next pressed
+	var last_k := -1
+	for k in n:
+		if pressed[k] == 1:
+			last_k = k
+			continue
+		var xy := Vector2(float((keys[k] as Array)[1]), float((keys[k] as Array)[2]))
+		if last_k >= 0 and xy.distance_to(Vector2(float((keys[last_k] as Array)[1]), float((keys[last_k] as Array)[2]))) < 0.05:
+			out[k] = out[last_k]
+			continue
+		var next_k := k + 1
+		while next_k < n and pressed[next_k] == 0:
+			next_k += 1
+		out[k] = out[next_k] if next_k < n else (out[last_k] if last_k >= 0 else Vector2.ZERO)
 	return out
 
 
@@ -2763,6 +3315,51 @@ static func _flat_lift(s: float, deep: float) -> float:
 	return FLAT_BAND * pow(u, (FLAT_BAND + deep) / FLAT_BAND) - s
 
 
+## HOW HIGH A BIT OF A PRESSED PAD OR SPONGE IS DRAWN over the skin (meters; prop_common.gdshaderinc's `press_lands`, the same
+## arithmetic), standing [param fs] over it as it is held (along the skin's depth; in it, under 0), [param zf] up from its face toward
+## the hand, facing the hand [param back] (0 its face, 1 its back): its face sagged [param sag] into what hollow is near it and laid
+## softly on whatever it would go into ([constant PRESS_SOFT]); its back kept its own share of its depth over it ([constant PRESS_THIN]).
+## Never lower for standing higher, so nothing of it passes through the rest.
+static func press_lands(fs: float, zf: float, back: float, sag: float) -> float:
+	var g := fs - sag * (1.0 - back) * (1.0 - smoothstep(0.0, PRESS_REACH, fs))
+	var h := PRESS_LIFT + PRESS_SOFT * log(1.0 + exp((g - PRESS_LIFT) / PRESS_SOFT)) if g - PRESS_LIFT < PRESS_SOFT * 20.0 else g
+	return maxf(h, PRESS_THIN * zf * back)
+
+
+## HOW TOOL [param tool] HELD [param h] IS PRESSED ONTO A SKIN, its node's space into the skin's front's [param m]: `{tip, up}` (where
+## its way of holding it meets the skin and the way up from it toward the hand, the front's space), `up_own` (that way, its node's)
+## and `sag` (how far a pad's face sags into a hollow, pressed as it is - [constant PRESS_SAG] of what it gives). [method press_lands],
+## [method _press_on].
+static func _press_of(tool: Dictionary, h: Array, m: Transform3D) -> Dictionary:
+	var c := _contact(tool, _contact_of(h))
+	var tip_l: Vector3 = c["tip"]
+	var up_own := ((c["grip"] as Vector3) - tip_l).normalized()
+	var sag := float(c.get("give", 0.0)) * float(h[2]) * PRESS_SAG if bool(tool.get("flat", false)) else 0.0
+	return {"tip": m * tip_l, "up": (m.basis * up_own).normalized(), "up_own": up_own, "sag": sag}
+
+
+## How low a pressed bit that touches is drawn ([method press_lands]): as low as a bit standing [constant TOUCH_BAND] over the skin is.
+static func _press_touches() -> float:
+	return press_lands(TOUCH_BAND, 0.0, 0.0, 0.0)
+
+
+## WHERE BIT [param q] OF A PRESSED PAD OR SPONGE IS DRAWN (the skin's front's space, as it is held), facing [param n_own] (its node's
+## space), pressed as [param ps] says ([method _press_of]) onto what stands over the skin ([method _obstacles] [param g]): `Vector4(x,
+## y, z, how high over the skin)` - as high over the skin there as [method press_lands] says, along its depth; its height NAN off the
+## skin. prop_common.gdshaderinc, the same arithmetic.
+static func _press_point(g: Dictionary, ps: Dictionary, q: Vector3, n_own: Vector3) -> Vector4:
+	var zs := _front_z(g, q)
+	if zs == -INF:
+		return Vector4(q.x, q.y, q.z, NAN)
+	var fs := q.z - zs
+	var zf := maxf((q - (ps["tip"] as Vector3)).dot(ps["up"] as Vector3), 0.0)
+	var back := smoothstep(-0.2, 0.2, n_own.normalized().dot(ps["up_own"] as Vector3))
+	var hh := press_lands(fs, zf, back, float(ps["sag"]))
+	if absf(hh - fs) <= 1e-6:
+		return Vector4(q.x, q.y, q.z, fs)
+	return Vector4(q.x, q.y, zs + hh, hh)
+
+
 ## The paint on the table nearest [param paint]'s color ([member _creams]), or empty.
 func _cream_near(paint: String) -> Dictionary:
 	var best := INF
@@ -2799,11 +3396,26 @@ func _source_of(kind: String, from: String, paint: String, T: float) -> Vector3:
 	return spot + Vector3(0.12, 0.06, 0.05)
 
 
+## HOW LONG A TRIP [param kind] TAKES tool [param tool] (seconds): a sponge's rinse and dry as a hand gives them ([method _sponge_trip]).
+static func _trip_len(kind: String, tool: Dictionary) -> float:
+	var sponge := String(tool.get("kind", "")) == "sponge"
+	match kind:
+		"rinse":
+			return SPONGE_RINSE if sponge else RINSE
+		"dry":
+			return SPONGE_DRY if sponge else DRY
+	return LOAD
+
+
 ## A TRIP: from [param near] to [param pot], over [param s] of the way - there, then down into it and up: a load dips and turns
 ## once, a rinse swishes round twice, a dry presses onto the cloth and wipes across it - a sponge or a puff PUSHED INTO ITS PAINT and
-## held there as it turns ([method _pressed_into]). It ends lifted over the place. A hold, or - turned in the hand on the way - its
-## node's place.
+## held there as it turns ([method _pressed_into]); a sponge rinsed and dried as a hand does it ([method _sponge_trip]). It ends lifted
+## over the place. A hold, or - turned in the hand on the way - its node's place.
 func _trip(near: Array, pot: Array, s: float, seed: int, kind: String, tool: Dictionary) -> Variant:
+	if String(tool.get("kind", "")) == "sponge" and kind in ["rinse", "dry"]:
+		return _sponge_trip(near, pot, s, seed, kind, tool)
+	if String(tool.get("kind", "")) == "brush" and kind == "load":
+		return _brush_load(near, pot, s, seed, tool)
 	var go := 0.4
 	var rise := float(pot[4]) if pot.size() > 4 else TRIP_LIFT
 	var over: Vector3 = (pot[0] as Vector3) + Vector3.UP * rise
@@ -2834,6 +3446,72 @@ func _trip(near: Array, pot: Array, s: float, seed: int, kind: String, tool: Dic
 	# (and where its paint's surface is, which it is drawn pressed flat on - [method _tick_tool])
 	return [(pot[0] as Vector3) + Vector3.UP * (rise * (1.0 - dip)) + way - into, pot[1], press, false, rise, _contact_of(pot),
 		float(pot[6]) if pot.size() > 6 and pumped else NAN]
+
+
+## A BRUSH WORKED INTO ITS PAINT (2026-11-07, the user: "the brush doesn't really move at all when it's dipped into the container, to
+## pickup more makeup" - it had been turned once in 2.5 mm): down into it [constant BRUSH_DIP], swirled round [constant LOAD_TURNS] times
+## out to [constant LOAD_SWIRL] and back to its middle, its hairs dragged through the paint ([method Bristles.target]), then drawn once
+## across it as it comes up - from [param near] to [param pot] over [param s] of the way. A hold, or its node's place on the way there.
+func _brush_load(near: Array, pot: Array, s: float, seed: int, tool: Dictionary) -> Variant:
+	var go := 0.35
+	var rise := float(pot[4]) if pot.size() > 4 else TRIP_LIFT
+	var at: Vector3 = pot[0]
+	if s < go:
+		return _between(near, [at + Vector3.UP * rise, pot[1], 0.0, false, rise, _contact_of(pot)], s / go, seed, tool)
+	var w := (s - go) / (1.0 - go)
+	var down := Hands.smooth(clampf(w / 0.12, 0.0, 1.0)) * (1.0 - Hands.smooth(clampf((w - 0.88) / 0.12, 0.0, 1.0)))
+	var way := Vector3.ZERO
+	var spun := (1.0 if hash([seed, "turn"]) % 2 == 0 else -1.0)
+	if w < 0.7:
+		var u := clampf((w - 0.1) / 0.6, 0.0, 1.0)
+		way = Vector3(cos(u * TAU * LOAD_TURNS * spun), 0.0, sin(u * TAU * LOAD_TURNS * spun)) * LOAD_SWIRL * sin(u * PI)
+	else:
+		way = Vector3(spun, 0.0, 0.0) * LOAD_SWIRL * 1.5 * Hands.smooth(clampf((w - 0.7) / 0.25, 0.0, 1.0))
+	var into := (pot[1] as Vector3).normalized() * BRUSH_DIP * down
+	return [at + Vector3.UP * rise * (1.0 - down) + way - into, pot[1], down, false, rise, _contact_of(pot), NAN]
+
+
+## A SPONGE RINSED AND DRIED AS A HAND DOES IT ([constant SPONGE_RINSE]), from [param near] to [param pot] over [param s] of the way.
+## A RINSE: down into the water, onto the cup's floor, and squeezed there [constant SOAKS] times as it soaks, its paint let go; lifted over the cup and
+## wrung out hard [constant WRINGS] times, over the water it runs back into. A DRY: [constant BLOTS] firm presses onto the towel, each
+## held a while and each on a fresh place, lifted a little between. Squeezed as hard as its hold's press says ([method _tick_tool]'s
+## squash); it ends lifted over the place.
+func _sponge_trip(near: Array, pot: Array, s: float, seed: int, kind: String, tool: Dictionary) -> Variant:
+	var rise := float(pot[4]) if pot.size() > 4 else TRIP_LIFT
+	var contact := _contact_of(pot)
+	var at: Vector3 = pot[0]
+	var into_n := (pot[1] as Vector3).normalized()
+	if s < SPONGE_GO:
+		return _between(near, [at + Vector3.UP * rise, pot[1], 0.0, false, rise, contact], s / SPONGE_GO, seed, tool)
+	var w := (s - SPONGE_GO) / (1.0 - SPONGE_GO)
+	var press := 0.0
+	var p := at
+	if kind == "rinse":
+		# (down into it, squeezed as it soaks, up over the cup, wrung)
+		var down := Hands.smooth(clampf(w / 0.1, 0.0, 1.0)) * (1.0 - Hands.smooth(clampf((w - 0.5) / 0.1, 0.0, 1.0)))
+		if w < 0.55:
+			var soak := clampf((w - 0.1) / 0.4, 0.0, 1.0)
+			press = down * lerpf(SOAK_EASE, SOAK_PRESS, pow(sin(soak * PI * float(SOAKS)), 2.0))
+		else:
+			press = pow(sin(clampf((w - 0.6) / 0.35, 0.0, 1.0) * PI * float(WRINGS)), 2.0)
+		var swish := Vector3(cos(w * TAU), 0.0, sin(w * TAU)) * 0.002 * down
+		p = at + Vector3.UP * rise * (1.0 - down) + swish
+	else:
+		# (blotted: down, held pressed, up a little and over to a fresh place - from over the towel and back over it)
+		# (over to its place while lifted, then down and pressed - never slid along the towel pressed)
+		var b := w * float(BLOTS)
+		var k := mini(int(b), BLOTS - 1)
+		var u := b - float(k)
+		var held := clampf(sin(clampf((u - BLOT_OVER) / (1.0 - BLOT_OVER), 0.0, 1.0) * PI) * BLOT_HELD, 0.0, 1.0)
+		press = held
+		var lift := BLOT_LIFT
+		if (k == 0 and u < 0.5) or (k == BLOTS - 1 and u >= 0.5):
+			lift = rise
+		var step := float(k) - float(BLOTS - 1) * 0.5
+		var x := step - (1.0 - Hands.smooth(clampf(u / BLOT_OVER, 0.0, 1.0))) if k > 0 else step
+		p = at + Vector3.RIGHT * x * BLOT_STEP + Vector3.UP * lift * (1.0 - held) \
+			- into_n * float(_contact(tool, contact)["give"]) * held
+	return [p, pot[1], press, false, rise, contact, NAN]
 
 
 ## HOW FAR TOOL [param tool], held [param contact], is pushed into its paint to take it up (meters): a sponge its [constant LOAD_PRESS],
@@ -2924,7 +3602,7 @@ func spans(entries: Array) -> void:
 						var keys: Array = prog["keys"]
 						for q in range(1, keys.size()):
 							if int((keys[q] as Array)[5]) == 1 and int((keys[q - 1] as Array)[5]) == 1:
-								var paint_of: String = String(element(si, String(pd["el"])).get("paint", ""))
+								var paint_of: String = String((_layers.get("%d|%s" % [si, String(pd["el"])], {}) as Dictionary).get("pot", element(si, String(pd["el"])).get("paint", "")))
 								if not paint_of.is_empty():
 									(_loads[ch] as Array).append([a + float((keys[q] as Array)[0]) * k, paint_of])
 					var stones: Array = prog.get("stones", [])
@@ -3061,7 +3739,9 @@ func _tick_tool(ch: String, t: float, entries_of: Callable) -> void:
 			((tf as Dictionary)["mat"] as ShaderMaterial).set_shader_parameter("bristle_splay", 0.0)
 		for sp in tool["sponges"]:
 			((sp as Dictionary)["mat"] as ShaderMaterial).set_shader_parameter("squash", Vector4.ZERO)
+			((sp as Dictionary)["mat"] as ShaderMaterial).set_shader_parameter("squeeze", Vector4.ZERO)
 			((sp as Dictionary)["mat"] as ShaderMaterial).set_shader_parameter("flat_by", Vector3.ZERO)
+			((sp as Dictionary)["mat"] as ShaderMaterial).set_shader_parameter("press_cells", Vector4.ZERO)
 		return
 	var tr: Dictionary = e["track"]
 	var t0 := float(e["t0"])
@@ -3093,9 +3773,28 @@ func _tick_tool(ch: String, t: float, entries_of: Callable) -> void:
 			var mat: ShaderMaterial = (tf as Dictionary)["mat"]
 			mat.set_shader_parameter("bristle_bend", inv * (bent[0] as Vector3))
 			mat.set_shader_parameter("bristle_splay", float(bent[1]))
+	# ...A SPONGE BEING RINSED IS SQUEEZED IN THE HAND, its broad faces together ([method _squeeze_of])
+	var rinsing := String(tool.get("kind", "")) == "sponge" and _phase_kind(plan, clampf(t - t0, 0.0, d)) == "rinse"
 	for sp in tool["sponges"]:
 		var mat2: ShaderMaterial = (sp as Dictionary)["mat"]
 		var h: Array = hold_at.call(t)
+		mat2.set_shader_parameter("squeeze", _squeeze_of(tool, float(h[2])) if rinsing else Vector4.ZERO)
+		if rinsing:
+			mat2.set_shader_parameter("press_cells", Vector4.ZERO)
+			mat2.set_shader_parameter("squash", Vector4.ZERO)
+			mat2.set_shader_parameter("squash_at", tool["center"])
+			mat2.set_shader_parameter("flat_by", Vector3.ZERO)
+			continue
+		# ...ON A SKIN, TAKING ITS SHAPE ([method _press_on]) - held over it, or turned in the hand between its face and its corner (it had
+		# stood 2.7 mm in a nose); never at its paint, its water or its towel (a trip's hold)
+		var si_on := int(tr.get("_skin", -1))
+		if si_on >= 0 and (bool(h[3]) or h.size() <= 6):
+			_press_on(mat2, si_on, tool, h, (sp as Dictionary)["mesh"])
+			mat2.set_shader_parameter("squash", Vector4.ZERO)
+			mat2.set_shader_parameter("squash_at", tool["center"])
+			mat2.set_shader_parameter("flat_by", Vector3.ZERO)
+			continue
+		mat2.set_shader_parameter("press_cells", Vector4.ZERO)
 		var into := -(h[1] as Vector3).normalized()
 		var dir_m := (node_w.basis.inverse() * into).normalized()
 		# ...GIVING BACK TO THE SURFACE what it was pushed into it ([method _skin_hold]): squashed from its middle that much at its tip
@@ -3112,6 +3811,223 @@ func _tick_tool(ch: String, t: float, entries_of: Callable) -> void:
 		if not flat.is_empty():
 			mat2.set_shader_parameter("flat_on", flat[0])
 			mat2.set_shader_parameter("flat_at", flat[2])
+
+
+## ONE COAT OF A PAINT, NEVER TWO (the user, 2026-11-07, of feedback 0062-0063: "why are we making two passes of white at all? And if BOTH use
+## the exact same color, then why would the first pass be half as light, with the second being even more light? ... There ought to be one
+## application of white, no more"): of each design's fills over all of its surface, those in one pot are one application - the first, as
+## thick as they all come to together (its own `opacity` made that, so a table prepared again finds the same), the rest taken out of the
+## design; an act left nothing to lay takes nothing up ([method plan_of]). A tan wash and a white over it, both its pot's white, had been
+## laid as two whites - then as a thin first coat and a made-up second.
+func _one_coat() -> void:
+	for si in skins.size():
+		var sd: Dictionary = skins[si]
+		var els: Array = (sd["design"] as Dictionary).get("elements", [])
+		var first_of := {}
+		var clear := {}
+		var gone := {}
+		for e in els:
+			var ed: Dictionary = e
+			var key := "%d|%s" % [si, String(ed["id"]).to_lower()]
+			if String(ed["kind"]) != "fill" or String(ed["d"]) != "all" or not _layers.has(key):
+				continue
+			var lay: Dictionary = _layers[key]
+			var pot := String(lay.get("pot", ed["paint"]))
+			var o := clampf(float(ed["opacity"]) * float(lay.get("thick", 1.0)), 0.0, 1.0)
+			if not first_of.has(pot):
+				first_of[pot] = ed
+				clear[pot] = 1.0 - o
+			else:
+				clear[pot] = float(clear[pot]) * (1.0 - o)
+				gone[String(ed["id"]).to_lower()] = true
+				_layers.erase(key)
+		if gone.is_empty():
+			continue
+		for pot in first_of:
+			var fd: Dictionary = first_of[pot]
+			var lay: Dictionary = _layers["%d|%s" % [si, String(fd["id"]).to_lower()]]
+			fd["opacity"] = clampf((1.0 - float(clear[pot])) / maxf(float(lay.get("thick", 1.0)), 1e-3), float(fd["opacity"]), 1.0)
+		(sd["design"] as Dictionary)["elements"] = els.filter(func(e: Dictionary) -> bool: return not gone.has(String(e["id"]).to_lower()))
+
+
+## A TOOL'S ACTS ONE AFTER ANOTHER (feedback 0061, 2026-11-07: "we put the sponge in water, squeezed it, dabbed it off, then put it on the
+## white dish. Then, we put it BACK into the water again. Why are we doing this a second time"): each paint track told what the same
+## tool's acts either side of it leave it - one whose next act comes straight after and begins in the paint it ends with keeps it,
+## uncleaned and never put down (`_keep`; 0063: "the sponge went into the dish, then came back to the mask and started dabbing again"),
+## and that act begins holding it (`_loaded`); one that ends rinsed leaves the next damp, wetted for nothing thin (`_damp`). Each act had
+## cleaned its tool before putting it down, and the next wetted it again.
+func _one_after_another() -> void:
+	var by_tool := {}
+	var order := {}
+	for a in _in_reading_order(work.acts):
+		order[String((a as Dictionary)["name"])] = order.size()
+		for tr in (a as Dictionary)["tracks"]:
+			var t: Dictionary = tr
+			if String(t["law"]) != "paint" or not t.has("_ch") or int(t.get("_skin", -1)) < 0:
+				continue
+			for k in ["_keep", "_loaded", "_damp"]:
+				t.erase(k)
+			t["_act"] = String((a as Dictionary)["name"])
+			if not by_tool.has(String(t["_ch"])):
+				by_tool[String(t["_ch"])] = []
+			(by_tool[String(t["_ch"])] as Array).append(t)
+	for ch in by_tool:
+		var list: Array = by_tool[ch]
+		for i in range(list.size() - 1):
+			var t: Dictionary = list[i]
+			var nxt: Dictionary = list[i + 1]
+			var ends := _pots_laid(t)
+			var begins := _pots_laid(nxt)
+			# (...kept in hand only for the act that comes straight after - never held up through another tool's work between)
+			var next_now := int(order.get(String(nxt["_act"]), -9)) == int(order.get(String(t["_act"]), -9)) + 1
+			if next_now and not ends.is_empty() and not begins.is_empty() and ends[ends.size() - 1] == begins[0]:
+				t["_keep"] = true
+				nxt["_loaded"] = begins[0]
+			elif t.has("rinse") and not ends.is_empty():
+				nxt["_damp"] = true
+
+
+## THE POTS PAINT TRACK [param tr] TAKES UP, in the order its elements are laid ([method _pot_of]) - those it lays, never those it goes over.
+func _pots_laid(tr: Dictionary) -> PackedStringArray:
+	var out := PackedStringArray()
+	var si := int(tr.get("_skin", -1))
+	for id in tr.get("paint", []):
+		var lay: Dictionary = _layers.get("%d|%s" % [si, String(id).to_lower()], {})
+		var ed := element(si, String(id))
+		if lay.is_empty() or ed.is_empty() or lay.get("act") != tr.get("_act") or String(ed["kind"]) in ["stones", "smear", "mist"]:
+			continue
+		var pot := String(lay.get("pot", ed["paint"]))
+		if out.is_empty() or out[out.size() - 1] != pot:
+			out.append(pot)
+	return out
+
+
+## THE PAINT ELEMENT [param el] IS LAID IN by paint track [param tr]: the paint in the pot its act takes from (`from`), else the paint on the
+## table nearest its color - as "#rrggbb" - or its own where it takes none (stones, a mist) or the table has none.
+func _pot_of(tr: Dictionary, el: Dictionary) -> String:
+	var own := String(el.get("paint", ""))
+	if String(el.get("kind", "")) in ["stones", "mist", "smear"] or _creams.is_empty() or own.is_empty():
+		return own
+	var from := String(tr.get("from", ""))
+	if not from.is_empty():
+		var ti := work._thing_named(from.get_slice("/", 0).get_slice(".", 0))
+		for cr in _creams:
+			if int((cr as Dictionary)["ti"]) == ti:
+				return "#" + Color((cr as Dictionary)["color"]).to_html(false)
+	var near := _cream_near(own)
+	return "#" + Color(near["color"]).to_html(false) if not near.is_empty() else own
+
+
+## HOW THICK a pot's paint [param pot] is laid for an element designed [param paint] (0-1, times its opacity): as thin as brings it over
+## a face [constant FACE_LIGHT] light to the design's lightness - a lighter plum a thinner plum - and whole where the design is as dark as
+## its pot or darker.
+static func _thickness(paint: Color, pot: Color) -> float:
+	var lp := pot.get_luminance()
+	var ld := paint.get_luminance()
+	if ld <= lp + 0.02:
+		return 1.0
+	return clampf((FACE_LIGHT - ld) / maxf(FACE_LIGHT - lp, 0.05), THIN_LEAST, 1.0)
+
+
+## THE KIND OF PHASE of [param plan] ([method plan_of]) at [param tau] seconds into its act ("" between phases).
+static func _phase_kind(plan: Dictionary, tau: float) -> String:
+	for p in plan.get("phases", []):
+		if tau >= float((p as Dictionary)["a"]) and tau <= float((p as Dictionary)["b"]):
+			return String((p as Dictionary)["kind"])
+	return ""
+
+
+## A SPONGE SQUEEZED IN THE HAND as hard as [param press] (0-1): across its broad faces - its box's thinnest way, in its own space -
+## that much of [constant SQUEEZE_MOST] thinner, prop_common.gdshaderinc's `squeeze` (the user, 2026-11-07, of a wring drawn as a press
+## along its length: "The sponge stretches and retracts the long way ... The sponge should compress first, then expand back to where it
+## started ... most people would squish on the wider edge, the fatter edge - not lengthwise").
+static func _squeeze_of(tool: Dictionary, press: float) -> Vector4:
+	var box: AABB = tool.get("box", AABB())
+	var k := 0 if box.size.x <= box.size.y and box.size.x <= box.size.z else (1 if box.size.y <= box.size.z else 2)
+	var across := Vector3.ZERO
+	across[k] = 1.0
+	return Vector4(across.x, across.y, across.z, clampf(press, 0.0, 1.0) * SQUEEZE_MOST)
+
+
+## WHAT STANDS OVER SKIN [param sd] AS A PRESSED PAD TAKES ITS SHAPE ([constant PRESS_CELL]), found once as the table is built, as
+## [method _obstacles] finds its own - `{at, n, z, cell, tex}` (`tex` its heights as a picture, far under it where nothing is,
+## prop_common.gdshaderinc's `press_z`) - or its obstacles', where it was not found.
+func _press_field(sd: Dictionary) -> Dictionary:
+	var got: Dictionary = sd.get("press_field", {})
+	if not got.is_empty():
+		return got
+	var g := _obstacles(sd)
+	var faces := PackedVector3Array()
+	var to_part: Transform3D = g["to_part"]
+	for m in (work.things[int(sd["ti"])] as Dictionary)["meshes"]:
+		var mi := m as MeshInstance3D
+		if mi.mesh == null:
+			continue
+		var xf := to_part * work._world_of(mi)
+		for v in mi.mesh.get_faces():
+			faces.append(xf * v)
+	var box: AABB = sd["box"]
+	var at := Vector2(box.position.x, box.position.y) - Vector2.ONE * PRESS_BEYOND
+	var n := Vector2i(ceili((box.size.x + PRESS_BEYOND * 2.0) / PRESS_CELL) + 1, ceili((box.size.y + PRESS_BEYOND * 2.0) / PRESS_CELL) + 1)
+	var z := PackedFloat32Array()
+	z.resize(n.x * n.y)
+	z.fill(-INF)
+	if not faces.is_empty():
+		var top := -INF
+		for v in faces:
+			top = maxf(top, v.z)
+		var tm := TableWork._ray_mesh(faces)
+		for j in n.y:
+			_breathe()
+			for i in n.x:
+				var hit := TableWork._ray(tm, Vector3(at.x + float(i) * PRESS_CELL, at.y + float(j) * PRESS_CELL, top + 0.01), Vector3(0.0, 0.0, -1.0))
+				if not hit.is_empty():
+					z[j * n.x + i] = (hit["position"] as Vector3).z
+	var zs := z.duplicate()
+	for i in zs.size():
+		if zs[i] == -INF:
+			zs[i] = -1.0
+	var out := {"at": at, "n": n, "z": z, "cell": PRESS_CELL,
+		"tex": ImageTexture.create_from_image(Image.create_from_data(n.x, n.y, false, Image.FORMAT_RF, zs.to_byte_array()))}
+	sd["press_field"] = out
+	return out
+
+
+## A PAD OR A SPONGE'S MATERIAL [param mat] (on [param mesh]) TOLD IT IS PRESSED ONTO SKIN [param si] held [param h]
+## (prop_common.gdshaderinc's `press_`, [method press_lands]): what stands over the skin as a picture of its heights ([method
+## _press_field]), this mesh as it is drawn now into the skin's front as it stands now and back, and how it is pressed ([method _press_of]).
+func _press_on(mat: ShaderMaterial, si: int, tool: Dictionary, h: Array, mesh: Node3D) -> void:
+	var sd: Dictionary = skins[si]
+	var g := _press_field(sd)
+	var to_front := (work._world_of(sd["holder"]) * (sd["xform"] as Transform3D)).affine_inverse()
+	var m_world := work._world_of(mesh)
+	var node_to_front := to_front * work._world_of(tool["node"])
+	var ps := _press_of(tool, h, node_to_front)
+	var to_mesh := m_world.affine_inverse() * work._world_of(tool["node"])
+	var at: Vector2 = g["at"]
+	mat.set_shader_parameter("press_z", g["tex"])
+	mat.set_shader_parameter("press_cells", Vector4(at.x, at.y, PRESS_CELL, float(ps["sag"])))
+	mat.set_shader_parameter("press_in", to_front * m_world)
+	mat.set_shader_parameter("press_out", (to_front * m_world).affine_inverse())
+	mat.set_shader_parameter("press_tip", ps["tip"])
+	mat.set_shader_parameter("press_up", ps["up"])
+	mat.set_shader_parameter("press_up_own", (to_mesh.basis * (ps["up_own"] as Vector3)).normalized())
+
+
+## WHERE VERTEX [param v] (facing [param n], its mesh's own space) OF A PAD OR A SPONGE IS DRAWN as its material [param mat] has it
+## pressed onto skin [param si] ([method _press_on]; itself where it is not): prop_common.gdshaderinc's own arithmetic, for a gate to judge
+## what is drawn.
+func pressed_drawn(mat: ShaderMaterial, si: int, v: Vector3, n: Vector3) -> Vector3:
+	var cells: Variant = mat.get_shader_parameter("press_cells")
+	if not cells is Vector4 or (cells as Vector4).z <= 0.0:
+		return v
+	var as_xf := func(x: Variant) -> Transform3D: return x if x is Transform3D else Transform3D(x as Projection)
+	var p_in: Transform3D = as_xf.call(mat.get_shader_parameter("press_in"))
+	var p_out: Transform3D = as_xf.call(mat.get_shader_parameter("press_out"))
+	var ps := {"tip": mat.get_shader_parameter("press_tip"), "up": mat.get_shader_parameter("press_up"),
+		"up_own": (mat.get_shader_parameter("press_up_own") as Vector3).normalized(), "sag": (cells as Vector4).w}
+	var lands := _press_point(_press_field(skins[si]), ps, p_in * v, n)
+	return v if is_nan(lands.w) else p_out * Vector3(lands.x, lands.y, lands.z)
 
 
 ## TOOL [param tool], its node at [param node_w], PRESSED ONTO the level surface at [param floor_y] (the table's space): in its node's

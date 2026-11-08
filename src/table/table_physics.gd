@@ -203,6 +203,11 @@ const MATTER_POINTS := 300
 const INSIDE_STEP := 4
 
 const _LIQUID := preload("res://shaders/prop_liquid.gdshader")
+## A LIQUID THIS CLEAR IS SEEN THROUGH (prop_liquid_clear.gdshader), and clouds as what is rinsed in it builds up
+## ([method TablePaint.cloud_at]): water had been drawn as opaque as a brew - "the water starts opaque white" (2026-11-07). A brew,
+## ink or wine below it keeps the opaque body.
+const CLEAR_LIQUID := 0.5
+const _LIQUID_CLEAR := preload("res://shaders/prop_liquid_clear.gdshader")
 
 ## The work this is a part of - HELD WEAKLY: the work holds this, and two RefCounted that hold each other are never freed
 ## (every table a preview stood had been kept, its meshes, frames and checkpoints with it - found 2026-10-28 with the app
@@ -639,7 +644,7 @@ func _add_liquid(si: int, vs: Vessel, ld: Dictionary, mats: Dictionary) -> void:
 			mesh.mesh = _inside_mesh(vs, mesh, sd)
 			var mat := mesh.material_override as ShaderMaterial
 			if mat != null:
-				mat.shader = _LIQUID
+				_liquid_shader(mat)
 				_cavity_uniforms(mat, vs, mesh, sd)
 				(entry["mats"] as Array).append(mat)
 			mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -4409,6 +4414,15 @@ func _wave_texture(li: int, bytes: Variant) -> Variant:
 	return tex
 
 
+## A LIQUID'S MATERIAL [param mat] turned to the liquid's shader: seen through when it is as clear as [constant CLEAR_LIQUID], drawn
+## under the glass round it (its glass and it are both seen through, and the nearer of the two is not always the one drawn last).
+static func _liquid_shader(mat: ShaderMaterial) -> void:
+	var clarity: Variant = mat.get_shader_parameter("clarity")
+	var clear := clarity != null and float(clarity) >= CLEAR_LIQUID
+	mat.shader = _LIQUID_CLEAR if clear else _LIQUID
+	mat.render_priority = -1 if clear else 0
+
+
 ## The inside of empty vessel [param li], made as a liquid is first poured or dipped into it.
 func _make_inside_node(li: int) -> void:
 	var L: Dictionary = liquids[li]
@@ -4421,7 +4435,7 @@ func _make_inside_node(li: int) -> void:
 	var sd: Dictionary = work._solids_ref[int(L["solid"])] if int(L["solid"]) < work._solids_ref.size() else solids[int(L["solid"])]
 	mesh.mesh = _inside_mesh(L["vessel"], mesh, sd)
 	var mat := Props.material(Props.sanitize_material({"kind": "liquid", "color": "#" + (L["color"] as Color).to_html(false)}, "#5060a0"), {}, 10.0, 5.0, li)
-	mat.shader = _LIQUID
+	_liquid_shader(mat)
 	_cavity_uniforms(mat, L["vessel"], mesh, sd)
 	mesh.material_override = mat
 	mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF

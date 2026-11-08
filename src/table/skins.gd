@@ -60,9 +60,13 @@ const MOST_PATH := 6000
 const MOST_DOTS := 120
 const MOST_STONES := 60
 const WIDTH := Vector2(0.2, 25.0)
-## How far an element's edge may be softened (millimeters), and how far a blend softens it when its `soft` says none.
+## How far an element's edge may be softened (millimeters), and how far a blend softens it when its `soft` says none - a fill, AT MOST
+## THIS SHARE OF HOW FAR ITS MIDDLE IS FROM ITS EDGE ([method inner_reach]; feedback 0046, of lips gone over with the blending brush: "now the
+## lips are fainter at the top, while smearing outside the lines at the bottom" - 4 mm softened an upper lip 8 mm deep through and through);
+## a line is feathered as far as it was.
 const SOFT_MOST := 15.0
 const BLEND_SOFT := 4.0
+const BLEND_SHARE := 0.3
 ## How finely an element is drawn (pixels a millimeter) and its reveal map ([method when_map]), and how finely a path is
 ## followed (millimeters).
 const PX_MM := 5.0
@@ -70,8 +74,18 @@ const WHEN_PX := 1.0
 ## How far a press's ragged edge reads its reveal map from each point, at most along each axis (millimeters) - line for line
 ## skin_paint.gdshader's `RAGGED` ([method touch_map]'s spread).
 const PRESS_RAGGED := 1.6
+## A BRUSH'S PAINT IS SMOOTHED AS PAINT SPREADS ([method touch_map]'s `foot_out`): what its hairs touched shrunk to a point this wide
+## (millimeters) and grown back smoothly, and laid where that is between these shares of whole - each bit of a hair stamped on its own, a
+## stray one beside a liner's line stood out of it as a bead (feedback 0043: "rough edges"). A lone bit fades out (0.29 of whole), a
+## millimeter's line stays whole (0.85), and what is thinner than half of one fades.
+const FOOT_SOFT := 1.0
+const FOOT_HALF := Vector2(0.25, 0.55)
 ## ...and a point no tool ever touched (of the program's length: never reached in it) - [method touch_map].
 const NEVER := 1000.0
+## A POINT IS TOUCHED AGAIN by a touch at any other moment of its program than its first (a share of it - a press's own touches are one
+## moment, and the next press is hardly a two-thousandth of a long act on): a pressed element's film thickens only where and when it is
+## ([method touch_map]'s third channel, skin_paint.gdshader's `again`).
+const AGAIN_AFTER := 0.00001
 ## ...and closed in where it is all but surrounded ([method closed_in]): of its eight neighbours this many laid, this many times over (a
 ## millimeter a time).
 const CLOSE_LEAST := 5
@@ -84,7 +98,13 @@ const PATH_STEP := 0.5
 ## line, across a sweep and a blend; how long it takes to come down onto the surface and to lift off it; how far it lifts between
 ## strokes (millimeters); how fast it moves between them (mm/s, never quicker than TRAVEL_LEAST seconds).
 const LINE_SPEED := 7.0
-const SWEEP_SPEED := 24.0
+## A LINE IS PRESSED AS FAR AS IT IS WIDE (feedback 0052): at the least this share of what its tool gives - a hairline with a big brush
+## still bends its tip over ([method program], TablePaint.TIP_PUSH).
+const LINE_PRESS_LEAST := 0.15
+const SWEEP_SPEED := 14.0
+## ...its edge cut in slower, as an outline is laid (millimeters a second; feedback 0056: "these strokes are being painted extremely fast" -
+## a fill went at 24 throughout)
+const CUT_SPEED := 10.0
 const BLEND_SPEED := 16.0
 const DOWN := 0.5
 const UP := 0.45
@@ -181,6 +201,14 @@ const PATS := 1.05
 ## ...and a sweep's row is kept every this far along (millimeters): a hand's tool is held clear of the surface at each place it is
 ## kept ([method TablePaint._cleared]), and a row with its two ends alone had crossed the nose at the ends' angle.
 const ROW_KEYS := 4.0
+## A FILL KEEPS INSIDE ITS SHAPE, ITS EDGE CUT IN FIRST (feedback 0042: a flat brush's rows ran over a diamond's black line and onto the
+## face past it, and its paint showed only inside the diamond - "we are going to need really accurate paint-application physics"; 0043:
+## "a real artist trying to be really precise here ... would go back and clean-up those lines"): now that a brush lays its paint where
+## its hairs touch, a sweep goes once round each of its shape's outlines this share of its brush's half width inside it, the side of the
+## hairs along the edge ([method _cut_in]), and its rows stay as far inside ([method sweep_paths]) - what still runs past is cut back
+## where it is drawn ([method TablePaint._keep_inside]). A run of the edge shorter than this (millimeters) is not drawn.
+const CUT_IN := 1.0
+const CUT_LEAST := 3.0
 ## A SPONGE IS HELD TWO WAYS (the user, 2026-11-05: "women generally would dab with the corner of the sponge, not with the flat side
 ## of it ... They probably use the flat side to smear it and spread it, but use the corner to dip into the container, and to paint
 ## features"): its flat face for the manners that spread, its corner for every other - and a corner lays paint this much of its
@@ -194,7 +222,7 @@ const CORNER_WIDE := 0.75
 ## WHATEVER A DECORATOR WROTE, as a design that can be painted on a skin [param frame] millimeters across and down:
 ## `{name, elements: [{id, stage, paint, finish, opacity, soft, kind (fill, line, dots, stones), d (a path, or "all"), width,
 ## dots, stones}], notes}` - every element with a shape and an id of its own, in the order written.
-static func sanitize(raw: Variant, frame: Vector2) -> Dictionary:
+static func sanitize(raw: Variant, frame: Vector2, outline := "") -> Dictionary:
 	var notes := PackedStringArray()
 	var d: Dictionary = raw if raw is Dictionary else {}
 	var list: Variant = d.get("elements", raw if raw is Array else [])
@@ -220,7 +248,52 @@ static func sanitize(raw: Variant, frame: Vector2) -> Dictionary:
 			made["id"] = id
 		ids[id.to_lower()] = true
 		out.append(made)
+	_based(out, outline if not outline.is_empty() else String(d.get("outline", "")), frame, notes)
 	return {"name": Props._text(d.get("name", ""), 80), "elements": out, "notes": notes}
+
+
+## A BASE COVERS ALL OF WHAT IT IS THE BASE OF: of elements [param els], the fills a design opens on that each cover at least
+## [constant BASE_SHARE] of its surface (inside [param outline], else its [param frame]) are laid over all of it, to its edges, their
+## soft edge kept off its rim. A second base drawn short of the chin ("left thinner at the right temple and jaw") was laid whole, and
+## its tan showed past it as a spot the hand had missed - twice (feedback 0050, 0051, 2026-11-07: "We missed that white spot in the
+## exact same spots on the chin, again. There are regions where tan is still showing through, not white. Our coverage is
+## incomplete"). Thinner or darker toward an edge is an element of its own over the base (decorator.yaml).
+const BASE_SHARE := 0.6
+## ...measured this many pixels a millimeter
+const BASE_PX := 1.0
+
+
+static func _based(els: Array, outline: String, frame: Vector2, notes: PackedStringArray) -> void:
+	var rect := Rect2(Vector2.ZERO, frame)
+	var whole := cover({"kind": "fill", "d": "all"}, rect, BASE_PX, outline, frame)
+	if whole == null:
+		return
+	var surface := 0
+	for y in whole.get_height():
+		for x in whole.get_width():
+			surface += int(whole.get_pixel(x, y).a > 0.5)
+	if surface == 0:
+		return
+	for e in els:
+		var ed: Dictionary = e
+		if String(ed.get("kind", "")) != "fill":
+			break
+		if String(ed["d"]) == "all":
+			continue
+		var c := cover(ed, rect, BASE_PX, outline, frame)
+		if c == null:
+			break
+		var on := 0
+		for y in mini(c.get_height(), whole.get_height()):
+			for x in mini(c.get_width(), whole.get_width()):
+				on += int(c.get_pixel(x, y).a > 0.5 and whole.get_pixel(x, y).a > 0.5)
+		var share := float(on) / float(surface)
+		if share < BASE_SHARE:
+			break
+		ed["d"] = "all"
+		ed.erase("rule")
+		ed["soft"] = 0.0
+		notes.append("%s: a base covers all of its surface - laid to its edges (it covered %.0f%%)" % [String(ed["id"]), share * 100.0])
 
 
 static func _element(e: Dictionary, frame: Vector2, notes: PackedStringArray, before: Array = []) -> Dictionary:
@@ -571,31 +644,71 @@ static func width_for(kind: String, mm: float, manner: String) -> float:
 ## stones' dish), strokes: [{pts, t, r}] (where it lays paint: millimeters, seconds, its radius), stones: [[t pick, t placed, x,
 ## y, r]], natural (seconds), pats: [t], manner}`. [param cov]: what the element covers at [constant WHEN_PX] pixels a millimeter
 ## over [param rect] (an image, or null).
-static func program(e: Dictionary, manner: String, tool_mm: float, cov: Image, rect: Rect2, inserts := {}) -> Dictionary:
+static func program(e: Dictionary, manner: String, tool_mm: float, cov: Image, rect: Rect2, inserts := {}, paths: Variant = null,
+		frame := Vector2.ZERO) -> Dictionary:
 	var p := _Prog.new()
 	p.seed = hash([String(e.get("id", "")), manner])
 	var r := maxf(tool_mm * 0.5, 0.4)
 	match manner:
 		"line":
 			var lw := maxf(float(e.get("width", 1.0)) * 0.5, 0.4)
+			# ...PRESSED AS FAR AS IT IS WIDE: the share of the tool a line is, its width over the tool's, is how hard it is pressed - a
+			# brush's tip bent over that much of its belly (TablePaint.TIP_PUSH), never the point of it alone
+			var share := clampf(float(e.get("width", 1.0)) / maxf(tool_mm, 0.5), LINE_PRESS_LEAST, 1.0)
+			# ...A LINE WIDER THAN ITS BRUSH in pulls side by side, each as wide as the brush ([method _beside]) - a pull lays no wider
+			var passes := _beside(String(e["d"]), float(e.get("width", 1.0)), tool_mm)
+			if passes.size() > 1:
+				lw = maxf(tool_mm * 0.5, 0.4)
 			var ri := 0
-			for st in _strokes_of(String(e["d"])):
+			for st in passes:
 				var pulls := _pulls(st, hash([p.seed, ri]))
 				ri += 1
 				for i in pulls.size():
 					var pl: Dictionary = pulls[i]
 					var last := i == pulls.size() - 1
-					p.stroke(pl["pts"], LINE_SPEED * float(pl["pace"]), lw, RELOAD_LINE, true, 1.0,
-						Skins.HOVER if i == 0 else PULL_LIFT, last, true)
+					var line_pts: PackedVector2Array = pl["pts"]
+					# (...drawn the way its handle leans there: pulled, never pushed - [method _pulled_ways])
+					if frame != Vector2.ZERO and line_pts.size() >= 2 and (line_pts[line_pts.size() - 1] - line_pts[0]).dot(pull_toward(line_pts[line_pts.size() / 2], frame)) < 0.0:
+						line_pts.reverse()
+					var line_press := PackedFloat32Array()
+					line_press.resize(line_pts.size())
+					line_press.fill(share)
+					p.stroke(line_pts, LINE_SPEED * float(pl["pace"]), lw, RELOAD_LINE, true, 1.0,
+						Skins.HOVER if i == 0 else PULL_LIFT, last, true, line_press)
 					p.planned(inserts, lw)
 		# ...A SHAPE AT A TIME: an element of several apart (both eyes' diamonds) is finished in one before the next is begun (feedback
 		# 0022: "one stroke of green on one eye, and another stroke on the other eye, then back to the first eye ... over and over")
 		"sweep", "blend":
-			for part in _islands(cov):
-				for st in _rows(part, rect, tool_mm * ROWS):
-					p.stroke(_resampled(st, ROW_KEYS), SWEEP_SPEED if manner == "sweep" else BLEND_SPEED, r, RELOAD_SWEEP if manner == "sweep" else INF, manner == "sweep",
-						DRY_SWEEP if manner == "sweep" else 1.0)
-					p.planned(inserts, r)
+			# (...a sweep's edge cut in and its rows kept inside, or the ways [param paths] given - eased off and cut back where they ran
+			# past, [method TablePaint._keep_inside]: `{pts, press}` each, a press a point)
+			var ways: Array = []
+			if paths == null:
+				for part in _islands(cov):
+					# (...a shape too fine for the brush, drawn along its middle as a line - [method _spine])
+					if manner == "sweep" and String(e.get("d", "all")) != "all" and _eroded(part, tool_mm * 0.5 * CUT_IN) == null:
+						var spine := _spine(part, rect, tool_mm, hash([p.seed, ways.size()]))
+						if not spine.is_empty():
+							ways.append_array(spine)
+							continue
+					var made := sweep_paths(e, part, rect, tool_mm) if manner == "sweep" else {"cut": [], "rows": _rows(part, rect, tool_mm * ROWS)}
+					for kind in ["cut", "rows"]:
+						for st in made[kind]:
+							var pts := _resampled(st, ROW_KEYS)
+							var press := PackedFloat32Array()
+							press.resize(pts.size())
+							press.fill(1.0)
+							var wd := {"pts": pts, "press": press}
+							if kind == "cut":
+								wd["speed"] = CUT_SPEED
+							ways.append(wd)
+				ways = _pulled_ways(ways, frame)
+			else:
+				ways = (paths as Array).duplicate()
+			for wd in ways:
+				p.stroke((wd as Dictionary)["pts"], float((wd as Dictionary).get("speed", SWEEP_SPEED if manner == "sweep" else BLEND_SPEED)), r, RELOAD_SWEEP if manner == "sweep" else INF, manner == "sweep",
+					DRY_SWEEP if manner == "sweep" else 1.0, Skins.HOVER, true, false, (wd as Dictionary)["press"])
+				p.planned(inserts, r)
+			p.ways = ways
 		"stipple", "pat":
 			return pressed(e, manner, tool_mm, press_places(manner, tool_mm, cov, rect))
 		"press":
@@ -617,7 +730,325 @@ static func program(e: Dictionary, manner: String, tool_mm: float, cov: Image, r
 	var out := p.done()
 	out["manner"] = manner
 	out["origin"] = p.origin
+	if not p.ways.is_empty():
+		out["ways"] = p.ways
 	return out
+
+
+## A SWEEP'S WAYS OVER SHAPE [param part] of element [param e] ([constant CUT_IN]): its edge cut in, a brush [param tool_mm] across
+## running round inside each outline with its hairs' side along it ([method _cut_in]), then rows back and forth over what is as far
+## inside it ([method _rows]) - a stretch at a time, millimeters: `{cut, rows}`. A shape too narrow for the brush to keep inside is rowed
+## as it is.
+static func sweep_paths(e: Dictionary, part: Image, rect: Rect2, tool_mm: float) -> Dictionary:
+	var by := tool_mm * 0.5 * CUT_IN
+	var rows_in := _eroded(part, by)
+	if rows_in == null or String(e.get("d", "all")) == "all":
+		return {"cut": [], "rows": _rows(part, rect, tool_mm * ROWS)}
+	return {"cut": _cut_in(e, by, _eroded(part, maxf(by - 1.0, 0.0)), rect), "rows": _rows(rows_in, rect, tool_mm * ROWS)}
+
+
+## A LINE'S RUNS AS A BRUSH LAYS THEM: path [param d]'s runs ([method _strokes_of]) - and for a line [param width] millimeters wider than a
+## [param tool_mm] brush, each run beside itself as many times as covers its width, each a brush's width across, side by side.
+static func _beside(d: String, width: float, tool_mm: float) -> Array:
+	var runs := _strokes_of(d)
+	if width <= tool_mm * 1.05 or tool_mm <= 0.0:
+		return runs
+	var n := int(ceil(width / tool_mm))
+	var out: Array = []
+	for run in runs:
+		var pts: PackedVector2Array = run
+		for j in n:
+			var off := lerpf(-(width - tool_mm) * 0.5, (width - tool_mm) * 0.5, float(j) / float(n - 1))
+			var moved := PackedVector2Array()
+			for k in pts.size():
+				var t := (pts[mini(k + 1, pts.size() - 1)] - pts[maxi(k - 1, 0)]).normalized()
+				moved.append(pts[k] + Vector2(-t.y, t.x) * off)
+			out.append(moved)
+	return out
+
+
+## WHICH WAY A HAND'S BRUSH LEANS over (x, y) [param at] millimeters of a [param frame] surface, along the surface (y down): up, and out to
+## the side the work is on - as TablePaint holds it ([constant TablePaint.HELD_UP], [constant TablePaint.HELD_SIDE]).
+static func pull_toward(at: Vector2, frame: Vector2) -> Vector2:
+	var side := clampf((at.x - frame.x * 0.5) / maxf(frame.x * TablePaint.HELD_SIDE_EDGE, 1e-3), -1.0, 1.0)
+	return Vector2(side * TablePaint.HELD_SIDE, -TablePaint.HELD_UP).normalized()
+
+
+## A BRUSH IS PULLED THROUGH EVERY STROKE (feedback 0054, 0056, 2026-11-07: "It feels like it is pushing against the direction of the
+## stroke. But for big, heavy strokes like this - I think it would be far more common to pull-through the strokes"; "the brush is PUSHING
+## against the natural direction of the stroke"): each of [param ways] (`{pts, press}`) cut where it turns against the way the hand
+## leans the brush over [param frame] ([method pull_toward]), and each piece drawn toward it - the handle ahead, its hairs trailing -
+## lifted back between. A fill's rows had gone back and forth, an outline round, half of each pushed where the handle could not lean
+## the way it went (beside the nose). A piece under [constant PULL_PIECE_LEAST] is drawn as the piece before it goes. Unchanged with no
+## frame.
+const PULL_PIECE_LEAST := 3.0
+
+
+static func _pulled_ways(ways: Array, frame: Vector2) -> Array:
+	if frame == Vector2.ZERO:
+		return ways
+	var out: Array = []
+	for w in ways:
+		var wd: Dictionary = w
+		var pts: PackedVector2Array = wd["pts"]
+		var press: PackedFloat32Array = wd["press"]
+		if pts.size() < 2:
+			out.append(wd)
+			continue
+		# ...the runs of its steps that go along the lean (1) or against it (-1), a run too short to turn for joined to the one before
+		# (the first, to the one after): `[first step, last step, way, length]`
+		var runs: Array = []
+		for k in range(pts.size() - 1):
+			var d := pts[k + 1] - pts[k]
+			var sg := 1 if d.dot(pull_toward(pts[k], frame)) >= 0.0 else -1
+			if not runs.is_empty() and int((runs.back() as Array)[2]) == sg:
+				(runs.back() as Array)[1] = k
+				(runs.back() as Array)[3] = float((runs.back() as Array)[3]) + d.length()
+			else:
+				runs.append([k, k, sg, d.length()])
+		var pieces: Array = []
+		for r in runs:
+			var ra: Array = r
+			if not pieces.is_empty() and float(ra[3]) < PULL_PIECE_LEAST:
+				(pieces.back() as Array)[1] = ra[1]
+				(pieces.back() as Array)[3] = float((pieces.back() as Array)[3]) + float(ra[3])
+			elif pieces.size() == 1 and float((pieces[0] as Array)[3]) < PULL_PIECE_LEAST:
+				pieces[0] = [(pieces[0] as Array)[0], ra[1], ra[2], float((pieces[0] as Array)[3]) + float(ra[3])]
+			else:
+				pieces.append(ra.duplicate())
+		# (steps a..b are points a..b+1)
+		for pc in pieces:
+			(pc as Array)[1] = int((pc as Array)[1]) + 1
+		for pc in pieces:
+			var a := int(pc[0])
+			var b := int(pc[1])
+			if b - a < 1:
+				continue
+			var pp := pts.slice(a, b + 1)
+			var pr := press.slice(a, b + 1)
+			if int(pc[2]) < 0:
+				pp.reverse()
+				pr.reverse()
+			var piece := wd.duplicate()
+			piece["pts"] = pp
+			piece["press"] = pr
+			out.append(piece)
+	return out
+
+
+## A FILL TOO FINE FOR ITS BRUSH IS DRAWN ALONG ITS MIDDLE (feedback 0055, 2026-11-07: "This eyebrow was painted extremely fast, literally
+## in a fraction of a second. The brush didn't even draw the whole line: it touched the area once, and the entire brow just appeared" - a
+## brow's crescent, 4 mm at its widest under a 6 mm brush, had nothing a row could keep inside, and was laid at its one touch): shape
+## [param part] followed along its long way in pulls, as a line is ([method _pulls]) - the middle of it every [constant SPINE_STEP]
+## across - each point pressed as far as the shape is thick there for a [param tool_mm] brush ([constant LINE_PRESS_LEAST] at the least),
+## heavy in its middle and light at its tails. `[{pts, press, speed}]` (millimeters); empty for a shape with no length to follow.
+const SPINE_STEP := 1.0
+
+
+static func _spine(part: Image, rect: Rect2, tool_mm: float, seed: int) -> Array:
+	var pts := PackedVector2Array()
+	for y in part.get_height():
+		for x in part.get_width():
+			if part.get_pixel(x, y).a > 0.3:
+				pts.append(rect.position + (Vector2(x, y) + Vector2(0.5, 0.5)) / WHEN_PX)
+	if pts.size() < 3:
+		return []
+	var way := _long_way(pts)
+	var mid: Vector2 = way[0]
+	var along: Vector2 = way[1]
+	var across: Vector2 = way[2]
+	# ...each step along it: how far across it reaches either side
+	var bins := {}
+	for q in pts:
+		var b := floori((q - mid).dot(along) / SPINE_STEP)
+		var c := (q - mid).dot(across)
+		var got: Vector2 = bins.get(b, Vector2(INF, -INF))
+		bins[b] = Vector2(minf(got.x, c), maxf(got.y, c))
+	var keys := bins.keys()
+	keys.sort()
+	var spine := PackedVector2Array()
+	var thick := PackedFloat32Array()
+	for b in keys:
+		var r: Vector2 = bins[b]
+		spine.append(mid + along * (float(b) + 0.5) * SPINE_STEP + across * (r.x + r.y) * 0.5)
+		thick.append(r.y - r.x + 1.0 / WHEN_PX)
+	if spine.size() < 2:
+		return []
+	# (its middle eased, the ends where they are)
+	var eased := spine.duplicate()
+	for k in range(1, spine.size() - 1):
+		eased[k] = (spine[k - 1] + spine[k] * 2.0 + spine[k + 1]) * 0.25
+	var out: Array = []
+	for pl in _pulls(eased, seed):
+		var pp: PackedVector2Array = (pl as Dictionary)["pts"]
+		var press := PackedFloat32Array()
+		press.resize(pp.size())
+		for k in pp.size():
+			var near := 0
+			for j in eased.size():
+				if eased[j].distance_squared_to(pp[k]) < eased[near].distance_squared_to(pp[k]):
+					near = j
+			press[k] = clampf(thick[near] / maxf(tool_mm, 0.5), LINE_PRESS_LEAST, 1.0)
+		out.append({"pts": pp, "press": press, "speed": LINE_SPEED * float((pl as Dictionary).get("pace", 1.0))})
+	return out
+
+
+## THE LONG WAY OF POINTS [param pts]: `[their middle, the way they run longest (their own principal axis), the way across it]`.
+static func _long_way(pts: PackedVector2Array) -> Array:
+	var mid := Vector2.ZERO
+	for q in pts:
+		mid += q
+	mid /= float(pts.size())
+	var sxx := 0.0
+	var syy := 0.0
+	var sxy := 0.0
+	for q in pts:
+		var d := q - mid
+		sxx += d.x * d.x
+		syy += d.y * d.y
+		sxy += d.x * d.y
+	var ang := 0.5 * atan2(2.0 * sxy, sxx - syy)
+	var along := Vector2(cos(ang), sin(ang))
+	return [mid, along, Vector2(-along.y, along.x)]
+
+
+## HOW FAR THE MIDDLE OF WHAT [param cov] COVERS IS FROM ITS EDGE (millimeters; [constant WHEN_PX] pixels a millimeter): the most any
+## covered point is from one not covered, or past the picture's edge - a chamfer's two passes.
+static func inner_reach(cov: Image) -> float:
+	if cov == null:
+		return 0.0
+	var w := cov.get_width()
+	var h := cov.get_height()
+	var d := PackedFloat32Array()
+	d.resize(w * h)
+	for y in h:
+		for x in w:
+			d[y * w + x] = 1e9 if cov.get_pixel(x, y).a > 0.3 else 0.0
+	var at := func(x: int, y: int) -> float: return 0.0 if x < 0 or y < 0 or x >= w or y >= h else d[y * w + x]
+	for y in h:
+		for x in w:
+			var k := y * w + x
+			if d[k] > 0.0:
+				d[k] = minf(d[k], minf(minf(at.call(x - 1, y) + 1.0, at.call(x, y - 1) + 1.0), minf(at.call(x - 1, y - 1) + 1.414, at.call(x + 1, y - 1) + 1.414)))
+	var most := 0.0
+	for y in range(h - 1, -1, -1):
+		for x in range(w - 1, -1, -1):
+			var k := y * w + x
+			if d[k] > 0.0:
+				d[k] = minf(d[k], minf(minf(at.call(x + 1, y) + 1.0, at.call(x, y + 1) + 1.0), minf(at.call(x + 1, y + 1) + 1.414, at.call(x - 1, y + 1) + 1.414)))
+				most = maxf(most, d[k])
+	return most / WHEN_PX
+
+
+## What of coverage [param cov] ([constant WHEN_PX] pixels a millimeter) is [param by] millimeters or more inside its edge - every point
+## with all within that of it covered - or null when nothing is.
+static func _eroded(cov: Image, by: float) -> Image:
+	if cov == null:
+		return null
+	var w := cov.get_width()
+	var h := cov.get_height()
+	var inside := PackedByteArray()
+	inside.resize(w * h)
+	for y in h:
+		for x in w:
+			inside[y * w + x] = 1 if cov.get_pixel(x, y).a > 0.3 else 0
+	var rp := by * WHEN_PX
+	var ring: Array = []
+	for dy in range(-ceili(rp), ceili(rp) + 1):
+		for dx in range(-ceili(rp), ceili(rp) + 1):
+			if Vector2(dx, dy).length() <= rp and (dx != 0 or dy != 0):
+				ring.append(Vector2i(dx, dy))
+	var out := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	var any := false
+	for y in h:
+		for x in w:
+			if inside[y * w + x] == 0:
+				continue
+			var keep := true
+			for d in ring:
+				var q: Vector2i = Vector2i(x, y) + (d as Vector2i)
+				if q.x < 0 or q.y < 0 or q.x >= w or q.y >= h or inside[q.y * w + q.x] == 0:
+					keep = false
+					break
+			if keep:
+				out.set_pixel(x, y, Color(1, 1, 1, 1))
+				any = true
+	return out if any else null
+
+
+## A FILL'S EDGE CUT IN ([constant CUT_IN]): each closed outline of element [param e] moved [param by] millimeters in - each point along
+## the way between its sides' insides, as far as keeps both that far in - in runs cut at its sharp corners ([constant CORNER]) and
+## wherever the shape is too narrow for it (a point not in [param inside], what is that far in, over [param rect]); none shorter than
+## [constant CUT_LEAST].
+static func _cut_in(e: Dictionary, by: float, inside: Image, rect: Rect2) -> Array:
+	var out: Array = []
+	if inside == null:
+		return out
+	var w := inside.get_width()
+	var h := inside.get_height()
+	var is_in := func(q: Vector2) -> bool:
+		var px := Vector2i(((q - rect.position) * WHEN_PX).floor())
+		return px.x >= 0 and px.y >= 0 and px.x < w and px.y < h and inside.get_pixel(px.x, px.y).a > 0.5
+	for sp in flatten(String(e.get("d", ""))):
+		var pts: PackedVector2Array = _resampled((sp as Dictionary)["pts"], 1.0)
+		if not bool((sp as Dictionary).get("closed", false)) or pts.size() < 3:
+			continue
+		if pts[0].distance_to(pts[pts.size() - 1]) < 0.01:
+			pts.resize(pts.size() - 1)
+		var n := pts.size()
+		# ...moved in on whichever side more of it lands inside
+		var best: PackedVector2Array
+		var best_in := -1
+		for side in [1.0, -1.0]:
+			var moved := PackedVector2Array()
+			var count := 0
+			for k in n:
+				var d0 := (pts[k] - pts[(k - 1 + n) % n]).normalized()
+				var d1 := (pts[(k + 1) % n] - pts[k]).normalized()
+				var n0 := Vector2(-d0.y, d0.x) * float(side)
+				var n1 := Vector2(-d1.y, d1.x) * float(side)
+				var m := (n0 + n1).normalized() if (n0 + n1).length() > 1e-4 else n0
+				var q := pts[k] + m * by / maxf(m.dot(n0), 0.25)
+				moved.append(q)
+				count += int(is_in.call(q))
+			if count > best_in:
+				best_in = count
+				best = moved
+		# ...in runs, cut where it leaves what is that far in and at its sharp corners - starting where a run begins, so none wraps
+		var start := 0
+		for k in n:
+			if not is_in.call(best[k]):
+				start = (k + 1) % n
+				break
+		var cur := PackedVector2Array()
+		for j in n + 1:
+			var k := (start + j) % n
+			var q := best[k]
+			if not is_in.call(q):
+				if cur.size() >= 2:
+					out.append(cur)
+				cur = PackedVector2Array()
+				continue
+			cur.append(q)
+			if cur.size() >= 3:
+				var a := cur[cur.size() - 3]
+				var b := cur[cur.size() - 2]
+				var dd0 := (b - a).normalized()
+				var dd1 := (q - b).normalized()
+				if rad_to_deg(acos(clampf(dd0.dot(dd1), -1.0, 1.0))) > CORNER:
+					cur.resize(cur.size() - 1)
+					out.append(cur)
+					cur = PackedVector2Array([b, q])
+		if cur.size() >= 2:
+			out.append(cur)
+	var kept: Array = []
+	for run in out:
+		var length := 0.0
+		for k in range(1, (run as PackedVector2Array).size()):
+			length += (run as PackedVector2Array)[k - 1].distance_to((run as PackedVector2Array)[k])
+		if length >= CUT_LEAST:
+			kept.append(run)
+	return kept
 
 
 ## WHERE A SPRAY IS AIMED, pump by pump: across what [param cov] covers along its long way, one a [constant PUMP_AREA] of it.
@@ -811,21 +1242,10 @@ static func _rows(cov: Image, rect: Rect2, spacing: float) -> Array:
 	if pts.is_empty():
 		return out
 	# the long way: the covered points' own principal axis
-	var mid := Vector2.ZERO
-	for q in pts:
-		mid += q
-	mid /= float(pts.size())
-	var sxx := 0.0
-	var syy := 0.0
-	var sxy := 0.0
-	for q in pts:
-		var d := q - mid
-		sxx += d.x * d.x
-		syy += d.y * d.y
-		sxy += d.x * d.y
-	var ang := 0.5 * atan2(2.0 * sxy, sxx - syy)
-	var along := Vector2(cos(ang), sin(ang))
-	var across := Vector2(-along.y, along.x)
+	var way := _long_way(pts)
+	var mid: Vector2 = way[0]
+	var along: Vector2 = way[1]
+	var across: Vector2 = way[2]
 	var lo := INF
 	var hi := -INF
 	var a_lo := INF
@@ -1040,7 +1460,14 @@ static func when_map(prog: Dictionary, rect: Rect2) -> Image:
 ## shown ([constant NEVER]) - [method when_map] gives every point the nearest reach's, so a dab showed all that was nearest it. Given the
 ## element's cover ([param inside], one a point it covers) and [param spread_mm], what lies past its edge takes the edge's moment that far
 ## out ([method _spread_out]).
-static func touch_map(touches: Array, rect: Rect2, px := WHEN_PX, spot_mm := 0.75 / WHEN_PX, inside := PackedByteArray(), spread_mm := 0.0) -> Image:
+##
+## GIVEN AN ARRAY [param foot_out], WHAT IT TOUCHED IS PUT IN IT AS PAINT (feedback 0042, of a fill brushed over its diamond's black line
+## and past it: "It's not clear why the grey paint only affects inside of the diamond ... when the brush is touching the mask the entire
+## time"): each disc's own share of each point it reaches - an edge as smooth as the canvas draws it, never in the map's steps - and what
+## the map closed round, whole; an image whose mipmaps soften it as a cover's do (skin_paint.gdshader's `foot`). Every point it reaches
+## takes the moment of the touch that reached it.
+static func touch_map(touches: Array, rect: Rect2, px := WHEN_PX, spot_mm := 0.75 / WHEN_PX, inside := PackedByteArray(), spread_mm := 0.0,
+		foot_out: Variant = null) -> Image:
 	var w := maxi(int(ceil(rect.size.x * px)), 1)
 	var h := maxi(int(ceil(rect.size.y * px)), 1)
 	var st := _Stamps.new()
@@ -1049,9 +1476,14 @@ static func touch_map(touches: Array, rect: Rect2, px := WHEN_PX, spot_mm := 0.7
 	st.vals.fill(-1.0)
 	st.loads.resize(w * h)
 	st.loads.fill(1.0)
+	st.again.resize(w * h)
+	st.again.fill(-1.0)
 	st.w = w
 	st.h = h
 	st.origin = rect.position
+	if foot_out != null:
+		st.cov.resize(w * h)
+		st.cov.fill(0.0)
 	var spot := spot_mm
 	for tc in touches:
 		var d: Dictionary = tc
@@ -1059,11 +1491,155 @@ static func touch_map(touches: Array, rect: Rect2, px := WHEN_PX, spot_mm := 0.7
 			st.stamp(p, spot, float(d["u"]), float(d.get("load", 1.0)))
 	if spread_mm > 0.0 and inside.size() == w * h:
 		_spread_out(st.vals, st.loads, inside, w, h, ceili(spread_mm * px) + 1)
+	var laid := st.vals.duplicate() if foot_out != null else PackedFloat32Array()
+	var before_closing := st.vals.duplicate()
 	closed_in(st.vals, st.loads, w, h)
-	var img := Image.create(w, h, false, Image.FORMAT_RGF)
+	# (...a point the map closes round, laid whole as it is: no first press's film)
+	for k in w * h:
+		if before_closing[k] < 0.0 and st.vals[k] >= 0.0:
+			st.again[k] = st.vals[k]
+	if foot_out != null:
+		# (...a point the map closed round laid whole; then the whole SMOOTHED AS PAINT SPREADS, [constant FOOT_SOFT]: a stray hair's lone
+		# disc fades out, a pinhole closes, a line keeps its width)
+		var cov := PackedFloat32Array()
+		cov.resize(w * h)
+		for k in w * h:
+			cov[k] = 1.0 if laid[k] < 0.0 and st.vals[k] >= 0.0 else clampf(st.cov[k], 0.0, 1.0)
+		cov = _blurred(cov, w, h, FOOT_SOFT * px)
+		var bytes := PackedByteArray()
+		bytes.resize(w * h)
+		var reached := PackedByteArray()
+		reached.resize(w * h)
+		for k in w * h:
+			var c := smoothstep(FOOT_HALF.x, FOOT_HALF.y, cov[k])
+			bytes[k] = roundi(c * 255.0)
+			reached[k] = 1 if c > 0.0 else 0
+		# ...and every point it now reaches given the moment of the latest touch beside it
+		_grown_into(st.vals, st.loads, reached, w, h, ceili(FOOT_SOFT * px) + 1)
+		var fi := Image.create_from_data(w, h, false, Image.FORMAT_L8, bytes)
+		fi.generate_mipmaps()
+		(foot_out as Array).append(fi)
+	var img := Image.create(w, h, false, Image.FORMAT_RGBF)
 	for k in st.vals.size():
-		img.set_pixel(k % w, k / w, Color(st.vals[k] if st.vals[k] >= 0.0 else NEVER, st.loads[k], 0.0))
+		img.set_pixel(k % w, k / w, Color(st.vals[k] if st.vals[k] >= 0.0 else NEVER, st.loads[k], st.again[k] if st.again[k] >= 0.0 else NEVER))
 	return img
+
+
+## A LINE AS A BRUSH LAYS IT (2026-11-07, the user: "nearly all straight lines are 'splotchy' ... they make a mess, they're super jagged when
+## applied, and they require correction later. But a proper brush stroke is more often than not very smooth, with clean edges... which
+## might fade near the tail of the stroke"; feedback 0060, of the touch-ups that followed: "tapping at each jagged place"): each of program
+## [param prog]'s strokes the band its hairs' patch sweeps - as wide as the line (a stroke's `r`), pressed as far as that takes
+## ([constant LINE_PRESS_LEAST]) - its edges clean, narrowing to [constant TAIL_NARROW] and thinning to [constant TAIL_LEFT] over the last
+## [constant TAIL_SHARE] of each pull, laid as the stroke passes. Its reveal map as [method touch_map]'s (each point's share of the
+## program when it was first covered, and the load then) over [param rect] at [param px], and its paint into [param foot_out] (an L8
+## picture, mipmapped). Laid where its hairs' tips were found at moments apart, a line had been beads with gaps between them.
+const TAIL_SHARE := 0.25
+const TAIL_LEFT := 0.55
+const TAIL_NARROW := 0.75
+## ...the band followed this often along a stroke (millimeters)
+const BAND_STEP := 0.25
+
+
+static func band_map(prog: Dictionary, rect: Rect2, px: float, foot_out: Array) -> Image:
+	var w := maxi(int(ceil(rect.size.x * px)), 1)
+	var h := maxi(int(ceil(rect.size.y * px)), 1)
+	var vals := PackedFloat32Array()
+	vals.resize(w * h)
+	vals.fill(-1.0)
+	var loads := PackedFloat32Array()
+	loads.resize(w * h)
+	var cov := PackedFloat32Array()
+	cov.resize(w * h)
+	var natural := maxf(float(prog["natural"]), 1e-3)
+	for st in prog["strokes"]:
+		var sd: Dictionary = st
+		var pts: PackedVector2Array = sd["pts"]
+		var ts: PackedFloat32Array = sd["t"]
+		if pts.size() < 2 or ts.size() != pts.size():
+			continue
+		var ld: Variant = sd.get("load", 1.0)
+		var r := float(sd["r"])
+		var cum := PackedFloat32Array([0.0])
+		for k in range(1, pts.size()):
+			cum.append(cum[k - 1] + pts[k - 1].distance_to(pts[k]))
+		var length := maxf(cum[cum.size() - 1], 1e-4)
+		var n := maxi(int(ceil(length / BAND_STEP)), 1)
+		var seg := 0
+		for i in n + 1:
+			var at := length * float(i) / float(n)
+			while seg < pts.size() - 2 and cum[seg + 1] < at:
+				seg += 1
+			var f := clampf((at - cum[seg]) / maxf(cum[seg + 1] - cum[seg], 1e-6), 0.0, 1.0)
+			var p := pts[seg].lerp(pts[seg + 1], f)
+			var u := lerpf(ts[seg], ts[seg + 1], f) / natural
+			var load := float((ld as PackedFloat32Array)[seg]) if ld is PackedFloat32Array and seg < (ld as PackedFloat32Array).size() else (float(ld) if ld is float else 1.0)
+			# (...thinning over its tail)
+			var tail := smoothstep(1.0 - TAIL_SHARE, 1.0, at / length)
+			var rad := r * lerpf(1.0, TAIL_NARROW, tail)
+			var shown := lerpf(1.0, TAIL_LEFT, tail)
+			var c := (p - rect.position) * px
+			var reach := rad * px + 1.0
+			for y in range(maxi(int(c.y - reach), 0), mini(int(c.y + reach) + 1, h)):
+				for x in range(maxi(int(c.x - reach), 0), mini(int(c.x + reach) + 1, w)):
+					var d := Vector2(float(x) + 0.5, float(y) + 0.5).distance_to(c)
+					var a := clampf(rad * px - d + 0.5, 0.0, 1.0) * shown
+					if a <= 0.0:
+						continue
+					var k := y * w + x
+					cov[k] = maxf(cov[k], a)
+					if vals[k] < 0.0 or u < vals[k]:
+						vals[k] = u
+						loads[k] = load
+	var bytes := PackedByteArray()
+	bytes.resize(w * h)
+	for k in w * h:
+		bytes[k] = roundi(cov[k] * 255.0)
+	var fi := Image.create_from_data(w, h, false, Image.FORMAT_L8, bytes)
+	fi.generate_mipmaps()
+	foot_out.append(fi)
+	var img := Image.create(w, h, false, Image.FORMAT_RGF)
+	for k in vals.size():
+		img.set_pixel(k % w, k / w, Color(vals[k] if vals[k] >= 0.0 else NEVER, loads[k], 0.0))
+	return img
+
+
+## [param vals] (one a point, [param w] by [param h]) BLURRED: shrunk to a point every [param by] points and grown back smoothly, by the
+## engine (a blur by hand, a point at a time, took a second an element; shrunk without filtering, a lone dot came through or not by where
+## it fell).
+static func _blurred(vals: PackedFloat32Array, w: int, h: int, by: float) -> PackedFloat32Array:
+	var f := maxf(by, 1.0)
+	var img := Image.create_from_data(w, h, false, Image.FORMAT_RF, vals.to_byte_array())
+	img.resize(maxi(roundi(float(w) / f), 1), maxi(roundi(float(h) / f), 1), Image.INTERPOLATE_LANCZOS)
+	img.resize(w, h, Image.INTERPOLATE_CUBIC)
+	return img.get_data().to_float32_array()
+
+
+## EVERY POINT [param reached] HOLDS (one a point, nonzero) and [param vals] has no moment for, given the latest of its eight
+## neighbours' (and its load), grown [param passes] points in. In place.
+static func _grown_into(vals: PackedFloat32Array, loads: PackedFloat32Array, reached: PackedByteArray, w: int, h: int, passes: int) -> void:
+	for _pass in passes:
+		var was := vals.duplicate()
+		var any := false
+		for y in h:
+			for x in w:
+				var k := y * w + x
+				if was[k] >= 0.0 or reached[k] == 0:
+					continue
+				var last := -1.0
+				var by := k
+				for dy in [-1, 0, 1]:
+					for dx in [-1, 0, 1]:
+						var qx: int = x + dx
+						var qy: int = y + dy
+						if qx >= 0 and qy >= 0 and qx < w and qy < h and was[qy * w + qx] > last:
+							last = was[qy * w + qx]
+							by = qy * w + qx
+				if last >= 0.0:
+					vals[k] = last
+					loads[k] = loads[by]
+					any = true
+		if not any:
+			return
 
 
 ## WHAT LIES PAST AN ELEMENT'S EDGE TAKES THE EDGE'S MOMENT (and load): [param vals] grown [param passes] points out from what is laid into
@@ -1133,6 +1709,10 @@ class _Stamps:
 	extends RefCounted
 	var vals := PackedFloat32Array()
 	var loads := PackedFloat32Array()
+	# (asked for, when each point was first touched again by a later touch - [method Skins.touch_map]'s third channel; -1 none)
+	var again := PackedFloat32Array()
+	# (asked for, how much of each point a disc covers - [method Skins.touch_map]'s `foot_out`)
+	var cov := PackedFloat32Array()
 	var w := 0
 	var h := 0
 	var origin := Vector2.ZERO
@@ -1141,11 +1721,35 @@ class _Stamps:
 	func stamp(c: Vector2, r: float, u: float, load := 1.0) -> void:
 		var pc := (c - origin) * px
 		var rp := maxf(r * px, 0.75)
+		if not cov.is_empty():
+			# ...and each point's share of it, the edge half a point either side: every point it reaches takes its moment
+			for y in range(maxi(int(pc.y - rp - 0.5), 0), mini(int(pc.y + rp + 0.5) + 1, h)):
+				for x in range(maxi(int(pc.x - rp - 0.5), 0), mini(int(pc.x + rp + 0.5) + 1, w)):
+					var share := rp + 0.5 - Vector2(float(x) + 0.5, float(y) + 0.5).distance_to(pc)
+					if share <= 0.0:
+						continue
+					var k := y * w + x
+					cov[k] = maxf(cov[k], minf(share, 1.0))
+					_at(k, u, load)
+			return
 		for y in range(maxi(int(pc.y - rp), 0), mini(int(pc.y + rp) + 1, h)):
 			for x in range(maxi(int(pc.x - rp), 0), mini(int(pc.x + rp) + 1, w)):
-				if vals[y * w + x] < 0.0 and Vector2(float(x) + 0.5, float(y) + 0.5).distance_to(pc) <= rp:
-					vals[y * w + x] = u
-					loads[y * w + x] = load
+				if Vector2(float(x) + 0.5, float(y) + 0.5).distance_to(pc) <= rp:
+					_at(y * w + x, u, load)
+
+	# ...point [param k] touched at [param u]: its first touch - and, asked for, the first touch after it [constant Skins.AGAIN_AFTER] on
+	func _at(k: int, u: float, load: float) -> void:
+		if vals[k] < 0.0:
+			vals[k] = u
+			loads[k] = load
+		elif again.is_empty():
+			return
+		elif u < vals[k] - Skins.AGAIN_AFTER:
+			again[k] = vals[k] if again[k] < 0.0 else minf(again[k], vals[k])
+			vals[k] = u
+			loads[k] = load
+		elif u > vals[k] + Skins.AGAIN_AFTER and (again[k] < 0.0 or u < again[k]):
+			again[k] = u
 
 
 ## AN SVG PATH READ ([method flatten]): its tokens in turn, the subpath being followed, and those done.
@@ -1298,6 +1902,7 @@ class _Prog:
 	var presses := 0
 	var product := -1.0         # WHAT IS ON THE TOOL, of a full load (-1: what never runs pale, or nothing taken up yet)
 	var stop := 0.0             # ...and how little it lays before the hand goes back for more: this load's own
+	var ways: Array = []        # a sweep's ways over its shape, as given its strokes ([method Skins.sweep_paths])
 
 	## A number in [0, 1) drawn from the element and [param k].
 	func _drawn(k: int) -> float:
@@ -1392,7 +1997,7 @@ class _Prog:
 	## A PULL ([constant Skins.PULL]) comes over [param lift] (millimeters), down and up the quicker, eased in and out along the way, and
 	## gets [param look] only where its run ends.
 	func stroke(pts: PackedVector2Array, speed: float, r: float, most: float, paints: bool, dry := 1.0, lift := Skins.HOVER, look := true,
-			pull := false) -> void:
+			pull := false, press := PackedFloat32Array()) -> void:
 		if pts.size() < 2:
 			return
 		var length := 0.0
@@ -1401,7 +2006,8 @@ class _Prog:
 		_reload(most, dry, false, length)
 		_go(pts[0], lift)
 		t += Skins.PULL_DOWN if pull else Skins.DOWN
-		_key(pts[0], 0.0, 1.0)
+		# (pressed as hard as [param press] says at each point, where it is given - eased off near an edge it would run past)
+		_key(pts[0], 0.0, press[0] if press.size() == pts.size() else 1.0)
 		var ts := PackedFloat32Array([t])
 		var rate := -log(dry) / maxf(most, 1e-3) if dry < 1.0 and most < INF else 0.0
 		var f := _hand(Skins.TAKE_SPREAD_SWEEP)
@@ -1415,11 +2021,11 @@ class _Prog:
 			t += d / (speed * ((0.55 + 0.45 * sin(PI * u)) / 0.84 if pull else 1.0))
 			laid += d
 			_take(rate, d, f)
-			_key(pts[k], 0.0, 1.0)
+			_key(pts[k], 0.0, press[k] if press.size() == pts.size() else 1.0)
 			ts.append(t)
 			left.append(_shown(f))
 		if paints:
-			strokes.append({"pts": pts, "t": ts, "r": r, "load": left})
+			strokes.append({"pts": pts, "t": ts, "r": r, "load": left, "press": press})
 		at = pts[pts.size() - 1]
 		t += Skins.PULL_UP if pull and not look else Skins.UP
 		_key(at, Skins.PULL_LIFT if pull and not look else Skins.HOVER, 0.0)
@@ -1747,7 +2353,7 @@ static func _near_lit(img: Image, x: int, y: int, r: int) -> bool:
 
 ## THE PAINTING AS THE SURFACE WEARS IT: [param painted] cut back to the surface's own millimeters from its canvas [param canvas] ([method
 ## face_canvas]; its bare picture [param bare]), FACE_PX pixels a millimeter, with the light the bare surface was shown in taken out - a
-## color as laid, which the table lights as it lights the surface; clear where the surface is not.
+## color as laid, for the decorator to copy (never laid by the table: feedback 0049); clear where the surface is not.
 static func face_reference(painted: Image, bare: Image, canvas: Dictionary, skin: Dictionary) -> Image:
 	var p := painted.duplicate() as Image
 	if p.get_size() != bare.get_size():

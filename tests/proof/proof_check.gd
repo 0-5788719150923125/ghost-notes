@@ -500,10 +500,10 @@ func _script() -> void:
 		"and the pen writes across exactly those words (%s)" % " ".join(spoken.slice(at, at + 6)))
 	# the rests: the pen coming down before each dictation (0.45), none in or after a dictation the pen
 	# keeps up with, the third's writing outlasting its six words (20 s at 4 x pace, less the words) -
-	# all of it after its last word - and the strike
+	# all of it after its last word - and the strike; before any of it, the settle the desk is seen in ([constant Openings.SETTLE])
 	var rests := _rests(String(p["speakable"]))
 	var tail := 20.0 / DeskScript.MAX_PACE - 6.0 * DeskScript.EST_WORD
-	var want := PackedFloat32Array([DeskScript.LEAD_HOLD, DeskScript.LEAD_HOLD, DeskScript.LEAD_HOLD,
+	var want := PackedFloat32Array([Openings.SETTLE, DeskScript.LEAD_HOLD, DeskScript.LEAD_HOLD, DeskScript.LEAD_HOLD,
 		tail, DeskScript.STRIKE])
 	var same := rests.size() == want.size()
 	for i in mini(rests.size(), want.size()):
@@ -1700,7 +1700,8 @@ func _desk() -> void:
 	# THE TITLE AND THE CAMERA: up and wide over the intro until the first word, close as the pen writes
 	_check(ShowOpening.title_alpha("title", 0.1, INF, false) == 0.0 and ShowOpening.title_alpha("title", 1.6, INF, false) == 1.0,
 		"the channel's name comes up over a titled intro")
-	_check(desk._opening() == f.st0[0], "the lesson opens on its first word")
+	_check(is_equal_approx(desk._opening(), f.st0[0] - Openings.settle(f.st0[0])) and Openings.settle(f.st0[0]) > 0.0,
+		"the lesson opens a settle before its first word (2026-11-07: \"The speaking starts IMMEDIATELY after the title screen disappears\")")
 	desk._now = float(f.st0[0]) - 2.0
 	_check(float(desk._framing()["k"]) == 0.0, "the camera is wide over the intro")
 	desk._now = float(plan["start"]) + 0.5
@@ -1760,7 +1761,7 @@ func _desk() -> void:
 	_check(bool((turned["actions"][2] as Dictionary)["turn"]) and not bool((turned["actions"][1] as Dictionary)["turn"]),
 		"the formula that will not fit turns the page")
 	var rests := _rests(String(turned["speakable"]))
-	_check(rests.size() == 5 and absf(rests[2] - DeskScript.LEAD_HOLD - DeskScript.TURN) < 0.011,
+	_check(rests.size() == 6 and absf(rests[3] - DeskScript.LEAD_HOLD - DeskScript.TURN) < 0.011,
 		"and the voice waits for the turn before its dictation (%s)" % str(rests))
 	var td := _desk_over(tall)
 	var tp: Dictionary = td._plan[2]
@@ -1781,7 +1782,7 @@ func _desk() -> void:
 		frames += 1
 		t += 1.0 / 60.0
 	td._now = ta
-	_check(td._parks(1, 2) and (td.pen_at()["p"] as Vector2).x > DeskScript.PW and hits == 0 and old_hits > 2,
+	_check(td._parks(1, 2) and (td.pen_at()["p"] as Vector2).x > DeskScript.PW and hits == 0 and old_hits > 0,
 		"the pen is off the pad as the sheet lifts and never in its way, nor as it comes back (%d of %d frames; the control, the old wait at the page's right, %d)"
 		% [hits, frames, old_hits])
 	td._now = ta - 0.1

@@ -600,9 +600,11 @@ func take_words(words: Array) -> void:
 		_build_plan()
 
 
-## THE LESSON OPENS with its first word, which the pen's first dictation is: INF until it is heard.
+## THE LESSON OPENS a settle before its first word, which the pen's first dictation is ([method Openings.settle]: the
+## desk seen sharp, the name gone, before the teacher speaks): INF until it is heard.
 func _opening() -> float:
-	return _word_t0(0)
+	var t := _word_t0(0)
+	return t - Openings.settle(t) if t < INF else INF
 
 
 # --- the document ------------------------------------------------------------------------------
@@ -1590,9 +1592,10 @@ func _spring_tau() -> float:
 	return SPRING_TAU
 
 
-## How long the page lies blank after the intro before anything is done on it (seconds): none at the desk.
+## How long the page lies blank after the intro before anything is done on it (seconds): the settle the voice rests on at
+## the desk ([constant Openings.SETTLE], [method DeskScript.parse]) - the desk seen sharp, its name gone, before the teacher speaks.
 func _blank() -> float:
-	return 0.0
+	return Openings.SETTLE
 
 
 ## WHEN DICTATED action [param i] MAY BEGIN, its first word said at [param t0] (INF while it is not): at the

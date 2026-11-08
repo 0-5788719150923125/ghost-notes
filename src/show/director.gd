@@ -1162,9 +1162,11 @@ func _bookend_fade() -> float:
 	if t > slen + 0.5:
 		return 1.0
 	# The fade windows follow the BOOKEND when there is one, so the picture arrives
-	# exactly as the held silence ends rather than over the opening words. Without a
+	# before the held silence ends rather than over the opening words - a settle before
+	# it, to be looked at before the first sound ([method Openings.settle]). Without a
 	# bookend it falls back to the per-song sampled length, which is the old behavior.
-	var fade_in := maxf(0.5, Spectrum.lead_in if Spectrum.lead_in > 0.001 else _bookend_time)
+	var lead := Spectrum.lead_in
+	var fade_in := maxf(0.5, lead - Openings.settle(lead) if lead > 0.001 else _bookend_time)
 	var fade_out := maxf(0.5, Spectrum.tail if Spectrum.tail > 0.001 else _bookend_time)
 	var a_in := clampf(t / fade_in, 0.0, 1.0)           # 0 at the very start -> 1 after fade_in
 	var a_out := clampf((slen - t) / fade_out, 0.0, 1.0)  # 1 -> 0 over the final fade_out seconds

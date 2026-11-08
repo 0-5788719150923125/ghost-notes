@@ -642,7 +642,7 @@ func _check_cards_familiar() -> void:
 		if String((sg as Dictionary)["text"]).contains("Star"):
 			star = String((sg as Dictionary)["speaker"])
 	_ok(star == n, "the card after the familiar's quip is read by '%s'" % star)
-	_ok(_rests(segs).size() == 4, "%d of the table's 4 rests survived the voices" % _rests(segs).size())
+	_ok(_rests(segs).size() == 5, "%d of the table's 5 rests (its settle and 4 actions) survived the voices" % _rests(segs).size())
 
 
 ## EACH VOICE IN COLORS OF ITS OWN (2026-10-05: "the first can remain the rainbow color, while

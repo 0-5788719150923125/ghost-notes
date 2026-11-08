@@ -7,9 +7,9 @@ extends SceneTree
 ##
 ## EVERY STEP THE EPISODE HAS IS A ROW (THE CONTROL: the fixture has steps) and no menu stands anywhere on the card or the list; a
 ## card's rows stand under its name. EVERY ⟳ SAYS ONE THING, each its own.
-## WHAT THROWS OTHER FINISHED WORK AWAY SAYS SO: Plan goes amber naming what goes - the stray click the menu had guarded -
+## WHAT THROWS OTHER FINISHED WORK AWAY SAYS SO: Plan asks first, naming what goes - the stray click the menu had guarded -
 ## and a new Cloth does not (THE CONTROL), for its depth is remade with it, nor the Close, for the script is only the readings put
-## together. And only when that work exists (THE CONTROL: the same row, on an episode with nothing made after it, plain).
+## together. And only when that work exists (THE CONTROL: the same row, on an episode with nothing made after it, asks nothing).
 ## A ⟳ ONLY WHAT CAN START: one whose inputs are not made is not offered, saying so (it had been passed by without a word).
 ## While the episode is being made every ⟳ waits. Pressed and answered, the step and what was made from it go.
 ## WHAT IT TAKES WITH IT IS WORKED OUT ONCE, the same as [method TableEpisode.dependents] says for every step (THE CONTROL: a
@@ -95,21 +95,21 @@ func _check() -> void:
 		"a step that cannot be made again by itself has none: the draw is the seed's, the script its readings'")
 
 	# WHAT IT THROWS AWAY
-	_ok(_redo("say:intro").modulate != _pipe.AMBER and not _redo("say:intro").tooltip_text.contains("throws away"),
-		"control: with nothing made from it yet, its ⟳ is plain - the same row goes amber once there is")
+	_ok(not _pipe.asks_first("say:intro") and not _redo("say:intro").tooltip_text.contains("throws away"),
+		"control: with nothing made from it yet, its ⟳ asks nothing - the same row asks once there is")
 	_ep.write_json("draw", {"cards": [{"name": "The Tower", "key": "tower"}, {"name": "The Moon", "key": "moon"}], "deck_n": 78})
 	_write(["design:1", "image:back", "table", "image:height", "image:card:1", "check:1", "say:intro", "say:1", "say:2",
 		"say:close", "script"])
 	_pipe.refresh()
 	var plan := _redo("plan")
-	_ok(plan.modulate == _pipe.AMBER and plan.tooltip_text.contains("Card 1 Design") and plan.tooltip_text.contains("more"),
-		"Plan throws the episode away: amber, and saying what (%s)" % plan.tooltip_text.replace("\n", " "))
-	_ok(_redo("image:card:1").modulate == _pipe.AMBER and _redo("image:card:1").tooltip_text.contains("Card 1 Reading"),
+	_ok(_pipe.asks_first("plan") and plan.tooltip_text.contains("Card 1 Design") and plan.tooltip_text.contains("more"),
+		"Plan throws the episode away: it asks, saying what (%s)" % plan.tooltip_text.replace("\n", " "))
+	_ok(_pipe.asks_first("image:card:1") and _redo("image:card:1").tooltip_text.contains("Card 1 Reading"),
 		"a painting throws its reading away, and says so")
-	_ok(_redo("say:intro").modulate == _pipe.AMBER, "the intro, plain a moment ago, now has readings to take with it")
-	_ok(_redo("image:surface").modulate != _pipe.AMBER and _redo("image:backdrop").modulate != _pipe.AMBER,
-		"control: a new cloth or room keeps the table, and its depth is remade with it: not amber")
-	_ok(_redo("say:close").modulate != _pipe.AMBER, "control: the close takes only the script, which is the readings put together: not amber")
+	_ok(_pipe.asks_first("say:intro"), "the intro, asking nothing a moment ago, now has readings to take with it")
+	_ok(not _pipe.asks_first("image:surface") and not _pipe.asks_first("image:backdrop"),
+		"control: a new cloth or room keeps the table, and its depth is remade with it: it does not ask")
+	_ok(not _pipe.asks_first("say:close"), "control: the close takes only the script, which is the readings put together: it does not ask")
 
 	# A ⟳ ONLY WHAT CAN START
 	DirAccess.remove_absolute(_ep.file_of("say:1"))

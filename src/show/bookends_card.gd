@@ -19,7 +19,7 @@ class_name BookendsCard
 const KEY := "bookends"
 
 const INTRO_TIP := ("Seconds of held opening before the narration starts, so the video fades up "
-	+ "onto something instead of beginning mid-word. If Ambience is on, the bed plays alone "
+	+ "onto something, seen a few seconds, instead of beginning mid-word. If Ambience is on, the bed plays alone "
 	+ "through it. On the tablet the hand waits for it too: the screen wakes when it ends. "
 	+ "Applies to the next reading or render, not the take already playing. Under about "
 	+ "4s the bed is still swelling when the voice arrives; 0 turns the intro off.")

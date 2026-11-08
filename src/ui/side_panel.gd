@@ -320,6 +320,8 @@ func _corner() -> HBoxContainer:
 		open.custom_minimum_size = Vector2(28, 28)
 		open.pressed.connect(func() -> void: visible = true)
 		_restore.add_child(open)
+		# it fades with the rest of the furniture while a show plays alone ([constant Shell.FADES])
+		_restore.add_to_group(Shell.FADES)
 	return _restore
 
 

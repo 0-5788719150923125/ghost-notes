@@ -92,6 +92,31 @@ signal stage_room_changed
 var stage_bottom := 0.0
 var _stage_claims := {}
 
+## THE STAGE ALONE WHILE IT PLAYS (2026-11-07, the user: "After a few seconds of realtime playback, can we auto-hide all of
+## the UI elements, including the mouse cursor? This should ONLY apply if we have also hidden the F2 panel"). [constant
+## IDLE_AFTER] s into a show playing with no hand on the mouse or the keys, the furniture fades out and the pointer is hidden;
+## the first move, click or key brings both back. What fades is the group [constant FADES]: the row here, the corner a hidden
+## panel leaves ([SidePanel]) and the transport ([Transport]). ITS ALPHA ONLY: nothing is hidden or moved, so a claim on the
+## bottom edge holds and the row comes back where it was - and a button nobody sees takes no click, because the pointer cannot
+## reach one without moving.
+##
+## NEVER WHILE SOMETHING IS UP TO BE USED ([method _stays_up]): a side panel (the user's condition), a panel above the row, a
+## dock along the bottom ([member stage_bottom]), a dialog, popup or tooltip (an embedded window), a field being typed in, the
+## pointer on the furniture or a hold on it ([method hold_up]: the transport's rail), or a show catching up (its line says so).
+## THE INPUT IS THE WINDOW'S ([signal Window.window_input]), heard before any node can take it: the transport takes the arrows
+## for itself, and an embedded popup the motion over it (Masking's pointer once vanished inside a color picker that way). The
+## pointer is hidden and shown only on the way in and out, so Masking's own hiding of it is never fought.
+const FADES := &"fades_while_watching"
+const IDLE_AFTER := 3.0
+const FADE_OUT := 0.6               # s from shown to gone
+const FADE_IN := 0.15               # s back
+const STILL := 3.0                  # px the pointer may drift and still be resting (a mouse's jitter)
+var _idle_t := 0.0
+var _faded := 1.0                   # the alpha the furniture is drawn at
+var _hid_pointer := false           # this shell hid the pointer, and shows it again
+var _rest_at := Vector2.INF         # where the pointer last moved to
+var _holds := {}                    # who -> true while it keeps the furniture up
+
 
 ## Claim [param px] of room at the bottom of the frame for [param who]. Idempotent -
 ## call it again with a new figure whenever the claiming surface changes size.
@@ -200,6 +225,11 @@ func _ready() -> void:
 	# THE ROW FIRST: each piece of furniture hands its button to it as it is built.
 	_build_row()
 	_build_home()
+	get_window().window_input.connect(_on_window_input)
+
+
+func _exit_tree() -> void:
+	_show_pointer()
 
 
 # --- the row ----------------------------------------------------------------------------------
@@ -219,6 +249,7 @@ func _build_row() -> void:
 	row.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	row.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_to_group(FADES)
 	_row_layer.add_child(row)
 	_place_row()
 
@@ -372,6 +403,7 @@ func _paint_home() -> void:
 
 
 func _process(delta: float) -> void:
+	_watch(delta)
 	# the reason a mode cannot be left comes and goes with an export; four times a second is plenty
 	if _home_button == null or not _home_button.visible:
 		return
@@ -410,3 +442,94 @@ func panel_open() -> bool:
 		if _panels_open[k]:
 			return true
 	return false
+
+
+# --- the stage alone while it plays -------------------------------------------------------------
+
+## Keep the furniture up while [param on] holds for [param who] (keyed, as every claim here is): something the pointer is
+## using that is no control the shell can find under it - the transport's rail.
+func hold_up(who: StringName, on: bool) -> void:
+	if on:
+		_holds[who] = true
+	else:
+		_holds.erase(who)
+
+
+## How much the furniture shows: 1 up, 0 faded out while the show plays alone.
+func furniture_alpha() -> float:
+	return _faded
+
+
+## A move, a click, a key or a touch: the furniture and the pointer come back. A pointer that drifts by less than
+## [constant STILL] is resting.
+func _on_window_input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion or event is InputEventScreenDrag:
+		var p: Vector2 = event.position
+		if _rest_at != Vector2.INF and p.distance_to(_rest_at) <= STILL:
+			return
+		_rest_at = p
+	elif not event.is_pressed():
+		return
+	elif not (event is InputEventKey or event is InputEventMouseButton or event is InputEventScreenTouch
+			or event is InputEventJoypadButton):
+		return
+	_idle_t = 0.0
+	_show_pointer()
+
+
+## One frame of watching: the time with nothing to do counts while nothing keeps the furniture up, and the furniture
+## eases toward what that says. Taken in steps of at most 0.25 s, so a hitch (a table's first frame) is not a wait.
+func _watch(delta: float) -> void:
+	if _stays_up():
+		_idle_t = 0.0
+	else:
+		_idle_t += minf(delta, 0.25)
+	var alone := _idle_t >= IDLE_AFTER
+	if alone and not _hid_pointer and Input.mouse_mode == Input.MOUSE_MODE_VISIBLE:
+		Input.mouse_mode = Input.MOUSE_MODE_HIDDEN
+		_hid_pointer = true
+	elif not alone:
+		_show_pointer()
+	var want := 0.0 if alone else 1.0
+	var was := _faded
+	_faded = move_toward(_faded, want, delta / (FADE_OUT if want < _faded else FADE_IN))
+	# every frame while it is down, so furniture that joins then fades too; nothing at all while it is up
+	if _faded == 1.0 and was == 1.0:
+		return
+	for n in get_tree().get_nodes_in_group(FADES):
+		var c := n as CanvasItem
+		if c != null:
+			c.modulate.a = _faded
+
+
+## Whatever keeps the furniture up: everything but a show playing on its own with nobody at the controls.
+func _stays_up() -> bool:
+	if not Spectrum.transport_playing() or Spectrum.waiting():
+		return true
+	if panel_open() or stage_bottom > 0.0 or not _holds.is_empty():
+		return true
+	for n in get_tree().get_nodes_in_group(SidePanel.GROUP):
+		var c := n as CanvasItem
+		if c != null and c.is_visible_in_tree():
+			return true
+	var vp := get_viewport()
+	for w in vp.get_embedded_subwindows():
+		if w.visible:
+			return true
+	var f := vp.gui_get_focus_owner()
+	if (f is TextEdit or f is LineEdit) and f.is_visible_in_tree():
+		return true
+	var h := vp.gui_get_hovered_control()
+	if h != null:
+		for n in get_tree().get_nodes_in_group(FADES):
+			if n == h or (n as Node).is_ancestor_of(h):
+				return true
+	return false
+
+
+func _show_pointer() -> void:
+	if not _hid_pointer:
+		return
+	_hid_pointer = false
+	if Input.mouse_mode == Input.MOUSE_MODE_HIDDEN:
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE

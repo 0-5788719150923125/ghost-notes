@@ -13,9 +13,11 @@ class_name PipelineCard
 ## ONE WAY IN: a card hands a [PipelineSection] ([method add]). The list is made of what those say ([PipelineRow]), and
 ## nothing here knows what a card, a sketch or a tag is.
 ##
-## ONE ⟳: a row's starts its one thing at once - unless that throws other finished work away, when the ⟳ goes amber, says so
-## on hover and asks once, a yes or a no, naming it ([member PipelineRow.asks]). Never a list. What a click will do is
-## known before it is made.
+## ONE ⟳: a row's starts its one thing at once - unless that throws other finished work away, when it says so on hover and
+## asks once, a yes or a no, naming it ([member PipelineRow.asks]). Never a list. What a click will do is known before it
+## is made. EVERY ⟳ IS ONE COLOR (2026-11-07, the user: "it's not clear why some of the regenerate buttons are orange, while
+## others are white. I would be inclined to just make them all white"): the amber a ⟳ that asks once wore said nothing a
+## person could read, and the hover and the question say it in words.
 ##
 ## ONE GENERATE: every section's missing work, top to bottom, each waiting for the one before ([method generate]): the
 ## words first, then what is made from them. The ▶ on a section's heading makes that section alone. While Generate walks,
@@ -25,8 +27,6 @@ class_name PipelineCard
 const NAME_MOST := 124.0
 ## How far a group's rows stand in.
 const INDENT := 12.0
-## A ⟳ that asks: the color a card's warnings are in.
-const AMBER := Color(1.0, 0.78, 0.4)
 ## Rows ask the disk what exists, so four times a second, as the cards' rows always did.
 const EVERY := 0.25
 
@@ -237,6 +237,12 @@ func row(key: String, section := "") -> Dictionary:
 		if (r["row"] as PipelineRow).key == key and (section.is_empty() or (r["section"] as PipelineSection).title == section):
 			return r
 	return {}
+
+
+## Whether the row's ⟳ asks before it runs, naming what it throws away (its tooltip says what). For a gate.
+func asks_first(key: String, section := "") -> bool:
+	var r := row(key, section)
+	return not r.is_empty() and not (r["row"] as PipelineRow).asks.is_empty()
 
 
 ## The names of the rows listed, top to bottom. For a gate.
@@ -503,7 +509,6 @@ func _show_row(section: PipelineSection, it: PipelineRow, walking_now: bool) -> 
 	if not it.again.is_empty():
 		redo.disabled = walking_now or not it.open
 		redo.tooltip_text = it.again + ("\n\n" + it.asks if not it.asks.is_empty() else "")
-		redo.modulate = AMBER if not it.asks.is_empty() else Color.WHITE
 	var make: Variant = r["make"]
 	if make is Button:
 		(make as Button).disabled = walking_now or not it.go_open

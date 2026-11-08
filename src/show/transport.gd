@@ -38,6 +38,10 @@ class_name Transport
 ## CLAIMS it from Chrome ([method Chrome.claim_bottom]) while it is timed, like any other surface
 ## at the bottom edge; nothing positions the row by a figure of its own. Change PAD, HIT or the
 ## rail's height and the row follows.
+##
+## IT FADES WITH THE REST OF THE FURNITURE while a show plays alone (the group [constant Shell.FADES]: the shell sets its
+## root's alpha, and keeps its claim), and a pointer on the rail holds it up ([method Shell.hold_up]) - the rail is drawn,
+## not a control the shell could find under the pointer.
 
 const BAR_H := 4.0                  # the resting rail, px
 const BAR_H_ACTIVE := 8.0           # while the pointer is over it
@@ -64,6 +68,7 @@ var _stop: Button
 var _painter: Control
 var _stale_tip := false
 var _claimed := false               # holds a claim on Chrome's bottom edge now
+var _holding := false               # holds the furniture up now (the pointer on the rail)
 
 
 func _ready() -> void:
@@ -73,6 +78,7 @@ func _ready() -> void:
 	_root = Control.new()
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.add_to_group(Shell.FADES)
 	add_child(_root)
 	_play = _button("▶", PLAY_TIP)
 	_play.pressed.connect(func() -> void: Spectrum.transport_toggle())
@@ -120,9 +126,21 @@ func _claim_room(on: bool) -> void:
 		ch.release_bottom(CLAIM)
 
 
+## Hold the furniture up (or let it go) while the pointer is on the rail or dragging it.
+func _hold_up(on: bool) -> void:
+	if on == _holding:
+		return
+	var ch := Shell.of(self)
+	if ch == null:
+		return
+	_holding = on
+	ch.hold_up(CLAIM, on)
+
+
 func _exit_tree() -> void:
 	if _claimed:
 		_claim_room(false)
+	_hold_up(false)
 
 
 func _button(glyph: String, tip: String) -> Button:
@@ -139,6 +157,7 @@ func _button(glyph: String, tip: String) -> Button:
 func _process(delta: float) -> void:
 	var want := 1.0 if Spectrum.timed() else 0.0
 	_claim_room(want > 0.0)
+	_hold_up(want > 0.0 and (_dragging or _hover_x >= 0.0))
 	_shown = lerpf(_shown, want, 1.0 - exp(-FADE * delta))
 	# Snapped to zero only on the way OUT: a frame of a fraction of a millisecond (a headless run)
 	# eases in by less than the threshold, and snapping then kept the bar hidden for good.

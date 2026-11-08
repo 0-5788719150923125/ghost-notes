@@ -86,7 +86,7 @@ func _ready() -> void:
 		_song.chosen.connect(_choose_song)
 		_panel.add_card("song", "Song", &"sound", "song").add_child(_song)
 	_cards = NoteCards.build(_panel, _attached, {
-		"intro_tip": "Seconds held before the song starts, the picture fading up through them.",
+		"intro_tip": "Seconds held before the song starts, the picture fading up through them and up a few seconds before it.",
 		"outro_tip": "Seconds held after the song ends, picture and sound fading out together."})
 	_picture = _cards.get("picture") as PictureCard
 	_story = _cards.get("scenes") as StoryboardCard

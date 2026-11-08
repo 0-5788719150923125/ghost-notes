@@ -1,5 +1,5 @@
 {
-	"digest": "9faae342330a9bf94ece0abfa068b14d8334258f7bd98fb8a251711f25193059",
+	"digest": "80e3ac5027997bfe6629184792b0ac12efe6c9a74b87e3e53885b491c1023e7b",
 	"files": [
 		"res://project.godot",
 		"res://scenes/main.tscn",
@@ -25,6 +25,8 @@
 		"res://shaders/prop_glass.gdshader",
 		"res://shaders/prop_lens.gdshader",
 		"res://shaders/prop_liquid.gdshader",
+		"res://shaders/prop_liquid.gdshaderinc",
+		"res://shaders/prop_liquid_clear.gdshader",
 		"res://shaders/sheet_writing.gdshader",
 		"res://shaders/skin_paint.gdshader",
 		"res://shaders/table_common.gdshaderinc",
@@ -161,6 +163,7 @@
 		"res://src/render/scheme.gd",
 		"res://src/render/shadow_casters.gd",
 		"res://src/render/shadow_filter.gd",
+		"res://src/render/tonemaps.gd",
 		"res://src/render/tri_batch.gd",
 		"res://src/scene_kit/ghost_scene.gd",
 		"res://src/scene_kit/layer.gd",

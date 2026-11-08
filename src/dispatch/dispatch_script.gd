@@ -136,8 +136,9 @@ const PING := 1.2
 const PING_LEN := 2.6
 const MOVING := 0.7
 const MOVING_LEN := 1.6
-## THE DESK AT REST, seen whole before anything moves (seconds): the breath the voice opens on.
-const OPENING := 3.0
+## THE DESK AT REST, seen whole before anything moves (seconds): the breath the voice opens on - every opening's settle
+## ([constant Openings.SETTLE]).
+const OPENING := Openings.SETTLE
 ## STATIC: a bare mark's seconds.
 const STATIC_BARE := 4.0
 ## THE PRINTER: before its first line, a line, the feed after it; and its least and most.

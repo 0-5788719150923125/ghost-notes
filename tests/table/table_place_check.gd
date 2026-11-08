@@ -578,7 +578,8 @@ func _outro() -> void:
 	_ok(mid > 0.05 and mid < 0.95, "fading through the outro (%.2f halfway)" % mid)
 	_ok(medium._end_fade(end_t + 6.01) < 0.001, "black as the outro runs out (%.3f)" % medium._end_fade(end_t + 6.01))
 	var ts := float(medium._times()["shuffle"])
-	_ok(ts < INF and medium._title_alpha(ts - 1.0) > 0.5, "the channel's name is up over the intro (%.2f)" % medium._title_alpha(ts - 1.0))
+	var ie: float = medium._intro_end()
+	_ok(ts < INF and medium._title_alpha(ie - 1.0) > 0.5, "the channel's name is up over the intro (%.2f)" % medium._title_alpha(ie - 1.0))
 	var shown := 0
 	var t := ts + 1.0
 	while t < end_t + 9.0:
@@ -591,7 +592,7 @@ func _outro() -> void:
 	var full := 0
 	var moments := 0
 	var t1 := 1.4
-	while t1 < ts - TableMedium.FOCUS_PULL.x:
+	while t1 < ie - TableMedium.FOCUS_PULL.x:
 		medium._tick_focus(t1)
 		full += 1 if medium._blur.visible and is_equal_approx(_blur_sigma(), wide) else 0
 		moments += 1
@@ -603,14 +604,24 @@ func _outro() -> void:
 		"the title screen's moment (%.1f s) has the name fully up over the table out of focus" % thumb)
 	var was := wide
 	var widened := 0
-	t1 = ts - TableMedium.FOCUS_PULL.x
-	while t1 < ts + TableMedium.FOCUS_PULL.y:
+	t1 = ie - TableMedium.FOCUS_PULL.x
+	while t1 < ie + TableMedium.FOCUS_PULL.y:
 		medium._tick_focus(t1)
 		var sg := _blur_sigma() if medium._blur.visible else 0.0
 		widened += 1 if sg > was + 1e-6 else 0
 		was = sg
 		t1 += 0.05
 	_ok(widened == 0 and was == 0.0, "the blur lifts as the focus pulls, never widening (%d steps back; %.4f left)" % [widened, was])
+	# THE TABLE SEEN FIRST (2026-11-07, the user: "The speaking starts IMMEDIATELY after the title screen disappears"): the voice rests
+	# a settle after the intro, and the name is gone and the table sharp through it, before the shuffle and the first word - THE
+	# CONTROL: timed off the shuffle, as it had been, the name is still up 2.5 s before the first word
+	var first_w: float = medium._follow.st0[0]
+	var sharp_at := ie + TableMedium.FOCUS_PULL.y
+	_ok(String(CardReading.parse(_script)["speakable"]).begins_with("<!-- action-hold: %s -->" % String.num(Openings.SETTLE, 2)),
+		"the voice rests a settle after the intro, before anything is said or done")
+	_ok(medium._title_alpha(first_w - 2.5) < 0.001 and first_w - sharp_at > 1.2 and ts - ie > 2.0,
+		"the name is gone %.1f s and the table sharp %.1f s before the first word, %.1f s before the shuffle" % [first_w - (ie + 0.3), first_w - sharp_at, ts - ie])
+	_ok(ShowOpening.title_alpha("title", first_w - 2.5, ts, true) > 0.5, "THE CONTROL: timed off the shuffle, the name is still up 2.5 s before the first word")
 	var on := 0
 	t1 = ts + 0.2
 	while t1 < end_t:

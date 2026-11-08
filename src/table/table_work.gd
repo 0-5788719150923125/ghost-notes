@@ -600,6 +600,16 @@ func _take_acts(raw: Variant, beats: int) -> void:
 				_writing[int(tr["_wi"])] = {"text": tr["text"], "hand": tr["hand"], "ink": tr["ink"]}
 
 
+## HOW MUCH WATER cloud track [param tr] ([method _cloud_of]) clouds, milliliters: its vessel's as the physics found it drawn, or a
+## glass's ([constant TablePaint.WATER_ML]).
+func _water_ml(tr: Dictionary) -> float:
+	if physics != null:
+		for L in physics.liquids:
+			if int((L as Dictionary)["wi"]) == int(tr.get("_wi", -2)) and float((L as Dictionary)["built_v"]) > 0.0:
+				return float((L as Dictionary)["built_v"]) * 1e6
+	return TablePaint.WATER_ML
+
+
 ## THE WATER PAINT TRACK [param tr] RINSES ITS BRUSH IN, as a track of its own on the water's color - or empty where what it names
 ## holds no liquid with a name.
 func _cloud_of(tr: Dictionary) -> Dictionary:
@@ -2113,7 +2123,7 @@ func _eval(e: Dictionary, tau: float, T: float) -> Variant:
 		return _pose(e, tau, d, T)
 	if e["from"] is Color:
 		if String(tr["law"]) == "cloud":
-			return _painter().cloud_at(tr["_with"], e["from"], tau, d)
+			return _painter().cloud_at(tr["_with"], e["from"], tau, d, _water_ml(tr))
 		return Motions.tint(tr, e["from"], tau, d, T) if String(tr["law"]) == "to" else e["from"]
 	return Motions.scalar(tr, float(e["from"]), tau, d, T)
 
@@ -3686,6 +3696,8 @@ func _pose_work(wi: int, t: float) -> void:
 			var mat := m as ShaderMaterial
 			if tint is Color:
 				mat.set_shader_parameter("color", tint)
+				# ...and how clouded what is in it is, by what is rinsed in it ([method TablePaint.cloud_at]: the rest of its alpha)
+				mat.set_shader_parameter("murk", 1.0 - (tint as Color).a)
 			mat.set_shader_parameter("glow", glow)
 			mat.set_shader_parameter("boil", boil)
 	if _writing.has(wi):

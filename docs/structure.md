@@ -5,7 +5,7 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 607 references inside a folder, 1058 down the stack, 0 up it.
+Between scripts today: 608 references inside a folder, 1065 down the stack, 0 up it.
 
 ## The stack, top first
 
@@ -26,7 +26,7 @@ Between scripts today: 607 references inside a folder, 1058 down the stack, 0 up
 | `show/` | The show | 10 | `media`, `ui`, `notes`, `scenes`, `stage`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
 | `media/` | Media | 20 | `voice`, `ui`, `notes`, `agents`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
 | `voice/` | Synthesis (voice) | 14 | `audio`, `platform`, `data` |
-| `ui/` | The panel kit | 22 | `notes`, `agents`, `render`, `platform`, `data` |
+| `ui/` | The panel kit | 22 | `notes`, `agents`, `render`, `audio`, `platform`, `data` |
 | `notes/` | Notes | 10 | `agents`, `stage`, `platform`, `data` |
 | `agents/` | Agents | 6 | `platform`, `data` |
 | `scenes/` | Scenes | 59 | `stage`, `scene_kit`, `geometry`, `motion`, `render`, `audio` |

@@ -1117,6 +1117,14 @@ description, chapters, tags, thumbnail moment and record). The export menu has n
   The block keeps `episode_title` and `description` - one of each, NOTHING per episode ("I just
   don't want to store a bunch of episode-specific logic in the frontmatter"); a per-seed record map
   was tried the same day and removed.
+- **The table seen first** (2026-11-07, the user: "The speaking starts IMMEDIATELY after the title screen disappears. That doesn't
+  give the viewer enough time to orient themselves ... That should probably be a general principle across most modes, after the
+  title/intro sequence"): the voice rests a settle (`Openings.SETTLE`, 3 s) after the intro before anything is said or done
+  (`CardReading.parse` opens its speakable on it), and the name goes and the focus pulls that long before the opening verb
+  (`TableMedium._intro_end`) - the table sharp and at rest, then the shuffle a beat before the first word. A cardless show's `begin`
+  had held the voice 0.4 s, so it spoke as the name went. The same settle at the desk (`DeskScript.parse`, `DeskMedium._blank`) and the
+  dispatch desk (`DispatchScript.OPENING`, which had it first); a letter's blank page is longer (`LetterScript.BLANK_PAGE`); a show with
+  no opening has its picture up that long before the first sound (`Director._bookend_fade`).
 - **The title screen**: the show's name, and under it the BYLINE - the document's `byline:` ("with
   Pen & Ink"), a field on the document card right under Title. REBUILT 2026-10-06 for the thumbnail
   (the user: the text "too small in some layouts on mobile", "always the same color... camouflaged",

@@ -302,11 +302,16 @@ void fragment() {
 		albedo = mix(albedo, color2 * 1.15, g * 0.75);
 		sss = max(sss, 0.55);
 	}
-	// THE PAINT ON A BRUSH'S TIP, toward its end, wet
+	// THE PAINT ON A BRUSH'S TIP, the end half of its hairs, wet and glossy - read over hair of any color as a sheen where its own color
+	// is near the hair's (2026-11-07, the user: "the bristle do not apparently pick up any color ... maybe a transparency overlay for
+	// color on the bristles, to show that they actually have some makeup on them"; a rust on a liner showed, a tan on a sable round
+	// brush did not: from 0.55 of the way up, rough 0.3)
 	if (bristle_len > 0.0 && tip_paint.a > 0.0) {
-		float wet = tip_paint.a * smoothstep(0.55, 0.9, UV2.x);
+		// (thinner on the core, the hairs inside: they carry less of it than the hairs outside - Bristles.CORE_WET)
+		float wet = tip_paint.a * smoothstep(0.4, 0.85, UV2.x) * (UV.x > 1.5 ? BRISTLE_CORE_WET : 1.0);
 		albedo = mix(albedo, tip_paint.rgb, wet);
-		rough = mix(rough, 0.3, wet);
+		rough = mix(rough, 0.15, wet);
+		spec = max(spec, mix(spec, 0.7, wet));
 	}
 	// A SURFACE PAINTED from its front: the paint composed for it, laid over what it is - its color where there is paint,
 	// its finish as rough, metallic or glittering as that paint is - and only where the surface faces that front

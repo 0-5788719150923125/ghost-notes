@@ -160,13 +160,16 @@ const EMITS := {
 ## WHAT STEAMS IS HOT, AND WHAT IS HOT COOLS (the user, of a coffee steaming through a two-hour build: "that steaming coffee is going to go cold ... implemented as temperature of the liquid, since that would
 ## make sense: I think many hot liquids would produce steam, and all of them would cool down eventually"). Newton's cooling, a pure function of show time: what it starts at, the room it falls toward, and how
 ## long a cup takes to lose all but a third of what it has over the room (34 minutes: coffee in a stoneware mug, 85 degrees C at the start, 41 at 40 minutes). A larger thing holds its heat for longer, as its
-## volume does against its surface, so by how far across it is. Its steam is thick down to one heat and gone at another.
+## volume does against its surface, so by how far across it is. Its steam is thick down to one heat and gone at another - SEEN STEAM IS
+## A HOT DRINK'S (feedback 0045, of 520084's mug: "We are 12 minutes in, and the coffee at the top-left has not stopped steaming yet"):
+## thick to 72 C and gone at 44, a mug steamed for 35 minutes and still gave most of it at twelve; a cup's steam thins from 80 and is
+## gone by 58, about 18 minutes in.
 const HOT_AT := 85.0
 const ROOM_AT := 21.0
 const CUP_COOLS := 2040.0
 const CUP_ACROSS := 0.084
-const STEAM_FULL := 72.0
-const STEAM_GONE := 44.0
+const STEAM_FULL := 80.0
+const STEAM_GONE := 58.0
 ## The most puffs one emitter keeps in the air at once: a thread of smoke's trail ([method TableWork._plume]) for
 ## as long as its longest puff lives.
 const MAX_PUFFS := 64

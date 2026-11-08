@@ -114,7 +114,8 @@ static func speakable(body: String) -> String:
 ##               `last` the run's last card (`card` for one)
 ##   source    - where the cards come from: the opening verb's ([constant TableActions.SOURCES])
 ##   spoken    - PackedStringArray: every spoken word, normalized ([method TabletScript.norm])
-##   speakable - the text the voice reads
+##   speakable - the text the voice reads, opening on a settle's rest ([constant Openings.SETTLE])
+##   settle    - that rest (seconds)
 ##   cards     - how many cards the reading draws
 ##   cues      - [{name, si}]: each act cued at a word, `si` the spoken word it starts at
 ##   chapters  - [{name, si, opens, action}]: each chapter mark; `opens` when no word of its passage is
@@ -148,6 +149,9 @@ static func parse(body: String) -> Dictionary:
 	var chapter_rx := _rx(CHAPTER_MARK)
 	var spoken := PackedStringArray()
 	var speak := PackedStringArray()
+	# THE TABLE SEEN FIRST: the voice rests a settle after the intro before anything is said or done ([constant Openings.SETTLE]; it had
+	# opened on its first verb's own rest, a cardless show's 0.4 s, the voice speaking as the name went)
+	speak.append("<!-- action-hold: %s -->" % String.num(Openings.SETTLE, 2))
 	var showing := false
 	var cards := 0
 	var moved := false
@@ -219,7 +223,8 @@ static func parse(body: String) -> Dictionary:
 				if not cued.is_empty():
 					who = cued
 	return {"passages": out_passages, "actions": actions, "spoken": spoken,
-		"speakable": "\n\n".join(speak), "cards": cards, "source": source, "cues": cues, "chapters": chapters, "quiets": quiets}
+		"speakable": "\n\n".join(speak), "cards": cards, "source": source, "cues": cues, "chapters": chapters, "quiets": quiets,
+		"settle": Openings.SETTLE}
 
 
 ## HOW FAR INTO A SILENCE a mark from [param from] to [param to] in [param text] stands: the seconds of the quiet marks between the word

@@ -142,7 +142,7 @@ func _names() -> PackedStringArray:
 ## The design on skin [param si] as it now stands, in words, and what was wrong with what was written.
 func _said(si: int) -> String:
 	var skin: Dictionary = skins[si]
-	var made := Skins.sanitize(_raw.get(si, {}), skin["frame"])
+	var made := Skins.sanitize(_raw.get(si, {}), skin["frame"], String(skin.get("outline", "")))
 	var lines := PackedStringArray()
 	lines.append("\"%s\" on %s, %d elements in the order they go on:" % [made["name"], _names()[si], (made["elements"] as Array).size()])
 	lines.append_array(Skins.summary(made, skin["frame"]))
@@ -222,7 +222,7 @@ func _look(args: Dictionary) -> Dictionary:
 	var si := _skin_of(args.get("on"))
 	if si < 0:
 		return {"text": "There is no surface to paint called \"%s\": %s." % [str(args.get("on", "")), ", ".join(_names())], "error": true}
-	var made := Skins.sanitize(_raw.get(si, {}), (skins[si] as Dictionary)["frame"])
+	var made := Skins.sanitize(_raw.get(si, {}), (skins[si] as Dictionary)["frame"], String((skins[si] as Dictionary).get("outline", "")))
 	var img := Skins.look(skins[si], made, String(args.get("stage", "")) if args.get("stage") is String else "")
 	if si == 0 and not reference.is_empty():
 		img = _beside(img, Image.load_from_file(reference))
@@ -262,7 +262,7 @@ func _submit() -> Dictionary:
 	if _raw.is_empty():
 		return {"text": "Nothing is designed yet: write elements with `design`.", "error": true}
 	for si in _raw:
-		var made := Skins.sanitize(_raw[si], (skins[int(si)] as Dictionary)["frame"])
+		var made := Skins.sanitize(_raw[si], (skins[int(si)] as Dictionary)["frame"], String((skins[int(si)] as Dictionary).get("outline", "")))
 		if (made["elements"] as Array).is_empty():
 			return {"text": "The design on %s has no element that can be painted:\n%s" % [_names()[int(si)], _said(int(si))], "error": true}
 		if String(made["name"]).is_empty():

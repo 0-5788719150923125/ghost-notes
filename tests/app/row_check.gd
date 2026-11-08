@@ -17,6 +17,13 @@ extends Node
 ## ONE PANEL ABOVE THE ROW AT A TIME: the Environment, the Graphics, the console's log and the Assistant's panel,
 ## each opened in turn by its own button, and every other one closed by it.
 ##
+## THE STAGE ALONE WHILE IT PLAYS ([constant Shell.FADES]): a show playing with the side panel hidden and no hand on the
+## controls fades the row, the panel's corner and the transport to nothing after Shell.IDLE_AFTER, and the shell hides the
+## pointer - with the claim on the bottom edge kept, so nothing moves. The control is the user's condition: the same play
+## with the panel showing stays up. So do a pause, a show catching up, a panel above the row, and the pointer on the rail.
+## A move, a key or a click brings it back; a pointer drifting a pixel does not. Time is stepped by hand (`_watch`), never
+## waited for.
+##
 ## `[deps] open`, READ BACK AFTER A RESTART: closing the Environment with its button is remembered
 ## and a fresh Chrome comes up with it closed; opening it is remembered too. (A probe's Settings
 ## never reach the disk; a fresh Chrome reads the same in-memory table the next launch would.)
@@ -34,6 +41,7 @@ func _run() -> void:
 	var ch := await _chrome()
 	await _geometry(ch)
 	await _one_at_a_time(ch)
+	await _alone(ch)
 	await _remembered(ch)
 	# put back what was there (in memory: a probe never writes the file)
 	if not had:
@@ -201,6 +209,108 @@ func _open(ch: Chrome) -> Array:
 	if ch.assistant._panel.visible:
 		out.append("assistant")
 	return out
+
+
+## Step the shell's watch [param s] seconds by hand, in quarter seconds, with no frame between.
+func _step(ch: Chrome, s: float) -> void:
+	for _i in int(ceil(s / 0.25)):
+		ch._watch(0.25)
+
+
+## The alpha of every piece of fading furniture: the row, the panel's corner, the transport.
+func _alphas(ch: Chrome, panel: SidePanel) -> Array:
+	return [ch.row.modulate.a, panel._restore.modulate.a, ch.transport._root.modulate.a]
+
+
+func _alone(ch: Chrome) -> void:
+	print("-- the stage alone while it plays")
+	_ok(get_window().window_input.is_connected(ch._on_window_input), "the shell hears the window's own input")
+	var panel := SidePanel.new()
+	add_child(panel)
+	panel.pin_title_row(self)
+	await _frames(3)
+	var playing := [true]
+	Spectrum.conduct(self, {"playing": func() -> bool: return playing[0]})
+	await _frames(4)
+	var rest := (_shown(ch)[0] as Control).get_global_rect().end.y
+	# THE CONTROL, the user's condition: the panel showing, the show playing, nobody touching anything
+	_step(ch, Shell.IDLE_AFTER + 1.0)
+	_ok(_alphas(ch, panel) == [1.0, 1.0, 1.0] and not ch._hid_pointer,
+		"control: with the side panel showing, a show playing alone keeps everything up (%s)" % str(_alphas(ch, panel)))
+	panel.visible = false
+	await _frames(2)
+	_step(ch, Shell.IDLE_AFTER - 0.5)
+	_ok(ch.furniture_alpha() == 1.0, "the panel hidden, it is still up before IDLE_AFTER")
+	_step(ch, 0.5 + Shell.FADE_OUT + 0.25)
+	_ok(_alphas(ch, panel) == [0.0, 0.0, 0.0] and ch._hid_pointer,
+		"after IDLE_AFTER the row, the corner and the transport fade out and the pointer is hidden (%s)" % str(_alphas(ch, panel)))
+	var faded_rest := (_shown(ch)[0] as Control).get_global_rect().end.y
+	_ok(absf(faded_rest - rest) < 0.5 and ch.transport._root.visible and ch.transport._claimed,
+		"faded, nothing moves: the transport keeps its claim and the row its place (%.0f, %.0f)" % [rest, faded_rest])
+	# a move brings it back; a drift of a pixel from where it moved to does not
+	var at := Vector2(400, 300)
+	_ok(_woken(ch, _motion(at)), "a move brings it back and shows the pointer")
+	_step(ch, Shell.FADE_IN + 0.25)
+	_ok(_alphas(ch, panel) == [1.0, 1.0, 1.0], "up again within FADE_IN (%s)" % str(_alphas(ch, panel)))
+	_step(ch, Shell.IDLE_AFTER + Shell.FADE_OUT + 0.25)
+	ch._on_window_input(_motion(at + Vector2(1, 1)))
+	_ok(ch._idle_t >= Shell.IDLE_AFTER and ch._hid_pointer, "a pointer drifting a pixel is resting: it stays down")
+	var key := InputEventKey.new()
+	key.keycode = KEY_RIGHT
+	key.pressed = true
+	_ok(_woken(ch, key), "a key brings it back (the transport takes the arrows; the window hears them first)")
+	_step(ch, Shell.IDLE_AFTER + Shell.FADE_OUT + 0.25)
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	click.position = at
+	_ok(_woken(ch, click), "a click brings it back")
+	# what keeps it up, each against the same quiet play
+	playing[0] = false
+	_ok(_stays(ch), "a paused show stays up")
+	playing[0] = true
+	Spectrum.set_waiting("row_check", true)
+	_ok(_stays(ch), "a show catching up stays up (its line says so)")
+	Spectrum.set_waiting("row_check", false)
+	ch.set_graphics_open(true)
+	_ok(_stays(ch), "a panel open above the row stays up")
+	ch.set_graphics_open(false)
+	ch.transport._hover_x = 300.0
+	await _frames(2)
+	_ok(ch._holds.has(Transport.CLAIM) and _stays(ch), "the pointer on the transport's rail holds it up")
+	ch.transport._hover_x = -1.0
+	await _frames(2)
+	_ok(not ch._holds.has(Transport.CLAIM) and not _stays(ch), "and lets go when it leaves the rail")
+	# leaving the play brings the pointer back
+	_step(ch, Shell.IDLE_AFTER + Shell.FADE_OUT + 0.25)
+	Spectrum.release_conductor(self)
+	_step(ch, Shell.FADE_IN + 0.25)
+	_ok(ch.furniture_alpha() == 1.0 and not ch._hid_pointer, "the show stopped, it is up again with the pointer")
+	panel.queue_free()
+	await _frames(3)
+
+
+func _motion(at: Vector2) -> InputEventMouseMotion:
+	var m := InputEventMouseMotion.new()
+	m.position = at
+	return m
+
+
+## Down first, then [param event] through the shell's window input: is it up again, pointer and all?
+func _woken(ch: Chrome, event: InputEvent) -> bool:
+	if ch._idle_t < Shell.IDLE_AFTER:
+		_step(ch, Shell.IDLE_AFTER + Shell.FADE_OUT + 0.25)
+	var was_down := ch._hid_pointer and ch.furniture_alpha() == 0.0
+	ch._on_window_input(event)
+	ch._watch(0.0)
+	return was_down and ch._idle_t == 0.0 and not ch._hid_pointer
+
+
+## Does a quiet play, stepped past IDLE_AFTER from up, stay up?
+func _stays(ch: Chrome) -> bool:
+	ch._on_window_input(_motion(Vector2(300, 200) if ch._rest_at.x == 200.0 else Vector2(200, 200)))
+	_step(ch, Shell.IDLE_AFTER + 0.5)
+	return ch._idle_t == 0.0 and ch.furniture_alpha() == 1.0
 
 
 func _remembered(ch: Chrome) -> void:

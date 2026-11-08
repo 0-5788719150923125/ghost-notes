@@ -338,7 +338,8 @@ static func timeline(parse: Dictionary, word: float, intro: float) -> Array:
 	for a in parse["actions"]:
 		var k := int((a as Dictionary)["after"])
 		rests[k] = float(rests.get(k, 0.0)) + float((a as Dictionary)["dur"]) + 0.5
-	var t := intro
+	# (the intro, and the settle the voice rests after it - [method CardReading.parse])
+	var t := intro + float(parse.get("settle", 0.0))
 	var sentence := 0
 	var spoken: PackedStringArray = parse["spoken"]
 	for i in spoken.size():

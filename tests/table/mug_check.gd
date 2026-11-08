@@ -4,9 +4,9 @@ extends SceneTree
 ## steaming coffee is going to go cold ... implemented as temperature of the liquid"; and "pick up the mug, and bring it close (close enough to leave the camera's viewport), as if to take a drink. Then, when it
 ## returns, some of the liquid would be gone".
 ##
-## - HEAT: a mug starts at 85 C and is near 41 C at 40 minutes, as real coffee in a mug is; what is larger holds it longer; its steam is whole when hot, gone by the time it stops. The controls: what is kept hot, and
-##   smoke, which is not heat, go on as they are.
-## - THE PLUME SAYS SO: a real mug's plume is whole at the start, thin and short-lived at twenty minutes, and at two hours nothing is born. The controls: the same mug `kept_hot`, and one that boils, steam at two hours.
+## - HEAT: a mug starts at 85 C and is near 41 C at 40 minutes, as real coffee in a mug is; what is larger holds it longer; its steam is whole when hot, gone by the time it stops - within 15 to 25 minutes (feedback
+##   0045: "We are 12 minutes in, and the coffee ... has not stopped steaming yet"; it had steamed for 35). The controls: what is kept hot, and smoke, which is not heat, go on as they are.
+## - THE PLUME SAYS SO: a real mug's plume is whole at the start, thin and short-lived at ten minutes, and at twenty-five nothing is born. The controls: the same mug `kept_hot`, and one that boils, steam at two hours.
 ## - A DRINK: at the mouth every corner of the mug is out of the frame by its foot; it comes back to within a hair of where it stood; the liquid has lost what the sip says and nothing else, none of it spilled; a
 ##   second drink takes its share of what is left. Its steam does not cross the picture. The controls: at rest it is in the frame, and a carry takes nothing from it; a thing with no liquid is drunk from, and said.
 ##
@@ -87,7 +87,7 @@ func _heat() -> void:
 	_ok(is_equal_approx(Motions.temperature(mug, across, 0.0), 85.0) and at_40 > 38.0 and at_40 < 44.0, "a mug starts at 85 C and is %.1f C at 40 minutes" % at_40)
 	_ok(Motions.temperature(mug, 0.3, 2400.0) > 60.0, "what is larger holds its heat: a pot 30 cm across is %.1f C then" % Motions.temperature(mug, 0.3, 2400.0))
 	var stops := Motions.steam_stops_at(mug, across)
-	_ok(stops > 1500.0 and stops < 2400.0, "a mug stops steaming %.0f minutes in" % (stops / 60.0))
+	_ok(stops > 900.0 and stops < 1500.0, "a mug stops steaming %.0f minutes in" % (stops / 60.0))
 	_ok(is_equal_approx(Motions.steam_share(Motions.temperature(mug, across, 0.0)), 1.0) and Motions.steam_share(Motions.temperature(mug, across, stops + 1.0)) == 0.0, "its steam is whole at the start and none once it has stopped")
 	var last := 2.0
 	var falls := true
@@ -128,11 +128,11 @@ func _plume() -> void:
 	for i in m._work._plumes.size():
 		by[names[i]] = i
 	var start := _plume_at(m, int(by["mug"]), 30.0)
-	var mid := _plume_at(m, int(by["mug"]), 1200.0)
-	var late := _plume_at(m, int(by["mug"]), 7200.0)
+	var mid := _plume_at(m, int(by["mug"]), 600.0)
+	var late := _plume_at(m, int(by["mug"]), 1500.0)
 	_ok(is_equal_approx(float(start[0]), 1.0) and int(start[1]) > 0, "a mug's steam is whole at the start: %.2f, %d in the air" % [float(start[0]), int(start[1])])
-	_ok(float(mid[0]) > 0.02 and float(mid[0]) < 0.8 and float(mid[2]) < float(start[2]), "at 20 minutes it is thin, %.2f, and short-lived, %.2f s against %.2f" % [float(mid[0]), float(mid[2]), float(start[2])])
-	_ok(float(late[0]) == 0.0 and int(late[1]) == 0, "at two hours nothing rises from it: %.2f, %d in the air" % [float(late[0]), int(late[1])])
+	_ok(float(mid[0]) > 0.02 and float(mid[0]) < 0.8 and float(mid[2]) < float(start[2]), "at 10 minutes it is thin, %.2f, and short-lived, %.2f s against %.2f" % [float(mid[0]), float(mid[2]), float(start[2])])
+	_ok(float(late[0]) == 0.0 and int(late[1]) == 0, "at 25 minutes nothing rises from it: %.2f, %d in the air" % [float(late[0]), int(late[1])])
 	for nm in ["kept", "boiling", "smoke"]:
 		var other := _plume_at(m, int(by[nm]), 7200.0)
 		_ok(is_equal_approx(float(other[0]), 1.0) and int(other[1]) > 0, "the control: at two hours the %s one still rises, %.2f" % [nm, float(other[0])])

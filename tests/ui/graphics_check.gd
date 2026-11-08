@@ -19,7 +19,9 @@ extends Node
 ##
 ## WHAT IS KEPT IS READ, AND WHAT NO OPTION HAS IS NOT: a choice written to `[graphics]` is the value; a value no
 ## option offers (a hand-edited file) is the default. BOUNCE LIGHT REACHES A MEDIUM'S ENVIRONMENT handed to
-## [method Graphics.dress], at a table's reach, and follows the row.
+## [method Graphics.dress], at a table's reach, and follows the row - HANDED IN ON A WORKER TOO, as a table is built away
+## (2026-11-07: "The caller thread can't call the function `get_node_or_null()`"): there it is as the main thread last read
+## it, and follows the row after. The control: what the main thread read forgotten, a worker reads the default.
 ##
 ## THE PANEL: a cell per row and tier, a shared row one control in both; a live choice applies at once, an export
 ## choice leaves the live stage as it is; "defaults" puts every row back. (A probe's Settings never reach the disk;
@@ -182,6 +184,29 @@ func _bounce() -> void:
 	Settings.write(Graphics.SECTION, "bounce", false)
 	Graphics.apply()
 	_ok(not env.ssil_enabled, "and off again")
+	# ...HANDED IN ON A WORKER, as a table is built away: as the main thread last read it, never asking the tree
+	Settings.write(Graphics.SECTION, "bounce", true)
+	Graphics.apply()
+	var away := Environment.new()
+	var worker := Thread.new()
+	worker.start(func() -> bool:
+		Graphics.dress(away)
+		return bool(Graphics.value("bounce")))
+	var read_away: bool = worker.wait_to_finish()
+	_ok(read_away and away.ssil_enabled, "handed in on a worker, it is %s where it is chosen on" % ("on" if away.ssil_enabled else "off"))
+	Settings.write(Graphics.SECTION, "bounce", false)
+	Graphics.apply()
+	_ok(not away.ssil_enabled, "and follows the row after, off again")
+	# THE CONTROL: what the main thread read forgotten, a worker reads the default (off) - it is that read a worker goes by
+	Settings.write(Graphics.SECTION, "bounce", true)
+	Graphics._lock.lock()
+	Graphics._read.clear()
+	Graphics._lock.unlock()
+	var forgot := Thread.new()
+	forgot.start(func() -> bool: return bool(Graphics.value("bounce")))
+	_ok(not bool(forgot.wait_to_finish()), "CONTROL: with nothing read on the main thread, a worker reads bounce light on")
+	Settings.write(Graphics.SECTION, "bounce", false)
+	Graphics.apply()
 
 
 func _panel() -> void:

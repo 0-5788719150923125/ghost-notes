@@ -267,7 +267,9 @@ static func parse(body: String, lengths: Dictionary = {}, sizes: Dictionary = {}
 	var spoken := PackedStringArray()
 	var speak := PackedStringArray()
 	var said := PackedStringArray()
-	var hold := 0.0
+	# THE DESK SEEN FIRST: the voice rests a settle after the intro before its first word ([constant Openings.SETTLE];
+	# [method DeskMedium._blank]), with whatever the pen does before it
+	var hold := Openings.SETTLE
 	var dictating: Dictionary = {}
 	var talked: Dictionary = {}     # what was dictated in the paragraph just said
 	for bi in blocks.size():

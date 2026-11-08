@@ -235,8 +235,9 @@ func _script() -> bool:
 	var holds := []
 	for m in Manuscript._rx(TabletScript.HOLD).search_all(speak):
 		holds.append(float(m.get_string(1)))
-	_ok(holds.size() == 4, "the voice is given %d rests for 4 actions" % holds.size())
-	var want := [CardReading.SHUFFLE_LEAD, CardReading.JUMP, CardReading.LAY + CardReading.DRAW,
+	# (the first the settle the table is seen in before anything begins - [constant Openings.SETTLE])
+	_ok(holds.size() == 5, "the voice is given %d rests for a settle and 4 actions" % holds.size())
+	var want := [Openings.SETTLE, CardReading.SHUFFLE_LEAD, CardReading.JUMP, CardReading.LAY + CardReading.DRAW,
 		CardReading.LAY + CardReading.SETTLE]
 	for i in mini(holds.size(), want.size()):
 		_ok(absf(float(holds[i]) - float(want[i])) < 0.011, "rest %d is %.2fs, the table takes %.2fs" % [i, holds[i], want[i]])
@@ -2087,7 +2088,7 @@ func _familiar() -> bool:
 	_ok(star == n, "the card after the familiar's quip is read by %s, not the reader" % star)
 	_ok(not (p["spoken"] as PackedStringArray).has("speaker") and not (p["spoken"] as PackedStringArray).has("familiar"),
 		"a cue's words are among the words the table follows")
-	_ok(String(p["speakable"]).count("action-hold") == 4, "a table's rest was lost among the cues")
+	_ok(String(p["speakable"]).count("action-hold") == 5, "a table's rest was lost among the cues (its settle and 4 actions)")
 	var naive := ""
 	for q in Manuscript.passages("\n\n".join(PackedStringArray(texts)).replace(" <!-- speaker: Familiar --> ", "\n<!-- speaker: Familiar -->\n")):
 		if String((q as Dictionary)["text"]).contains("The Star"):

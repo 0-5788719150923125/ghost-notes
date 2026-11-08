@@ -499,7 +499,7 @@ func _end_fade() -> float:
 	return ShowOpening.end_fade(_now, _follower, _spoken_n, feed.tail())
 
 
-## THE SHOW OPENS ON THE DESK AT REST: the title and the blur clear [constant DispatchScript.OPENING] before its first word
+## THE SHOW OPENS ON THE DESK AT REST: the title and the blur clear a settle ([method Openings.settle]) before its first word
 ## or the first thing the desk does - the rest the voice opens on - so the desk is seen whole first, never under the title
 ## (it had held the title until the first ping); INF until either is placed.
 func _opening() -> float:
@@ -507,7 +507,7 @@ func _opening() -> float:
 	for i in _t0.size():
 		if int((_actions[i] as Dictionary)["after"]) == 0 and _t0[i] < first:
 			first = _t0[i]
-	return first - DispatchScript.OPENING if first < INF else INF
+	return first - Openings.settle(first) if first < INF else INF
 
 
 # --- the document --------------------------------------------------------------------------------------------------------

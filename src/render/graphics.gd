@@ -82,6 +82,13 @@ static var overrides := {}
 
 static var _stage: WeakRef = null
 static var _envs: Array = []         # WeakRefs of the environments the mediums handed in
+## WHAT THIS PROCESS'S MAIN THREAD LAST READ of each row (its key in [constant SECTION]), for what is built on a worker: the settings'
+## owner is a node of the tree, and a worker may not ask the tree for it (a table built away - [code]TablePreview._stand[/code] - handing
+## its environment to [method dress]: "The caller thread can't call the function `get_node_or_null()` on this node", and bounce light
+## read as its default whatever was chosen). Read on the main thread, every row, as the stage is bound ([method apply]); it and
+## [member _envs] are held by [member _lock].
+static var _read := {}
+static var _lock := Mutex.new()
 
 
 ## The column this process draws at: an export render's, else the live viewer's.
@@ -123,11 +130,22 @@ static func value(key: String, t := "") -> Variant:
 	if t.is_empty():
 		t = tier()
 	var dflt: Variant = default_of(key, t)
-	var v: Variant = _settings().read(SECTION, key_of(key, t), dflt) if _settings() != null else dflt
+	var k := key_of(key, t)
+	var v: Variant = dflt
+	_lock.lock()
+	if OS.get_thread_caller_id() != OS.get_main_thread_id():
+		# ...on a worker, what the main thread last read ([member _read])
+		v = _read.get(k, dflt)
+	else:
+		var st := _settings()
+		v = st.read(SECTION, k, dflt) if st != null else dflt
+		_read[k] = v
+	_lock.unlock()
 	return v if values_of(key).has(v) else dflt
 
 
-## The settings' owner (an autoload), or null where there is none (a `--script` run's first compile).
+## The settings' owner (an autoload), or null where there is none (a `--script` run's first compile). The main thread's
+## alone ([member _read]).
 static func _settings() -> Node:
 	var tree := Engine.get_main_loop() as SceneTree
 	return tree.root.get_node_or_null("Settings") if tree != null and tree.root != null else null
@@ -149,6 +167,9 @@ static func stage() -> SubViewport:
 ## EVERYTHING AS THIS PROCESS'S TIER HAS IT: the renderer's globals, the stage, and every environment handed in.
 ## Called as the stage is bound, and by the panel whenever a row of this tier changes.
 static func apply() -> void:
+	# (every row read here, on the main thread, for what is built on a worker after - [member _read])
+	for key in SETTINGS:
+		value(String(key))
 	var ao := int(value("occlusion"))
 	var half := ao <= 2
 	RenderingServer.environment_set_ssao_quality(ao as RenderingServer.EnvironmentSSAOQuality, half,
@@ -162,29 +183,41 @@ static func apply() -> void:
 	RenderingServer.environment_set_volumetric_fog_volume_size(fog, fog)
 	_set_shadows(int(value("shadows")))
 	_dress_stage()
-	var kept: Array = []
-	for w in _envs:
+	_lock.lock()
+	var envs := _envs.duplicate()
+	_lock.unlock()
+	var gone: Array = []
+	for w in envs:
 		var env := (w as WeakRef).get_ref() as Environment
 		if env != null:
 			_bounce(env)
-			kept.append(w)
-	_envs = kept
+		else:
+			gone.append(w)
+	_lock.lock()
+	for w in gone:
+		_envs.erase(w)
+	_lock.unlock()
 
 
 static func _ps(name: String, dflt: float) -> float:
 	return float(ProjectSettings.get_setting("rendering/environment/" + name, dflt))
 
 
-## A MEDIUM'S ENVIRONMENT, handed as it is made: bounce light set on it as the row has it, and again whenever the
-## row changes. [param reach] and [param strength] are the medium's own, at its scale.
+## A MEDIUM'S ENVIRONMENT, handed as it is made - on a worker too, as a table is built away: bounce light set on it as the
+## row has it, and again whenever the row changes. [param reach] and [param strength] are the medium's own, at its scale.
 static func dress(env: Environment, reach := BOUNCE_REACH, strength := BOUNCE_STRENGTH) -> void:
 	env.ssil_radius = reach
 	env.ssil_intensity = strength
 	_bounce(env)
+	_lock.lock()
+	var known := false
 	for w in _envs:
 		if (w as WeakRef).get_ref() == env:
-			return
-	_envs.append(weakref(env))
+			known = true
+			break
+	if not known:
+		_envs.append(weakref(env))
+	_lock.unlock()
 
 
 static func _bounce(env: Environment) -> void:

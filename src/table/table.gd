@@ -1682,17 +1682,9 @@ func _skin_json() -> Dictionary:
 	if _skin_mt >= 0:
 		var j := JSON.new()
 		if j.parse(FileAccess.get_file_as_string(path)) == OK and j.data is Dictionary:
-			var doc: Dictionary = j.data
-			# ...AND THE FACE PAINTED FIRST that it was copied from, as the surface wears it ([method Skins.face_reference]), and on which
-			# surface (`face.json`, [method TableProducer._make_image])
-			var ref_path := dir.path_join("face_ref.png")
-			var meta := JSON.new()
-			if FileAccess.file_exists(ref_path) and meta.parse(FileAccess.get_file_as_string(dir.path_join("face.json"))) == OK and meta.data is Dictionary:
-				var ref := Image.load_from_file(ref_path)
-				if ref != null and not ref.is_empty():
-					doc["_reference"] = ref
-					doc["_reference_on"] = String((meta.data as Dictionary).get("on", ""))
-			return doc
+			# (never the face painted first that it was copied from: the paint is the tools', the painting only the decorator's guide -
+			# feedback 0049, skin_paint.gdshader)
+			return j.data
 	return {}
 
 
@@ -1835,7 +1827,7 @@ func _tick_ride(t: float) -> void:
 ## wide blur lifts, and the lens carries on near to far, the cloth in front of the reader first, and is
 ## off for the reading. The end card leaves it alone. A note that opens on nothing is sharp throughout.
 func _tick_focus(t: float) -> void:
-	_lens(ShowOpening.pull(feed.opening, t, float(_times()["opening"]), not _sched.is_empty()))
+	_lens(ShowOpening.pull(feed.opening, t, _intro_end(), not _sched.is_empty()))
 
 
 ## The lens at [param pull] of the intro's focus pull ([method ShowOpening.lens]).
@@ -2526,11 +2518,19 @@ static func _ease(x: float) -> float:
 
 # --- the title -------------------------------------------------------------------------------------------
 
-## The channel's name over the table while the intro holds, gone as the reading opens (the deck's
-## shuffle, the box's opening) - and only then: the reading ends on the table fading to black, not
-## on the name again. Only where the note opens on its title ([member ShowFeed.opening]).
+## The channel's name over the table while the intro holds, gone a settle before the reading opens (the deck's
+## shuffle, the box's opening; [method _intro_end]) - and only then: the reading ends on the table fading to
+## black, not on the name again. Only where the note opens on its title ([member ShowFeed.opening]).
 func _title_alpha(t: float) -> float:
-	return ShowOpening.title_alpha(feed.opening, t, float(_times()["opening"]), not _sched.is_empty())
+	return ShowOpening.title_alpha(feed.opening, t, _intro_end(), not _sched.is_empty())
+
+
+## WHEN THE INTRO IS OVER: the table seen sharp, its name gone, [method Openings.settle] before the reading opens -
+## the deck's shuffle, the box's opening, a cardless show's first words (its `begin` had been held 0.4 s, and the
+## voice began as the name went). INF until the opening is placed.
+func _intro_end() -> float:
+	var o := float(_times()["opening"])
+	return o - Openings.settle(o) if o < INF else INF
 
 
 ## THE OUTRO: once the voice has said its last word, the table fades to black - a beat after it,

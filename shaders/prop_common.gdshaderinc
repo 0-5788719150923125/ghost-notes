@@ -32,9 +32,18 @@ uniform vec3 bristle_axis = vec3(0.0, 1.0, 0.0);
 uniform float bristle_len = 0.0;
 uniform vec3 bristle_bend = vec3(0.0);
 uniform float bristle_splay = 0.0;
+// (Bristles.CORE_IN, CORE_DOWN, CORE_WET)
+const float BRISTLE_CORE_IN = 1.0;
+const float BRISTLE_CORE_DOWN = 1.0;
+const float BRISTLE_CORE_WET = 0.45;
+// how much wider a sponge squeezed in the hand bulges for how much thinner it is (mostly air, it gives little back)
+const float SQUEEZE_BULGE = 0.15;
 // A SPONGE GIVES where it is pressed: the way it is pressed (the mesh's space) and how far, a share of its depth; its middle
 uniform vec4 squash = vec4(0.0);
 uniform vec3 squash_at = vec3(0.0);
+// ...SQUEEZED IN THE HAND, its broad faces pressed together about its middle (squash_at): the way across them (the mesh's space) and
+// how much thinner it is, 0-1 - both sides in, then back out to its own shape, never longer than it is (TablePaint._squeeze_of)
+uniform vec4 squeeze = vec4(0.0);
 // a surface it is pressed onto (its own space): its normal toward it and how far along that the surface is; how far the deepest
 // of it went past it, the band over it that gives and how far it spreads; the deepest of it (TablePaint._flat_on)
 uniform vec4 flat_on = vec4(0.0, 1.0, 0.0, 0.0);
@@ -42,6 +51,22 @@ uniform vec3 flat_by = vec3(0.0);
 uniform vec3 flat_at = vec3(0.0);
 // (spread out from the deepest point as from a disc this wide, never from a point)
 const float FLAT_CORE = 0.004;
+// PRESSED ONTO A SKIN, A PAD OR A SPONGE TAKES ITS SHAPE (TablePaint._press_on and press_lands - the same arithmetic): what stands
+// over the skin, its heights along the skin's front every cell (meters; far under where nothing is); where its first cell is, how wide a
+// cell is (0: not on a skin) and how far its face sags into a hollow; this mesh's space into the front's and back; where its face is
+// and the way up from it toward the hand (the front's space); and that way up in this mesh's own space
+uniform sampler2D press_z : filter_nearest, repeat_disable;
+uniform vec4 press_cells = vec4(0.0);
+uniform mat4 press_in = mat4(1.0);
+uniform mat4 press_out = mat4(1.0);
+uniform vec3 press_tip = vec3(0.0);
+uniform vec3 press_up = vec3(0.0, 0.0, 1.0);
+uniform vec3 press_up_own = vec3(0.0, 1.0, 0.0);
+// (TablePaint.PRESS_SOFT, PRESS_LIFT, PRESS_THIN, PRESS_REACH)
+const float PRESS_SOFT = 0.0003;
+const float PRESS_LIFT = 0.0002;
+const float PRESS_THIN = 0.3;
+const float PRESS_REACH = 0.008;
 // A SURFACE PAINTED (TablePaint): where each point is on its skin, seen from its front - across and down, 0-1 - and how far
 // it faces that front
 uniform bool skinned = false;
@@ -49,6 +74,35 @@ uniform vec4 skin_u = vec4(0.0);
 uniform vec4 skin_v = vec4(0.0);
 uniform vec3 skin_side = vec3(0.0, 0.0, 1.0);
 varying vec3 skin_at;
+
+// The skin's height under (x, y) of its front (TablePaint._front_z): between its cells, and where a cell meets its rim as high as it
+// stands; far under it off the skin
+float press_height(vec2 xy) {
+	ivec2 n = textureSize(press_z, 0);
+	vec2 f = (xy - press_cells.xy) / press_cells.z;
+	if (f.x < 0.0 || f.y < 0.0 || f.x > float(n.x - 1) || f.y > float(n.y - 1)) {
+		return -1.0;
+	}
+	ivec2 ij = min(ivec2(f), n - ivec2(2));
+	float z00 = texelFetch(press_z, ij, 0).r;
+	float z10 = texelFetch(press_z, ij + ivec2(1, 0), 0).r;
+	float z01 = texelFetch(press_z, ij + ivec2(0, 1), 0).r;
+	float z11 = texelFetch(press_z, ij + ivec2(1, 1), 0).r;
+	float hi = max(max(z00, z10), max(z01, z11));
+	if (min(min(z00, z10), min(z01, z11)) < -0.5) {
+		return hi;
+	}
+	vec2 a = f - vec2(ij);
+	return mix(mix(z00, z10, a.x), mix(z01, z11, a.x), a.y);
+}
+
+// How high a bit of it [fs] over the skin is drawn (TablePaint.press_lands): its face, sagged into what hollow is near it, laid on
+// whatever it would go into; its back kept its own share of its depth over it
+float press_lands(float fs, float zf, float back, float sag) {
+	float g = fs - sag * (1.0 - back) * (1.0 - smoothstep(0.0, PRESS_REACH, fs));
+	float h = g - PRESS_LIFT < PRESS_SOFT * 20.0 ? PRESS_LIFT + PRESS_SOFT * log(1.0 + exp((g - PRESS_LIFT) / PRESS_SOFT)) : g;
+	return max(h, PRESS_THIN * zf * back);
+}
 
 void vertex() {
 	cpos = VERTEX * 100.0;
@@ -65,6 +119,15 @@ void vertex() {
 		float s = clamp(UV2.x, 0.0, 1.0);
 		vec3 off = VERTEX - bristle_root;
 		vec3 radial = off - bristle_axis * dot(off, bristle_axis);
+		// ...THE CORE (Bristles.core_at, UV's x past 1) stands for the hairs inside: pressed, they are pushed back into the bundle as
+		// the outer ones splay, so it draws in and down under them - never a lump of their paint left over the splayed tips
+		float out_by = bristle_splay * s * 1.2;
+		if (UV.x > 1.5) {
+			float down = BRISTLE_CORE_DOWN * bristle_splay;
+			VERTEX -= bristle_axis * dot(off, bristle_axis) * down;
+			s *= 1.0 - down;
+			out_by = -BRISTLE_CORE_IN * bristle_splay * s;
+		}
 		// BENT ASIDE AS AN ARC OF A CIRCLE, AS LONG AS IT WAS (Bristles.bent_at, the same arithmetic): never along itself, its tip
 		// at most ASIDE_MOST of its length aside - and splayed out from the middle
 		vec3 aside = bristle_bend - bristle_axis * dot(bristle_bend, bristle_axis);
@@ -82,13 +145,34 @@ void vertex() {
 			float rr = hl / th;
 			VERTEX += bristle_axis * (rr * sin(th * s) - hl * s) + (aside / side) * rr * (1.0 - cos(th * s));
 		}
-		VERTEX += radial * bristle_splay * s * 1.2;
+		VERTEX += radial * out_by;
 	}
 	if (squash.w > 0.0) {
 		vec3 d = normalize(squash.xyz);
 		float into = max(dot(VERTEX - squash_at, d), 0.0);
 		vec3 across = (VERTEX - squash_at) - d * dot(VERTEX - squash_at, d);
 		VERTEX += -d * into * squash.w + across * squash.w * 0.3 * into / max(length(VERTEX - squash_at), 1e-4);
+	}
+	if (squeeze.w > 0.0) {
+		vec3 d = normalize(squeeze.xyz);
+		vec3 rel = VERTEX - squash_at;
+		float along = dot(rel, d);
+		VERTEX = squash_at + d * along * (1.0 - squeeze.w) + (rel - d * along) * (1.0 + squeeze.w * SQUEEZE_BULGE);
+	}
+	// PRESSED ONTO A SKIN (TablePaint._press_on): each bit drawn as high over the skin as press_lands says, along the skin's depth so
+	// it lands where it says
+	if (press_cells.z > 0.0) {
+		vec3 pq = (press_in * vec4(VERTEX, 1.0)).xyz;
+		float zs = press_height(pq.xy);
+		if (zs > -0.5) {
+			float fs = pq.z - zs;
+			float zf = max(dot(pq - press_tip, press_up), 0.0);
+			float back = smoothstep(-0.2, 0.2, dot(normalize(NORMAL), normalize(press_up_own)));
+			float h = press_lands(fs, zf, back, press_cells.w);
+			if (abs(h - fs) > 1e-6) {
+				VERTEX = (press_out * vec4(pq.xy, zs + h, 1.0)).xyz;
+			}
+		}
 	}
 	// PRESSED ONTO A SURFACE (a sponge into its paint, TablePaint._flat_lift - the same numbers): what would go under it is drawn ON
 	// it, the band over it squeezed hardest nearest it, and spread out from the deepest of it as far as it gave

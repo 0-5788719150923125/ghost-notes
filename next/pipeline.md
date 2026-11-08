@@ -47,9 +47,11 @@ A section's rows are `PipelineRow`s: a key, a name, a state, what it says, and w
 **One ⟳.** Every distinct regeneration is a row of its own, and its ⟳ does exactly that one thing. Never a menu. A card
 of an Episode has four rows where it had one row and a menu: Design, Painting, Reading, Over its work.
 
-**The guard, in the open.** A ⟳ that would throw away OTHER finished work goes amber, says so on hover, and asks once - a
+**The guard, in the open.** A ⟳ that would throw away OTHER finished work says so on hover and asks once - a
 yes or a no, never a list - naming what it throws away. Only when there is such work. So what a click will do is known
-before it is made, and an amber ⟳ on Plan cannot lose an episode to a stray click. (Worked out from the steps' own
+before it is made, and the ⟳ on Plan cannot lose an episode to a stray click. It wore amber until 2026-11-07, when the
+user found it said nothing they could read ("it's not clear why some of the regenerate buttons are orange, while others
+are white"): every ⟳ is one color now, and the hover and the question say it. (Worked out from the steps' own
 dependencies, once per change of the episode's files - `TableEpisode.dependents` parses JSON per call, and at a row each
 four times a second would cost a playing show.)
 
@@ -62,7 +64,7 @@ pictures, not the tags" is still one click. While Generate walks, every ⟳ wait
 - Tags, Thumbnail: a "YouTube" section, always the same place, whatever else is on the note.
 - Generate now also paints a note's missing pictures: it makes everything the list says is missing, and the ▶ on a
   section is there for making less.
-- Proof's Make/Remake: Generate makes what is missing, and "Whole episode" is a row, amber, asking.
+- Proof's Make/Remake: Generate makes what is missing, and "Whole episode" is a row, asking first.
 - A ⟳ makes what it says and nothing else. A Proof ⟳ no longer rewrites the tags and paints a thumbnail as a side effect:
   they say they are stale, and Generate (or their own ⟳) makes them.
 - A Picture's "Regenerate" stays beside its thumbnail and in its full-size window: it is where the picture is judged, and
@@ -79,6 +81,6 @@ Looked at under xvfb only (`pipeline_look_probe`), not yet by the user in the ap
 
 Open, not built:
 
-- An undo for a thrown-away step (`invalidate` deletes). With one, the amber question could go.
+- An undo for a thrown-away step (`invalidate` deletes). With one, the question could go.
 - Which group to scroll to when a long Generate moves past the list's view: the tally says where it is, the list stays
   where it was left - or, left at its end, stays at its end as steps are added (`PanelDeck`, next/panel_deck.md).

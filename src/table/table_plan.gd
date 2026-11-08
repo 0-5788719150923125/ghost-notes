@@ -180,7 +180,8 @@ func estimated_times(n: int) -> PackedFloat32Array:
 		rests[k] = float(rests.get(k, 0.0)) + float((q as Dictionary)["s"])
 	var out := PackedFloat32Array()
 	out.resize(n)
-	var t := maxf(hold, 0.0)
+	# (the intro, and the settle the voice rests after it - [method CardReading.parse])
+	var t := maxf(hold, 0.0) + float(parse.get("settle", 0.0))
 	for j in n:
 		t += float(rests.get(j, 0.0))
 		out[j] = t

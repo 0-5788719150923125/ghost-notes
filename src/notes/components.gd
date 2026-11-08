@@ -175,7 +175,7 @@ const REGISTRY := {
 		"capabilities": ["forward_plus", "subprocess", "agent:writer", "agent:painter"], "marks": [],
 		"block": "table", "card": "episode", "heading": "Episode",
 		"script": "res://src/table_show/episode_card.gd",
-		"intro_tip": "Seconds the table holds before the reader speaks, with the channel's name and the episode's title over it. The deck starts shuffling a beat before the first word.",
+		"intro_tip": "Seconds the table holds with the channel's name and the episode's title over it; then the table itself, a few seconds more, before the reader speaks. The deck starts shuffling a beat before the first word.",
 		"outro_tip": "Seconds held after the last word, the spread on the table and the channel's name over it, fading picture and sound out together."},
 	# A GHOST DOING MATH AT A DESK (next/proof.md, 2026-10-15): its card is the episode - the problem
 	# fixed, solved at the desk with Lean, taught - and it hands the reading the lesson to read and the
@@ -187,7 +187,7 @@ const REGISTRY := {
 		"capabilities": ["forward_plus", "subprocess", "agent:writer", "tex", "lean", "python:math"], "marks": [],
 		"block": "proof", "card": "proof", "heading": "Proof",
 		"script": "res://src/proof/proof_card.gd",
-		"intro_tip": "Seconds the desk holds before the teacher speaks.",
+		"intro_tip": "Seconds the desk holds, its title over it where it has one; then the desk itself, a few seconds more, before the teacher speaks.",
 		"outro_tip": "Seconds held after the last word, the page on the desk, fading picture and sound out together."},
 	# A LETTER WRITTEN AT A DESK (next/letter.md, 2026-10-26): the note's words are the letter, written by
 	# hand while the voice reads them; its card draws the sketches and pins its medium, and the Pictures card
@@ -210,7 +210,7 @@ const REGISTRY := {
 		"slots": ["presentation"], "workspace": "",
 		"capabilities": ["forward_plus"], "marks": ["dispatch"],
 		"block": "dispatch", "card": "dispatch", "script": "res://src/dispatch/dispatch_card.gd",
-		"intro_tip": "Seconds the desk holds before the first word, its title over it.",
+		"intro_tip": "Seconds the desk holds, its title over it; then the desk at rest, a few seconds more, before the first word.",
 		"outro_tip": "Seconds held after the last word, the desk in the dark, fading picture and sound out together."},
 	# AN ACTOR READS THE NOTE (next/likeness.md): its card builds them from their own videos - the footage
 	# surveyed and cut into sets, a still of the set in use, a model of them and their voice from every

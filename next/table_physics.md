@@ -99,7 +99,9 @@ surface, what leaves it as particles.
   running out at a ripple's speed, dying as they go) and, hard enough, throws droplets that fall back.
 - Drawn by `prop_liquid.gdshader`: the cavity's mesh, everything above the surface cut away, and where the cut is seen
   through, the surface itself at its true depth (written to `DEPTH`, lit at `LIGHT_VERTEX`) - the classic liquid in a
-  bottle, with the old wet look (ripples, bubbles as it boils, foam, glow) on the surface.
+  bottle, with the old wet look (ripples, bubbles as it boils, foam, glow) on the surface. A liquid as clear as 0.5 (water) is
+  drawn seen through by the same body (`prop_liquid_clear.gdshader`, `CLEAR` in `prop_liquid.gdshaderinc`), under its glass, and
+  less as what is rinsed into it clouds it (`murk`; next/painted_surface.md); a brew, ink or wine keeps the opaque body.
 
 ### 2. Grains and loose things: one particle solver
 

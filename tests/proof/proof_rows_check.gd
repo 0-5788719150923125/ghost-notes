@@ -83,11 +83,11 @@ func _check() -> void:
 	_write(["draft", "review", "lesson", "ink", "script"])
 	_pipe.refresh()
 	var whole := _redo("whole")
-	_ok(not whole.disabled and whole.modulate == _pipe.AMBER and whole.tooltip_text.contains("thrown away"), "the whole episode asks, amber, and says what goes")
+	_ok(not whole.disabled and _pipe.asks_first("whole") and whole.tooltip_text.contains("thrown away"), "the whole episode asks first, and says what goes")
 	var solve := _redo("solve")
-	_ok(solve.modulate == _pipe.AMBER and solve.tooltip_text.contains("Lesson") and not solve.tooltip_text.contains("Ink"),
+	_ok(_pipe.asks_first("solve") and solve.tooltip_text.contains("Lesson") and not solve.tooltip_text.contains("Ink"),
 		"the solve throws the agents' work away and says which: %s" % solve.tooltip_text.replace("\n", " "))
-	_ok(_redo("ink").modulate != _pipe.AMBER, "control: the ink takes only the script, the tools': not amber")
+	_ok(not _pipe.asks_first("ink"), "control: the ink takes only the script, the tools': it does not ask")
 	# PRESSED
 	whole.pressed.emit()
 	_ok(_ep.has("lesson") and _pipe.asking != null, "pressed: it asks, nothing thrown away yet")

@@ -145,9 +145,10 @@ func _scheduled() -> void:
 		times[String((w.acts[int((r as Dictionary)["i"])] as Dictionary)["name"])] = [float(r["t0"]), float(r["t1"])]
 	_ok(times.size() == 4, "every act placed: %s" % str(times.keys()))
 	var words: Array = subs.words
-	# THE VIDEO OPENS TALKING, whatever the reader wrote, and the hands are at work under it
+	# THE VIDEO OPENS TALKING, whatever the reader wrote, and the hands are at work under it - once the table has been seen a settle
+	# after the intro ([constant Openings.SETTLE])
 	var first_word := float((words[0] as Dictionary)["t0"])
-	_ok(absf(first_word - Director.intro_hold) < 1.0, "the first word is said as the video opens, its opening silence moved on: %.1f, the opening %.1f" % [first_word, Director.intro_hold])
+	_ok(absf(first_word - Director.intro_hold - Openings.SETTLE) < 1.0, "the first word is said as the video opens, its opening silence moved on: %.1f, the opening %.1f and its settle" % [first_word, Director.intro_hold])
 	_ok(float((times["first-look"] as Array)[0]) <= first_word + 0.5, "and the first act has begun by then: %.1f" % float((times["first-look"] as Array)[0]))
 	# ...AND WHAT WAS CUED AT A WORD WAITS FOR ITS WORD, in a silence or not
 	var si: int = (medium._plan.parse["cues"] as Array).filter(func(c: Dictionary) -> bool: return String(c["name"]) == "start-wall")[0]["si"]

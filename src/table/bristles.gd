@@ -9,9 +9,10 @@ class_name Bristles
 ## table's distance. Every vertex carries how far up its hair it is (UV2's x, 0 at the root and 1 at the tip), which is all the
 ## shader needs to bend it ([member Props] sets the root, the axis and the length on its material; prop_common.gdshaderinc).
 ##
-## HOW IT MOVES IS A PURE FUNCTION OF TIME: the hairs lean back against the way the brush is dragged and splay as it is pressed
-## ([method target]), and follow that as a stiff spring does, a little behind it and past it - a flick as the brush lifts
-## ([method response]: the target over the last moment, weighed by a damped spring's own response). No step is ever kept.
+## HOW IT MOVES IS A PURE FUNCTION OF TIME: the hairs trail behind as the brush is dragged ON the surface, splay as it is pressed
+## straight down and bend over as it is pressed leaning ([method target]), and follow that as a stiff spring does, a moment behind it
+## and hardly past it ([method response]: the target over the last moment, weighed by a damped spring's own response). No step is ever
+## kept. Moved through the air, quickly or not, they stay straight.
 
 ## THE KINDS of tuft, each how its hairs gather: `point` how far toward the middle the tips gather (1 all the way), `spread`
 ## how far out across they fan, `dome` how much shorter the outer hairs are, `bulge` how far out the middle of each hair
@@ -36,21 +37,42 @@ const HAIR_STEPS := 5
 const CORE := 0.78
 const CORE_STEPS := 8
 const CORE_SIDES := 12
+## THE CORE STANDS FOR THE HAIRS INSIDE THE BUNDLE, and pressed they are pushed back into it as the outer ones splay (the user,
+## 2026-11-07: a fat brush pushed into the mask kept "a weird ring" of its paint, "too dense", that stayed "ABOVE the moving bristles"
+## instead of fanning out into them - the core, a solid body splayed as the hairs were, stood over their tips as a lump of paint): as
+## far as they splay it draws in by [constant CORE_IN] of that and down by [constant CORE_DOWN], under the hairs; it takes this share of
+## the paint they carry ([constant CORE_WET]); and it is told from a hair by its UV's x ([constant CORE_MARK], a hair's own number is
+## 0-1). AS prop_common.gdshaderinc DRAWS IT ([method core_at]).
+const CORE_IN := 1.0
+const CORE_DOWN := 1.0
+const CORE_WET := 0.45
+const CORE_MARK := 2.0
 
 ## THE SPRING the hairs follow ([method response]): how fast they swing back (Hz), how damped (1 never overshoots), and the
-## moment it is judged over (seconds, in steps).
-const SPRING_HZ := 3.6
-const SPRING_DAMPING := 0.38
+## moment it is judged over (seconds, in steps). HAIRS ARE STIFF (the user, 2026-11-07, of the liner: "when moved quickly, the
+## bristles are super 'floppy.' They curl into a tight arc ... Bristles aren't floppy, and quick movement shouldn't cause them to
+## wiggle at all really; they would still be rigid, for the kinds of quick/short movements an artist will make"): at 3.6 Hz damped
+## 0.38 they swung past straight by a quarter of their bend and back, every time a stroke ended.
+const SPRING_HZ := 9.0
+const SPRING_DAMPING := 0.75
 const SPRING_STEP := 0.025
 const SPRING_STEPS := 18
-## HOW FAR THEY BEND (shares of the hairs' length): back against a drag at full speed, and how fast that is (meters a
-## second); how far they fold aside when pressed with no drag; how far they splay when pressed.
-const DRAG_BEND := 0.42
+## HOW FAR THEY BEND (shares of the hairs' length): trailing a drag on the surface at full speed, and how fast that is (meters a
+## second) - the surface's pull on them, as hard as they are pressed: in the air nothing pulls them (they had bent a third as far
+## there, a liner carried between strokes curled over); how far they fold aside when pressed with no drag; how far they splay when
+## pressed. Dragged, 0.42 of their length had curled a liner's tip into a tight arc.
+const DRAG_BEND := 0.2
 const DRAG_FULL := 0.06
 const PRESS_BEND := 0.22
 const PRESS_SPLAY := 0.35
 ## ...a handle leaning this far off the surface's normal (the sine) folds them as far as they fold ([method target]).
 const LEAN_FULL := 0.3
+## A BRUSH PRESSED STRAIGHT DOWN SPLAYS; LEANED, ITS HAIRS BEND OVER INSTEAD (the user, 2026-11-07: a fat brush "balloons into a
+## mushroom shape" when pressed, where "most artists would ... lean the brush slightly, such that the bristles bend more than they
+## balloon"): leaning this far off the normal (the sine, about 30 degrees) it splays only this share of what it splays upright - the
+## bend that keeps its tip on the face takes up the rest ([method TablePaint._bend_to_surface]).
+const SPLAY_LEAN := 0.5
+const SPLAY_LEANED := 0.25
 ## A HAIR BENT ASIDE KEEPS ITS LENGTH: it is bent as an arc of a circle ([method bent_at]), its tip at most this share of its length
 ## aside - about as far as an arc can take it (the most is 0.72, half way round and more).
 const ASIDE_MOST := 0.7
@@ -133,7 +155,9 @@ static func _hair(g: Props.Tris, root: Vector3, tip: Vector3, bow: Vector3, r0: 
 				Vector2(a[2], 0.0), Vector2(c[2], 0.0), Vector2(d[2], 0.0))
 
 
-## THE CORE: the hairs' room, a little smaller, as one smooth body - so the tuft reads whole from across the table.
+## THE CORE: the hairs' room, a little smaller, as one smooth body - so the tuft reads whole from across the table - and NO TALLER THAN
+## ITS OUTER HAIRS (a dome's are 38% shorter than its middle's): taller, it was the dome's top, a solid band of whatever the brush was
+## loaded with standing over the ends of the hairs round it ([constant CORE_IN]).
 static func _core(g: Props.Tris, hw: float, hd: float, L: float, row: Dictionary) -> void:
 	var gather := 1.0 - float(row["point"])
 	var spread := float(row["spread"])
@@ -145,7 +169,7 @@ static func _core(g: Props.Tris, hw: float, hd: float, L: float, row: Dictionary
 		var ring: Array = []
 		for k in CORE_SIDES:
 			var a := TAU * float(k) / float(CORE_SIDES)
-			var y := L * s * (1.0 - float(row["dome"]) * 0.5 * s * s)
+			var y := L * s * (1.0 - float(row["dome"]) * 0.5 * s * s) * (1.0 - float(row["dome"]))
 			var q := Vector3(cos(a) * hw * maxf(sx, 0.05) * CORE, y, sin(a) * hd * maxf(sz, 0.05) * CORE)
 			ring.append([q, Vector3(cos(a) / maxf(hw, 1e-5), 0.2, sin(a) / maxf(hd, 1e-5)).normalized(), s])
 		rings.append(ring)
@@ -155,9 +179,9 @@ static func _core(g: Props.Tris, hw: float, hd: float, L: float, row: Dictionary
 			var b: Array = rings[i][(k + 1) % CORE_SIDES]
 			var c: Array = rings[i + 1][(k + 1) % CORE_SIDES]
 			var d: Array = rings[i + 1][k]
-			g.tri(a[0], b[0], c[0], a[1], b[1], c[1], Vector2(0.5, a[2]), Vector2(0.5, b[2]), Vector2(0.5, c[2]),
+			g.tri(a[0], b[0], c[0], a[1], b[1], c[1], Vector2(CORE_MARK, a[2]), Vector2(CORE_MARK, b[2]), Vector2(CORE_MARK, c[2]),
 				Vector2(a[2], 0.0), Vector2(b[2], 0.0), Vector2(c[2], 0.0))
-			g.tri(a[0], c[0], d[0], a[1], c[1], d[1], Vector2(0.5, a[2]), Vector2(0.5, c[2]), Vector2(0.5, d[2]),
+			g.tri(a[0], c[0], d[0], a[1], c[1], d[1], Vector2(CORE_MARK, a[2]), Vector2(CORE_MARK, c[2]), Vector2(CORE_MARK, d[2]),
 				Vector2(a[2], 0.0), Vector2(c[2], 0.0), Vector2(d[2], 0.0))
 	# its top closed
 	var top: Array = rings[CORE_STEPS]
@@ -168,7 +192,7 @@ static func _core(g: Props.Tris, hw: float, hd: float, L: float, row: Dictionary
 	for k in CORE_SIDES:
 		var a: Array = top[k]
 		var b: Array = top[(k + 1) % CORE_SIDES]
-		g.tri(a[0], b[0], mid, Vector3.UP, Vector3.UP, Vector3.UP, Vector2(0.5, 0.93), Vector2(0.5, 0.93), Vector2(0.5, 1.0),
+		g.tri(a[0], b[0], mid, Vector3.UP, Vector3.UP, Vector3.UP, Vector2(CORE_MARK, 0.93), Vector2(CORE_MARK, 0.93), Vector2(CORE_MARK, 1.0),
 			Vector2(0.93, 0.0), Vector2(0.93, 0.0), Vector2(1.0, 0.0))
 
 
@@ -177,6 +201,8 @@ static func _core(g: Props.Tris, hw: float, hd: float, L: float, row: Dictionary
 ## meters long whose hairs run back to the handle along [param axis] (unit, the table's space), its tip going [param ahead] along
 ## the surface as it is pressed (the way from where the handle leans over it to the tip; none for a brush held upright, or off a
 ## surface). Returns [bend, splay].
+##
+## Splayed as far as it is upright ([constant SPLAY_LEAN]): pressed straight down it mushrooms, leaned it bends.
 ##
 ## A BEND IS ALWAYS ASIDE, ACROSS THE HAIRS, NEVER ALONG THEM (feedback 0030: "The bristles on this brush are stretching and
 ## contracting. But bristles don't do that: they have one size"): the fold had been the handle's own way out of the surface, so a
@@ -189,11 +215,21 @@ static func target(velocity: Vector3, pressed: float, length: float, axis: Vecto
 	var speed := across.length()
 	var bend := Vector3.ZERO
 	if speed > 1e-5:
-		bend = -across / speed * DRAG_BEND * length * clampf(speed / DRAG_FULL, 0.0, 1.0) * (0.35 + 0.65 * pressed)
+		bend = -across / speed * DRAG_BEND * length * clampf(speed / DRAG_FULL, 0.0, 1.0) * pressed
 	var fold := ahead - a * ahead.dot(a)
 	if fold.length() > 1e-5:
 		bend += fold / maxf(fold.length(), LEAN_FULL) * PRESS_BEND * length * pressed
-	return [bend, PRESS_SPLAY * pressed]
+	# (how far it leans: [param ahead] is the handle's own lean along the surface, the sine of its angle off the normal)
+	return [bend, PRESS_SPLAY * pressed * lerpf(1.0, SPLAY_LEANED, clampf(ahead.length() / SPLAY_LEAN, 0.0, 1.0))]
+
+
+## A POINT OF THE CORE pressed so its hairs splay [param splay]: `[how far up its hairs it stands now (of [param s]), how far down its
+## height along them is drawn (a share of it), how far out from the middle it goes (a share of how far out it is)]` - a hair's own
+## point is `[s, 0, splay * s * 1.2]`, out as they splay ([method target]).
+static func core_at(s: float, splay: float) -> Vector3:
+	var down := CORE_DOWN * splay
+	var s2 := s * (1.0 - down)
+	return Vector3(s2, down, -CORE_IN * splay * s2)
 
 
 ## A POINT [param s] (0-1) up a hair [param length] long bent [param bend] aside (meters, across it): (how far aside, how far along
@@ -219,15 +255,16 @@ static func arc_angle(q: float) -> float:
 
 
 ## THE SPRING's weights over the last [constant SPRING_STEPS] steps (newest first), summing to 1: a damped spring's own
-## response, so the hairs follow a little behind and swing past when the pull stops.
-static func weights() -> PackedFloat32Array:
+## response - [param hz] and [param damping] its own, by default [constant SPRING_HZ], [constant SPRING_DAMPING] - so the hairs follow a
+## moment behind and come back when the pull stops.
+static func weights(hz := SPRING_HZ, damping := SPRING_DAMPING) -> PackedFloat32Array:
 	var w := PackedFloat32Array()
-	var wn := TAU * SPRING_HZ
-	var wd := wn * sqrt(1.0 - SPRING_DAMPING * SPRING_DAMPING)
+	var wn := TAU * hz
+	var wd := wn * sqrt(1.0 - damping * damping)
 	var sum := 0.0
 	for k in SPRING_STEPS:
 		var tau := float(k) * SPRING_STEP
-		var h := exp(-SPRING_DAMPING * wn * tau) * sin(wd * tau + 0.35)
+		var h := exp(-damping * wn * tau) * sin(wd * tau + 0.35)
 		w.append(h)
 		sum += h
 	for k in w.size():
@@ -236,9 +273,9 @@ static func weights() -> PackedFloat32Array:
 
 
 ## THE HAIRS' BEND at show time [param t]: [param at] (a function of a time, giving [bend, splay] as [method target] does)
-## followed as the spring follows it - a pure function of time.
-static func response(at: Callable, t: float) -> Array:
-	var w := weights()
+## followed as the spring follows it ([method weights], [param hz] and [param damping] its own) - a pure function of time.
+static func response(at: Callable, t: float, hz := SPRING_HZ, damping := SPRING_DAMPING) -> Array:
+	var w := weights(hz, damping)
 	var bend := Vector3.ZERO
 	var splay := 0.0
 	for k in w.size():
