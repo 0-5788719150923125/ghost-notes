@@ -18,9 +18,9 @@ const COL_USES := Color(0.42, 0.48, 0.58)
 ## immediately handed to a fresh `claude -p --dangerously-skip-permissions`
 ## subprocess - the same one-shot workflow already used interactively all
 ## session, just wired to fire the moment feedback lands instead of waiting
-## for a human to notice and paste it in. Sonnet 5, default (auto) effort -
-## the CLI's --effort flag has no "auto" value, so it's simply omitted; the
-## session picks its own. Codex CLI (OpenAI) is the second backend; what differs
+## for a human to notice and paste it in. THE AGENT, ITS MODEL AND ITS LEVEL are chosen on the
+## writers' own row ([method AgentPick.assistant], 2026-11-07), and each run takes what the row says.
+## Codex CLI (OpenAI) and the Grok Build CLI are the others; what differs
 ## between them (command line, resume, event stream, cost) lives in
 ## [AssistantBackends], and each entry remembers which one started it so a
 ## follow-up never lands on a different CLI's session. With it set to Off, submissions still
@@ -51,9 +51,13 @@ const COL_USES := Color(0.42, 0.48, 0.58)
 ## construction, not by coincidence, so don't move one without the other.
 
 const DIR := "res://feedback"
+## WHERE THE NOTES ARE, for a gate: a folder of its own, never the author's (EVERY TEST IS READ-ONLY). "" is the app's.
+static var root := ""
 
 
 static func _feedback_dir() -> String:
+	if not root.is_empty():
+		return root
 	return DIR if OS.has_feature("editor") else "user://feedback"
 const PANEL_W := 380
 ## How many dispatched subprocesses may be live at once - past this, entries
@@ -82,6 +86,8 @@ var _closing := false
 var _panel: Control
 var _list_col: VBoxContainer
 var _header: Label
+var _head_row: HBoxContainer        # the header and its Delete all
+var _delete_all_btn: Button
 var _toggle_btn: Button
 var _expanded := false # closed by default - see _build_ui
 
@@ -138,8 +144,19 @@ func _resolve_repo_root() -> void:
 
 
 func _ensure_dir() -> void:
-	if not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(_feedback_dir())):
-		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(_feedback_dir()))
+	var dir := ProjectSettings.globalize_path(_feedback_dir())
+	if not DirAccess.dir_exists_absolute(dir):
+		DirAccess.make_dir_recursive_absolute(dir)
+	# KEPT OUT OF GODOT'S SCAN: under res:// an editor scan (and the parse gate's `--editor --quit`) imported every
+	# screenshot as a texture, and a deleted note left its `.png.import` behind (63 of them, 2026-11-07). Nothing loads
+	# a note's files as resources: an agent reads them from disk.
+	# (never from a test: a gate writes nothing of the author's)
+	var ignore := dir.path_join(".gdignore")
+	if _feedback_dir().begins_with("res://") and not FileAccess.file_exists(ignore) \
+			and not Settings.is_read_only() and not Settings.is_probe_launch(OS.get_cmdline_args()):
+		var f := FileAccess.open(ignore, FileAccess.WRITE)
+		if f != null:
+			f.close()
 
 
 # --- public API ----------------------------------------------------------------
@@ -287,6 +304,7 @@ func _dispatch(entry: Dictionary, prompt: String) -> void:
 	# dropdown says now.
 	var backend := _backend_of(entry)
 	entry.backend = backend
+	var run := _run_for(entry, prompt_path)
 	# The run's stdout is a stream of JSON events, one per line, as they happen - never a
 	# single blob at the end, which gave NOTHING to show for however long the fix took.
 	# _poll_progress tails it each frame for a live "what's it doing" line; _finish reads
@@ -299,7 +317,7 @@ func _dispatch(entry: Dictionary, prompt: String) -> void:
 	if pf != null:
 		pf.store_string(prompt)
 		pf.close()
-	var cli := Backends.argv(backend, _bin_for(backend), String(entry.session_id), _repo_root)
+	var cli := Backends.argv(backend, _bin_for(backend), String(entry.session_id), _repo_root, run)
 	entry.pid = Subprocess.start_redirected(cli[0], cli.slice(1), {"cwd": _repo_root,
 		"stdin": prompt_path, "out": entry.out_path, "err": entry.err_path}, "", true) \
 		if pf != null else -1
@@ -319,6 +337,23 @@ func _dispatch(entry: Dictionary, prompt: String) -> void:
 		return
 	_save_entry(entry)
 	_refresh_list()
+
+
+## WHAT A RUN OF [param entry] TAKES ([method AssistantBackends.argv]'s `run`), on the CLI pinned to it: the picker's model
+## and level while the picker names that CLI, else what the entry last ran on - kept on it, so a follow-up after the
+## picker moved to another agent still runs as it did. Grok is handed the id a fresh run takes: its opening event has none.
+func _run_for(entry: Dictionary, prompt_path: String) -> Dictionary:
+	var backend := String(entry.backend)
+	var c: Dictionary = _pick.choice() if _pick != null else {}
+	if String(c.get("agent", "")) == backend:
+		entry.model = String(c["model"])
+		entry.effort = String(c["effort"])
+	var run := {"model": String(entry.get("model", "")), "effort": String(entry.get("effort", "")),
+		"prompt_path": prompt_path}
+	if backend == "grok_cli" and String(entry.session_id).is_empty():
+		entry.fresh = Backends.new_session_id()
+		run["fresh"] = entry.fresh
+	return run
 
 
 ## Mirrors exactly how this whole session actually worked: point the fresh
@@ -354,11 +389,15 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_EXIT_TREE \
 			or what == NOTIFICATION_PREDELETE:
 		_closing = true
+		# a note's files being deleted are finished, never abandoned half-way
+		_reap_deleting(true)
 
 
 func _process(_dt: float) -> void:
 	if _closing:
 		return
+	if not _deleting.is_empty():
+		_reap_deleting()
 	var any_running := false
 	for e in _entries:
 		if e.status == "running" and int(e.pid) >= 0:
@@ -398,6 +437,9 @@ func _poll_progress(entry: Dictionary) -> void:
 			# crash still has a saved id and can be resumed later (see _load_existing).
 			if String(entry.session_id) == "":
 				var sid := Backends.session_of(_backend_of(entry), evt)
+				# a run handed its id (Grok) has it once it has said something
+				if sid == "" and String(evt.get("type", "")) == "assistant":
+					sid = String(entry.get("fresh", ""))
 				if sid != "":
 					entry.session_id = sid
 					_save_entry(entry)
@@ -493,6 +535,7 @@ func _save_entry(entry: Dictionary) -> void:
 		"session_id": entry.session_id, "response": entry.response,
 		"cost_usd": entry.cost_usd, "error_text": entry.get("error_text", ""),
 		"backend": entry.get("backend", ""), "usage": entry.get("usage", ""),
+		"model": entry.get("model", ""), "effort": entry.get("effort", ""),
 	}
 	var fa := FileAccess.open(path, FileAccess.WRITE)
 	if fa != null:
@@ -547,6 +590,7 @@ func _load_existing() -> void:
 			"response": str(data.get("response", "")), "cost_usd": float(data.get("cost_usd", 0.0)),
 			"pid": - 1, "out_path": "", "err_path": "", "error_text": error_text, "expanded": false,
 			"pending_prompt": "", "backend": backend, "usage": str(data.get("usage", "")),
+			"model": str(data.get("model", "")), "effort": str(data.get("effort", "")),
 		})
 		has_record[idx] = true
 	# Orphaned feedback: a NNNN.json with no matching NNNN.assistant.json - left
@@ -587,20 +631,87 @@ func _load_existing() -> void:
 	_refresh_list()
 
 
+# --- deleting -------------------------------------------------------------------
+# (2026-11-07, the user: "We can delete them individually now, but that can be very slow ... It blocks the main thread to
+# do that.") MEASURED, the disk was never it: a note's files go in under a millisecond, and the second was the list built
+# again - every row, and every symbol on a row (○ ✓ ✕) a system font search of 5-8 ms (Boot.lend_symbol_fonts ends that).
+# Now the rows are built only while the panel is open, a note leaves the list at once, and its files go on a worker.
+
+## The deleting under way: WorkerThreadPool task ids, each waited for once it is done (_process) or as the app closes.
+var _deleting: Array = []
+
+
+## THE FILES OF [param entry], absolute: its record and screenshot (and the screenshot's import file, from before the folder
+## carried a .gdignore), its conversation, and a run's stream, error log and prompt - by its number, for an entry loaded
+## from an earlier session knows no paths of its own.
+func _files_of(entry: Dictionary) -> PackedStringArray:
+	var g := ProjectSettings.globalize_path(String(entry.stem))
+	var out := PackedStringArray()
+	for ext in [".assistant.json", ".json", ".png", ".png.import", ".out.json", ".err.log", ".prompt.txt"]:
+		out.append(g + ext)
+	return out
+
+
+## Delete [param paths] on a worker: what is listed has already left the list.
+func _remove_away(paths: PackedStringArray) -> void:
+	if not paths.is_empty():
+		_deleting.append(WorkerThreadPool.add_task(_remove.bind(paths), false, "feedback delete"))
+
+
+static func _remove(paths: PackedStringArray) -> void:
+	for p in paths:
+		if FileAccess.file_exists(p):
+			DirAccess.remove_absolute(p)
+
+
+## Every task id whose deleting is done, let go of. With [param all], wait for the rest (the app closing).
+func _reap_deleting(all := false) -> void:
+	for id in _deleting.duplicate():
+		if all or WorkerThreadPool.is_task_completed(int(id)):
+			WorkerThreadPool.wait_for_task_completion(int(id))
+			_deleting.erase(id)
+
+
 func _delete_entry(entry: Dictionary) -> void:
 	if entry.status == "running" and int(entry.pid) >= 0:
 		Subprocess.terminate(int(entry.pid))
-	_delete_file(entry.out_path)
-	_delete_file(entry.err_path)
-	_delete_file(String(entry.out_path).replace(".out.json", ".prompt.txt"))
-	var g := ProjectSettings.globalize_path(String(entry.stem))
-	_delete_file(g + ".assistant.json")
-	_delete_file(g + ".json")
-	_delete_file(g + ".png")
 	_entries.erase(entry)
+	_remove_away(_files_of(entry))
 	if entry.status == "running":
 		_running_count -= 1
 		_pump_queue()
+	# ITS ROW ALONE GOES: the other rows built again were the rest of what a delete cost
+	var row: Variant = entry.get("_row")
+	if _expanded and is_instance_valid(row):
+		(row as Control).queue_free()
+		_refresh_head()
+		call_deferred("_resize_panel")
+	else:
+		_refresh_list()
+
+
+## A note an agent is working on or waiting to: never taken by a bulk delete.
+static func _at_work(entry: Dictionary) -> bool:
+	return String(entry.status) == "running" or String(entry.status) == "queued"
+
+
+## EVERY NOTE NOT AT WORK, IN ONE PRESS (the user: "can we add a button to delete all entries in the assistant feedback
+## list?"): a run under way or waiting its turn stays, for a bulk delete never stops an agent mid-edit. The numbered files
+## no remaining note owns go with them - an old screenshot's import file too - listed now, so a note submitted while they
+## are deleted is never touched, and deleted on a worker.
+func _delete_all() -> void:
+	var kept := _entries.filter(_at_work)
+	var keep := {}
+	for e in kept:
+		keep[int(e.index)] = true
+	var dir := ProjectSettings.globalize_path(_feedback_dir())
+	var paths := PackedStringArray()
+	for fn in DirAccess.get_files_at(dir):
+		var num := fn.get_slice(".", 0)
+		if num.length() == 4 and num.is_valid_int() and fn.length() > 5 and not keep.has(int(num)):
+			paths.append(dir.path_join(fn))
+	_entries = kept
+	_remove_away(paths)
 	_refresh_list()
 
 
@@ -675,7 +786,16 @@ func _build_ui() -> void:
 	# off-screen to the right (the panel grows to its content's minimum size).
 	_header.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_header.add_theme_color_override("font_color", Color(0.7, 0.85, 1.0, 0.9))
-	outer.add_child(_header)
+	_header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# beside it, DELETE ALL: pressed twice, as every delete that cannot be undone is ([ArmedDelete])
+	_head_row = HBoxContainer.new()
+	outer.add_child(_head_row)
+	_head_row.add_child(_header)
+	_delete_all_btn = ArmedDelete.button("Delete all", _delete_all,
+		"Delete every note in this list, with its screenshot and conversation - all but a run under way or "
+		+ "waiting its turn. Press twice: it cannot be undone.")
+	_delete_all_btn.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	_head_row.add_child(_delete_all_btn)
 	# The panel starts (and often sits) invisible/collapsed, and Godot doesn't run
 	# layout on invisible controls - so the deferred _resize_panel() call below can
 	# land while an autowrapped Label is still mid-reflow (a transient near-zero
@@ -700,6 +820,26 @@ func _build_ui() -> void:
 
 
 func _refresh_list() -> void:
+	_refresh_head()
+	for c in _list_col.get_children():
+		c.queue_free()
+	# ROWS ONLY WHILE THE PANEL IS OPEN: closed, the list is the entries alone - building every row at startup, and again
+	# each second a run was under way, was most of what this panel cost
+	if not _expanded:
+		return
+	for e in _entries:
+		var row := _build_row(e)
+		e._row = row
+		_list_col.add_child(row)
+	# Deferred: freshly added rows haven't had a layout pass yet, so their
+	# autowrapped labels don't report an accurate minimum height until next
+	# idle frame.
+	call_deferred("_resize_panel")
+
+
+## What the panel says above its list - the header, the 💬's badge, whether Delete all has anything to delete - with no
+## row built.
+func _refresh_head() -> void:
 	var running := 0
 	var queued := 0
 	for e in _entries:
@@ -718,14 +858,7 @@ func _refresh_list() -> void:
 	# running/queued is still visible without opening the panel.
 	_toggle_btn.text = "💬" if running + queued == 0 else "💬 %d" % (running + queued)
 	_panel.visible = _expanded
-	for c in _list_col.get_children():
-		c.queue_free()
-	for e in _entries:
-		_list_col.add_child(_build_row(e))
-	# Deferred: freshly added rows haven't had a layout pass yet, so their
-	# autowrapped labels don't report an accurate minimum height until next
-	# idle frame.
-	call_deferred("_resize_panel")
+	_delete_all_btn.disabled = not _entries.any(func(e: Dictionary) -> bool: return not _at_work(e))
 
 
 ## Keeps the panel sized to its actual content (small by default, above the
@@ -744,7 +877,7 @@ func _resize_panel() -> void:
 	var style := _panel.get_theme_stylebox("panel")
 	if style:
 		chrome_h = style.get_minimum_size().y
-	var content_h: float = _header.get_combined_minimum_size().y + 6.0 \
+	var content_h: float = _head_row.get_combined_minimum_size().y + 6.0 \
 		+ _backend_row.get_combined_minimum_size().y + 6.0 + _list_col.get_combined_minimum_size().y + chrome_h
 	_panel.offset_top = offset_bottom - clamp(content_h, 0.0, max_h)
 
@@ -894,7 +1027,11 @@ func _build_body(entry: Dictionary) -> Control:
 			var usage := String(entry.get("usage", ""))
 			if usage.is_empty():
 				usage = "$%.3f" % float(entry.cost_usd)
-			body.add_child(_dim_label("%s · %s" % [Backends.label(_backend_of(entry)), usage]))
+			var ran := PackedStringArray([Backends.label(_backend_of(entry))])
+			for k in ["model", "effort"]:
+				if not String(entry.get(k, "")).is_empty():
+					ran.append(String(entry[k]))
+			body.add_child(_dim_label("%s · %s" % [", ".join(ran), usage]))
 			body.add_child(_build_followup_row(entry))
 		_:
 			var err := Label.new()
@@ -1087,10 +1224,11 @@ const ASSIST_TIP := "Feedback left with ` gets handed to this, one-shot, the mom
 const INSTALL_HINT := ("Install one or several of them, then press rescan in the Environment panel "
 	+ "(⚙). Click an agent's row there for the command that installs it.")
 
-var _backend_row: HBoxContainer
-var _backend_label: Label
-## The picker: Off, then every row of [AssistantBackends] - BOUND, so the choice is stored and
-## restored by construction (Settings.bind), as the backend's NAME, never a row number.
+## THE WRITERS' OWN ROW ([method AgentPick.assistant]): Off or an agent, its model and its level - the agent stored as its
+## NAME in `[assistant] backend`, never a row number, the model and the level beside it. It was a list of CLIs alone.
+var _pick: AgentPick
+var _backend_row: Control           # the row, measured by _resize_panel
+## The agent picker of the row - what a gate drives, and what says why nothing can run.
 var _backend_pick: OptionButton
 
 
@@ -1098,21 +1236,20 @@ var _backend_pick: OptionButton
 ## where a Masking session launched with --mask-edit could never reach it, and its "chosen on the
 ## home screen" told a person to go somewhere no mode could take them back to.
 func _build_backend_pick(parent: Control) -> void:
-	_backend_row = HBoxContainer.new()
-	_backend_row.add_theme_constant_override("separation", 8)
-	parent.add_child(_backend_row)
-	_backend_label = Label.new()
-	_backend_label.text = "Runs on:"
-	_backend_row.add_child(_backend_label)
-	_backend_pick = OptionButton.new()
-	_backend_pick.focus_mode = Control.FOCUS_NONE
-	_backend_pick.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var keys := AssistantBackends.picker_keys()
-	for k in keys:
-		_backend_pick.add_item("Off" if String(k).is_empty() else Backends.label(k))
-	Settings.bind(_backend_pick, "assistant", "backend", "", keys)
-	_backend_pick.item_selected.connect(func(_i: int) -> void: _refresh_list())
-	_backend_row.add_child(_backend_pick)
+	_pick = AgentPick.assistant(ASSIST_TIP)
+	_backend_row = _pick
+	_backend_pick = _pick.agents
+	parent.add_child(_pick)
+	var backend := String(Settings.read("assistant", "backend", ""))
+	# A CLAUDE CHOSEN BEFORE THERE WAS A MODEL TO CHOOSE ran Sonnet, and still does until another is picked
+	_pick.set_choice(backend, String(Settings.read("assistant", "model", "sonnet" if backend == "claude_cli" else "")),
+		String(Settings.read("assistant", "effort", "")))
+	_pick.changed.connect(func() -> void:
+		var c := _pick.choice()
+		for k in ["model", "effort"]:
+			Settings.write("assistant", k, String(c[k]))
+		Settings.write("assistant", "backend", String(c["agent"]))
+		_refresh_list())
 	_refresh_backend_pick()
 	# A rescan after installing a CLI lights its row up without a restart.
 	var ch := Chrome.of(self)
@@ -1125,14 +1262,8 @@ func _build_backend_pick(parent: Control) -> void:
 ## and [method AssistantBackends.runnable] reads as Off everywhere. The stored choice is never
 ## rewritten, so it comes back the moment its CLI is found.
 func _refresh_backend_pick() -> void:
-	var keys := AssistantBackends.picker_keys()
+	_pick.mark_available()
 	var have := AssistantBackends.installed()
-	for i in keys.size():
-		var k := String(keys[i])
-		if k.is_empty():
-			continue
-		_backend_pick.set_item_text(i, Backends.label(k) + ("" if have.has(k) else "  (not installed)"))
-		_backend_pick.set_item_disabled(i, not have.has(k))
 	_backend_pick.disabled = have.is_empty()
 	var gap := AssistantBackends.gap()
 	if have.is_empty():
@@ -1146,5 +1277,5 @@ func _refresh_backend_pick() -> void:
 			% [ASSIST_TIP, gap.left(1).to_upper() + gap.substr(1)]
 	else:
 		_backend_pick.tooltip_text = ASSIST_TIP
-	_backend_label.add_theme_color_override("font_color",
+	(_pick.get_child(0) as Label).add_theme_color_override("font_color",
 		COL_USES if have.is_empty() else Color(0.55, 0.62, 0.75))

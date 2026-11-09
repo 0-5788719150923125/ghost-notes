@@ -5,7 +5,7 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 608 references inside a folder, 1065 down the stack, 0 up it.
+Between scripts today: 612 references inside a folder, 1080 down the stack, 0 up it.
 
 ## The stack, top first
 
@@ -14,19 +14,19 @@ Between scripts today: 608 references inside a folder, 1065 down the stack, 0 up
 | `app/` | The shell | 13 | `masking`, `letter`, `table_show`, `table`, `reading`, `export`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `render`, `audio`, `platform`, `data` |
 | `masking/` | Masking | 15 | `timeline`, `voice`, `ui`, `notes`, `platform`, `data` |
 | `likeness/` | Likeness | 15 | `table`, `reading`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `scene_kit`, `platform`, `data` |
-| `dispatch/` | Dispatch desk | 8 | `desk`, `table`, `reading`, `show`, `media`, `scene_kit`, `render`, `data` |
+| `dispatch/` | Dispatch desk | 8 | `desk`, `table`, `reading`, `media`, `scene_kit`, `render`, `data` |
 | `letter/` | Letter | 3 | `desk`, `reading`, `show`, `media`, `ui`, `notes`, `agents`, `platform`, `data` |
 | `proof/` | Proof | 6 | `desk`, `reading`, `export`, `show`, `ui`, `notes`, `agents`, `platform`, `data` |
 | `desk/` | The desk | 9 | `table`, `media`, `scene_kit`, `render`, `data` |
-| `table_show/` | The table's show | 17 | `table`, `reading`, `export`, `show`, `voice`, `ui`, `notes`, `agents`, `geometry`, `audio`, `platform`, `data` |
-| `table/` | The set | 57 | `media`, `agents`, `scene_kit`, `geometry`, `render`, `audio`, `platform`, `data` |
+| `table_show/` | The table's show | 18 | `table`, `reading`, `export`, `show`, `voice`, `ui`, `notes`, `agents`, `geometry`, `audio`, `platform`, `data` |
+| `table/` | The set | 58 | `media`, `agents`, `scene_kit`, `geometry`, `render`, `audio`, `platform`, `data` |
 | `reading/` | The voice's workspaces | 12 | `export`, `show`, `media`, `voice`, `ui`, `notes`, `audio`, `platform`, `data` |
 | `export/` | Export | 5 | `show`, `media`, `voice`, `ui`, `notes`, `agents`, `stage`, `scene_kit`, `audio`, `platform`, `data` |
 | `timeline/` | The storyboard's editor | 5 | `show`, `ui`, `scenes`, `stage`, `audio`, `data` |
-| `show/` | The show | 10 | `media`, `ui`, `notes`, `scenes`, `stage`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
+| `show/` | The show | 11 | `media`, `ui`, `notes`, `scenes`, `stage`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
 | `media/` | Media | 20 | `voice`, `ui`, `notes`, `agents`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
 | `voice/` | Synthesis (voice) | 14 | `audio`, `platform`, `data` |
-| `ui/` | The panel kit | 22 | `notes`, `agents`, `render`, `audio`, `platform`, `data` |
+| `ui/` | The panel kit | 22 | `notes`, `agents`, `render`, `platform`, `data` |
 | `notes/` | Notes | 10 | `agents`, `stage`, `platform`, `data` |
 | `agents/` | Agents | 6 | `platform`, `data` |
 | `scenes/` | Scenes | 59 | `stage`, `scene_kit`, `geometry`, `motion`, `render`, `audio` |
@@ -127,7 +127,7 @@ What the show is carried on: the `Medium` base and its registry, each medium ([m
 
 The player: the Director's schedule and transitions, the one transport, karaoke subtitles, the Look over the whole picture, and the cards of the show's own settings.
 
-[`bookends_card`](../src/show/bookends_card.gd), [`director`](../src/show/director.gd), [`filters`](../src/show/filters.gd), [`look_card`](../src/show/look_card.gd), [`picture_card`](../src/show/picture_card.gd), [`pictures_card`](../src/show/pictures_card.gd), [`song_card`](../src/show/song_card.gd), [`subtitle_sea`](../src/show/subtitle_sea.gd), [`subtitles`](../src/show/subtitles.gd), [`transport`](../src/show/transport.gd)
+[`bookends_card`](../src/show/bookends_card.gd), [`director`](../src/show/director.gd), [`filters`](../src/show/filters.gd), [`look_card`](../src/show/look_card.gd), [`made_pictures`](../src/show/made_pictures.gd), [`medium_card`](../src/show/medium_card.gd), [`pictures_card`](../src/show/pictures_card.gd), [`song_card`](../src/show/song_card.gd), [`subtitle_sea`](../src/show/subtitle_sea.gd), [`subtitles`](../src/show/subtitles.gd), [`transport`](../src/show/transport.gd)
 
 ### `timeline/` - The storyboard's editor
 
@@ -151,13 +151,13 @@ The panels a voice runs in: the reading (script, cast, voice, stream, export), t
 
 A place, seen and heard, built from a written description: the table itself (Tables), the things on it (Props), its air (Effects, and what the wind carries: Drifts), its light (Lights) and the one wind both share (Winds), its sound (Soundscape), where cards go on it, what can be done with them and how a reading says so, the faces printed on them - and the medium that puts it all on the stage (`table.gd`, a row of `Medium.REGISTRY`).
 
-[`assembly`](../src/table/assembly.gd), [`assembly_bake`](../src/table/assembly_bake.gd), [`assembly_heap`](../src/table/assembly_heap.gd), [`assembly_meshes`](../src/table/assembly_meshes.gd), [`assembly_model`](../src/table/assembly_model.gd), [`assembly_track`](../src/table/assembly_track.gd), [`assembly_world`](../src/table/assembly_world.gd), [`boil`](../src/table/boil.gd), [`bristles`](../src/table/bristles.gd), [`card_faces`](../src/table/card_faces.gd), [`card_reading`](../src/table/card_reading.gd), [`card_table`](../src/table/card_table.gd), [`dice`](../src/table/dice.gd), [`dice_bake`](../src/table/dice_bake.gd), [`dice_notation`](../src/table/dice_notation.gd), [`drifts`](../src/table/drifts.gd), [`effects`](../src/table/effects.gd), [`face_form`](../src/table/face_form.gd), [`fingers`](../src/table/fingers.gd), [`formula`](../src/table/formula.gd), [`game_board`](../src/table/game_board.gd), [`game_ledger`](../src/table/game_ledger.gd), [`hands`](../src/table/hands.gd), [`intro_blur`](../src/table/intro_blur.gd), [`lights`](../src/table/lights.gd), [`mesh_cut`](../src/table/mesh_cut.gd), [`motions`](../src/table/motions.gd), [`particles`](../src/table/particles.gd), [`props`](../src/table/props.gd), [`rides`](../src/table/rides.gd), [`rigid_parts`](../src/table/rigid_parts.gd), [`shape_field`](../src/table/shape_field.gd), [`sheet_bend`](../src/table/sheet_bend.gd), [`sheet_writing`](../src/table/sheet_writing.gd), [`show_opening`](../src/table/show_opening.gd), [`skins`](../src/table/skins.gd), [`soundscape`](../src/table/soundscape.gd), [`surface_waves`](../src/table/surface_waves.gd), [`table`](../src/table/table.gd), [`table_actions`](../src/table/table_actions.gd), [`table_assembly`](../src/table/table_assembly.gd), [`table_box`](../src/table/table_box.gd), [`table_card_pose`](../src/table/table_card_pose.gd), [`table_game`](../src/table/table_game.gd), [`table_light`](../src/table/table_light.gd), [`table_paint`](../src/table/table_paint.gd), [`table_physics`](../src/table/table_physics.gd), [`table_plan`](../src/table/table_plan.gd), [`table_positions`](../src/table/table_positions.gd), [`table_shuffle`](../src/table/table_shuffle.gd), [`table_things`](../src/table/table_things.gd), [`table_work`](../src/table/table_work.gd), [`tables`](../src/table/tables.gd), [`title_card`](../src/table/title_card.gd), [`vessel`](../src/table/vessel.gd), [`winds`](../src/table/winds.gd), [`work_sounds`](../src/table/work_sounds.gd)
+[`assembly`](../src/table/assembly.gd), [`assembly_bake`](../src/table/assembly_bake.gd), [`assembly_heap`](../src/table/assembly_heap.gd), [`assembly_meshes`](../src/table/assembly_meshes.gd), [`assembly_model`](../src/table/assembly_model.gd), [`assembly_track`](../src/table/assembly_track.gd), [`assembly_world`](../src/table/assembly_world.gd), [`boil`](../src/table/boil.gd), [`bristles`](../src/table/bristles.gd), [`card_faces`](../src/table/card_faces.gd), [`card_reading`](../src/table/card_reading.gd), [`card_table`](../src/table/card_table.gd), [`dice`](../src/table/dice.gd), [`dice_bake`](../src/table/dice_bake.gd), [`dice_notation`](../src/table/dice_notation.gd), [`drifts`](../src/table/drifts.gd), [`effects`](../src/table/effects.gd), [`face_form`](../src/table/face_form.gd), [`fingers`](../src/table/fingers.gd), [`formula`](../src/table/formula.gd), [`game_board`](../src/table/game_board.gd), [`game_ledger`](../src/table/game_ledger.gd), [`hands`](../src/table/hands.gd), [`intro_blur`](../src/table/intro_blur.gd), [`lights`](../src/table/lights.gd), [`mesh_cut`](../src/table/mesh_cut.gd), [`motions`](../src/table/motions.gd), [`paint_layers`](../src/table/paint_layers.gd), [`particles`](../src/table/particles.gd), [`props`](../src/table/props.gd), [`rides`](../src/table/rides.gd), [`rigid_parts`](../src/table/rigid_parts.gd), [`shape_field`](../src/table/shape_field.gd), [`sheet_bend`](../src/table/sheet_bend.gd), [`sheet_writing`](../src/table/sheet_writing.gd), [`show_opening`](../src/table/show_opening.gd), [`skins`](../src/table/skins.gd), [`soundscape`](../src/table/soundscape.gd), [`surface_waves`](../src/table/surface_waves.gd), [`table`](../src/table/table.gd), [`table_actions`](../src/table/table_actions.gd), [`table_assembly`](../src/table/table_assembly.gd), [`table_box`](../src/table/table_box.gd), [`table_card_pose`](../src/table/table_card_pose.gd), [`table_game`](../src/table/table_game.gd), [`table_light`](../src/table/table_light.gd), [`table_paint`](../src/table/table_paint.gd), [`table_physics`](../src/table/table_physics.gd), [`table_plan`](../src/table/table_plan.gd), [`table_positions`](../src/table/table_positions.gd), [`table_shuffle`](../src/table/table_shuffle.gd), [`table_things`](../src/table/table_things.gd), [`table_work`](../src/table/table_work.gd), [`tables`](../src/table/tables.gd), [`title_card`](../src/table/title_card.gd), [`vessel`](../src/table/vessel.gd), [`winds`](../src/table/winds.gd), [`work_sounds`](../src/table/work_sounds.gd)
 
 ### `table_show/` - The table's show
 
 A show at a table nobody writes: a show's brief, its episodes - each planned, dealt, painted and written by agents a card or a beat of work at a time, kept on disk step by step - the set dresser that builds the table and the puppeteer that works what stands on it. The rules are every show's; the brief says what is done there - cards read (tarot, baseball or trading cards, a card game's deck, flashcards, recipe cards, listed or left to each episode's producer), things made, or both. Design: next/cards.md, next/table_work.md.
 
-[`card_deck`](../src/table_show/card_deck.gd), [`dealer_tools`](../src/table_show/dealer_tools.gd), [`decorator_tools`](../src/table_show/decorator_tools.gd), [`episode_card`](../src/table_show/episode_card.gd), [`episode_walk`](../src/table_show/episode_walk.gd), [`fixed_table`](../src/table_show/fixed_table.gd), [`game_prep_tools`](../src/table_show/game_prep_tools.gd), [`game_tools`](../src/table_show/game_tools.gd), [`model_studio`](../src/table_show/model_studio.gd), [`model_tools`](../src/table_show/model_tools.gd), [`puppeteer_tools`](../src/table_show/puppeteer_tools.gd), [`set_dresser_tools`](../src/table_show/set_dresser_tools.gd), [`table_blueprint`](../src/table_show/table_blueprint.gd), [`table_episode`](../src/table_show/table_episode.gd), [`table_preview`](../src/table_show/table_preview.gd), [`table_producer`](../src/table_show/table_producer.gd), [`table_prompts`](../src/table_show/table_prompts.gd)
+[`card_deck`](../src/table_show/card_deck.gd), [`dealer_tools`](../src/table_show/dealer_tools.gd), [`decorator_tools`](../src/table_show/decorator_tools.gd), [`episode_card`](../src/table_show/episode_card.gd), [`episode_walk`](../src/table_show/episode_walk.gd), [`fixed_table`](../src/table_show/fixed_table.gd), [`game_prep_tools`](../src/table_show/game_prep_tools.gd), [`game_tools`](../src/table_show/game_tools.gd), [`model_studio`](../src/table_show/model_studio.gd), [`model_tools`](../src/table_show/model_tools.gd), [`painter_tools`](../src/table_show/painter_tools.gd), [`puppeteer_tools`](../src/table_show/puppeteer_tools.gd), [`set_dresser_tools`](../src/table_show/set_dresser_tools.gd), [`table_blueprint`](../src/table_show/table_blueprint.gd), [`table_episode`](../src/table_show/table_episode.gd), [`table_preview`](../src/table_show/table_preview.gd), [`table_producer`](../src/table_show/table_producer.gd), [`table_prompts`](../src/table_show/table_prompts.gd)
 
 ### `desk/` - The desk
 
@@ -173,15 +173,15 @@ A ghost doing math, made by agents: a note's problem fixed, worked at the desk w
 
 ### `letter/` - Letter
 
-A note read as a letter written by hand at a desk: the card that pins its medium, draws its sketches (an agent's SVG, laid out by the Proof pad's ink step) and paints its pictures (the Illustrations library's), and hands the reading the letter with the pen's rests in it. Design: next/letter.md.
+A note read as a letter written by hand at a desk, one of the Medium card's formats: its own rows there, which draw its sketches (an agent's SVG, laid out by the Proof pad's ink step) and hand the reading the letter with the pen's rests in it. Design: next/letter.md.
 
-[`letter_card`](../src/letter/letter_card.gd), [`letter_sketches`](../src/letter/letter_sketches.gd), [`letter_walk`](../src/letter/letter_walk.gd)
+[`letter_format`](../src/letter/letter_format.gd), [`letter_sketches`](../src/letter/letter_sketches.gd), [`letter_walk`](../src/letter/letter_walk.gd)
 
 ### `dispatch/` - Dispatch desk
 
-A note played at a desk late at night in a hollow under the ground, seen from the chair: the script's marks read into the desk's actions and the voice's rests (calls, rings, texts, pings, the terminal's typed and shown blocks, the printer, the static), the desk and everything on it built by code (a beige terminal, a dozen labeled flip phones, a radar, a shortwave receiver, a printer, small screens), the roots grown over and across it, every sound synthesized, the medium that turns its camera to whatever is active, and the card that pins it and paints its pictures. Design: next/dispatch.md.
+A note played at a desk late at night in a hollow under the ground, seen from the chair: the script's marks read into the desk's actions and the voice's rests (calls, rings, texts, pings, the terminal's typed and shown blocks, the printer, the static), the desk and everything on it built by code (a beige terminal, a dozen labeled flip phones, a radar, a shortwave receiver, a printer, small screens), the roots grown over and across it, every sound synthesized, the medium that turns its camera to whatever is active - one of the Medium card's formats - and its own rows there. Design: next/dispatch.md.
 
-[`dispatch`](../src/dispatch/dispatch.gd), [`dispatch_card`](../src/dispatch/dispatch_card.gd), [`dispatch_roots`](../src/dispatch/dispatch_roots.gd), [`dispatch_screens`](../src/dispatch/dispatch_screens.gd), [`dispatch_script`](../src/dispatch/dispatch_script.gd), [`dispatch_set`](../src/dispatch/dispatch_set.gd), [`dispatch_sounds`](../src/dispatch/dispatch_sounds.gd), [`dispatch_walk`](../src/dispatch/dispatch_walk.gd)
+[`dispatch`](../src/dispatch/dispatch.gd), [`dispatch_format`](../src/dispatch/dispatch_format.gd), [`dispatch_roots`](../src/dispatch/dispatch_roots.gd), [`dispatch_screens`](../src/dispatch/dispatch_screens.gd), [`dispatch_script`](../src/dispatch/dispatch_script.gd), [`dispatch_set`](../src/dispatch/dispatch_set.gd), [`dispatch_sounds`](../src/dispatch/dispatch_sounds.gd), [`dispatch_walk`](../src/dispatch/dispatch_walk.gd)
 
 ### `likeness/` - Likeness
 

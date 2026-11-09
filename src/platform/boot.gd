@@ -126,6 +126,7 @@ const TIP_MAX_PX := 480.0
 
 
 func _ready() -> void:
+	lend_symbol_fonts()
 	if OS.get_cmdline_user_args().has("--apply-update") \
 			or OS.get_cmdline_user_args().has("--update-smoke-hold"):
 		return
@@ -140,6 +141,40 @@ func _ready() -> void:
 	# Godot sets its own at startup and an autoload's ready comes after it, so this one stays.
 	AppIcon.apply()
 	get_tree().node_added.connect(_hook_tooltip)
+
+
+## THE SYMBOLS' FONTS, FOUND ONCE (2026-11-07, measured behind the user's "We can delete them individually now, but that
+## can be very slow"). Ghost ships no UI font, so the text is Godot's own (Open Sans SemiBold), which has no ○ ✓ ✕ ⚙ ⟳ ▶:
+## for each, the shaper asked the system for a font that has it - fontconfig, every time a label was laid out, 5 to 8 ms
+## where plain text takes 0.2. A list of 60 notes, two symbols a row, took a second to build, and every panel, card and
+## row of buttons paid the same. Handed to the default font as its own FALLBACKS, they are found in it (0.15 ms).
+##
+## WHICH, AND WHY ONLY THESE: the sans families fontconfig itself turns to, in its order (Noto Sans, then DejaVu Sans), at
+## the default font's weight, as its search asked for them - drawn side by side, every symbol the app uses came out the
+## same. A FONT TALLER THAN THE DEFAULT IS NEVER LENT: Godot takes a label's height from the tallest font on the list, so
+## Noto Sans Symbols 2 (29 px at 16 against 23) made every label in the app 11 px taller. And no emoji font: the system
+## draws ⏸ ⏺ 🎞 🖼 in plain symbols, and an emoji font on the list would paint them in color. What none of these has (an
+## emoji, ⏳, ⤓) still finds its font the old way. One [SystemFont] per family, for a SystemFont is the first of its names
+## that is installed, never several; a machine with neither family lends nothing.
+const SYMBOL_FONTS := ["Noto Sans", "DejaVu Sans"]
+
+
+static func lend_symbol_fonts() -> void:
+	var base := ThemeDB.fallback_font
+	if base == null or OS.has_feature("mobile") or OS.has_feature("web") or not base.fallbacks.is_empty():
+		return
+	var have := OS.get_system_fonts()
+	var lent: Array[Font] = []
+	for family in SYMBOL_FONTS:
+		if not have.has(family):
+			continue
+		var f := SystemFont.new()
+		f.font_names = PackedStringArray([family])
+		f.font_weight = base.get_font_weight()
+		f.font_stretch = base.get_font_stretch()
+		if f.get_height(100) <= base.get_height(100):
+			lent.append(f)
+	base.fallbacks = lent
 
 
 ## THE BACKSTOP for background programs. Every child ghost starts goes through

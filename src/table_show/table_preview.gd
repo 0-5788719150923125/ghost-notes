@@ -66,9 +66,10 @@ var timing := {}
 ## never its card faces: the set dresser knows no card - and the other files the table reads from its
 ## folder that an earlier step made: the designs painted on it (`skin.json`, [TablePaint]). Left out, a
 ## puppeteer's mask had no design, every paint act laid nothing and pressed its tool into the bare mask,
-## and the puppeteer would not hand the work in (joker-motivation 856886, 2026-11-05). Not the face painted first that they were copied
-## from: the table never lays it (feedback 0049, skin_paint.gdshader).
-const PICTURES := ["surface.png", "height.png", "height.json", "backdrop.png", "backdrop.json", "back.png", "skin.json"]
+## and the puppeteer would not hand the work in (joker-motivation 856886, 2026-11-05). And the face painted first that they were copied
+## from, with where it lies (`face_ref.png`, `face.json`): never laid itself (feedback 0049), it says where each operation's paint is
+## still wanted ([PaintLayers], TablePaint._from_picture) - left out, a preview's acts would be laid as the shapes say and the show's not.
+const PICTURES := ["surface.png", "height.png", "height.json", "backdrop.png", "backdrop.json", "back.png", "skin.json", "face_ref.png", "face.json"]
 ## The studio's four sides of one thing: a direction from its middle toward the camera, and a caption.
 const SIDES := [["front", Vector3(0.0, 0.14, 1.0)], ["its right side", Vector3(1.0, 0.14, 0.0)],
 	["from above (its front at the bottom)", Vector3(0.0, 1.0, 0.0)], ["as the camera sees it", Vector3.ZERO]]

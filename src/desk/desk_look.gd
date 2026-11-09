@@ -282,7 +282,7 @@ static func of(seed: int, picks := {}) -> Dictionary:
 	return out
 
 
-## WHAT A DOCUMENT'S `letter` CHOSE for its desk ([LetterCard]): `things` and `mood` where it carries them, and what is
+## WHAT A DOCUMENT'S `letter` CHOSE for its desk ([LetterFormat]): `things` and `mood` where it carries them, and what is
 ## written on its index cards (`card_text`) with the hand it is written in - [method of]'s `picks`.
 static func picks_of(letter: Dictionary) -> Dictionary:
 	var out := {}
@@ -298,7 +298,7 @@ static func picks_of(letter: Dictionary) -> Dictionary:
 
 
 ## WHAT [param look] HAS ON IT, by [constant THINGS] key in its order - the mat among them when one lies under the pad:
-## what the Letter card shows ticked for a desk it has chosen nothing for.
+## what the Letter's rows show ticked for a desk it has chosen nothing for.
 static func kinds(look: Dictionary) -> Array:
 	var have := {}
 	for t in look.get("things", []):

@@ -33,7 +33,7 @@ extends Node
 ## uses, and the note left and opened again shows and walks the same storyboard. A note that NAMES
 ## a file plays it as it is and cannot change it here, until it is taken into the note.
 ##
-## A VOICE WALKS ONE TOO: a note with a voice, a Picture and a storyboard hands the same plan to
+## A VOICE WALKS ONE TOO: a note with a voice, a Medium and a storyboard hands the same plan to
 ## main as a song's does - the pairing is no panel's feature.
 ##
 ## THE ROWS ARE THE TABLES ([SchemaForm]): a row per field, a choice picked or a line typed raises
@@ -210,10 +210,10 @@ func _inspector_form(ed: StoryboardEditor, label: String) -> SchemaForm:
 
 func _forecast(song: String) -> void:
 	print("-- the seeded show is a storyboard nobody wrote down")
-	var note := NoteStore.create("seeded", "", {"song": {"path": song}, "picture": {"medium": "full"}})
+	var note := NoteStore.create("seeded", "", {"song": {"path": song}, "medium": {"format": "full"}})
 	_main._list._open(note)
 	await _frames(24)
-	_ok(Director.is_attached() and not Director.is_manual(), "a song and a Picture: the show is up, and the seed chooses")
+	_ok(Director.is_attached() and not Director.is_manual(), "a song and a Medium: the show is up, and the seed chooses")
 	if not Director.is_attached():
 		return
 	var ahead := Director.forecast(CUTS)
@@ -242,7 +242,7 @@ func _forecast(song: String) -> void:
 func _write_and_edit(song: String) -> void:
 	print("-- written down, it is the same show")
 	var ch: Chrome = _main._chrome
-	var note := NoteStore.create("story", "Words.\n", {"song": {"path": song}, "picture": {"medium": "full"},
+	var note := NoteStore.create("story", "Words.\n", {"song": {"path": song}, "medium": {"format": "full"},
 		"scenes": {"sequence": []}})
 	_main._list._open(note)
 	await _frames(24)
@@ -425,7 +425,7 @@ func _write_and_edit(song: String) -> void:
 
 func _file_board(song: String) -> void:
 	print("-- a note that names a file")
-	var note := NoteStore.create("from a file", "", {"song": {"path": song}, "picture": {"medium": "full"},
+	var note := NoteStore.create("from a file", "", {"song": {"path": song}, "medium": {"format": "full"},
 		"scenes": {"storyboard": "showcase"}})
 	_main._list._open(note)
 	await _frames(24)
@@ -459,7 +459,7 @@ func _file_board(song: String) -> void:
 func _voice(_song: String) -> void:
 	print("-- a voice with a picture and a storyboard")
 	var home_procs := Subprocess.tracked()
-	var note := NoteStore.create("narrated", "Words.\n", {"voice": {}, "picture": {"medium": "full"},
+	var note := NoteStore.create("narrated", "Words.\n", {"voice": {}, "medium": {"format": "full"},
 		"scenes": {"loop": true, "sequence": [{"scene": "aurora", "hold": 4}, {"scene": "embers", "hold": 4}]}})
 	_main._list._open(note)
 	await _frames(24)
@@ -467,7 +467,7 @@ func _voice(_song: String) -> void:
 	_ok(reading != null and is_instance_valid(reading), "it opens as a reading")
 	if reading != null:
 		var titles: Array = (reading._panel as SidePanel).cards().map(func(c: Node) -> String: return (c as Card).title)
-		_ok(titles == ["Body", "Voice", "Picture", "Storyboard"], "its cards are the note's: %s" % str(titles))
+		_ok(titles == ["Body", "Voice", "Medium", "Storyboard"], "its cards are the note's: %s" % str(titles))
 		var plan: Dictionary = reading.show_plan()
 		_ok(bool(plan["picture"]) and ((plan["board"] as Dictionary).get("sequence", []) as Array).size() == 2,
 			"the plan it hands main is a song's: a picture, and the storyboard to walk")

@@ -66,6 +66,14 @@ func pictures() -> PackedStringArray:
 	return PackedStringArray()
 
 
+## THE PICTURES THE EPISODE'S AGENTS MADE, as a card shows them (the user, 2026-11-09: "the Godot app can generate a mask, but we
+## will never see the reference image in the UI ... whatever we do must be generic. Because there are other scenarios where agents may
+## generate pictures"): `[{path (absolute), label, row (the Pipeline row that makes it again, "" none), group}]`, in the order they
+## are made; none for an episode that painted nothing. Every maker says its own here - the Pictures card names none.
+func made_pictures() -> Array:
+	return []
+
+
 ## Who writes for the episode, `{agent, model, effort}`: the maker's own writer, so a step's words are
 ## written by whoever the show's are.
 func writer() -> Dictionary:

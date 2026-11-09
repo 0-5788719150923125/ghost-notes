@@ -34,6 +34,9 @@ const MAX_SECTIONS := 12
 ## How far apart a warped part's points may be, meters: a warp moves the points a shape has, and a
 ## candle's wall drawn top and bottom only stayed straight however far it was bent.
 const WARP_STEP := 0.005
+## ...and a block of a material that gives (a sponge's foam), its flat faces cut this far apart (meters): enough to show it bend over a
+## pot's mouth, few enough that what is looked at through its every point stays quick
+const GIVE_STEP := 0.008
 ## The largest anything may be, centimeters: a thing past it is scaled down whole.
 const MAX_SIZE := 60.0
 ## How high above the cloth a thing's FOOT is measured (meters): what a card sliding across the
@@ -947,7 +950,12 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 	var meshes: Array = []
 	# EVERY PART, its groups opened: its geometry and every place it stands - its groups' repeats and
 	# its own together - and no more of them in all than a thing may make
-	var leaves := _assemble(thing.get("parts", []), seed, [])
+	# (...a part of a material that gives - a sponge's foam - cut finely across its faces, so it can bend where it is pressed)
+	var gives := {}
+	for nm in materials:
+		if String((materials[nm] as Dictionary).get("kind", "")) == "sponge":
+			gives[String(nm)] = true
+	var leaves := _assemble(thing.get("parts", []), seed, [], gives)
 	var budget := MAX_INSTANCES
 	for leaf in leaves:
 		var xs: Array = leaf["xforms"]
@@ -1127,7 +1135,7 @@ static func _holder(chain: Array, inner: Node3D, movers: Array, at: Dictionary, 
 ## A heap is laid last, into whatever the other parts make of a vessel round it. [param path] is
 ## where these parts sit among the groups; `salt` is a part's place, the same as it always was for a
 ## part in no group.
-static func _assemble(parts: Array, seed: int, path: Array) -> Array:
+static func _assemble(parts: Array, seed: int, path: Array, gives := {}) -> Array:
 	var out: Array = []
 	var heaps: Array = []    # [place in out, rng]: laid last, into whatever they lie in ([method _walls])
 	var own: Array = []      # this list's own shaped parts, whose moves are reckoned once all are laid
@@ -1137,7 +1145,7 @@ static func _assemble(parts: Array, seed: int, path: Array) -> Array:
 		var rng := RandomNumberGenerator.new()
 		rng.seed = hash([seed, here, "part"])
 		if part.get("parts") is Array:
-			var inner := _assemble(part["parts"], seed, path + [pi])
+			var inner := _assemble(part["parts"], seed, path + [pi], gives)
 			if inner.is_empty():
 				continue
 			var sized: Array = []
@@ -1187,7 +1195,11 @@ static func _assemble(parts: Array, seed: int, path: Array) -> Array:
 			own.append(out.size())
 			out.append({"part": part, "geos": [], "xforms": _placements(part, rng, []), "salt": here, "grains": true})
 			continue
-		var geos := _geometry(part, rng)
+		var shaped := part
+		if part.get("material") is String and gives.has(String(part["material"])):
+			shaped = part.duplicate()
+			shaped["_gives"] = true
+		var geos := _geometry(shaped, rng)
 		if geos.is_empty():
 			continue
 		own.append(out.size())
@@ -2479,15 +2491,16 @@ static func _box(p: Dictionary) -> Tris:
 	var taper := float(p["taper"])
 	var g := Tris.new()
 	var fine := _fine(p)
+	var step := GIVE_STEP if bool(p.get("_gives", false)) and (p.get("warp", {}) as Dictionary).is_empty() else WARP_STEP
 	var axis_samples := func(half: float) -> PackedFloat32Array:
 		var out := PackedFloat32Array([-half])
 		if r > 0.0001:
 			for k in [0.15, 0.4, 0.7]:
 				out.append(-half + r * (1.0 - cos(float(k) * PI * 0.5)) / (1.0 - cos(PI * 0.5)) * 1.0)
 			out.append(-half + r)
-		# a warped block is cut across its flat faces too, so it can bend
+		# a warped block is cut across its flat faces too, so it can bend - a block of a material that gives, as far apart as shows it bend
 		var flat := 2.0 * (half - r)
-		var cuts := ceili(flat / WARP_STEP) if fine and flat > WARP_STEP else 1
+		var cuts := ceili(flat / step) if fine and flat > step else 1
 		for k in range(1, cuts):
 			out.append(-half + r + flat * float(k) / float(cuts))
 		if r > 0.0001:
@@ -2985,9 +2998,12 @@ static func _resample(poly: Array, m: int) -> Array:
 	return out
 
 
-## Whether part [param p]'s warp bends its shape rather than only scaling it: then its shape is
-## built with points no further apart than [constant WARP_STEP].
+## Whether part [param p]'s warp bends its shape rather than only scaling it - or it is of a material that gives, bent where it is
+## pressed (a sponge laid over a pot's mouth, feedback 0005: "It would bend in the middle"; its broad faces had been one flat quad each,
+## which no press could bend) - then its shape is built with points no further apart than [constant WARP_STEP].
 static func _fine(p: Dictionary) -> bool:
+	if bool(p.get("_gives", false)):
+		return true
 	var w: Dictionary = p.get("warp", {})
 	for k in ["taper", "twist", "lean", "bend", "wobble"]:
 		if w.has(k):

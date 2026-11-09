@@ -36,7 +36,7 @@ extends Node
 ## after it, and a song note opens stopped at its start. Two-sided: the chapter does set them.
 ##
 ## A NOTE'S MAKE-UP IS ITS BLOCKS: there is one kind of new note, so each is made with the blocks "+"
-## would have written ([constant BLOCKS]) - a voice with a Picture and a storyboard among them, which
+## would have written ([constant BLOCKS]) - a voice with a Medium and a storyboard among them, which
 ## no template ever was. An Actor's note carries its own block alone, as "+" writes it, and must show its
 ## card and the Voice it brings, and play them (2026-10-21: the reading built only what was written).
 ##
@@ -52,15 +52,15 @@ const MODES := ["note", "auto", "manual", "story", "synthesis", "generative", "n
 	"likeness", "masking"]
 const BLOCKS := {
 	"note": {},
-	"auto": {"song": {"path": "SONG"}, "picture": {"medium": "auto"}},
-	"manual": {"song": {"path": "SONG"}, "picture": {"medium": "full"}, "scenes": {"storyboard": "default"}},
+	"auto": {"song": {"path": "SONG"}, "medium": {"format": "auto"}},
+	"manual": {"song": {"path": "SONG"}, "medium": {"format": "full"}, "scenes": {"storyboard": "default"}},
 	# a storyboard of the note's own, with the editor opened over the show before each leaving
-	"story": {"song": {"path": "SONG"}, "picture": {"medium": "full"},
+	"story": {"song": {"path": "SONG"}, "medium": {"format": "full"},
 		"scenes": {"loop": true, "sequence": [{"scene": "aurora", "hold": 4}, {"scene": "embers", "hold": 4}]}},
 	"synthesis": {"synthesis": {}},
 	"generative": {"voice": {}},
-	# a voice with a Picture and a storyboard: a pairing no template had
-	"narrated": {"voice": {}, "picture": {"medium": "full"},
+	# a voice with a Medium and a storyboard: a pairing no template had
+	"narrated": {"voice": {}, "medium": {"format": "full"},
 		"scenes": {"loop": true, "sequence": [{"scene": "aurora", "hold": 4}]}},
 	"table": {"table": {}},
 	# a ghost doing math at a desk: its card pins the desk, which must be let go on leaving
@@ -212,7 +212,7 @@ func _check_refused_while_preparing() -> void:
 func _check_fresh(song: String) -> void:
 	var ch: Chrome = _main._chrome
 	var chapter := NoteStore.create("teardown fresh", "Words.\n",
-		{"voice": {}, "picture": {"medium": "tablet"}, "look": {"filters": {"monochrome": 1.0}}})
+		{"voice": {}, "medium": {"format": "tablet"}, "look": {"filters": {"monochrome": 1.0}}})
 	_main._list._open(chapter)
 	await _frames(20)
 	_ok(Director.medium == "tablet" and Director.filter_amount("monochrome") > 0.0,

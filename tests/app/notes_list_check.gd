@@ -35,8 +35,8 @@ extends Node
 ## the list comes back.
 ##
 ## THE ROUND TRIP - A NOTE BECOMES A SHOW BY WHAT IS ATTACHED: New, then "+" Song (the note opens
-## again with a Song card asking for one, nothing timed, no stage, and a Picture grayed no longer),
-## "+" Picture (in the Auto medium: the seeded show); choosing a song writes it into the note and
+## again with a Song card asking for one, nothing timed, no stage, and a Medium grayed no longer),
+## "+" Medium (in the Auto format: the seeded show); choosing a song writes it into the note and
 ## opens the note again around it, loaded and WAITING at its start ("start from the baseline of off,
 ## not played yet"); it plays through the transport; "+" Storyboard puts its card on the same note
 ## and the seed still chooses until something is written. A SECOND CLOCK IS REFUSED, WITH THE REASON
@@ -354,7 +354,7 @@ func _dialog_in(n: Node) -> DeleteDialog:
 # --- the round trip ------------------------------------------------------------------------------
 
 func _check_round_trip() -> void:
-	print("-- New, + Song, + Picture, a song, play, a storyboard, detach, leave")
+	print("-- New, + Song, + Medium, a song, play, a storyboard, detach, leave")
 	var ch: Chrome = _main._chrome
 	var home := _measure()
 	var list: NotesList = _main._list
@@ -366,9 +366,9 @@ func _check_round_trip() -> void:
 	if panel == null:
 		return
 	var note: String = panel.path
-	_ok(_offer(panel, "picture") == "grayed" and _offer(panel, "song") == "lit" and _offer(panel, "voice") == "lit",
-		"a plain note's \"+\": a Song and a Voice are lit, a Picture waits for a sound (picture %s, song %s, voice %s)"
-		% [_offer(panel, "picture"), _offer(panel, "song"), _offer(panel, "voice")])
+	_ok(_offer(panel, "medium") == "grayed" and _offer(panel, "song") == "lit" and _offer(panel, "voice") == "lit",
+		"a plain note's \"+\": a Song and a Voice are lit, a Medium waits for a sound (medium %s, song %s, voice %s)"
+		% [_offer(panel, "medium"), _offer(panel, "song"), _offer(panel, "voice")])
 	panel = await _attach(panel, "song")
 	_ok(panel != null and _main._note == note and panel._song != null and not panel._song.ready_to_play(),
 		"+ Song: the same note, opened again with a Song card asking for a song")
@@ -378,9 +378,9 @@ func _check_round_trip() -> void:
 	_ok(_offer(panel, "voice") == "grayed" and _tip(panel, "voice").contains("clock") and _tip(panel, "voice").contains("Song"),
 		"a second clock is refused, and \"+\" says which to detach (%s)" % _tip(panel, "voice").get_slice("\n\n", 1))
 	_ok(_offer(panel, "song") == "", "what is attached is not offered again")
-	panel = await _attach(panel, "picture")
-	_ok(panel != null and panel._picture != null and Director.medium == "auto",
-		"+ Picture: a Picture card, in the Auto medium (%s)" % Director.medium)
+	panel = await _attach(panel, "medium")
+	_ok(panel != null and panel._medium != null and Director.medium == "auto",
+		"+ Medium: a Medium card, in the Auto format (%s)" % Director.medium)
 	if panel == null:
 		return
 	# twenty seconds, as teardown_check's: the eight-second silence opens on spires, whose worker-thread
@@ -396,7 +396,7 @@ func _check_round_trip() -> void:
 	_ok(_main._note == note and Spectrum.has_audio(), "...and the note opens again around it, loaded")
 	_ok(not Spectrum.transport_playing(), "...WAITING at its start: a note opens stopped")
 	_ok(Director.is_attached() and _main._medium != null and _main._medium.key == "auto" and _stage_up(),
-		"its picture is up, in the Auto medium")
+		"its picture is up, in the Auto format")
 	_ok(not Director.is_manual(), "...and the seed chooses its scenes")
 	Spectrum.transport_play()
 	await _frames(10)
@@ -426,13 +426,13 @@ func _check_round_trip() -> void:
 		await _frames(20)
 		panel = _main._note_panel
 		var left := NoteStore.blocks_of(note)
-		_ok(not left.has("song") and left.has("picture") and left.has("scenes"),
+		_ok(not left.has("song") and left.has("medium") and left.has("scenes"),
 			"detaching the Song takes its block out and leaves the others (%s)" % str(left.keys()))
 		_ok(String(FrontMatter.split(FileAccess.get_file_as_string(note)).body) == words, "...and the note's words as they were")
 		_ok(panel != null and panel._song == null and not Spectrum.timed() and not _stage_up(),
 			"...the note opens again without it: no clock, no stage")
-		_ok(panel != null and panel._picture != null and _waiting(panel).contains("song or a voice"),
-			"...and the Picture left on it says what it is waiting for (%s)" % _waiting(panel))
+		_ok(panel != null and panel._medium != null and _waiting(panel).contains("song or a voice"),
+			"...and the Medium left on it says what it is waiting for (%s)" % _waiting(panel))
 	ch._home_button.pressed.emit()
 	await _frames(12)
 	_ok(_main._list != null and is_instance_valid(_main._list), "the ⌂ goes back to the list")
@@ -552,8 +552,8 @@ func _check_new_card_starter() -> void:
 		"the Cards workspace opens, and Edit shows the starter brief")
 	if editor != null:
 		var titles: Array = (editor._panel as SidePanel).cards().map(func(c: Node) -> String: return (c as Card).title)
-		_ok(titles.has("Episode") and titles.has("Voice") and not titles.has("Picture"),
-			"its cards are the show's: the Episode and the Voice it brings, and no Picture (%s)" % str(titles))
+		_ok(titles.has("Episode") and titles.has("Voice") and not titles.has("Medium"),
+			"its cards are the show's: the Episode and the Voice it brings, and no Medium (%s)" % str(titles))
 		_ok(bool(editor.show_plan()["picture"]), "...and the table is what it is seen in")
 
 

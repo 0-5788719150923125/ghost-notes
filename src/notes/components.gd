@@ -10,8 +10,8 @@ class_name Components
 ## A NOTE IS WHAT ITS COMPONENTS MAKE IT. There is one kind of new note - its words and nothing
 ## else - and "+" attaches the rest ([method attach_menu]); what a note can do, which panel runs it
 ## ([method workspace_of]) and what it may take next are read off what is attached, never off a
-## list of kinds of note. A song and a Picture is a seeded show; add a Storyboard and it is a show
-## written by hand; a Voice reads the words, and Cards has agents write them.
+## list of kinds of note. A song and a Medium is a seeded show; add a Storyboard and it is a show
+## written by hand; a Voice reads the words, and Table has agents write them.
 ##
 ## NEEDS AND PROVIDES ARE TYPED NAMES that ghost matches, the way a scene's `morph_out` and
 ## `morph_in` already are: "text", "audio", "reading", "picture", "moments". A component never
@@ -28,9 +28,8 @@ class_name Components
 ##
 ## A PART THAT COMES WITH ANOTHER IS A ROW'S `comes_with` (optional): it is never attached by itself
 ## and brings nothing, its block is kept by whichever of those components the note has ([method
-## blocks_of]) - a book's pictures' look, with a Picture or a Letter - and a note carrying its block
-## with none of them has the first ([method attached_of]). As `requires`, the Picture had come with
-## it, and a letter's look would have brought a Picture into the letter.
+## blocks_of]) - a novel's or a letter's pictures' look, with the Medium - and a note carrying its block
+## with none of them has the first ([method attached_of]). As `requires`, the Medium would come with it.
 ##
 ## A CARD ANY PANEL CAN SHOW IS A ROW'S `script`: the path of the script that builds the
 ## component's card, loaded when a panel builds it ([method NoteCards.make]). By path because this
@@ -52,7 +51,7 @@ const FAMILIES := {
 	&"voice": {"label": "Voice", "hue": 172.0},
 	&"sound": {"label": "Sound", "hue": 212.0},
 	&"picture": {"label": "Picture", "hue": 32.0},
-	&"medium": {"label": "Presentation", "hue": 128.0},
+	&"medium": {"label": "Medium", "hue": 128.0},
 	&"look": {"label": "Look", "hue": 322.0},
 	&"publish": {"label": "Publish", "hue": 2.0},
 }
@@ -63,7 +62,7 @@ const SLOTS := {
 	"clock": {"label": "clock",
 		"blurb": "What the show is timed by, and how long it is: a song, a voice reading the text, or a clip."},
 	"presentation": {"label": "presentation",
-		"blurb": "What the show is seen in: the Picture and the medium it names, a card table, a voice lab's own show, or a clip's own frame."},
+		"blurb": "What the show is seen in: the Medium and the format it names, a card table, a proof's desk, an actor's room, a voice lab's own show, or a clip's own frame."},
 }
 
 ## THE WORKSPACES: the panels that run a note. Most components are a card on whichever panel is
@@ -76,7 +75,7 @@ const SLOTS := {
 ## anywhere").
 ## The two a [ReadingPanel] runs say the rest of that panel too, so nothing extends it: `hint` (the
 ## line under its title row, which names no mode - [method SidePanel.pin_title_row]), `hosts` (which of a note's component cards it can
-## show - a card table is its own presentation, so it shows no Picture) and `classic` (what a panel
+## show - a card table is its own presentation, so it shows no Medium) and `classic` (what a panel
 ## started without a note - the command line, a gate - is made of).
 const WORKSPACES := {
 	"note": {"label": "Note", "section": "note",
@@ -84,8 +83,8 @@ const WORKSPACES := {
 	"reading": {"label": "Reading", "section": "generative",
 		"blurb": "A voice reads the note: the cast, each speaker's delivery and room, the stream.",
 		"hint": "Write or open a chapter. It is spoken in chunks, so the show starts while the rest is still being made. Edit lists every mark the reading understands - speakers, hesitations, pictures, pronunciations.",
-		"hosts": ["voice", "voice_training", "picture", "letter", "dispatch", "illustrations", "actor", "storyboard", "look", "bookends"],
-		"classic": ["text", "voice", "picture", "illustrations", "look", "bookends"]},
+		"hosts": ["voice", "voice_training", "medium", "illustrations", "actor", "storyboard", "look", "bookends"],
+		"classic": ["text", "voice", "medium", "illustrations", "look", "bookends"]},
 	# (its settings keep the section they had as Cards: renamed, the workspace would forget them)
 	"table": {"label": "Table", "section": "cards", "mode": "table",
 		"blurb": "A show at a table: the episodes agents make from the note's brief - cards drawn, things made, or both - and the voice that reads them.",
@@ -140,17 +139,22 @@ const REGISTRY := {
 		"needs": ["text"], "provides": ["audio", "reading", "moments"], "requires": ["scenes"],
 		"slots": ["clock", "presentation"], "workspace": "lab",
 		"capabilities": ["stage"], "marks": ["voices", "timing"], "block": "synthesis", "card": "water"},
-	"picture": {"label": "Picture", "family": &"picture",
-		"blurb": "A show for the note, and what it is carried on: Auto (the seeded show, nothing to set), full frame, a comic, a book, a notebook, a tablet.",
+	# WHAT THE NOTE IS SHOWN IN, ONE CARD (2026-11-09): a FORMAT picked on it - the seeded show, full frame, a comic, a
+	# novel, a notebook, a tablet, a letter, a dispatch desk ([constant Medium.REGISTRY]) - with the rows the format uses
+	# ([MediumCard]). The Letter and the Dispatch desk were components of their own until then, each holding the
+	# presentation; a Picture card picked among the rest, beside the Pictures card ("That is confusing").
+	"medium": {"label": "Medium", "family": &"medium",
+		"blurb": "What the note is shown in - Auto (the seeded show, nothing to set), full frame, a comic, a novel, a notebook, a tablet, a letter written at a desk, a dispatch desk at night - and the settings that format uses.",
 		"needs": ["picture"], "provides": ["places"], "requires": ["scenes"], "slots": ["presentation"], "workspace": "",
-		"capabilities": ["forward_plus"], "marks": ["typography", "tablet"], "block": "picture", "card": "picture",
-		"script": "res://src/show/picture_card.gd"},
+		"capabilities": ["forward_plus"], "marks": ["typography", "tablet", "letter", "dispatch"], "block": "medium", "card": "medium",
+		"script": "res://src/show/medium_card.gd"},
 	# THE NOTE'S PICTURES, ONE CARD (2026-11-06): whatever presents the note, its pictures are painted, stepped between or
-	# imported here - which marks are pictures is the presentation's to say (Medium.pictures_of). It comes with each
-	# presentation that can show them and is never attached by itself.
+	# imported here - which marks are pictures is the format's to say (Medium.pictures_of). It comes with the Medium,
+	# standing while its format shows pictures, and with a show whose agents paint pictures of their own (2026-11-09: what a
+	# table show's painter made, seen - EpisodeFeed.made_pictures), and is never attached by itself.
 	"illustrations": {"label": "Pictures", "family": &"picture",
-		"blurb": "The note's pictures, painted by an agent from the image marks in its words or imported from a file - one card, whatever the note is shown in: a novel, a notebook, a tablet, a letter, a dispatch desk.",
-		"needs": ["text"], "provides": ["picture"], "requires": [], "comes_with": ["picture", "letter", "dispatch"],
+		"blurb": "The note's pictures, painted by an agent from the image marks in its words or imported from a file - one card, whatever the note is shown in: a novel, a notebook, a tablet, a letter, a dispatch desk - and every picture a show's agents painted for its episode.",
+		"needs": ["text"], "provides": ["picture"], "requires": [], "comes_with": ["medium", "table"],
 		"slots": [], "workspace": "",
 		"capabilities": ["forward_plus"], "marks": ["pictures"], "block": "illustrations", "card": "pictures",
 		"script": "res://src/show/pictures_card.gd"},
@@ -189,29 +193,6 @@ const REGISTRY := {
 		"script": "res://src/proof/proof_card.gd",
 		"intro_tip": "Seconds the desk holds, its title over it where it has one; then the desk itself, a few seconds more, before the teacher speaks.",
 		"outro_tip": "Seconds held after the last word, the page on the desk, fading picture and sound out together."},
-	# A LETTER WRITTEN AT A DESK (next/letter.md, 2026-10-26): the note's words are the letter, written by
-	# hand while the voice reads them; its card draws the sketches and pins its medium, and the Pictures card
-	# comes with it for the pictures its marks describe. It brings a Voice.
-	"letter": {"label": "Letter", "family": &"picture",
-		"blurb": "The note read as a letter written by hand at a desk: the pen writes each paragraph as the voice reads it, crosses lines out, draws the sketches the letter describes, taps while the writer thinks, and a picture takes the screen for a passage read over it.",
-		"needs": ["reading"], "provides": ["picture"], "requires": ["voice"],
-		"slots": ["presentation"], "workspace": "",
-		"capabilities": ["forward_plus", "subprocess", "agent:writer", "tex", "python:math"], "marks": ["letter"],
-		"block": "letter", "card": "letter", "script": "res://src/letter/letter_card.gd",
-		"intro_tip": "Seconds the desk holds before the letter is begun, its title over it.",
-		"outro_tip": "Seconds held after the pen's last stroke, the page on the desk, fading picture and sound out together."},
-	# A DESK LATE AT NIGHT, SEEN FROM THE CHAIR (next/dispatch.md, 2026-11-06): the note's words are the script, played
-	# at a desk in a hollow under the ground - a terminal, labeled phones, a radar, a receiver, a printer, small screens,
-	# the camera turning to whatever is active; its card pins its medium, and the Pictures card comes with it for the
-	# pictures its marks describe. It brings a Voice.
-	"dispatch": {"label": "Dispatch desk", "family": &"picture",
-		"blurb": "The note played at a desk late at night, seen from the chair: an old terminal types what is said and shows what is written, a dozen labeled flip phones ring and are held to the ear (every voice but the room's heard through one), a radar pings, a receiver crackles, a printer prints, small screens show pictures - the camera turning gently to whatever is active, roots growing across the desk.",
-		"needs": ["reading"], "provides": ["picture"], "requires": ["voice"],
-		"slots": ["presentation"], "workspace": "",
-		"capabilities": ["forward_plus"], "marks": ["dispatch"],
-		"block": "dispatch", "card": "dispatch", "script": "res://src/dispatch/dispatch_card.gd",
-		"intro_tip": "Seconds the desk holds, its title over it; then the desk at rest, a few seconds more, before the first word.",
-		"outro_tip": "Seconds held after the last word, the desk in the dark, fading picture and sound out together."},
 	# AN ACTOR READS THE NOTE (next/likeness.md): its card builds them from their own videos - the footage
 	# surveyed and cut into sets, a still of the set in use, a model of them and their voice from every
 	# video - and puts them on the stage, the still moved by their own motion, the mouth and eyes drawn
@@ -269,8 +250,8 @@ static func workspace_of(attached: Array) -> String:
 
 
 ## The blocks attaching the component [param key] to a note adds: its own marker (`voice:` for a
-## Voice), or {} for one that is not attached by itself - it comes with another (the scenes with a
-## Picture, a clip's masks) or is the note (its text). A block is only what says the component is
+## Voice), or {} for one that is not attached by itself - it comes with another (the scenes with the
+## Medium, a clip's masks) or is the note (its text). A block is only what says the component is
 ## there: every setting is written by its card the first time it changes, because an empty block is
 ## not "the defaults" to every card (an empty `illustrations:` wipes the pictures' look).
 static func attach_blocks(key: String) -> Dictionary:
@@ -285,10 +266,6 @@ static func attach_blocks(key: String) -> Dictionary:
 			return {"proof": {}}
 		"actor":
 			return {"actor": {}}
-		"letter":
-			return {"letter": {}}
-		"dispatch":
-			return {"dispatch": {}}
 		"voice_training":
 			return {"voice_training": {}}
 		"song":
@@ -298,10 +275,10 @@ static func attach_blocks(key: String) -> Dictionary:
 		# NOTHING WRITTEN IN IT YET: the seed still chooses, until the first entry is added
 		"storyboard":
 			return {"scenes": Storyboard.own_block({})}
-		# A PICTURE starts as the seeded show (the user's flow: "attach a picture component... an
-		# auto type"); the card picks another medium.
-		"picture":
-			return {"picture": {"medium": "auto"}}
+		# A MEDIUM starts as the seeded show (the user's flow: "attach a picture component... an
+		# auto type"); its card picks another format.
+		"medium":
+			return {"medium": {"format": "auto"}}
 		"look":
 			return {"look": {}}
 		"bookends":
@@ -312,8 +289,8 @@ static func attach_blocks(key: String) -> Dictionary:
 	return {}
 
 
-## THE BLOCKS THAT ARE [param key]'s in a note: its own, and those of what only comes with it (a
-## Picture's or a Letter's illustrations). What a panel showing the component keeps, and what the
+## THE BLOCKS THAT ARE [param key]'s in a note: its own, and those of what only comes with it (the
+## Medium's illustrations). What a panel showing the component keeps, and what the
 ## note loses when it is detached.
 static func blocks_of(key: String) -> Array:
 	var out: Array = attach_blocks(key).keys()
@@ -341,9 +318,9 @@ static func detach_blocker(key: String, attached: Array) -> String:
 
 ## WHICH COMPONENTS A NOTE HAS, read off its blocks: the text always, each component whose block it
 ## carries, and a storyboard where the `scenes:` block holds or names one (the scenes themselves
-## come with the picture that shows them). A part that comes with another, carried with none of
-## them, has the first: a voice's chapter keeping `illustrations:` and no `picture:` (written before
-## attaching a Picture wrote its block) is still shown with its pictures.
+## come with the Medium that shows them). A part that comes with another, carried with none of
+## them, has the first: a voice's chapter keeping `illustrations:` and no `medium:` (written before
+## attaching a Medium wrote its block) is still shown with its pictures.
 static func attached_of(blocks: Dictionary) -> Array:
 	var out: Array = ["text"]
 	for k in REGISTRY:
@@ -358,6 +335,36 @@ static func attached_of(blocks: Dictionary) -> Array:
 		var have := with_required(out)
 		if not hosts.is_empty() and not hosts.any(func(h: String) -> bool: return have.has(h)):
 			out.append(hosts[0])
+	return out
+
+
+## THE MEDIUM'S ONE BLOCK from a note's blocks written before it (2026-11-09; remove with [code]main._adopt_old_media[/code]):
+## a Picture's `picture:` (its `medium:` the format), a Letter's `letter:` or a Dispatch desk's `dispatch:` becomes one
+## `medium:`, standing where the first of them stood. [param blocks] itself where none of them is there, or `medium:`
+## already is.
+static func adopted_medium(blocks: Dictionary) -> Dictionary:
+	if blocks.has("medium"):
+		return blocks
+	var med := {}
+	for own in ["letter", "dispatch"]:
+		if med.is_empty() and blocks.get(own) is Dictionary:
+			med = {"format": own}
+			med.merge(blocks[own] as Dictionary)
+	if med.is_empty() and blocks.get("picture") is Dictionary:
+		var pic: Dictionary = blocks["picture"]
+		med = {"format": String(pic.get("medium", "auto"))}
+		for k in pic:
+			if k != "medium":
+				med[k] = pic[k]
+	if med.is_empty():
+		return blocks
+	var out := {}
+	for k in blocks:
+		if k in ["picture", "letter", "dispatch"]:
+			if not out.has("medium"):
+				out["medium"] = med
+		else:
+			out[k] = blocks[k]
 	return out
 
 
@@ -386,7 +393,7 @@ static func with_required(keys: Array) -> Array:
 
 
 ## [param keys] and what COMES WITH them ([member REGISTRY]'s `comes_with`): a part never attached by itself, stood beside
-## whichever of its hosts a note has - the Pictures card beside a Picture, a Letter or a Dispatch desk.
+## whichever of its hosts a note has - the Pictures card beside the Medium.
 static func with_parts(keys: Array) -> Array:
 	var out := keys.duplicate()
 	for k in REGISTRY:
@@ -524,11 +531,11 @@ static func _menu_item(menu: PopupMenu, k: String, attached: Array) -> void:
 
 ## What attaching each need's provider looks like, for [method needs_note].
 const NEED_HINTS := {"text": "text", "audio": "a song or a voice", "reading": "a voice",
-	"picture": "a Picture", "places": "a Picture", "moments": "a song or a voice"}
+	"picture": "a Medium", "places": "a Medium", "moments": "a song or a voice"}
 
 
 ## The needs [param key] brings that nothing in [param attached] provides, as a sentence for the "+"
-## menu ("Needs a Picture - attach it first."), or "" when everything it needs is there.
+## menu ("Needs a Medium - attach it first."), or "" when everything it needs is there.
 static func needs_note(key: String, attached: Array) -> String:
 	var have: Array = []
 	for c in with_required(attached + [key]):

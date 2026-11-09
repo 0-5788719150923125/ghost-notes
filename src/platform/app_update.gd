@@ -4,6 +4,10 @@ class_name AppUpdate
 ## Portable desktop updater. The release executable is copied beside the running one while it
 ## can still be written, then that same downloaded executable starts headlessly on exit to swap
 ## the files after the old process closes. No installer or system Python is needed.
+##
+## NOT ON macOS: the program there is sealed inside a signed .app bundle, and a copy downloaded
+## by a browser runs from a read-only translocated folder, so swapping the executable would break
+## the signature or fail outright. A Mac gets new builds from the Releases page.
 signal changed
 
 const REPO := "0-5788719150923125/ghost-notes"
@@ -37,9 +41,12 @@ func _ready() -> void:
 	current_sha = String(info.get("commit", ""))
 	var settings := get_node_or_null("/root/Settings")
 	enabled = OS.has_feature("template") and OS.has_feature("release") \
-		and not OS.has_feature("mobile") and settings != null and not bool(settings.call("is_read_only")) \
+		and not OS.has_feature("mobile") and not OS.has_feature("macos") \
+		and settings != null and not bool(settings.call("is_read_only")) \
 		and current_sha.length() == 40 and not bool(info.get("dirty", true))
 	status = "build %s" % current_sha.substr(0, 7) if not current_sha.is_empty() else "development build"
+	if OS.has_feature("macos") and not current_sha.is_empty():
+		status += " · new builds on GitHub Releases"
 	if enabled:
 		get_tree().create_timer(10.0).timeout.connect(_cleanup_downloads)
 		var previous_error := FileAccess.get_file_as_string(ERROR_PATH) if FileAccess.file_exists(ERROR_PATH) else ""

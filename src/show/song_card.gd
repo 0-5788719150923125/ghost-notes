@@ -6,7 +6,7 @@ class_name SongCard
 ## file or a video file - then we should add those relevant components/attachments to the note".
 ##
 ## THE SONG IS THE NOTE'S CLOCK. main loads it as the note opens, waiting at its start - a note opens
-## stopped - and the transport plays it; with no Picture attached it plays to an empty frame. So
+## stopped - and the transport plays it; with no Medium attached it plays to an empty frame. So
 ## choosing another song is choosing another session: the card says which file was picked
 ## ([signal chosen]) and the panel writes the note's `song:` block and opens the note again.
 
@@ -61,7 +61,7 @@ func _refresh() -> void:
 		_name.text = "No song yet"
 		_name.tooltip_text = ""
 		_pick.text = "Choose…"
-		_info.text = "Choose a song for this note: it plays from the transport, and a Picture shows a scene for it."
+		_info.text = "Choose a song for this note: it plays from the transport, and a Medium shows a scene for it."
 	elif not FileAccess.file_exists(_path):
 		_name.text = "Missing: " + _path.get_file()
 		_name.tooltip_text = _path

@@ -16,12 +16,15 @@ extends SceneTree
 ## runs the show). Two-sided: the same voice without Cards is a reading.
 ##
 ## SLOTS: a note has one clock and one presentation. A second clock is refused with a sentence that
-## names the one in the way (a Voice on a note with a Song), and a Picture on a show of cards is
+## names the one in the way (a Voice on a note with a Song), and a Medium on a show of cards is
 ## refused the same way - and lit again once what held the slot is gone.
 ##
 ## EVERYTHING ATTACHED COMES OFF: what "+" attaches, detach removes - the same blocks, and with a
-## Picture the illustrations that only come with it. Two refusals, each with its reason: the text
-## is the note, and a Voice stays while the Table that brings it does.
+## Medium the illustrations that only come with it. Two refusals, each with its reason: the text
+## is the note, and a Voice stays while the Table that brings it does. The Letter and the Dispatch
+## desk are no components (the Medium's formats, 2026-11-09), and a note's old `picture:`, `letter:`
+## or `dispatch:` block moves into the one `medium:` where it stood (the controls: none of them, or
+## a `medium:` already, and the note is itself).
 ##
 ## THE TABLE ANSWERS FOR THE PLATFORM, two-sided: on this desktop every capability but the agents'
 ## is possible; asked as Android (`Deps.platform_override`), only the text is - every other
@@ -30,13 +33,15 @@ extends SceneTree
 ## "+" GRAYS WHAT IS NOT READY, WITH THE REASON: an agent made missing in `Deps._resolved` (the cache
 ## a launch reads - never a seam) grays the Cards component and its tooltip says why; a component
 ## already attached is not offered again. AND WHAT A NOTE CANNOT USE YET: a Look on a note with no
-## picture is grayed and says to attach a Picture first (two-sided: with a song and a Picture it is
+## medium is grayed and says to attach a Medium first (two-sided: with a song and a Medium it is
 ## lit); so is YouTube, which needs a picture and a sound to make a video of. What "+" offers is
 ## derived: every component that is attached by itself, with no list per panel.
 ##
 ## A NOTE'S COMPONENTS ARE READ OFF ITS BLOCKS: a storyboard is there when the `scenes:` block
 ## names a file or holds the note's own, an empty one included. A note with only a song is not
-## offered the media that print a reading (the novel, the notebook, the tablet).
+## offered the media that show a reading (the novel, the notebook, the tablet, the letter, the
+## dispatch desk); a format's own rows are a card's script, and only the formats that cut scenes
+## use Scene hold and Flourishes (the control: never a tablet).
 
 ## The programs every agent resolves - the same list splash_agents_check hides.
 const AGENT_PROGRAMS := ["claude", "codex", "grok", "aws"]
@@ -134,7 +139,7 @@ func _registry() -> void:
 		for written in Components.attach_blocks(k):
 			_ok(written == b, "%s: attaching it writes its own block ('%s', not '%s')" % [k, b, written])
 	# the blocks the panels keep are the components' blocks
-	for b in ["voice", "picture", "illustrations", "look", "bookends", "table", "synthesis", "song", "clip", "scenes", "youtube"]:
+	for b in ["voice", "medium", "illustrations", "look", "bookends", "table", "synthesis", "song", "clip", "scenes", "youtube"]:
 		_ok(blocks.has(b), "the document block '%s' belongs to a component" % b)
 	_ok(not (Components as Script).get_script_constant_map().has("TEMPLATES"), "there is no table of kinds of note")
 	_ok(Components.unmet(["text", "voice"]).is_empty(), "text + voice needs nothing more")
@@ -143,9 +148,22 @@ func _registry() -> void:
 	var song_media := Medium.offered(["audio"])
 	_ok(song_media.has("auto") and song_media.has("full") and song_media.has("comic")
 		and not song_media.has("book") and not song_media.has("notebook") and not song_media.has("tablet")
+		and not song_media.has("letter") and not song_media.has("dispatch")
 		and not song_media.has("table"), "a song alone is offered the media that need nothing more (%s)" % str(song_media))
-	_ok(Medium.offered(["audio", "reading"]).has("tablet") and not Medium.offered(["audio", "reading"]).has("table"),
-		"a reading is offered every pickable medium")
+	_ok(Medium.offered(["audio", "reading"]).has("tablet") and Medium.offered(["audio", "reading"]).has("letter")
+		and Medium.offered(["audio", "reading"]).has("dispatch") and not Medium.offered(["audio", "reading"]).has("table"),
+		"a reading is offered every pickable medium, the Letter and the Dispatch desk among them")
+	# A FORMAT'S OWN ROWS are a script the Medium card loads (by path), and a format's `uses` are the card's own groups
+	for k in Medium.REGISTRY:
+		var own := String(Registry.field(Medium.REGISTRY, k, "card", ""))
+		_ok(own.is_empty() or (load(own) is GDScript and (load(own) as GDScript).get_script_method_list().any(
+			func(m: Dictionary) -> bool: return String(m["name"]) == "for_note")), "%s: its own rows, where it has them, are a card's script (%s)" % [k, own])
+		for tag in Registry.field(Medium.REGISTRY, k, "uses", []) as Array:
+			_ok(String(tag) in ["scenes", "camera", "films", "illustrations", "handwriting", "ink", "opening"],
+				"%s: it uses '%s', a group some card shows" % [k, tag])
+	_ok(Medium.uses("full", "scenes") and Medium.uses("comic", "scenes") and not Medium.uses("tablet", "scenes")
+		and not Medium.uses("book", "scenes") and not Medium.uses("letter", "scenes"),
+		"Scene hold and Flourishes are the formats' that cut scenes - never a tablet's, a novel's or a letter's (the control)")
 	_ok(not Medium.takes_settings("auto") and Medium.takes_settings("full"), "Auto takes no settings; Full frame does")
 
 
@@ -155,10 +173,10 @@ func _composition() -> void:
 	_ok(Components.workspace_of(["text"]) == "note", "...and opens in the note's own panel")
 	var cases := [
 		[{"song": {"path": ""}}, "note", "a song"],
-		[{"song": {"path": ""}, "picture": {"medium": "auto"}}, "note", "a song and a Picture"],
-		[{"song": {"path": ""}, "picture": {}, "scenes": {"sequence": []}}, "note", "a song, a Picture and a storyboard"],
+		[{"song": {"path": ""}, "medium": {"format": "auto"}}, "note", "a song and a Medium"],
+		[{"song": {"path": ""}, "medium": {}, "scenes": {"sequence": []}}, "note", "a song, a Medium and a storyboard"],
 		[{"voice": {}}, "reading", "a voice"],
-		[{"voice": {}, "picture": {}, "scenes": {"storyboard": "default"}, "look": {}}, "reading", "a voice with a picture, a storyboard and a look"],
+		[{"voice": {}, "medium": {}, "scenes": {"storyboard": "default"}, "look": {}}, "reading", "a voice with a medium, a storyboard and a look"],
 		[{"synthesis": {}}, "lab", "a voice lab"],
 		[{"clip": {"path": ""}}, "clip", "a clip"],
 		[{"table": {}}, "table", "a show of cards"],
@@ -183,8 +201,8 @@ func _composition() -> void:
 	_ok(not Components.attached_of({"scenes": {}}).has("storyboard"), "an empty scenes: block is none")
 	_ok(Storyboard.of_block(Components.attach_blocks("storyboard")["scenes"])["kind"] == "own",
 		"attaching a storyboard starts the note's own, with nothing written in it")
-	_ok(String((Components.attach_blocks("picture")["picture"] as Dictionary).get("medium", "")) == "auto",
-		"a Picture starts as the seeded show: the Auto medium")
+	_ok(String((Components.attach_blocks("medium")["medium"] as Dictionary).get("format", "")) == "auto",
+		"a Medium starts as the seeded show: the Auto format")
 	# every attachable component is seen once its blocks are in the note
 	for k in Components.REGISTRY:
 		var add := Components.attach_blocks(k)
@@ -203,10 +221,10 @@ func _slots() -> void:
 		"...and has room on a note with no clock")
 	_ok(Components.slot_note("song", ["text", "voice"]).contains("Voice"), "a Song on a reading is refused the same way")
 	_ok(Components.slot_note("clip", ["text", "song"]).contains("Song"), "a clip is a clock too")
-	why = Components.slot_note("picture", ["text", "table"])
-	_ok(why.contains("presentation") and why.contains("Table"), "a Picture on a show of cards: the table is its presentation (%s)" % why)
-	_ok(Components.slot_note("table", ["text", "voice"]).is_empty(), "Cards on a reading with no Picture has room")
-	_ok(Components.slot_note("table", ["text", "voice", "picture"]).contains("Picture"), "...and none once a Picture holds the presentation")
+	why = Components.slot_note("medium", ["text", "table"])
+	_ok(why.contains("presentation") and why.contains("Table"), "a Medium on a show of cards: the table is its presentation (%s)" % why)
+	_ok(Components.slot_note("table", ["text", "voice"]).is_empty(), "Table on a reading with no Medium has room")
+	_ok(Components.slot_note("table", ["text", "voice", "medium"]).contains("Medium"), "...and none once a Medium holds the presentation")
 	_ok(Components.slot_note("table", ["text", "song"]).contains("Song"), "Table brings a voice, so a song's clock is in its way too")
 	_ok(Components.slot_note("look", ["text", "song", "voice"]).is_empty(), "a component with no slot is never refused for one")
 
@@ -220,21 +238,39 @@ func _detach() -> void:
 		var mine := Components.blocks_of(k)
 		_ok(add.all(func(b: String) -> bool: return mine.has(b)), "%s: detaching removes what attaching wrote (%s)" % [k, str(mine)])
 		_ok(Components.detach_blocker(k, ["text", k]).is_empty(), "%s: alone on a note, it can be detached" % k)
-	_ok(Components.blocks_of("picture").has("illustrations"), "a Picture takes the illustrations that only come with it")
-	_ok(Components.blocks_of("letter").has("illustrations"), "...and so does a Letter, which shows them too")
-	var letter := Components.with_required(Components.attached_of({"voice": {}, "letter": {}, "illustrations": {}}))
-	_ok(letter.has("illustrations") and not letter.has("picture"),
-		"a letter keeping its pictures' look is not given a Picture (%s)" % str(letter))
-	# the control: chapter 40's shape, a voice and the look, and no `picture:` - it still has its pictures
-	_ok(Components.attached_of({"voice": {}, "illustrations": {}}).has("picture"),
-		"a note keeping the look with nothing that shows it has a Picture")
+	_ok(Components.blocks_of("medium").has("illustrations"), "a Medium takes the illustrations that only come with it")
+	_ok(not Components.REGISTRY.has("letter") and not Components.REGISTRY.has("dispatch") and not Components.REGISTRY.has("picture"),
+		"the Letter and the Dispatch desk are the Medium's formats, and the Picture is the Medium: no component of their own")
+	# chapter 40's shape, a voice and the look, and no `medium:` - it still has its pictures
+	_ok(Components.attached_of({"voice": {}, "illustrations": {}}).has("medium"),
+		"a note keeping the look with nothing that shows it has a Medium")
+	_adopted()
 	_ok(not Components.detach_blocker("text", ["text"]).is_empty(), "the text cannot be detached: it is the note")
 	var why := Components.detach_blocker("voice", ["text", "table", "voice"])
 	_ok(why.contains("Table"), "a Voice stays while the Table that brings it does (%s)" % why)
 	_ok(Components.detach_blocker("table", ["text", "table", "voice"]).is_empty(), "...and Cards itself comes off")
-	_ok(Components.detach_blocker("picture", ["text", "song", "picture", "look"]).is_empty(),
-		"a Picture a Look depends on still comes off: the Look then says what it is waiting for")
+	_ok(Components.detach_blocker("medium", ["text", "song", "medium", "look"]).is_empty(),
+		"a Medium a Look depends on still comes off: the Look then says what it is waiting for")
 	_ok(not Components.needs_note("look", ["text", "song", "look"]).is_empty(), "...which it does")
+
+
+## THE MEDIUM'S BLOCK, MOVED ONCE ([method Components.adopted_medium]): a Picture's, a Letter's and a Dispatch desk's block
+## each become the one `medium:` where the first stood, the format named; a note with none, or with `medium:` already, is
+## itself (the controls).
+func _adopted() -> void:
+	var pic := Components.adopted_medium({"voice": {"tab": "Narrator"}, "picture": {"medium": "tablet", "camera": 0.1}, "illustrations": {}})
+	_ok(pic.keys() == ["voice", "medium", "illustrations"] and pic["medium"] == {"format": "tablet", "camera": 0.1},
+		"a Picture's block becomes the Medium's, where it stood, its medium the format (%s)" % str(pic))
+	var letter := Components.adopted_medium({"voice": {}, "letter": {"seed": 4, "hand": "caveat"}, "youtube": {}})
+	_ok(letter.keys() == ["voice", "medium", "youtube"] and letter["medium"] == {"format": "letter", "seed": 4, "hand": "caveat"},
+		"a Letter's block becomes a Medium shown as a letter, its knobs and hand kept (%s)" % str(letter))
+	var desk := Components.adopted_medium({"dispatch": {"seed": 3}, "voice": {}})
+	_ok(desk.keys() == ["medium", "voice"] and desk["medium"] == {"format": "dispatch", "seed": 3},
+		"a Dispatch desk's block becomes a Medium shown as one (%s)" % str(desk))
+	var plain := {"voice": {}}
+	var moved := {"medium": {"format": "book"}, "picture": {"medium": "tablet"}}
+	_ok(is_same(Components.adopted_medium(plain), plain) and is_same(Components.adopted_medium(moved), moved),
+		"the controls: a note with none of them, or with a `medium:` already, is left as it is")
 
 
 func _desktop() -> void:
@@ -288,32 +324,32 @@ func _menu() -> void:
 	_ok(_item(menu, "scenes") < 0 and _item(menu, "masks") < 0 and _item(menu, "illustrations") < 0,
 		"what only comes with another component is not offered by itself")
 	# a plain note is offered everything that can be attached, with no list of what "decides" it
-	for k in ["song", "voice", "voice_lab", "clip", "table", "picture", "storyboard", "look", "bookends", "youtube"]:
+	for k in ["song", "voice", "voice_lab", "clip", "table", "medium", "storyboard", "look", "bookends", "youtube"]:
 		_ok(_item(menu, k) >= 0, "a plain note's \"+\" offers %s" % k)
 	var look := _item(menu, "look")
-	_ok(look >= 0 and menu.is_item_disabled(look) and menu.get_item_tooltip(look).contains("Picture"),
-		"a Look on a note with no picture is grayed, and says to attach a Picture (%s)" % (menu.get_item_tooltip(look).get_slice("\n\n", 1) if look >= 0 else ""))
+	_ok(look >= 0 and menu.is_item_disabled(look) and menu.get_item_tooltip(look).contains("Medium"),
+		"a Look on a note with no medium is grayed, and says to attach a Medium (%s)" % (menu.get_item_tooltip(look).get_slice("\n\n", 1) if look >= 0 else ""))
 	var song := _item(menu, "song")
 	_ok(song >= 0 and not menu.is_item_disabled(song), "a Song is lit on a plain note")
-	Components.attach_menu(menu, ["text", "song", "picture"])
+	Components.attach_menu(menu, ["text", "song", "medium"])
 	look = _item(menu, "look")
-	_ok(look >= 0 and not menu.is_item_disabled(look), "...and the Look lit once the note has a song and a Picture")
-	_ok(_item(menu, "picture") < 0, "a Picture already attached is not offered again")
+	_ok(look >= 0 and not menu.is_item_disabled(look), "...and the Look lit once the note has a song and a Medium")
+	_ok(_item(menu, "medium") < 0, "a Medium already attached is not offered again")
 	var yt := _item(menu, "youtube")
-	_ok(yt >= 0 and not menu.is_item_disabled(yt), "YouTube is lit on a song with a Picture")
+	_ok(yt >= 0 and not menu.is_item_disabled(yt), "YouTube is lit on a song with a Medium")
 	var voice := _item(menu, "voice")
 	_ok(voice >= 0 and menu.is_item_disabled(voice) and menu.get_item_tooltip(voice).contains("clock"),
 		"a second clock is grayed in the menu, with the reason")
 	Components.attach_menu(menu, ["text", "song"])
 	yt = _item(menu, "youtube")
-	_ok(yt >= 0 and menu.is_item_disabled(yt) and menu.get_item_tooltip(yt).contains("Picture"),
-		"...and YouTube grayed on a song with none, saying to attach a Picture (%s)" % (menu.get_item_tooltip(yt).get_slice("\n\n", 1) if yt >= 0 else ""))
+	_ok(yt >= 0 and menu.is_item_disabled(yt) and menu.get_item_tooltip(yt).contains("Medium"),
+		"...and YouTube grayed on a song with none, saying to attach a Medium (%s)" % (menu.get_item_tooltip(yt).get_slice("\n\n", 1) if yt >= 0 else ""))
 	var board := _item(menu, "storyboard")
-	_ok(board >= 0 and menu.is_item_disabled(board), "a storyboard needs a Picture too")
-	# a reading takes a Picture and a storyboard, as a song does: the pairing is nobody's feature
-	Components.attach_menu(menu, ["text", "voice", "picture"])
+	_ok(board >= 0 and menu.is_item_disabled(board), "a storyboard needs a Medium too")
+	# a reading takes a Medium and a storyboard, as a song does: the pairing is nobody's feature
+	Components.attach_menu(menu, ["text", "voice", "medium"])
 	board = _item(menu, "storyboard")
-	_ok(board >= 0 and not menu.is_item_disabled(board), "a voice with a Picture is offered a storyboard, lit")
+	_ok(board >= 0 and not menu.is_item_disabled(board), "a voice with a Medium is offered a storyboard, lit")
 	var with_yt: Array = Components.attached_of({"voice": {}, "youtube": {}})
 	Components.attach_menu(menu, with_yt)
 	_ok(with_yt.has("youtube") and _item(menu, "youtube") < 0, "a note with a youtube block has it, and is not offered it again")

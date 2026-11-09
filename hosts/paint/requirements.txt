@@ -1,0 +1,6 @@
+# ghost's painter environment (user://paint_venv): the painter at the table (hosts/paint/run.py, next/face_layers.md) - arrays, image
+# filters, pictures, and the gradient descent that finds each layer's strokes (PyTorch, on the GPU where there is one, else the CPU).
+numpy>=2.3
+scipy>=1.16
+pillow>=11.3
+torch>=2.14.1

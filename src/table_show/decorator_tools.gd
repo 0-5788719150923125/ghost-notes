@@ -230,7 +230,9 @@ func _look(args: Dictionary) -> Dictionary:
 	var path := dir.path_join("look_%02d.jpg" % _looks)
 	if img.save_jpg(path, 0.9) != OK:
 		return {"text": "It could not be shown.", "error": true}
-	return {"text": "%s Looks left: %d." % [JUDGE, LOOKS - _looks], "images": [path]}
+	# (...the picture itself handed back - AgentTools sends only an Image: handed its path, every look the decorator asked for had come back
+	# blank, and it had traced the painting without once seeing what it drew)
+	return {"text": "%s Looks left: %d." % [JUDGE, LOOKS - _looks], "images": [img]}
 
 
 ## [param look] with [param painting] to its right, as tall as it ([param look] alone where the painting cannot be read).

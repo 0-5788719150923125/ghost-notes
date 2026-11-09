@@ -16,11 +16,11 @@ extends Node
 ## order, newest first.
 ##
 ## THE COLOR IS THE COMPONENTS': the same components make the same color whatever order they are named in;
-## a Table and a Proof are near (the producers' violet) and still apart; a Letter is far from both; what
-## shows the note counts most (a Letter read by a Voice is nearer the Letter's own hue than the Voice's); and
+## a Table and a Proof are near (the producers' violet) and still apart; a letter is far from both; what
+## shows the note counts most (a letter read by a Voice is nearer the Medium's own hue than the Voice's); and
 ## a note of words alone is the paper's gray.
 ##
-## THE SEARCH: a word of the title, of the words, or a component's name finds its notes; two words find only
+## THE SEARCH: a word of the title, of the words, a component's name or its Medium's format finds its notes; two words find only
 ## the notes with both; a word no note has leaves none and says so; Escape brings every note back; Enter
 ## opens the first note left. A TAP OPENS A NOTE AND A DRAG DOES NOT (the control: the same press, released
 ## 40 px away). The × asks to delete. A note made after the grid is up appears at its next look.
@@ -64,7 +64,7 @@ func _make_notes() -> Dictionary:
 	return {
 		"plain": NoteStore.create("Groceries", "Milk, eggs, and the good bread.\n"),
 		"letter": NoteStore.create("Dear Pen", "# To Pen\n\n<!-- sketch: a tree of dots -->I write to you **tonight** from the porch.\n",
-			{"letter": {}, "voice": {}, "youtube": {}}),
+			{"medium": {"format": "letter"}, "voice": {}, "youtube": {}}),
 		"table": NoteStore.create("The Quiet Crucible", "# The Quiet Crucible\n\nGrind the salts, then read the cards.\n",
 			{"table": {}, "voice": {}}),
 		"proof": NoteStore.create("Primes Go On", "Show there is no largest prime.\n", {"proof": {}, "voice": {}}),
@@ -122,7 +122,7 @@ func _check_tiles(notes: Dictionary) -> void:
 		"a heading that only says the title again is left out (%s)" % JSON.stringify(table._words.text if table != null else ""))
 	_ok(words.begins_with("To Pen"), "THE CONTROL: a heading that says something else stays")
 	var chips := letter._chips.get_children().map(func(c: Node) -> String: return (c as Label).text) if letter != null else []
-	_ok(chips == ["Voice", "Letter", "YouTube"], "a chip for each component, in the order their cards stand (%s)" % str(chips))
+	_ok(chips == ["Voice", "Medium", "YouTube"], "a chip for each component, in the order their cards stand (%s)" % str(chips))
 	var plain := g.tile_of(notes["plain"])
 	_ok(plain != null and plain._chips.get_child_count() == 0, "a note of words alone has no chips")
 	_ok(plain != null and plain.color == Card.PAPER and letter.color != Card.PAPER, "...and is the paper's gray, where the letter is not")
@@ -132,18 +132,18 @@ func _check_tiles(notes: Dictionary) -> void:
 
 func _check_colors() -> void:
 	print("-- the color is the components'")
-	var letter := NoteTile.color_of(["text", "letter", "voice", "youtube"])
-	_ok(letter == NoteTile.color_of(["youtube", "voice", "text", "letter"]), "the same components make the same color, in any order")
+	var letter := NoteTile.color_of(["text", "medium", "voice", "youtube"])
+	_ok(letter == NoteTile.color_of(["youtube", "voice", "text", "medium"]), "the same components make the same color, in any order")
 	var table := NoteTile.color_of(["text", "table", "voice"])
 	var proof := NoteTile.color_of(["text", "proof", "voice"])
 	var d_tp := _hue_apart(table, proof)
 	_ok(d_tp > 8.0 and d_tp < 60.0, "a Table and a Proof are near and still apart (%.0f degrees)" % d_tp)
 	_ok(_hue_apart(table, letter) > 90.0 and _hue_apart(proof, letter) > 90.0,
-		"a Letter is far from both (%.0f, %.0f)" % [_hue_apart(table, letter), _hue_apart(proof, letter)])
-	var own := Color.from_hsv(NoteTile.hue_of("letter") / 360.0, Card.SAT, Card.VAL)
+		"a read letter is far from both (%.0f, %.0f)" % [_hue_apart(table, letter), _hue_apart(proof, letter)])
+	var own := Color.from_hsv(NoteTile.hue_of("medium") / 360.0, Card.SAT, Card.VAL)
 	var voice := Color.from_hsv(NoteTile.hue_of("voice") / 360.0, Card.SAT, Card.VAL)
 	_ok(_hue_apart(letter, own) < _hue_apart(letter, voice) / 3.0,
-		"what shows the note counts most: a read letter is near the Letter's hue (%.0f), far from the Voice's (%.0f)" % [_hue_apart(letter, own), _hue_apart(letter, voice)])
+		"what shows the note counts most: a read letter is near the Medium's hue (%.0f), far from the Voice's (%.0f)" % [_hue_apart(letter, own), _hue_apart(letter, voice)])
 	_ok(NoteTile.color_of(["text"]) == Card.PAPER and NoteTile.color_of([]) == Card.PAPER, "a note of words alone is the paper's gray")
 
 
@@ -151,7 +151,7 @@ func _check_search(notes: Dictionary) -> void:
 	print("-- the search")
 	var g := await _grid(1920.0)
 	var cases := [["dear", [notes["letter"]], "a word of the title"], ["porch", [notes["letter"]], "a word of its words"],
-		["proof", [notes["proof"]], "a component's name"], ["voice", [notes["letter"], notes["table"], notes["proof"]], "a component every reading has"],
+		["proof", [notes["proof"]], "a component's name"], ["letter", [notes["letter"]], "the format its Medium names"], ["voice", [notes["letter"], notes["table"], notes["proof"]], "a component every reading has"],
 		["voice cards", [notes["table"]], "two words: only the notes with both"]]
 	for c in cases:
 		g.search.text = String(c[0])

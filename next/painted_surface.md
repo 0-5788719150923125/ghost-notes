@@ -664,11 +664,319 @@ by it; a line as wide as the liner's touch, which may be narrower than the line 
   skin_paint.gdshader's `again`); one dab leaves most of its paint (`FIRST` 0.85, a sponge all but dry `DRY_LEAST` 0.75 of it); and a point one
   press reached all but dry is a gap like a bare one, pressed again right after the press last round it (`GAP_THIN_LOAD`). Rendered on
   257002: one white coat from the middle out, even as it goes, its specks put right as the sponge passes.
+- **Specks left in the white (feedback 0001, 2026-11-07: "missing specks of makeup all over this face ... it's painting in new areas around
+  the scalp, at the chin... and it's completely ignoring the ugly missing specks right at the center of the face")**: not holes - the reveal
+  map had none - but points one press alone reached, a dab's thin film, thickest round the nose, kept to the act's end (the face as the
+  shader draws it, 264 s and the end, reproduced the screenshot). Only a dry one had counted as thin, and the look stamped up to nine pixels round
+  each touched point where the map stamps one to four, so it counted two presses where one had landed. Now A POINT ONE PRESS ALONE REACHED IS THIN
+  (`TablePaint._gaps_left`), the look stamps as the map does (`PRESS_SPOT`), and a thin patch is pressed right after the later of its own
+  press and the paint round it. 257002's base: nothing under 60% shown at its end, 11 mm2 left to one press - but 863 presses for 568, the
+  base 470 s for 312, the show 4.6 minutes longer on the plan's own timing. Gate: paint_check (the stipple's area one press alone reached;
+  control, its presses as planned).
+- **A powder is a paint** (found on 257002 while looking at 0001): only creams were the table's paints, so its setting powder took the
+  nearest cream - the white - and as a fill over the whole face in the white's paint `_one_coat` folded it into the base: both powder acts
+  lasted a tenth of a second and patted nothing. Its copper glitter, from a vial of copper flakes, was laid in the rust cream. The table's
+  powders are its paints too, a track's `from` gives its own whichever kind, and the nearest is of the element's kind (`TablePaint._pot_of`).
+  Gate: paint_check `_coats` (control: taken as a cream, its nearest is the base's white).
+- **Never short of whole** (0001 again: "a tiny spot just under the nose that is slightly more transparent"; "a small piece to the left of
+  the nose as well"; the user: "if you consider the face to be a flat map, and if coverage is alpha transparency ... why could we not just
+  detect and correct regions where there is still transparency, and never stop until we have 100% coverage?"): the spots were the only four
+  patches of 257002's base one press alone reached at its end (under the nose, beside the left nostril, two by the right eye) - where the
+  corner never lands a second time, and painting them anyway laid them with their own press again. Now what one press alone reached is laid
+  again by the touch aimed nearest it OF THOSE AFTER IT (`TablePaint._painted_anyway`'s `firsts`): none left. Why it had been hard: the
+  loop looks at its own estimate of what the tool touched, not at what the shader draws (a first dab's film, a second's filling, a 1.6 mm
+  ragged read, a moment interpolated between pixels), and each fix closed one gap between the two; and it stops at five looks, after which
+  only painting it anyway can finish what the tool cannot reach. Gate: paint_check (a point the first press reached laid by the second;
+  control, not told what reached it, by its own).
+- **An act left nothing to do is no act** (0002: "we went in the water, then dabbed it dry, then put it on the white tray. Then, we picked it
+  up and just dunked it in the water again ... redundant"): 257002's second white, folded into the first, left its act empty, and it stood as
+  the sponge's next act - the white's rinse left IT damp, and the rim shade began dry and wet the clean sponge again
+  (`TablePaint._one_after_another`, `_paints_nothing`). The rim shade now loads straight away: 8 s sooner, its act 7 s shorter.
+- **The hard orange edge** (0003, 0004: "how is the sponge making such hard, perfectly-straight edges of orange there?"; "a huge sponge
+  pressed against the face, somehow creating a hard orange edge"): laying a press's paint where it touched was TRIED AND TAKEN OUT the same
+  hour - it smeared a warm band 10-20 mm wide round the whole face (the user: "The problem was the sponge, spilling over that hard edge but
+  leaving no mark ... dab in the regions below the hard edge, where it is safe and it won't spill over, then use a finer brush to make the
+  hard edge clean"). Where it came from: the decorator's `rim shade`, a 6 mm ring copied from the painting's softly darkened edge, laid
+  since 8c04fbe crisp first (`SOFT_GONE_OVER`) and in a pot's thinned rust (`_pot_of`) - before, in its own pale paint, 4 mm soft from the
+  first dab, it hardly showed. What answers it is below: "The painting is the design".
 - **A line is the band its hairs sweep** (2026-11-07: "nearly all straight lines are 'splotchy' ... super jagged when applied, and they
   require correction later. But a proper brush stroke is more often than not very smooth, with clean edges... which might fade near the
   tail"; 0060, of the touch-ups: "tapping at each jagged place"): each pull laid as a clean band as wide as the line, narrowing and thinning
   over its last quarter (`Skins.band_map`), and never gone back over for gaps - laid from the hairs' tips found at moments apart, a line
   had been beads, and the dabs that filled them stood out.
+
+## The painting is the design (2026-11-07, late - ENGINE BUILT, not yet in the show)
+
+The user, after a day of specks, spills and a hard orange edge: "There is a lot of detail in this reference mask, and ... our own painting
+on the mask was nowhere close to that ... see that the mask is mostly white, so paint a white foundation. See that there is a lot of
+orange, so lay the orange layers on ... See that there is orange ON TOP of the purple, so layer more orange on ... This is a layering
+problem. With enough error correction and layers, we should be able to paint any mask really, of any arbitrary level of detail. The tools
+are just there to give the visualization of our self-correction process ... Consider the brick-building mode."
+
+Why the day went as it did:
+
+- **The detail was gone before a tool moved.** The painter makes a detailed picture of the finished face (`face_ref.png`: cracks, rust
+  flakes, gradients); the decorator, a text model, redraws it as a few dozen SVG shapes; every tool lays the shapes, never the picture.
+  The painting's softly darkened edge became a crisp 6 mm ring; its rust texture, polygons.
+- **Whether paint lands was decided by simulating the tool**, and coverage by a separate estimate of that simulation, while the shader
+  draws with effects neither shares (a first dab's film, a second's filling, a ragged read, interpolated moments). Every mismatch was a
+  speck; every shape narrower than its tool, a spill that left no mark or paint the tool never touched.
+
+What brick mode does right: an agent decides WHAT (a design), code decides HOW (exact parts), staging animates it, and it always finishes.
+The painting's own version, built as `PaintLayers` (src/table/paint_layers.gd; Hertzmann 1998, "Painterly Rendering with Curved Brush
+Strokes of Multiple Sizes"):
+
+1. **The painting is the target**, pixel for pixel, painted with the table's own pots (laid whole or thinned).
+2. **Widest tool first**: the sponge, then the flat brush, the round brush, the liner. Each pass aims at the picture blurred as far as its
+   tool resolves, and paints only where the canvas still differs from it, each point given the paint that brings it nearest; the paints
+   that put most right go first. Orange over purple, or over a black line, comes of a finer pass finding it still wants orange.
+3. **A tool goes only where its footprint fits**: a dab or a stroke's every step must lie where its paint makes nothing worse (`FIT`,
+   `WORSE`) - never a spill that leaves no mark, never paint no tool touched. What a tool cannot fit is the next, finer tool's; the finest
+   lays what is left, so it always finishes.
+4. **What it lays is exactly its strokes' footprints**: the canvas it keeps IS the painting. A show draws each layer as computed and poses
+   the tool along its strokes - the tools are the visualization.
+
+First run, on 257002's picture with its table's seven creams and the sponge, flat brush, round brush and liner (16.6 s): a white
+foundation, the sponge's rust and plum masses, the brushes' grin and eye shapes, the liner's brows, tears, rivets, diamond and lip line -
+off the picture (in the palette's colors) 5.2 on average, 16.5% of the surface over 10. What it took to get there, each a class of fault:
+a base chosen by the least average had been a grey between the white and the rust (now by vote); a picture blurred for a wide tool was
+painted in colors nobody mixed (a white flecked with rust, pink - now each point the color MOST of the tool's window is nearest); the
+painted picture's own light left its white a tan (`#dbc3ae`), matched as a rust thinned over the white (now balanced so its ground is the
+foundation's paint); a liner judged point by point chased the picture's grain (now by area, 2 mm cells, and a dot only where well off).
+Open: the liner's 2,465 strokes (rust flecks and drips; a show cannot spend a second on each - a stippling sponge's own texture, or merging,
+should take most); the faint hairline cracks fall under the threshold. Gate: paint_layers_check (a white foundation first, tools
+narrowing, orange laid over purple, nearly all of it finished; the control, the sponge alone, leaves the line and the streak).
+
+NOT A REVEAL (the user, 2026-11-08: "If you are suggesting that we essentially just 'reveal' layers through transparency operations, I
+feel like that could be very wrong ... the expression is not only in the layering: it is in how the tools put those layers on the face.
+The strokes of the brushes, the big splotches from a sponge, or small ones from a sponge's corner, the fine lines drawn in pencil or tiny
+brushes ... the motions, the pressure applied, the direction a stroke is carried, the amount of product upon the bristles - and how it
+decays over time"). The picture says only WHERE paint is still wanted; every mark is a tool's:
+
+- A STROKE IS CHOSEN, NEVER A PIXEL: its tool, pot, path, way and pressure - a sponge's corner a small dab, its face a big splotch; a brush
+  pulled along the form, pressed wider; a liner's line.
+- A MARK IS DRAWN AS ITS TOOL LAYS IT, and the canvas the engine corrects is those marks: bristle streaks along a pull, a load running dry
+  over its strokes until the tool goes back to its pot, a tail thinning, a sponge's pores and ragged edge - a patchy area is gone over again
+  as a painter would.
+- THE SHOW PLAYS THOSE STROKES through the motion it has (programs, held poses, hairs bending, the sponge squashing, trips to the pot); its
+  paint is the marks' own coverage, revealed as the strokes are laid.
+- FIRST, THE AGENTS AS THEY ARE: each decorator element is the region its act works in, with its pot and its tool; the engine fills it from
+  the picture, element by element in the acts' order, on one canvas.
+
+BUILT, the same night (not yet watched): `TablePaint._from_picture` lays every element a sponge or a brush lays by dabs, dots, pulls or
+lines from the picture, element by element in its acts' reading order, on one canvas - its act's tool, its pot, its shape grown 3 mm as
+where it works; its program the strokes `PaintLayers.lay` chose, made by `Skins._Prog` (the show's own loads, trips back to the pot, hand);
+its paint their coverage (`foot`), its reveal their moments; nothing looked for after (the gap loop and the touch map pass it by). The
+first element filling the whole surface is a FOUNDATION: its own paint, whole, gone over at what is still bare until no speck shows. An
+element the picture wants nothing of in its place lays nothing, and its act takes nothing up. 257002 stands in about the time it did
+(64 s); on the plan's timing the show runs 67 minutes where it ran 55 (the foundation ten, the rims and mouth longer: the picture asks more
+of them than the decorator's shapes did). A hand looks at its work once every few strokes (`LOOK_EVERY`); an operation draws at most
+`PULLS_MOST` strokes and `TAPS_MOST` taps. Gate: paint_check `_picture` (the foundation and a brushed element laid from a picture, the brush's
+black on the picture's black and not on the white beside it in its own shape; the control, no picture, the shapes as before).
+  Then, looked at in the show on the GPU (`episode_bake_probe --shots`): the foundation whole to the rim at 640 s, the rim shade a soft warm
+  tint at the face's edge where the decorator's ring had been a hard band, the liner's rust runs beside the seam. Two classes of fault
+  found and fixed: A TOOL PRESSED ONLY AS HARD AS IT GOES - a flat brush wider than a bar laid nothing, a round brush never a rivet - now
+  each mark is tried at lighter presses until one fits, narrower as a brush is lifted (`DAB_PRESSES`, `PULL_PRESSES`, `LINE_PRESSES`); and
+  THE WORK RAN PAST ITS WORDS - laid with no end, the work ran an hour past the reading and the show closed on a face half painted - now each
+  operation draws the most wanted strokes its act's planned time holds (`PICTURE_SLACK` of what its shape's program took, the length the
+  readers' words were written to), in the hand's order: 257002 ends at 3034 s on the plan's timing, where it had ended at 2837. The
+  foundation alone is laid whole whatever it takes (573 s where its shape's took 332), its last looks aimed at patches big enough to see
+  (`BASE_AREA`), never at what lies between a sponge's pores.
+
+- **A sponge dabs with whichever side the work needs** (2026-11-08, of the foundation laid from the picture: "much too quick ... the
+  splotches of white are appearing BEFORE the sponge actually touches the mask ... every touch of the sponge creates a paint area that is
+  at least 4 times as large as the corner we touched the mask with ... all dabs are applied at full color"; of the old stipple: "the
+  splotches were too big there as well ... the foundation was extremely wet ... it would ooze and spread outward, in a crawling fashion";
+  then: "it should be possible to dab from any side of the sponge really ... the corner for smaller detail work, the flat side for larger
+  surface areas"). Each dab is judged by WHAT THAT SIDE REALLY TOUCHES there, as the show poses it (`TablePaint._side_touch`, handed to the
+  engine as `touch`): its face where it lands most on what still wants paint, its corner where only a corner fits; the program says the
+  side by place (`way_at`) and `_held_keys` holds it so; its mark is the touch itself, softened and cut a little ragged, a thin film
+  (`FILM` 0.7, pores), shown as the sponge meets the face (`DAB_MEETS`), never spreading after. Goings-back spaced by the dab already
+  there; what no side reaches, painted anyway with the nearest dab. The old stipple's paint had been read from a map a point a millimeter
+  with a 1.6 mm ragged edge (about 3 mm past every touch) and its holes filled as later presses landed - the size and the ooze. 257002's
+  foundation: 281 dabs in about 4 minutes, its face covered 0.96 on average, 0.07% under 0.6 (it had been 2,258 corner dabs and 23 minutes,
+  or a coat that stopped at half); the table stands in 60 s. Seen on the GPU: flat on the forehead at 30 s, its corner at the temple and
+  the nose's sides at 150 s, whole at 255 s. THEN (the user, watching: "The sponge is dabbed in the foundation container, via a single
+  corner. Then we proceed to tap the face with the flat side - which would not have picked-up any foundation at all ... perfect 100% fill
+  rate ... never refilling from the container"): A SPONGE IS LOADED ON THE SIDE IT DABS WITH - each trip to the pot, and the act's first
+  load, presses the side its next dab is pressed with onto the paint (`_side_after`, `_pot_hold`'s `side`: its face tilted into the pot,
+  narrower than it, a corner tapped); A LOAD IS SPENT BY WHAT IT LAYS (as many dabs a load as `LOAD_AREA_DABS` holds this dab's touch -
+  counted in a corner's dabs, the face's prints had laid a whole foundation on two loads); and each dab a thinner film (`FILM` 0.5).
+  257002: 337 dabs (232 by the face), 44 trips back to the pot, about 7.6 minutes, its face covered 0.93 on average, 0.28% under 0.6.
+  Seen on the GPU: the face pressed into the white pot at 180 s, the white built out from the middle in the sponge's own prints.
+- **The sponge pinched, not pressed flat** (2026-11-08: "the entire sponge is compressed uniformly ... like praying. Instead, the sponge
+  should compress from the middle - while the edges still try to expand"): squeezed in the hand, it is thinnest under the finger and thumb
+  and less so away from them, its ends their own thickness and a little more (prop_common's `squeeze_reach`, `SQUEEZE_EDGE_SWELL`;
+  `TablePaint._squeeze_reach`, `SQUEEZE_REACH`).
+- **Laid over the pot, area by area, built up as laid** (2026-11-08, feedback 0005-0006 and the user's notes while watching). THE FACE
+  LAID OVER A POT TOO NARROW FOR IT (0005: "The sponge is clipping through the container ... You would expected it dabbed flat: resting on
+  both sides of the container, and compressed/pushed from the middle, into the container. It would bend in the middle"): the 50 mm sponge
+  over the 45 mm white pot had been tilted 60 degrees and lifted by the search for a way to fit inside the mouth, its corner still through
+  the wall. Now a face wider than the mouth (`_wider_than`) rests flat on the rim (`DRAPE_CLEAR`) and only bends: pressed, its middle goes
+  down onto the paint and a little past it (`DRAPE_INTO`), its back further under the finger (`DRAPE_DENT`, `DRAPE_FINGER`), nothing past
+  the wall, what lies outside the mouth over the rim, its faces turned as it bends (`_drape_on`, prop_common's `drape_*`) - and a part of a
+  material that gives is cut finely across its faces (`Props._fine`'s `_gives`), or no press could bend it: its broad faces had been one
+  flat quad each. THE DABS AREA BY
+  AREA ("it moves from cheek to cheek, eye to eye, forehead to chin - it jumps everywhere, then returns"; 0006: "touching up everywhere
+  else, but completely ignoring the giant gaps missing in the center of the face"): the dabs had gone in rings round the whole face, and
+  every look again began at the middle once more, eight times. Now a coat is shared out among areas three dabs across (`AREA_DABS`), begun
+  where the broadest side lands most of itself nearest the middle, each area worked whole - its dabs the nearest next, then gone back over
+  until nothing in it is short (`AREA_LOOKS`) - before the hand moves to the area beside it nearest where it is (`PaintLayers._coat`,
+  `_area`, `_next_area`); an area works its own points, each cell's worst among them (`_wanting`'s labels: picked among all a cell's and then
+  left to the area beside, a border's cells had waited for the end). And the sponge keeps the side it holds while it lands mostly on what
+  wants paint, one side then the other in each pass (`SIDE_KEEP`, `_side_for`; it had turned in the hand at nearly every dab - and gone
+  back over by a corner wherever it touched, it took 993 dabs and 14 minutes). BUILT UP AS LAID ("the dabs are extremely heavy with
+  paint. There is not opacity at all ... more transparency at edges, or sometimes randomly, or near the end of the foundation's load"):
+  the engine had laid each print as a thin film, but a show drew each point at what ALL its prints came to from the first that touched it -
+  a reveal of the finished coat. Now `PaintLayers.render` says what each point holds after its first, second and third marks and after its
+  last, and when (`built`, `built_when`; skin_paint.gdshader's `laid_*`), so a print shows its own film and the next thickens it; and each
+  print is lighter toward its edge - a broad one over a share of its width (`EDGE_FADE`, `EDGE_FADE_SHARE`, `EDGE_LEAST`; faded its last
+  2 mm only, the face's print on a flat brow was a sharp-cornered rectangle), its edge wandering more (`TOUCH_SOFT`, `TOUCH_RAGGED`) -
+  some lighter than others (`FILM_LEAST`), and fainter as the load runs out (`DAB_DRY_LEAST` 0.35; a brush's pull keeps `DRY_LEAST`), its
+  film `FILM` 0.65. 257002's foundation: 477 dabs (223 by the face), 58 trips back to the pot, about 8.5 minutes (`FOUNDATION_SLACK` 3.0
+  tells its readers 498 s), its face 0.94 on average and 0.01% under 0.6; the table stands in about 86 s (it had been 60). Seen on the GPU:
+  the sponge flat across the white pot's rim, dented in its middle as it is pressed and back between presses; the white going on in soft
+  translucent prints that thicken where they overlap, the brow first, then the forehead, round the eyes, down the cheek. Not looked at
+  live; 104-113 turns in the hand remain, about one every five seconds. THEN (feedback 0007: "that hard-edged white against transparent
+  color looks strange ... you would expect edges between the shades of white to be more feathered, blurry. It's also not clear why EVERY
+  application of the sponge results in transparent white, the first time it's applied ... Some might be perfectly white, others might be
+  very faint ... determined by factors like: how much foundation is on the sponge, which part of the sponge we tapped with, how much
+  pressure was applied"): the show had been told each point's first three marks and its last (four slots), so every mark past the third
+  came in at once, cut along the last one's edge - the hard white; it is told seven and the last now (`BUILT_SLOTS` 8, `laid_map2`,
+  `laid_when2`), each print's edge feathered (`TOUCH_FEATHER`) and pressed hardest in its middle, its farthest corners least (`CORNER_FROM`,
+  `CORNER_LEAST`; a flat face's print on a flat brow had been its rectangle). And A DAB LAYS WHAT IS ON THE SIDE IT PRESSES, AS HARD AS IT
+  PRESSES (`PaintLayers.deposit`): `FILM` 0.95 of a fresh load pressed hard by the side just loaded - near solid - its load's share of that
+  (`LOAD_POWER`), a light press less (`PRESS_DEPOSIT`; a dab's press is now kept on its stroke, and pressed between 0.55 and 1), a side other
+  than the one just loaded half (`OTHER_SIDE`), each its own share (`FILM_LEAST` 0.55). 257002: 525 dabs, 58 trips, about 8.8 minutes
+  (`FOUNDATION_SLACK` 3.2), its face 0.94 on average. Seen on the GPU: some prints near solid at once, others faint, soft irregular edges,
+  no rectangle. Gates: paint_check (the face laid over the mouth: flat, nothing past the wall, its middle on
+  its paint; the controls, unbent it never reaches the paint, fitted inside it is turned far over), paint_layers_check (the hand comes back
+  to a square it left half as often as rings at most; a point holds a thin film after its first mark; the controls).
+
+- **The audit (2026-11-08, after "it looks HORRIBLE ... like something a child did with finger paints" at 37:00).** A second opinion
+  (Codex, read-only, on the code, the reference and the engine's own canvas), its central claims checked against the code:
+  1. THE TARGET THROWS THE DETAIL AWAY before a mark is chosen: `_aim_for` replaces every pixel of the reference with the nearest of the
+     pots-over-the-ground at four opacities, then the majority over the tool's width - no gradient, flake, crack or highlight survives -
+     and `NEED`, `GAIN` and the 2 mm cells reject small corrections; planned at 2 px/mm from a 3 px/mm picture. The "9.1 off" was measured
+     against that substitute, not the painting.
+  2. THE DECORATOR'S ELEMENT IS THE UNIT OF EVERYTHING: one tool, one pot, its traced region (crude rust polygons, a sparse crack network),
+     its act's slot and a budget of its old SVG program's time x1.1 - whatever the trace missed can never be painted, and nothing goes back
+     over the whole face at the end.
+  3. MARKS ARE JUDGED BY A PROXY: `_fit` tests a disc at the heaviest press, not the mark the raster draws; a stroke with no slope to follow
+     goes horizontal (`Vector2.RIGHT` - the capsules); lines under 2.5 mm become capped taps (the flakes, crack branches, highlights).
+  4. THE SHOW DOES NOT DRAW THE CANVAS THE ENGINE JUDGED: the engine mixes in linear light, the skin's viewports blend sRGB sprites and the
+     prop shader unpremultiplies and decodes after; a blend softens coverage the planner never saw.
+  5. Powder, mist, blending and gloss are outside the planning canvas.
+  Proposed instead: one compositor for planning and playback; the original reference as the target at its own resolution, marks fitted by
+  what the raster really lays, judged on color, edges and detail at several scales; agents name regions, order and finishes, and code
+  schedules long tool sessions over the whole face with a reserved fine-tool pass at the end; the program's length fixed before the voices
+  are written to it. Not started: the user's call.
+- **The engine rebuilt (2026-11-08, night - "Go ahead with all of the required work ... The foundation matters most: we have to START from
+  the right place").** Built and measured on 257002 with `tests/table/paint_preview_probe.gd` - THE SHOW'S OWN CANVAS AT ANY MOMENT, read
+  back from the GPU after setting the paint alone to that time (no bake: a frame at 37:00 had taken half an hour of playing up to it), beside
+  the picture, with how far it stands from it. What changed:
+  1. ONE COMPOSITOR: the engine's canvas is the skin canvas's own - paint times coverage blended as sprites over clear, shown over the bare
+     surface as prop.gdshader shows it (`pre`, `alp`, `_shown`, `_after`).
+  2. THE PICTURE ITSELF IS THE AIM for every operation but a foundation, point for point; its ground balanced to the foundation's paint and
+     ITS LIGHT TAKEN OUT where it falls off (a flat field from the ground's own points, `_ground_shade`) - the painted picture's soft shadow at
+     the rim and beside the nose had been copied as a brown ring and a grey line.
+  3. MARKS FITTED BY WHAT THEY REALLY LAY (`_fit_op`): where laying the pot helps most (`_regain`), the next near the last; a stroke traced
+     along the run of what still wants it (`_way_at`: across the slope of that want, else the long way of its patch, else as a hand pulls -
+     never a horizontal default), each candidate rastered at each press and thinning (`THINNINGS`: a dark pot thinned is its tint) and laid
+     only where it puts at least `MARK_GAIN` right overall and `MARK_AVG` on average, a point made worse counting `WORSE_WEIGHT` times. Smears
+     are laid this way too, as lines of the paint they drag.
+  4. WHERE AND HOW LONG: an operation works `REGION_GROW` (8 mm) round its element, `PICTURE_GROW_LINE` (15 mm) round a line or dots; at most
+     `PICTURE_SLACK` (1.25) of its shape's time, its readers told `PICTURE_TOLD` (1.0) - what the operations took, all together; a blend
+     softens what was laid from the picture no more than `PICTURE_BLEND_LOD`.
+  5. THE FOUNDATION WITHOUT MISSES ("there are a ton of MISSES: dabs that touch a place that didn't need to be touched"): going back over, a
+     print lands at least `LOOK_LEAST` (half) on what still wants paint, aimed at the middle of what wants it; a load lasts `TOUCH_LOAD_AREA`
+     of printed paint; whole to `BASE_NEED` 3 and its last thin places evened by the print beside them (`BASE_FINISH`). 257002: 501 prints in
+     6.8 minutes, 28 trips to the pot, 0.98 of the face covered, 73% of each print on what wanted it (it had been 13.4 minutes at need 2).
+  6. A powder is no longer gone back over (a puff's pats had held the show two and a half minutes for a finish no one sees), and the face
+     painter is told the table's paints (`Skins.table_paints`, painter.yaml `face`): 257002's picture asks for a bright orange no pot holds.
+  Measured, the show's own canvas against the picture at the end of the painting: 22.4 off on average with 80% of the surface over 10 before;
+  13.5 and 50% after - brows, eyes, drips, the diamond, the seam and rivets, the smile, cracks and rust in place. Open: the rust's color (the
+  pots), the eyes' blotchy shadow, the total length (about 44 minutes of painting), and the next layer - AN AGENT IN THE LOOP choosing each
+  operation from the canvas as the show will draw it (the user, 2026-11-08: "send in-progress images back to agents, and allow the agents to
+  determine which steps we'll take next"), the engine laying it.
+  THEN (the user: "I can't even use the realtime player anymore ... stuck on 'Catching up'"): the table had taken 200 s to stand, the
+  foundation 81 of them, a sponge's rim shade and rust 39 and 38 - every candidate print drawn with its pores and ragged edge computed a
+  point at a time, at four sides and three thinnings. Now noise is read from a table made once (`_noise`, `NOISE_SIDE`), candidates are
+  weighed by a plain print (`raster`'s `quick`), a sponge's narrower sides are asked only where its broadest helped too little, an operation
+  gives up after `FIT_REFUSED_MOST` refusals in a row, a foundation never weighs thinnings it does not use, and its evening finds the nearest
+  print by cells (`EVEN_CELL`): about 90-105 s. Skipping ahead is the physics' bake (8 to 10 times as fast as the show, the rigid bodies and
+  liquids its cost - `episode_bake_probe --profile-bake`), not the paint: 37:00 is about five minutes of baking. And of feedback 0009 (the grey
+  diamond "just a grey smudge"): a brush's dot is now as small as its tip (`TIP_LEAST`), crisp (`TIP_RAGGED`, `TIP_SOFT`), a stroke as narrow
+  as `PRESS_NARROW` of its width, a spill costs `WORSE_WEIGHT` 3, and the show's maps are drawn at `FOOT_PX` 4. Up close it is still far from
+  the picture - the eyes broad overlapping strokes, the rivets grey dots, the rust a wash - which is the decorator's acts (one tool, one pot,
+  a rough region and an old program's time each) more than the marks: the agent in the loop is the next step.
+
+## The painter (2026-11-08, late - BUILT, gated with a script in an agent's place; no real agent has run it yet)
+
+The user: "the act structure is kind of a huge limitation. It forces an entire act to use one tool ... I would expect acts to be more fluid
+... you would restrict tools to the necessary job ... a real artist would go into this with a plan. They'd start with layers, with wide
+areas, and they would keep refining their work at every step ... with an agent, we can peak at each step, and make informed decisions
+about what to do next." And found on the way: THE DECORATOR HAD NEVER SEEN ITS LOOKS - `look` handed AgentTools a file's path, which it
+drops (it sends only an Image); every look came back blank. Fixed (the picture itself handed back; skin_step_check holds it).
+
+- WHERE A FACE WAS PAINTED FIRST AND THE WRITER TAKES TOOLS, the `skin` step is THE PAINTER (`PainterTools`, rules/table/painting.yaml,
+  `TablePrompts.painting`): it paints the picture again at the table an operation at a time - a tool of the table's, a paint of its pots,
+  how (sponge, dab, sweep, line, or a powder patted on), where (a closed path in millimeters, or all), how strong and how long, in one of
+  the episode's beats (its intro, each stage of the plan with its `work`, its close) - and `look`s after each: the picture, the canvas as
+  the show will draw it, and where it is still off, on a 10 mm grid. [PaintLayers] lays each on that canvas (on a worker; a sponge as a
+  disc there, its real sides at the table); `undo` puts the canvas back; `submit` hands in the design, an element an operation, its `plan`
+  (tool, how, beat, seconds) beside it. Elsewhere the decorator designs, as before.
+- ITS ACTS ARE MADE FROM IT (`TableProducer.acts_from_painting`): beat by beat, in the order laid, each run of operations with one tool and
+  one way an act - the hand putting one tool down and taking the next as the work asks, the beat's passage spoken over them all - each
+  told the seconds its operations took (`Skins.act_natural` reads `plan.seconds`), and laid at the show in that time (`PLANNED_SLACK`) and
+  the region drawn (`PAINTER_GROW`). A design no painter laid goes to the puppeteer as before.
+- Tried with a script in the painter's place on 257002 (16 operations - ground, rust, the eyes, brows, seam, rivets, drips, smile, diamond,
+  cracks - in about 22 minutes of painting): its canvas 12.7 off the picture where the decorator's 40 acts had come to 13.5 in about 44
+  minutes; the show standing it 15.7 (a sponge's real sides, the acts' times on an old script).
+- Open: THE SHOW SHOULD REPLAY THE MARKS THE PAINTER SAW, not lay its operations again (one plan, one canvas); a stroke in a broad region
+  with no run to follow goes one way (the eye shadows came out as bars); a mist, a glitter and stones are not among the painter's ways yet
+  (no spray tool is found without naming one); and a real agent's run - a new episode, made from the plan up.
+
+Still to build: the decorator naming only each beat's REGION and
+the finishes a picture does not carry (gloss, glitter, stones), the layers painted beat by beat inside them; the paint acts made from the
+plan by code, as brick mode lays parts. Probe: `tests/table/paint_layers_probe.gd` (an episode's `face_ref.png` painted in layers, each
+pass's canvas beside the picture).
+
+## The painter's first run, and what it could not do (2026-11-08, night - BUILT; looked at on the painter's own 28 operations replayed)
+
+The painter's first real run (joker-motivation 327484, 27 operations in about 19 minutes; stopped before its readers) came out
+recognizable and flat. The user, of its `look_30.jpg`: "the crackle is missing, the lips and eyes are smeared instead of feathered;
+overall the presentation is just very flat ... I really wish we could just emulate the images better" - and, mid-work: "ANY brush can be
+applied with varied degrees of pressure ... Even with a thicker brush, it should be possible to paint small lines or dots ... this is the
+brush size option, in any paint program". A fade-in of the picture was talked over and left: it would show, and it is not paint.
+
+- A LINE OPERATION DRAWS THE PICTURE'S OWN LINES (`PaintLayers._trace_lines`): found at the picture's own resolution (`hi`, 3 px/mm, where
+  a crackle's hairlines are a pixel - the canvas's 2 px/mm never held them), where the picture is the paint or stands nearer it than what
+  is round it, followed on where a line fades (hysteresis), its dotted gaps bridged, thinned, and followed as a hand draws - through where
+  lines meet, joined to what is drawn, on without lifting into the next that begins where one ends. Each is pressed to the line's own width
+  point by point; one wider than the brush filled with passes beside it. Short lines are flicked (`TRACE_SPEED`), long ones drawn with care.
+  Where an operation finds lines it draws only those: fitted after them, a liner had hatched a bruise in bars. The answer tells the painter
+  how many it found, drew, and how long the rest would take - the regions 327484's painter drew round held about 1,400 mm of black crackle
+  and 2,100 of gold, minutes each.
+- PRESSED TO THE WIDTH (`_pressed_to`, `_wide_at`): a fitted stroke is tried pressed point by point to the width of what still wants its
+  paint, beside each even press, and traced as wide as that - a fat brush follows a hairline with its tip (`PRESS_NARROW` 0.12; a dot as
+  small as `TIP_LEAST` 0.15 of the brush).
+- A BRUSH'S BELLY (`BELLY`): a pull thins out over the outer half of its width, a blend's more - a band laid flat to a crisp edge had made
+  every lip and eye a smear; overlapping strokes now build a gradient and feather.
+- ONE STROKE ONE COLOR (`TRACE_SAME`): a stroke runs on only while the picture (softened over a millimeter) stays the color it began in.
+- MIXED ON THE PALETTE (`mix`, `PaintLayers._mixes`): an operation may name creams to mix with, and each mark takes the mix (a quarter, a
+  half, three quarters - pigments' weighted geometric mean, so they darken as paint does) that brings the canvas nearest. A mark carries
+  its colors (`cc`), the show draws an element's own colors from `PaintLayers.render`'s `tint` (skin_paint.gdshader `tint_map`).
+- A BLEND (`how: blend`, `_blend_op`): no paint - a clean brush, rinsed first at the show, pulled short across edges the canvas has and the
+  picture does not, taking up what it passes over (`BLEND_PICK`) and laying it on along the way, each pull kept only where it brings the
+  canvas nearer. Its marks carry what they picked up.
+- The painter keeps every operation's marks (`PainterTools.laid`) - the first step toward the show replaying what the painter saw - and
+  its looks are at 3 px/mm.
+- Replayed: the same 28 operations, the closed eye now has its lashes, the brow is one arc, the tear its gold edge, the lips soft with their
+  light; the crackle real lines where the painter gave them time. The bruised eye is still one mass of a mix: the painter's to work in
+  layers with what it has now.
+- Open: the show replaying the painter's marks (brushes exactly; a sponge's real sides differ); a mix's tool dipped into both pots; a
+  sponge's blend (pressed, never slid); a foundation still about eight minutes; the user's eye on a new episode.
 
 ## Back to the drawing board (feedback 0023, 2026-11-06 - FIRST STAGE BUILT 2026-11-07; no real painting made yet)
 
@@ -740,9 +1048,12 @@ back, as with a card.
 - A real episode: the producer planning `painted`, a decorator drawing a face, a puppeteer blocking paint acts, readers talking over
   them - and the user watching it. 856886 has been watched once (above); its passages, and its table for the new mask, are for the user
   to make again.
-- The producer counts a word at `TablePrompts.SAID_WORD` (0.52 s, Proof's Piper voices); Secular Hazing's Kokoro at pace 1.2 says them
-  quicker, so a passage's words cover less of its work than planned and the work runs on past them. The producer does not know the
-  voice's pace.
+- ANSWERED 2026-11-08: the producer counted every voice's word at 0.52 s (Proof's Piper); 257002's Kokoro at pace 1.2 said 3,779 words
+  and 463 s of silence in 1,920 s - 0.39 s a word - so every passage came out a quarter short and the painting ran 15 minutes past the
+  last word (the show closes on it). Now a passage is written to the reader's own pace (`ReadingCast.said_word`: each engine's measured
+  pace over its `pace`, handed to the producer in its spec), and told what its acts take as the table will lay them: an element laid from
+  the picture its shape's time times `PICTURE_SLACK` (a foundation's, `FOUNDATION_SLACK`, its goings-back held to it), a coat the table
+  folds into one before nothing (`Skins.folded_coats`). 257002: the table takes 2,530 s, its readers would be told 2,719 s.
 - The voice by ear: Secular Hazing's Puck at its pace and tone over a face being painted.
 - A tool held over the face hides some of what it paints. A sponge or a dab is held up and out to the side; a brush drawn toward the
   lens now leans toward it (a line half as far; a fill on its belly all the way, or its rows streak). If that hides too much, the other

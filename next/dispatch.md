@@ -13,7 +13,8 @@ small cyan star in the middle of the black.
 
 ## What it is
 
-**A component, `dispatch`** ("+" Dispatch desk; it brings a Voice, as the Letter does) and **its medium, `dispatch`**:
+**A format of the Medium card, `dispatch`** (2026-11-09; until then a component of its own, "+" Dispatch desk bringing
+a Voice) and **its medium, `dispatch`**:
 one desk late at night in a hollow under the ground, seen from the chair. The man who works it is never seen: the
 viewer sits where he sits, and everything on the desk moves on its own. The note's words are the script, word for
 word; the desk is described in the note's own top-level `desk:` block (the author's, never ghost's `ghost:` block).
@@ -76,7 +77,7 @@ As `MEDIUM.md` has them, with the changes above: `call:`, `/call`, `/call: X`, `
 | `dispatch_roots.gd` | `DispatchRoots`: the roots grown and meshed |
 | `dispatch_screens.gd` | the 2D faces drawn into the screens: the terminal, the radar, the scope, a phone's two screens, the receiver's dial |
 | `dispatch_sounds.gd` | `DispatchSounds`: every sound of the desk, a function of show time |
-| `dispatch_card.gd`, `dispatch_walk.gd` | the component's card (pins the medium, the desk's number) and what it hands the reading; the pictures are the note's Pictures card's (next/pictures.md), `DispatchMedium.pictures_in` saying which marks they are |
+| `dispatch_format.gd`, `dispatch_walk.gd` | its own rows on the Medium card (the desk's number) and what they hand the reading; the pictures are the note's Pictures card's (next/pictures.md), `DispatchMedium.pictures_in` saying which marks they are |
 
 And in the voice: `Manuscript.HEARD`, a passage's `heard` through [ReadingPlan], a mark in [ReadingJoin], applied by
 the stream and the export, the band in [VoiceFX].

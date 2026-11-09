@@ -103,7 +103,7 @@ var subtitles: Node            # set by main; its clock is re-based by the strea
 var _plan_note := ""
 
 ## This panel's own rows that belong to a medium feature (the Ink): tag -> the Controls to show
-## or hide together, by [method _sync_medium_rows]. A card keeps its own (see [PictureCard]).
+## or hide together, by [method _sync_medium_rows]. A card keeps its own (see [MediumCard]).
 var _medium_rows := {}
 
 ## The note this panel is (set by main before it is added), "" when started without one.
@@ -121,6 +121,7 @@ var reopen: Callable
 ## cards it shows and what "+" offers follow them. [] when the panel was started without a note
 ## (the command line, a gate), which is every card the workspace has.
 var _attached: Array = []
+var _blocks := {}             # the note's blocks, as it opened
 ## THE CARDS THAT KEEP A BLOCK of the document's frontmatter, by block (see [method _add_block_card]):
 ## each answers `capture() -> Dictionary` and `apply(block)`. The voice is this panel's own.
 var _block_cards := {}
@@ -280,7 +281,8 @@ func _build_panel() -> void:
 	_panel = preload("res://src/ui/side_panel.gd").new(380.0)
 	_panel.title = _row("label")
 	if not note_path.is_empty():
-		_attached = Components.attached_of(NoteStore.blocks_of(note_path))
+		_blocks = NoteStore.blocks_of(note_path)
+		_attached = Components.attached_of(_blocks)
 		# a note's components come off again: each card's × (see SidePanel.add_card)
 		_panel.detach = _detach
 		_panel.detach_blocker = func(key: String) -> String: return Components.detach_blocker(key, _has())
@@ -308,7 +310,7 @@ func _build_panel() -> void:
 	if not publish.note_is_episode():
 		_writer.hand_field("episode", func() -> Variant: return publish.episode_title(),
 			func(t: String) -> String: return publish.name_episode(t))
-	# THE REST ARE THE NOTE'S: the Voice ([VoiceCard], the cast this panel reads), the Picture, the
+	# THE REST ARE THE NOTE'S: the Voice ([VoiceCard], the cast this panel reads), the Medium, the
 	# Storyboard, the Look, the bookends...
 	_note_cards(false)
 	# ...and where the video goes, when the note says so
@@ -338,14 +340,21 @@ func _row(field: String) -> String:
 ## build ([method _add_youtube]: a component adds rows of its own to it). Each card is handed what it
 ## may need of this panel in `ctx`: `workspace` (this panel - a producer hands it what the reading
 ## reads), `cast` (the voices the reading plays, which the Voice shows), `reading` (a voice is
-## attached, so every medium is offered) and the bookends' tooltips in the words of what the show is
-## presented on (its row's `intro_tip` / `outro_tip`).
+## attached, so every format of the Medium is offered), `blocks` and `reshape` (the Medium's format, and the
+## note written and opened again when it picks one with rows of its own) and the bookends' tooltips in the words
+## of what the show is presented on (its row's `intro_tip` / `outro_tip`, or its Medium format's).
 func _note_cards(producers: bool) -> void:
 	var have := _voiced()
-	var with := {"reading": true, "workspace": self, "cast": _cast}
+	var with := {"reading": true, "workspace": self, "cast": _cast, "blocks": _blocks, "reshape": _reshape}
+	var fmt: Variant = _blocks.get("medium")
+	var rows: Array = []
 	for key in have:
+		rows.append(Components.REGISTRY.get(key, {}))
+	if have.has("medium") and fmt is Dictionary:
+		rows.append(Medium.REGISTRY.get(String((fmt as Dictionary).get("format", "")), {}))
+	for row in rows:
 		for tip in ["intro_tip", "outro_tip"]:
-			var said := String((Components.REGISTRY.get(key, {}) as Dictionary).get(tip, ""))
+			var said := String((row as Dictionary).get(tip, ""))
 			if not said.is_empty():
 				with[tip] = said
 	var only: Array = []
@@ -376,7 +385,7 @@ func _components() -> Array:
 ## workspace, and a show of cards or a proof requires one - before its note carries the block. AND
 ## WHAT ITS COMPONENTS BRING ([method Components.with_required]): a Likeness brings an Actor, whose card
 ## stands beside it from the first open (attaching writes the Likeness's block alone). AND WHAT COMES WITH
-## THEM ([method Components.with_parts]): the Pictures card beside a Picture, a Letter or a Dispatch desk.
+## THEM ([method Components.with_parts]): the Pictures card beside the Medium.
 func _voiced() -> Array:
 	var have: Array = Components.with_parts(Components.with_required(_components()))
 	if not have.has("voice"):
@@ -403,7 +412,7 @@ func _has() -> Array:
 
 
 ## WHAT THE NOTE'S SHOW IS, for main ([method main._attach_show]): whether it has something to be
-## seen in - a Picture, a card table; a voice alone is heard, its words over an empty frame - and
+## seen in - a Medium, a card table; a voice alone is heard, its words over an empty frame - and
 ## the storyboard it walks. Without a note, the workspace's show as it always was.
 func show_plan() -> Dictionary:
 	if note_path.is_empty():
@@ -413,6 +422,15 @@ func show_plan() -> Dictionary:
 	if story != null and story.has_method("plan"):
 		plan.merge(story.call("plan"), true)
 	return plan
+
+
+## WHAT THE CARDS HOLD, written into the note, and the note opened again around it: a format with rows of its own picked
+## on the Medium card, or one left ([member MediumCard._reshape]).
+func _reshape() -> void:
+	_rewrite(func(held: Dictionary) -> String:
+		var ghost := NoteStore.blocks_of(note_path)
+		ghost.merge(held, true)
+		return FrontMatter.write_block(note_path, ghost))
 
 
 ## A component picked from "+". YouTube's card is added at once - the autosave writes its block
@@ -645,6 +663,11 @@ func stop_speaking() -> void:
 ## Every voice the cast has, by the name the script cues it with - the reader's first.
 func cast_names() -> Array:
 	return _cast.cast_dict().keys()
+
+
+## How long a word takes the reader's voice to say, seconds ([method ReadingCast.said_word]): what a show's passages are written to.
+func reader_said_word() -> float:
+	return ReadingCast.said_word(_cast.cfg_of(_cast.reader()))
 
 
 ## Where each voice sits, by name, in degrees round a table ([member VoiceFX.seat]): what a game's dice are thrown from.

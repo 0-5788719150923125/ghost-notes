@@ -2,7 +2,7 @@
 # Build Ghost Notes, from one command.
 #
 #   scripts/build.sh                    # check, then every target whose templates are installed
-#   scripts/build.sh android            # only that one (linux, windows, android, all)
+#   scripts/build.sh android            # only that one (linux, windows, android, macos, all)
 #   scripts/build.sh linux android      # or several
 #   scripts/build.sh --release          # release mode instead of debug
 #   scripts/build.sh --no-setup linux    # use an already installed Godot and templates
@@ -29,7 +29,9 @@
 #
 # RELEASE SIGNING IS THE USER'S. A release APK needs GODOT_ANDROID_KEYSTORE_RELEASE_PATH,
 # _USER and _PASSWORD in the environment (the names Godot reads); this refuses --release
-# without them and never prints them.
+# without them and never prints them. The macOS bundle is signed ad hoc by Godot's built-in
+# signer (an Apple Silicon Mac runs no unsigned code) and is not notarized: that takes an Apple
+# Developer account, so a downloaded copy asks for Privacy & Security > Open Anyway once.
 
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 2
@@ -164,6 +166,7 @@ if [ "$setup" -eq 1 ]; then
 				Linux|"Linux/X11") setup_args+=(--target linux) ;;
 				"Windows Desktop") setup_args+=(--target windows) ;;
 				Android) setup_args+=(--target android); need_android=1 ;;
+				macOS) setup_args+=(--target macos) ;;
 			esac
 		done
 	fi

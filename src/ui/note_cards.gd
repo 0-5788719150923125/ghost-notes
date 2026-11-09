@@ -14,7 +14,7 @@ class_name NoteCards
 ## block card does.
 ##
 ## A NEED NOTHING PROVIDES IS A SENTENCE ON THE CARD ([method Components.needs_note]), never a
-## control that silently does nothing: a Picture left on a note whose song was detached says what
+## control that silently does nothing: a Medium left on a note whose song was detached says what
 ## it is waiting for.
 ##
 ## ATTACH AND DETACH WRITE THE NOTE AND NOTHING ELSE ([method attach], [method detach]): the block
@@ -25,14 +25,15 @@ class_name NoteCards
 ## The components whose settings are a card any workspace can show, in the order they stand:
 ## the rows of [constant Components.REGISTRY] that name a `script`. Cards' and Proof's episodes
 ## first, then the voice that reads them: what produces the text stands above what shows it.
-const KEYS := ["table", "proof", "voice", "voice_training", "picture", "letter", "dispatch", "illustrations", "actor", "storyboard",
+const KEYS := ["table", "proof", "voice", "voice_training", "medium", "illustrations", "actor", "storyboard",
 	"look", "bookends", "youtube"]
 
 
 ## A card for each of [param attached] that is one of [constant KEYS] (and of [param ctx]'s
 ## `only`, when a panel builds some of them itself), added to [param panel]. Returns them by block
-## key, in order. [param ctx]: `reading` (the note has a voice, so every medium is offered),
-## `intro_tip` / `outro_tip` (what the bookends hold in this workspace's words), `only`.
+## key, in order. [param ctx]: `reading` (the note has a voice, so every format of the Medium is offered),
+## `blocks` (the note's, as it opened), `reshape` (write what the cards hold and open the note again), `intro_tip` /
+## `outro_tip` (what the bookends hold in this workspace's words), `only`.
 static func build(panel: SidePanel, attached: Array, ctx := {}) -> Dictionary:
 	var out := {}
 	var only: Array = ctx.get("only", KEYS)

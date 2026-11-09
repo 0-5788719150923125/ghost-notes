@@ -15,7 +15,7 @@ extends Node
 ## landscape whatever was asked.
 ##
 ## THE STAGE IS THE FRAME: through the real main scene, a song note's stage (a note of the gate's own,
-## with a Picture, opened from the list) is the frame's shape
+## with a Medium, opened from the list) is the frame's shape
 ## (16:9, or 9:16 in portrait), as large as the window holds it, centered, black beside it; the filters
 ## are sized to the stage; the subtitles told the frame. Measured against the window as it is - a 16:9
 ## window holds a landscape stage whole, and headless Godot's window is 64x64, so its view is square
@@ -128,7 +128,7 @@ func _stage() -> void:
 		await get_tree().process_frame
 	var keep_root := NoteStore.root
 	NoteStore.root = SONG_DIR
-	var note := NoteStore.create("frame check", "", {"song": {"path": song}, "picture": {"medium": "full"}})
+	var note := NoteStore.create("frame check", "", {"song": {"path": song}, "medium": {"format": "full"}})
 	NoteStore.root = keep_root
 	main._list._open(note)
 	for _i in 10:

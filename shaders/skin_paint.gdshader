@@ -22,6 +22,19 @@ uniform sampler2D blend_map : filter_linear, repeat_disable;
 uniform bool blend_touched = false;
 // when its tool first reached each point (0-1 of its strokes' span), and how much of a full load the tool had on it then
 uniform sampler2D when_map : filter_linear, repeat_disable;
+// BUILT UP AS IT WAS LAID (PaintLayers.render's `built`; the user, 2026-11-08: "the dabs are extremely heavy with paint. There is not
+// opacity at all"): what each point holds after each of the first seven marks that reach it and after the last, and the moments of
+// those (0-1 of its strokes' span) - each point shown at what the marks so far have laid there, never at what they all come to
+uniform sampler2D laid_map : filter_linear, repeat_disable;
+uniform sampler2D laid_when : filter_linear, repeat_disable;
+// ...and the marks after those four, the last what it holds at the end
+uniform sampler2D laid_map2 : filter_linear, repeat_disable;
+uniform sampler2D laid_when2 : filter_linear, repeat_disable;
+uniform bool laid_on = false;
+// THE COLORS ITS MARKS CARRY (PaintLayers.render's `tint`): each point's own, where its marks were mixed on the palette or picked up
+// from the surface by a clean brush - in place of its one paint
+uniform sampler2D tint_map : source_color, filter_linear, repeat_disable;
+uniform bool tinted = false;
 uniform float now = 0.0;
 // when its strokes lay it, when it is blended, when its excess is swept off (show time, seconds)
 uniform vec2 span = vec2(1e9, 1e9);
@@ -110,6 +123,22 @@ void fragment() {
 		b = smoothstep(bw - EDGE, bw + BLEND_TAKES, now);
 	}
 	float c = footed ? textureLod(foot, UV, mix(lods.x, lods.y, b)).r : textureLod(cover, UV, mix(lods.x, lods.y, b)).a;
+	if (laid_on) {
+		// (...the share of what it comes to that the marks so far have laid: each mark's coming in as the tool reaches it)
+		vec4 bt = mix(vec4(span.x), vec4(span.y), texture(laid_when, at));
+		vec4 bc = texture(laid_map, at);
+		vec4 bt2 = mix(vec4(span.x), vec4(span.y), texture(laid_when2, at));
+		vec4 bc2 = texture(laid_map2, at);
+		float so_far = bc.r * smoothstep(bt.r - EDGE, bt.r + EDGE * 0.25, now);
+		so_far = mix(so_far, bc.g, smoothstep(bt.g - EDGE, bt.g + EDGE * 0.25, now));
+		so_far = mix(so_far, bc.b, smoothstep(bt.b - EDGE, bt.b + EDGE * 0.25, now));
+		so_far = mix(so_far, bc.a, smoothstep(bt.a - EDGE, bt.a + EDGE * 0.25, now));
+		so_far = mix(so_far, bc2.r, smoothstep(bt2.r - EDGE, bt2.r + EDGE * 0.25, now));
+		so_far = mix(so_far, bc2.g, smoothstep(bt2.g - EDGE, bt2.g + EDGE * 0.25, now));
+		so_far = mix(so_far, bc2.b, smoothstep(bt2.b - EDGE, bt2.b + EDGE * 0.25, now));
+		so_far = mix(so_far, bc2.a, smoothstep(bt2.a - EDGE, bt2.a + EDGE * 0.25, now));
+		c *= clamp(so_far / max(bc2.a, 1e-3), 0.0, 1.0);
+	}
 	float a = c * shown * opacity;
 	if (pressed > 0) {
 		// BUILT UP, NEVER CUT: the first press a thin uneven film - fainter as the tool runs dry, until it is loaded again - filled where
@@ -129,5 +158,6 @@ void fragment() {
 	if (dries > 0.0) {
 		a *= mix(1.0, dried, smoothstep(span.y, span.y + dries, now));
 	}
-	COLOR = finish_pass ? vec4(finish.rgb, a) : vec4(paint.rgb, a * color_alpha);
+	vec3 own = tinted ? texture(tint_map, at).rgb : paint.rgb;
+	COLOR = finish_pass ? vec4(finish.rgb, a) : vec4(own, a * color_alpha);
 }

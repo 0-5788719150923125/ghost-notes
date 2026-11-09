@@ -189,6 +189,12 @@ face:
       PAINT A HAND COULD LAY WITH A SPONGE AND BRUSHES: shapes of flat color with clean edges, crisp lines and dots, and
       where something should shine or glint, a highlight as a shape of its own; soft only at an edge a sponge would soften.
       A striking, finished design that reads from across a room, with fine work in it that rewards a close look.
+  - when: paints
+    say: >-
+      THE PAINTS ON THE TABLE are the only colors it is painted with - each as it comes from its pot, or laid thin over the
+      surface and over another, so a hand there can lay every color in it:
+  - each: paints
+    say: "  - {{it}}"
   - when: sent_back
     say: "IT WAS PAINTED BEFORE, and the art director sent it back for:"
   - each: sent_back
@@ -197,6 +203,27 @@ face:
     say: "Paint it again with every one of these put right."
   - >-
       FORMAT: the same size and shape as the attached image (PORTRAIT 2:3). No border, no text, no watermark.
+
+# ONE LAYER OF THE PICTURE PAINTED FIRST (TableProducer._make_layer; the lab, lab/paint/layers_gen.py): the picture as painted so far and
+# the finished picture attached, and one more layer laid - only it, exactly as in the finished picture - so what each layer lays is
+# exactly what changed (the user, 2026-11-09: "generate MULTIPLE images, each one including changes from the last").
+# The code gives: {{add}} (what the layer lays, as the art director wrote it), {{k}} of {{n}}, and the head's.
+layer:
+  - include: head
+  - ""
+  - >-
+      THE FIRST ATTACHED IMAGE is a surface being painted by hand, layer by layer, as it stands now. THE SECOND ATTACHED IMAGE is
+      the same surface when it is finished.
+  - "PAINT LAYER {{k}} OF {{n}} onto the first image: {{add}}"
+  - >-
+      Paint it exactly as it is in the finished picture - the same place, the same shape, the same size, the same colors - and
+      nothing else from the finished picture: what later layers add is not painted yet.
+  - >-
+      EVERYTHING ALREADY ON THE FIRST IMAGE STAYS EXACTLY AS IT IS: every pixel that is not part of this layer unchanged - its
+      colors, its shading, its edges. No crop, no zoom, no turn, no flip: laid over the first image, the surface's edge falls on
+      its edge. The black around the surface stays black.
+  - >-
+      FORMAT: the same size and shape as the first attached image (PORTRAIT 2:3). No border, no text, no watermark.
 
 # THE PAINTING'S HEIGHT MAP: the same surface redrawn as depth, from the cloth's painting attached - for
 # the relief the table's light rakes (Tables.height_fit checks it lies under it)

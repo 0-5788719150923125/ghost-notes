@@ -4,6 +4,7 @@
   python3 scripts/package_release.py archive linux      # dist/ghost-notes-linux.x86_64 -> dist/release/
   python3 scripts/package_release.py archive windows    # dist/ghost-notes-windows.exe
   python3 scripts/package_release.py archive android    # dist/ghost-notes-android.apk, copied as-is
+  python3 scripts/package_release.py archive macos      # dist/ghost-notes-macos.zip, copied as-is
   python3 scripts/package_release.py finalize           # SHA256SUMS + manifest.json over dist/release/
 
 The same commands run on a developer machine and in CI (.github/workflows/build.yml); the
@@ -12,8 +13,10 @@ latest release always has the same filenames (the in-app update path, next/ci_bu
 pick an asset by platform). The tag uses the short commit hash; the manifest keeps the full hash.
 
 A Linux archive is a tar.gz that keeps the executable bit; a Windows archive is a zip. Each
-holds one folder, `ghost-notes/`, with the program in it. Desktop releases also carry a raw
-executable for the in-app updater, which avoids relying on an external archive tool.
+holds one folder, `ghost-notes/`, with the program in it. Linux and Windows releases also carry
+a raw executable for the in-app updater, which avoids relying on an external archive tool. The
+macOS export is already a zip holding the signed .app (repacking it could drop the bundle's
+symlinks and modes), and a Mac has no in-app updater (see AppUpdate), so it carries no raw copy.
 """
 
 from __future__ import annotations
@@ -47,6 +50,7 @@ TARGETS = {
             "ghost-notes-windows.exe": "ghost-notes.exe",
         },
     },
+    "macos": {"asset": "ghost-notes-macos-universal.zip", "files": {"ghost-notes-macos.zip": None}},
 }
 
 
@@ -72,9 +76,10 @@ def archive(target: str) -> None:
         path = DIST / source
         if not path.is_file() or path.stat().st_size < 1_000_000:
             fail(f"{path} is missing or too small to be an export. Run scripts/build.sh --release {target}.")
-    if target == "android":
-        # An APK is already the archive: copied, named for its architecture.
-        shutil.copyfile(DIST / "ghost-notes-android.apk", out)
+    if target in ("android", "macos"):
+        # An APK, or the zip Godot packs a .app into, is already the archive: copied, named for its
+        # architecture.
+        shutil.copyfile(DIST / next(iter(spec["files"])), out)
     elif target == "linux":
         with tarfile.open(out, "w:gz") as bundle:
             for source, inside in spec["files"].items():
@@ -89,7 +94,7 @@ def archive(target: str) -> None:
                 info.compress_type = zipfile.ZIP_DEFLATED
                 info.external_attr = 0o755 << 16
                 bundle.writestr(info, (DIST / source).read_bytes())
-    if target != "android":
+    if "update_asset" in spec:
         update_asset = spec["update_asset"]
         source = next(iter(spec["files"]))
         shutil.copyfile(DIST / source, STAGE / update_asset)

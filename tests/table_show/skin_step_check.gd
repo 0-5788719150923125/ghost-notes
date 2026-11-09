@@ -17,7 +17,8 @@ extends SceneTree
 ## - A SHOW'S FIXED THINGS: the brief's fenced JSON under its heading is read, the agents read a line in its place, and a table handed in
 ##   is given them whatever it wrote - a thing of the same name replaced. The set dresser starts with them standing and can neither put
 ##   them again, move them nor take them away. The control: a brief with no such heading fixes nothing and reads as it was.
-## - EVERY PROMPT RENDERS WHOLE: the decorator's, with tools and without; the puppeteer's told the design; the set dresser's told what is
+## - THE PAINTER AT THE TABLE ([method _painter]): its tools, its handing in, the acts its painting makes - and the controls.
+## - EVERY PROMPT RENDERS WHOLE: the painter's; the decorator's, with tools and without; the puppeteer's told the design; the set dresser's told what is
 ##   painted and what stands fixed.
 ## - WHAT THE TABLE READS REACHES A PREVIEW: every file the table reads from its episode's folder (`path_join("...")` in table.gd) is
 ##   written by the preview (the table, the acts) or copied into it from the episode ([constant TablePreview.PICTURES]) - the designs
@@ -46,6 +47,7 @@ func _run() -> void:
 	_face()
 	_surfaces()
 	await _tools()
+	await _painter()
 	await _fixed()
 	_prompts()
 	_preview_files()
@@ -77,7 +79,7 @@ func _steps() -> void:
 	var ep := _episode(1, "a white face with a red mouth")
 	var steps := ep.steps()
 	_ok(steps.has("skin") and steps.find("skin") > steps.find("table") and steps.find("skin") < steps.find("acts"), "the design comes after the table and before the work: %s" % [steps])
-	_ok(ep.needs("skin") == ["plan", "table", "image:face", "check:face"], "the design needs the plan, the table and the face painted first, looked at: %s" % [ep.needs("skin")])
+	_ok(ep.needs("skin") == ["plan", "table", "image:face", "check:face", "layers"], "the design needs the plan, the table and the face painted first, looked at, and its layers: %s" % [ep.needs("skin")])
 	_ok(ep.needs("acts").has("skin"), "the work needs the design")
 	_ok(ep.dependents("skin").has("acts"), "designing again throws the work away")
 	_ok(not _episode(2, "").steps().has("skin"), "control: a plan that paints nothing designs nothing")
@@ -96,6 +98,26 @@ func _steps() -> void:
 	_ok(not before.steps().has("image:face") and before.needs("skin") == ["plan", "table"], "control: an episode designed before there were paintings goes on as it was made: %s" % [before.steps()])
 	before.invalidate("skin")
 	_ok(before.steps().has("image:face") and before.needs("skin").has("check:face"), "control: and designed again, it starts from one")
+	# ...AND AGAIN IN LAYERS (2026-11-09): the order written after the picture is passed, then each layer painted over the one before -
+	# listed once the order is written; painting one again throws the layers after it away, and painting the picture again all of them
+	_ok(steps.find("layers") == steps.find("check:face") + 1 and not steps.has("image:layer:1"),
+		"the order is written once the picture is passed, its layers listed only once it is: %s" % [steps])
+	_ok(ep.needs("layers") == ["image:face", "check:face"], "written from the picture, passed: %s" % [ep.needs("layers")])
+	var lay := _episode(7, "a face")
+	lay.write_json("layers", {"layers": [{"name": "ground", "add": "the ground", "soft": false}, {"name": "tone", "add": "the tone", "soft": true},
+		{"name": "lines", "add": "the lines", "soft": false}]})
+	var ls := lay.steps()
+	_ok(lay.layer_count() == 3 and ls.find("image:layer:1") == ls.find("layers") + 1 and ls.find("image:layer:3") == ls.find("layers") + 3,
+		"written, its three layers are steps in order: %s" % [ls])
+	_ok(lay.needs("image:layer:1") == ["layers", "image:face"] and lay.needs("image:layer:3") == ["layers", "image:face", "image:layer:2"],
+		"each painted over the one before, the picture its guide: %s %s" % [lay.needs("image:layer:1"), lay.needs("image:layer:3")])
+	_ok(lay.dependents("image:layer:2").has("image:layer:3") and not lay.dependents("image:layer:2").has("image:layer:1"),
+		"painting a layer again throws the ones after it away, never the ones before")
+	_ok(lay.dependents("image:face").has("layers") and lay.dependents("image:face").has("image:layer:1"), "painting the picture again throws all of them away")
+	_ok(lay.file_of("image:layer:2").ends_with("layer_2.png") and lay.file_of("layers").ends_with("layers.json"), "kept as layers.json and layer_K.png")
+	_ok(lay.needs("skin").has("image:layer:3") and lay.dependents("image:layer:3").has("skin"),
+		"the painter at the table lays every layer: the design waits for the last, and painting one again lays them again")
+	_ok(not _episode(8, "").steps().has("layers"), "control: a plan that paints nothing has no layers")
 
 
 ## THE FACE PAINTED FIRST, AS THE CODE HANDLES IT ([Skins], [TableProducer]): the bare surface in the middle of an upright 2:3 canvas,
@@ -198,9 +220,12 @@ func _tools() -> void:
 	got = await t.call_tool("submit", {})
 	_ok(got.has("error") and String(got["text"]).contains("off the surface"), "what is off the surface stops it once")
 	got = await t.call_tool("look", {})
-	_ok(got.has("images") and FileAccess.file_exists(String((got["images"] as Array)[0])), "`look` draws it on the surface")
-	if got.has("images"):
-		var img := Image.load_from_file(String((got["images"] as Array)[0]))
+	# (...handed back as the picture itself - AgentTools sends only an Image; handed its path, the decorator had looked at nothing)
+	var shown: Variant = (got["images"] as Array)[0] if got.has("images") and not (got["images"] as Array).is_empty() else null
+	_ok(shown is Image and not (shown as Image).is_empty(), "`look` draws it on the surface and hands the picture back: %s" % [typeof(shown)])
+	_ok(Array(DirAccess.get_files_at(t.dir)).any(func(f: String) -> bool: return f.begins_with("look_") and f.ends_with(".jpg")), "and keeps it beside the job")
+	if shown is Image:
+		var img: Image = shown
 		var mouth := img.get_pixel(int(75 * 3), int(153 * 3))
 		var corner := img.get_pixel(3, 3)
 		_ok(mouth.r > mouth.g * 2.0 and mouth.r > 0.3, "and the mouth is red where it is drawn: %s" % mouth)
@@ -246,6 +271,82 @@ static func _line_of(text: String, head: String) -> String:
 const BRIEF := "# A Show\n\nWords.\n\n## The fixed table\n\nIt stands there.\n\n```json\n{\"things\": [{\"name\": \"stand\", \"at\": [0, 4], \"parts\": [{\"shape\": \"box\", \"size\": [4, 4, 4], \"material\": \"oak\"}]}], \"materials\": {\"oak\": {\"kind\": \"wood\", \"color\": \"#6a4a2a\"}}}\n```\n\nMore words.\n\n## Never\n\n- Never.\n"
 
 
+## THE PAINTER AT THE TABLE ([PainterTools]; the user, 2026-11-08: "with an agent, we can peak at each step"): on the station's table and a
+## picture of a white face with a black bar, it is told the episode's beats and the table's tools and paints; a look hands the picture back;
+## an operation lays only where the picture asks and says what it took; one with no such tool, way or region is not laid; undo puts the
+## canvas back as it was; what is handed in is an element an operation, its plan beside it; and its acts are a tool's run each, beat by
+## beat, told the seconds its operations took. The controls: a design no painter laid makes no acts; a gloss is never the painting's ground.
+func _painter() -> void:
+	var dir := ProjectSettings.globalize_path(ROOT).path_join("painter")
+	DirAccess.make_dir_recursive_absolute(dir)
+	# (the picture: a white face, a black bar across its middle - 3 points a millimeter over the face's frame)
+	var img := Image.create(450, 630, false, Image.FORMAT_RGBA8)
+	for y in 630:
+		for x in 450:
+			var q := Vector2(float(x) + 0.5, float(y) + 0.5) / 3.0
+			var inside := Vector2((q.x - 75.0) / 74.0, (q.y - 105.0) / 104.0).length() <= 1.0
+			var bar := q.x > 40.0 and q.x < 110.0 and q.y > 100.0 and q.y < 106.0
+			img.set_pixel(x, y, Color("#121214") if bar and inside else (Color("#f6f2ea") if inside else Color(0, 0, 0, 0)))
+	img.save_png(dir.path_join("face_ref.png"))
+	var table := Check.station()
+	var plan := {"work_intro": "the ground", "work_close": "the finish", "spread": {"positions": [{"name": "the bar", "work": "a black bar"},
+		{"name": "the rest", "work": "anything left"}]}}
+	var pt := PainterTools.new(dir.path_join("job"), table, plan, dir.path_join("face_ref.png"))
+	_ok(pt.ready(), "the painter has a picture to paint again and tools to paint it with")
+	_ok(pt.beats().map(func(b: Dictionary) -> String: return String(b["key"])) == ["intro", "1", "2", "close"], "it is told the episode's beats: %s" % [pt.beats().map(func(b: Dictionary) -> String: return String(b["key"]))])
+	var got: Dictionary = await pt.call_tool("look", {})
+	_ok(got.has("images") and (got["images"] as Array)[0] is Image, "`look` hands the picture back: the painting, the canvas, what is off")
+	_ok(pt._ground == Color("#f6f2ea") or pt._ground.get_luminance() > 0.8, "control: its ground is the painting's white, never a gloss: #%s" % pt._ground.to_html(false))
+	var sponge := ""
+	var liner := ""
+	for t in pt._tools:
+		if String((t as Dictionary)["kind"]) == "sponge" and sponge.is_empty():
+			sponge = String((t as Dictionary)["name"])
+		if String((t as Dictionary)["kind"]) == "brush" and (liner.is_empty() or float((t as Dictionary)["mm"]) < float((pt._tool_of(liner) as Dictionary).get("mm", 99.0))):
+			liner = String((t as Dictionary)["name"])
+	_ok(not sponge.is_empty() and not liner.is_empty(), "the table's sponge and finest brush are its tools: %s, %s" % [sponge, liner])
+	got = await pt.call_tool("paint", {"beat": "intro", "tool": sponge, "paint": "white paint", "how": "sponge", "where": "all", "seconds": 200})
+	_ok(not got.has("error") and int((pt._ops.back() as Dictionary)["marks"]) > 20, "the ground goes on: %s" % String(got["text"]).get_slice("
+", 0))
+	got = await pt.call_tool("paint", {"beat": "1", "tool": "a teapot", "paint": "black paint", "how": "line", "where": "all"})
+	_ok(got.has("error") and String(got["text"]).contains("`tool`"), "control: no such tool, nothing laid")
+	got = await pt.call_tool("paint", {"beat": "1", "tool": sponge, "paint": "black paint", "how": "line", "where": "all"})
+	_ok(got.has("error"), "control: a sponge lays no fine lines")
+	got = await pt.call_tool("paint", {"beat": "1", "tool": liner, "paint": "black paint", "how": "line", "where": "M -60 -60 L -20 -60 L -20 -20 Z"})
+	_ok(got.has("error"), "control: a region off the surface lays nothing")
+	var k_bar: int = pt._pl._k(Vector2(75.0, 103.0))
+	var k_white: int = pt._pl._k(Vector2(75.0, 60.0))
+	var bar_was: Vector3 = pt._pl.labs[k_bar]
+	got = await pt.call_tool("paint", {"beat": "1", "tool": liner, "paint": "black paint", "how": "line", "where": "M 30 90 L 120 90 L 120 116 L 30 116 Z", "seconds": 60})
+	var bar_now: Vector3 = pt._pl.labs[k_bar]
+	_ok(not got.has("error") and bar_now.x < bar_was.x - 20.0, "the liner draws the bar where the picture has it: lightness %.0f, from %.0f" % [bar_now.x, bar_was.x])
+	_ok(pt._pl.labs[k_white].x > 85.0, "and never on the white beside it: %.0f" % pt._pl.labs[k_white].x)
+	got = await pt.call_tool("undo", {})
+	_ok(not got.has("error") and pt._ops.size() == 1 and pt._pl.labs[k_bar].is_equal_approx(bar_was), "`undo` takes it back, the canvas as it was")
+	await pt.call_tool("paint", {"beat": "1", "tool": liner, "paint": "black paint", "how": "line", "where": "M 30 90 L 120 90 L 120 116 L 30 116 Z", "seconds": 60})
+	got = await pt.call_tool("submit", {})
+	_ok(got.has("error") and String(got["text"]).contains("Name"), "control: a painting with no name is not handed in")
+	got = await pt.call_tool("submit", {"name": "a white face with a bar"})
+	_ok(pt.submitted and FileAccess.file_exists(dir.path_join("job").path_join(PainterTools.SUBMITTED)), "it is handed in")
+	var doc: Dictionary = pt.designs()
+	var els: Array = ((doc["designs"] as Array)[0] as Dictionary)["elements"]
+	_ok(els.size() == 2 and (els[1] as Dictionary).get("plan") is Dictionary and String(((els[1] as Dictionary)["plan"] as Dictionary)["how"]) == "line",
+		"an element an operation, its plan beside it: %s" % [els.map(func(e: Dictionary) -> String: return String(e["id"]))])
+	var made := Skins.sanitize((doc["designs"] as Array)[0], Vector2(150, 210))
+	_ok((made["elements"] as Array).size() == 2 and ((made["elements"] as Array)[1] as Dictionary).has("plan"), "and the plan lands with it")
+	var acts := TableProducer.acts_from_painting(doc, table, 2)
+	var list: Array = acts.get("acts", [])
+	_ok(list.size() == 2 and str((list[0] as Dictionary)["beat"]) == "intro" and str((list[1] as Dictionary)["beat"]) == "1"
+		and String((((list[1] as Dictionary)["tracks"] as Array)[0] as Dictionary)["manner"]) == "line", "its acts: a tool's run each, beat by beat: %s" % [list.map(func(a: Dictionary) -> String: return String(a["name"]))])
+	var safe := Motions.sanitize_acts(acts, 2)
+	var told := Skins.act_natural((safe["acts"] as Array)[1], doc, table, true)
+	var took := float((((els[1] as Dictionary)["plan"]) as Dictionary)["seconds"])
+	_ok((safe["acts"] as Array).size() == 2 and absf(told - took - TablePaint.FETCH - TablePaint.RETURN - TablePaint.MOVE - TablePaint.LOAD) < 1.0,
+		"told what its operations took: %.0f s for %.0f s laid" % [told, took])
+	var designed := {"designs": [{"thing": "mask", "part": "face", "elements": [{"id": "base", "paint": "#f4f1ea", "fill": "all"}]}]}
+	_ok(TableProducer.acts_from_painting(designed, table, 2).is_empty(), "control: a design no painter laid makes no acts")
+
+
 func _fixed() -> void:
 	var f := FixedTable.parse(BRIEF)
 	_ok((f.get("things", []) as Array).size() == 1 and (f.get("materials", {}) as Dictionary).has("oak"), "the brief's fixed table is read: %s" % [f.keys()])
@@ -274,6 +375,16 @@ func _fixed() -> void:
 
 
 func _prompts() -> void:
+	# THE LAYERS' PROMPTS: the order asked of the art director with the table's paints and how many; a layer asked of the painter, only it
+	var fl := TablePrompts.face_layers("A Show", "a brief", {"painted": "a white ground, a red mouth"}, {"thing": "mask"}, ["red paint #b3122a"])
+	_ok(String(fl.get("prompt", "")).contains("a white ground, a red mouth") and String(fl["prompt"]).contains("red paint #b3122a")
+		and String(fl["prompt"]).contains(str(TableProducer.LAYERS_MOST)), "the art director is asked for the order with what was painted, the paints and how many")
+	var li := TablePrompts.layer_image({}, "THE MOUTH ONLY", "/tmp/x.png", 3, 7)
+	_ok(li.contains("THE MOUTH ONLY") and li.contains("3 OF 7") and li.contains("/tmp/x.png"), "a layer is asked for alone, which of how many, and where it is saved")
+	var painting := TablePrompts.painting("a title", "a brief", {"episode_title": "it", "premise": "a premise", "painted": "a face"},
+		[{"key": "intro", "name": "intro", "work": "a ground"}, {"key": "1", "name": "the first", "work": ""}], PainterTools.BUDGET, PainterTools.LOOKS)
+	_ok(not String(painting["prompt"]).contains("{{") and String(painting["prompt"]).contains("a ground") and String(painting["prompt"]).contains("`look`"),
+		"the painter's prompt renders whole")
 	var surfaces := Skins.skins_of(Check.station())
 	var plan := {"episode_title": "A Face", "premise": "x", "painted": "a white face with a red mouth", "look": {}, "staging": {"source": "none"},
 		"spread": {"positions": [{"name": "the base", "asks": "x", "work": "the base goes on"}]},

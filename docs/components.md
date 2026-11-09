@@ -5,7 +5,7 @@ What a note can carry. A note is a markdown file, and each block under `ghost:` 
 
 Components - the parts a note is made of (next/notes.md, "A component"). One registry shaped like `Medium`'s: each entry says what the component is, what it needs and what it gives, the components it brings with it, the room it takes in a note, what it asks of the platform (`Capabilities`), which groups of the script's marks it brings, the frontmatter block it keeps, and the card it is set on.
 
-A NOTE IS WHAT ITS COMPONENTS MAKE IT. There is one kind of new note - its words and nothing else - and "+" attaches the rest (`attach_menu`); what a note can do, which panel runs it (`workspace_of`) and what it may take next are read off what is attached, never off a list of kinds of note. A song and a Picture is a seeded show; add a Storyboard and it is a show written by hand; a Voice reads the words, and Cards has agents write them.
+A NOTE IS WHAT ITS COMPONENTS MAKE IT. There is one kind of new note - its words and nothing else - and "+" attaches the rest (`attach_menu`); what a note can do, which panel runs it (`workspace_of`) and what it may take next are read off what is attached, never off a list of kinds of note. A song and a Medium is a seeded show; add a Storyboard and it is a show written by hand; a Voice reads the words, and Table has agents write them.
 
 NEEDS AND PROVIDES ARE TYPED NAMES that ghost matches, the way a scene's `morph_out` and `morph_in` already are: "text", "audio", "reading", "picture", "moments". A component never names another to work - only what it needs - so a need nobody provides is a sentence on a card, never a branch somewhere else.
 
@@ -13,13 +13,13 @@ SLOTS SAY HOW MANY (`SLOTS`): components that name the same slot are alternative
 
 THE STAGE IS A CAPABILITY: anything shown on it asks for `forward_plus`, the desktop renderer, so on a phone - where a note is its text and nothing more - every component but the text is impossible and "+" offers nothing (`attach_menu`).
 
-A PART THAT COMES WITH ANOTHER IS A ROW'S `comes_with` (optional): it is never attached by itself and brings nothing, its block is kept by whichever of those components the note has (`blocks_of`) - a book's pictures' look, with a Picture or a Letter - and a note carrying its block with none of them has the first (`attached_of`). As `requires`, the Picture had come with it, and a letter's look would have brought a Picture into the letter.
+A PART THAT COMES WITH ANOTHER IS A ROW'S `comes_with` (optional): it is never attached by itself and brings nothing, its block is kept by whichever of those components the note has (`blocks_of`) - a novel's or a letter's pictures' look, with the Medium - and a note carrying its block with none of them has the first (`attached_of`). As `requires`, the Medium would come with it.
 
 A CARD ANY PANEL CAN SHOW IS A ROW'S `script`: the path of the script that builds the component's card, loaded when a panel builds it (`NoteCards.make`). By path because this registry is under every card (docs/structure.md): a row is how it names one. The script answers `KEY` (its block), `for_note(ctx)`, `capture()` and `apply(block)`; `tests/notes/components_check.gd` loads each and holds it to that.
 
 Static and free of autoload names, like `Capabilities`, so a gate can read it under `--script`.
 
-Registry: `Components.REGISTRY` in [src/notes/components.gd](../src/notes/components.gd) (19 components, 2 slots, 6 workspaces).
+Registry: `Components.REGISTRY` in [src/notes/components.gd](../src/notes/components.gd) (17 components, 2 slots, 6 workspaces).
 
 ## Slots
 
@@ -28,7 +28,7 @@ Where a note has room for exactly one. Components that take the same slot are al
 | Slot | What it is | Taken by |
 | --- | --- | --- |
 | `clock` | What the show is timed by, and how long it is: a song, a voice reading the text, or a clip. | Song, Voice, Voice lab, Clip |
-| `presentation` | What the show is seen in: the Picture and the medium it names, a card table, a voice lab's own show, or a clip's own frame. | Voice lab, Picture, Table, Proof, Letter, Dispatch desk, Actor, Clip |
+| `presentation` | What the show is seen in: the Medium and the format it names, a card table, a proof's desk, an actor's room, a voice lab's own show, or a clip's own frame. | Voice lab, Medium, Table, Proof, Actor, Clip |
 
 ## Workspaces
 
@@ -81,18 +81,17 @@ By family - the color a component's card, chip and marks are drawn in.
   - needs audio; gives picture, moments; asks for `forward_plus`
 - **Storyboard** (`storyboard`) - The show written down: which scenes play, in what order, how long each stays and how it leaves - and, on a stage, who is there and what they do. Nothing written, and the seed chooses.
   - needs audio, places; gives picture; brings Scenes; asks for `forward_plus`; kept in `scenes:`
-- **Picture** (`picture`) - A show for the note, and what it is carried on: Auto (the seeded show, nothing to set), full frame, a comic, a book, a notebook, a tablet.
-  - needs picture; gives places; brings Scenes; takes the presentation; asks for `forward_plus`; kept in `picture:`
-- **Pictures** (`illustrations`) - The note's pictures, painted by an agent from the image marks in its words or imported from a file - one card, whatever the note is shown in: a novel, a notebook, a tablet, a letter, a dispatch desk.
-  - needs text; gives picture; comes with Picture, Letter, Dispatch desk; asks for `forward_plus`; kept in `illustrations:`
-- **Letter** (`letter`) - The note read as a letter written by hand at a desk: the pen writes each paragraph as the voice reads it, crosses lines out, draws the sketches the letter describes, taps while the writer thinks, and a picture takes the screen for a passage read over it.
-  - needs reading; gives picture; brings Voice; takes the presentation; asks for `forward_plus`, `subprocess`, `agent:writer`, `tex`, `python:math`; kept in `letter:`
-- **Dispatch desk** (`dispatch`) - The note played at a desk late at night, seen from the chair: an old terminal types what is said and shows what is written, a dozen labeled flip phones ring and are held to the ear (every voice but the room's heard through one), a radar pings, a receiver crackles, a printer prints, small screens show pictures - the camera turning gently to whatever is active, roots growing across the desk.
-  - needs reading; gives picture; brings Voice; takes the presentation; asks for `forward_plus`; kept in `dispatch:`
+- **Pictures** (`illustrations`) - The note's pictures, painted by an agent from the image marks in its words or imported from a file - one card, whatever the note is shown in: a novel, a notebook, a tablet, a letter, a dispatch desk - and every picture a show's agents painted for its episode.
+  - needs text; gives picture; comes with Medium, Table; asks for `forward_plus`; kept in `illustrations:`
 - **Actor** (`actor`) - An actor reads the note in their own room, built from their own videos - a folder, or links to videos, playlists or a channel: the footage surveyed and grouped by camera and look, a still of them chosen, and their motion, blinks, mouths and voice learned from every video. Every pixel of them is their own.
   - needs reading; gives picture; brings Voice; takes the presentation; asks for `forward_plus`, `subprocess`, `ffmpeg`, `python:face`, `python:speech`, `python:download`, `agent:writer`; kept in `actor:`
 - **Clip** (`clip`) - A video, cut and prepared from a file or a link, with chroma-key effects over it: markers, tracks and renders.
   - gives picture, audio; takes the clock and the presentation; asks for `forward_plus`, `subprocess`, `ffmpeg`; kept in `clip:`
+
+### Medium
+
+- **Medium** (`medium`) - What the note is shown in - Auto (the seeded show, nothing to set), full frame, a comic, a novel, a notebook, a tablet, a letter written at a desk, a dispatch desk at night - and the settings that format uses.
+  - needs picture; gives places; brings Scenes; takes the presentation; asks for `forward_plus`; kept in `medium:`
 
 ### Look
 

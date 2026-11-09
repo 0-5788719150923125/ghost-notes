@@ -6,7 +6,7 @@ class_name LetterMedium
 ## word by word - with the letter's own hand and the letter's own moments ([LetterScript]).
 ##
 ## WHAT IT DRAWS FROM: the reading's document (`_subs.document`) - its `source`, the letter with its marks,
-## and its `letter`, what the Letter component hands the reading ([method LetterCard.document]): the hand's
+## and its `letter`, what the Letter's rows on the Medium card hand the reading ([method LetterFormat.document]): the hand's
 ## `seed`, each sketch's SVG (`svgs`), the ink step's layout of them (`ink`) and each picture's file
 ## (`pictures`). The words are the hand's own, so nothing else is needed to write them: a letter whose
 ## sketches and pictures are not made yet plays all the same, its sketches' paragraphs said and its
@@ -280,7 +280,7 @@ func _ensure_doc() -> void:
 	var key := "%d|%d|%s|%d|%d|%s" % [src.hash(), int(letter.get("seed", 0)), String(letter.get("hand", "")),
 		hash(letter.get("svgs", {})), hash(letter.get("pictures", {})), " ".join(start)]
 	if key == _doc_key:
-		# THE DESK, WHAT IS ON IT AND ITS LIGHT, chosen while it plays ([LetterCard]): the desk dressed again, the letter
+		# THE DESK, WHAT IS ON IT AND ITS LIGHT, chosen while it plays ([LetterFormat]): the desk dressed again, the letter
 		# as it is - nothing it writes, and nothing the voice says, depends on them
 		var picks := DeskLook.picks_of(letter)
 		if picks != _picks or _desk_of(letter) != _seed:

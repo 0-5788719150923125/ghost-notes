@@ -2,7 +2,7 @@ extends SceneTree
 
 ## The gate of THE PAINTED SURFACE ([FaceForm], [Bristles], [Skins], [TablePaint]; next/painted_surface.md), with no renderer.
 ##
-##   timeout 600 godot --headless --path . --script res://tests/table/paint_check.gd   (over 300 s: a puff, a sponge and a fill each held and looked at through a whole act)
+##   timeout 900 godot --headless --path . --script res://tests/table/paint_check.gd   (over 300 s: a puff, a sponge and a fill each held and looked at through a whole act, the sponge's every drawn point)
 ##
 ## - A MASK IS A FACE SEEN FROM THE FRONT: its nose stands out its depth, its closed eyes lie in their sockets, a point outside its
 ##   outline has no height, and its landmarks are where its features are. The control: the rim's height is nothing.
@@ -107,7 +107,7 @@ func _ok(cond: bool, msg: String) -> void:
 
 
 func _init() -> void:
-	for check in [_mask, _design, _paths, _reveal, _hairs, _paints, _held, _pad, _inside, _scheduled, _details, _coats]:
+	for check in [_mask, _design, _paths, _reveal, _hairs, _paints, _held, _pad, _inside, _scheduled, _details, _coats, _picture]:
 		var done: Variant = (check as Callable).call()
 		_ok(done == true, "%s stopped part way (a script error - see above)" % (check as Callable).get_method())
 	print("paint_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
@@ -847,7 +847,7 @@ func _paints() -> bool:
 				sworst = maxf(sworst, absf(off - owed))
 				on_face += 1
 	_ok(pressed >= 10 and on_face >= pressed * 0.8 and sworst < 0.0015, "the sponge's corner is not on the face as it stipples: %d presses, %d found on it, %.2f mm off at worst" % [pressed, on_face, sworst * 1000.0])
-	# (4.5 mm: what is thin is filled while the hand is there too - TablePaint.GAP_THIN_LOAD - and some of it lies in the tight places
+	# (4.5 mm: what is thin is filled while the hand is there too - TablePaint._gaps_left - and some of it lies in the tight places
 	# beside the nose, where the corner is stood off a little further to clear the face round it)
 	_ok(stood_off < 0.0045, "the sponge's corner is stood %.1f mm off the face to clear it" % (stood_off * 1000.0))
 	# EACH ELEMENT LAID WHILE ITS ACT RUNS
@@ -869,9 +869,9 @@ func _paints() -> bool:
 	_ok(String(said["text"]).contains("it paints") and String(said["text"]).contains("\"brow\""), "`act` does not say what it paints:\n%s" % said["text"])
 	_ok(m._work.parts_report().contains("surface to paint"), "the parts report does not say what can be painted")
 	# ITS OWN PAINT, NEVER THE PAINTING'S PIXELS (feedback 0049: "we are just revealing the underlying PNG through transparency
-	# manipulation"): an element draws from its own maps alone, whatever its design was copied from - THE CONTROL: the shader as it
-	# was, which read the painting too
-	var own := ["cover", "foot", "blend_map", "when_map"]
+	# manipulation"): an element draws from its own maps alone - its marks' own build-up among them (`laid_map`, `laid_when`) - whatever its
+	# design was copied from - THE CONTROL: the shader as it was, which read the painting too
+	var own := ["cover", "foot", "blend_map", "when_map", "laid_map", "laid_when", "laid_map2", "laid_when2", "tint_map"]
 	var pictures_of := func(code: String) -> Array:
 		var names := []
 		for line in code.split("\n"):
@@ -1050,22 +1050,38 @@ func _held() -> bool:
 		var planned_turned := 0
 		var bkeys: Array = prog["keys"]
 		var seen_b := {}
-		for j in mini(bkeys.size(), ways_b.size()):
+		# (the plan's presses are its own places - a press put in at the first look is pressed no harder than they are)
+		var planned_at := {}
+		for st in (made["planned"] as Dictionary)["strokes"]:
+			planned_at[((st as Dictionary)["pts"] as PackedVector2Array)[0]] = true
+		var nb := mini(bkeys.size(), ways_b.size())
+		var j := 0
+		while j < nb:
 			var kb: Array = bkeys[j]
 			var xy := Vector2(float(kb[1]), float(kb[2]))
-			if float(kb[4]) < 0.99 or seen_b.has(xy):
+			# ...THE KEYS AT ONE PLACE ONE PRESS, as hard as the hardest of them, as TablePaint._held_keys holds it: a thin patch is pressed
+			# again where the press put in for it was, straight after it
+			var hard := 0.0
+			var way := 0
+			var kj := j
+			while kj < nb and Vector2(float((bkeys[kj] as Array)[1]), float((bkeys[kj] as Array)[2])) == xy:
+				hard = maxf(hard, float((bkeys[kj] as Array)[4]))
+				way = maxi(way, ways_b[kj])
+				kj += 1
+			j = maxi(kj, j + 1)
+			if hard < 0.99 or seen_b.has(xy):
 				continue
 			seen_b[xy] = true
-			if float(kb[4]) < TablePaint.PRESS_HARD - 0.01:
+			if planned_at.has(xy):
 				planned += 1
-				if ways_b[j] > 0:
+				if way > 0:
 					planned_turned += 1
 				continue
-			if ways_b[j] > 0:
-				var wn: String = TablePaint.WAYS[ways_b[j]]
+			if way > 0:
+				var wn: String = TablePaint.WAYS[way]
 				turned += 1
-				var own_miss := tp._press_miss(0, xy, tool_b, "corner", tp._cleared(0, xy, tool_b, "corner"), float(kb[4]))
-				if own_miss > TablePaint.AIM_MET and tp._press_miss(0, xy, tool_b, wn, tp._cleared(0, xy, tool_b, wn), float(kb[4])) < own_miss - TablePaint.REACH_BETTER:
+				var own_miss := tp._press_miss(0, xy, tool_b, "corner", tp._cleared(0, xy, tool_b, "corner"), hard)
+				if own_miss > TablePaint.AIM_MET and tp._press_miss(0, xy, tool_b, wn, tp._cleared(0, xy, tool_b, wn), hard) < own_miss - TablePaint.REACH_BETTER:
 					turned_right += 1
 		print("  presses put in held another way: %d, %d where the corner missed and it reached nearer; of %d planned, %d" % [turned, turned_right, planned, planned_turned])
 		_ok(turned > 0 and turned_right == turned, "a press put in was held another way where its corner reached as near: %d of %d" % [turned - turned_right, turned])
@@ -1081,11 +1097,43 @@ func _held() -> bool:
 				by_u[float((tc as Dictionary)["u"])] = ((tc as Dictionary)["pts"] as PackedVector2Array).size()
 		_ok(anyway.size() == 4 and by_u.get(0.1, 0) == 1 and by_u.get(0.9, 0) == 2, "what was left bare is not laid with the touch nearest each point: %s" % [anyway])
 		_ok(TablePaint._painted_anyway(two_touches, []).size() == 2, "THE CONTROL: with nothing bare, something is added")
+		# ...AND WHAT ONE PRESS ALONE REACHED, LAID AGAIN BY ONE AFTER IT (feedback 0001: "a tiny spot just under the nose that is slightly
+		# more transparent than the rest of the white"): a point the first touch reached, nearest its aim, is laid by the second - THE
+		# CONTROL: not told what reached it, it is laid by the nearest, its own press again, and stays a single press's film
+		var thin_by := func(firsts: Array) -> float:
+			for tc in TablePaint._painted_anyway(two_touches, [PackedVector2Array([Vector2(12, 10)])], firsts):
+				if (tc as Dictionary).get("anyway", false):
+					return float((tc as Dictionary)["u"])
+			return -1.0
+		_ok(is_equal_approx(thin_by.call([PackedInt32Array([0])]), 0.9), "a point the first press reached is laid again by %.1f, not the press after it" % thin_by.call([PackedInt32Array([0])]))
+		_ok(is_equal_approx(thin_by.call([]), 0.1), "THE CONTROL: not told what reached it, a point was laid by %.1f, not its nearest" % thin_by.call([]))
+		# ...AND WHAT ONE PRESS ALONE REACHED, GONE OVER AGAIN (feedback 0001: "missing specks of makeup all over this face ... it's completely
+		# ignoring the ugly missing specks right at the center of the face"): one dab leaves a thin, uneven film that only a second press
+		# fills (skin_paint.gdshader's `again`, the map's third channel), so next to nothing of what the stipple covers is left to one press
+		# alone - THE CONTROL: its presses as planned, before any was put in, left much of it so
+		var inside_s := TablePaint.covered_in(cov_s)
+		var alone_of := func(img: Image) -> float:
+			var n := 0
+			for y in mini(img.get_height(), cov_s.get_height()):
+				for x in mini(img.get_width(), cov_s.get_width()):
+					var pv := img.get_pixel(x, y)
+					if inside_s[y * cov_s.get_width() + x] == 1 and pv.r < Skins.NEVER and pv.b >= Skins.NEVER:
+						n += 1
+			return float(n) / (Skins.WHEN_PX * Skins.WHEN_PX)
+		var covered_mm2 := float(inside_s.count(1)) / (Skins.WHEN_PX * Skins.WHEN_PX)
+		var alone_now: float = alone_of.call(wm)
+		var alone_planned: float = alone_of.call(Skins.touch_map(tp._stroke_touches(0, made["planned"], track, tool_s, "stipple"), made["rect"],
+			Skins.WHEN_PX, TablePaint.PRESS_SPOT / Skins.WHEN_PX, inside_s, Skins.PRESS_RAGGED))
+		print("  of the stipple's %.0f mm2, reached by one press alone: %.0f (its presses as planned, %.0f)" % [covered_mm2, alone_now, alone_planned])
+		_ok(alone_now < 1.0, "of the stipple's %.0f mm2, %.0f were reached by one press alone" % [covered_mm2, alone_now])
+		_ok(alone_planned >= covered_mm2 * 0.01, "THE CONTROL: its presses as planned left only %.0f of %.0f mm2 to one press alone" % [alone_planned, covered_mm2])
 		var edge_now: Vector2i = past_edge.call(wm)
 		var edge_was: Vector2i = past_edge.call(Skins.touch_map(made.get("touches", []), made["rect"]))
 		print("  two points past the stipple's edge: %d of %d hold a moment (with nothing carried out, %d of %d)" % [edge_now.y, edge_now.x, edge_was.y, edge_was.x])
 		_ok(edge_now.x > 50 and edge_now.y >= edge_now.x * 0.95, "two points past the stipple's edge, %d of %d hold a moment" % [edge_now.y, edge_now.x])
-		_ok(edge_was.y < edge_was.x * 0.5, "THE CONTROL: with nothing carried out, %d of %d did" % [edge_was.y, edge_was.x])
+		# (...short of all of them: a thin patch at the rim is pressed again, and its presses reach past the edge of their own - 60% of the
+		# ring two out)
+		_ok(edge_was.y < edge_was.x * 0.8, "THE CONTROL: with nothing carried out, %d of %d did" % [edge_was.y, edge_was.x])
 		var two: Array = []
 		for k in 2:
 			for c in Skins._dabs(cov_s, made["rect"], mm_s * Skins.DABS, k):
@@ -1193,7 +1241,9 @@ func _held() -> bool:
 		if w.y < old_low + 0.0015:
 			old_on.append(w)
 	var old_patch := _across(old_on)
-	_ok(old_patch < patch * 0.5, "THE CONTROL: held by its corner through its middle, the sponge lay on its paint %.1f mm across (%.1f now)" % [
+	# (...a share, not a half: the patch is its drawn points within 1.5 mm of its lowest, and a sponge cut finely across its faces, so it
+	# can bend over a pot, has more of them along its corner's edges)
+	_ok(old_patch < patch * 0.65, "THE CONTROL: held by its corner through its middle, the sponge lay on its paint %.1f mm across (%.1f now)" % [
 		old_patch * 1000.0, patch * 1000.0])
 	print("  the sponge pressed %.1f mm into its paint, lying on it %.1f mm across (by its corner through its middle, %.1f), %.1f mm inside the pot's wall" % [
 		hardest * 1000.0, patch * 1000.0, old_patch * 1000.0, -dipped * 1000.0])
@@ -1203,6 +1253,38 @@ func _held() -> bool:
 	for q in pts:
 		flat_ws.append(flat * q)
 	_ok(float(past_wall.call(flat_ws)) > 0.002, "THE CONTROL: held flat in the pot the sponge stands only %.1f mm past its wall" % (float(past_wall.call(flat_ws)) * 1000.0))
+	# ...SO A FACE TOO BROAD FOR THE MOUTH IS LAID OVER IT FLAT (feedback 0005, 2026-11-08: "You would expected it dabbed flat: resting on
+	# both sides of the container, and compressed/pushed from the middle, into the container. It would bend in the middle"): upright, resting
+	# on the rim, and pressed, bent down in its middle onto its paint - nothing of it past the wall, what is outside the mouth over the rim
+	var fpot := tp._pot_hold("load", "white pot", "", float(st[0]), _track_of(m, "stipple"), "face")
+	var draped := fpot.size() > 9 and fpot[9] is Vector4 and (fpot[9] as Vector4).w > 0.0
+	_ok(draped, "a face wider than the pot's mouth is not laid over it: %s" % [fpot])
+	if draped:
+		var fx := tp._node_at(fpot, stool, stool["x0"])
+		var dr := TablePaint._drape_on(fx, fpot[9], float(fpot[6]), 1.0, stool)
+		var dws := PackedVector3Array()
+		var d_low := INF
+		var outside_low := INF
+		var rest_low := INF
+		for q in pts:
+			var wq: Vector3 = fx * _drape_drawn(q, dr)
+			dws.append(wq)
+			d_low = minf(d_low, wq.y)
+			rest_low = minf(rest_low, (fx * q).y)
+			if Vector2(wq.x - rim.x, wq.z - rim.z).length() > float(mouth["r"]):
+				outside_low = minf(outside_low, wq.y)
+		var turned := (fpot[1] as Vector3).angle_to(Vector3.UP)
+		_ok(turned < 0.01, "laid over the mouth, the sponge is turned %.0f degrees from flat" % rad_to_deg(turned))
+		_ok(float(past_wall.call(dws)) < 0.0005, "laid over the mouth and pressed, the sponge stands %.1f mm past the pot's wall" % (float(past_wall.call(dws)) * 1000.0))
+		_ok(outside_low >= rim.y - 0.0002, "what of it rests on the rim goes %.1f mm under it" % ((rim.y - outside_low) * 1000.0))
+		_ok(absf(d_low - float(fpot[6])) < 0.001, "laid over the mouth and pressed, its middle is drawn %.1f mm off its paint" % ((d_low - float(fpot[6])) * 1000.0))
+		# THE CONTROLS: unbent, resting on the rim, it never reaches its paint; and fitted inside the mouth, as it had been, it stood tilted far over
+		_ok(rest_low - float(fpot[6]) > 0.002, "THE CONTROL: unbent, resting on the rim, the sponge is only %.1f mm over its paint" % ((rest_low - float(fpot[6])) * 1000.0))
+		var tilted: Dictionary = tp._pot_clear("white pot", stool, "face", tp._source_of("load", "white pot", "", float(st[0])), Vector3.UP, mouth, float(fpot[6]))
+		var tilt := (tilted["axis"] as Vector3).angle_to(Vector3.UP)
+		_ok(tilt > deg_to_rad(20.0), "THE CONTROL: fitted inside the mouth, the face is turned only %.0f degrees" % rad_to_deg(tilt))
+		print("  a face too broad for the mouth laid over it: pressed, its middle %.1f mm into the pot and on its paint (unbent, %.1f mm over it); fitted inside, it had been turned %.0f degrees" % [
+			(rim.y - d_low) * 1000.0, (rest_low - float(fpot[6])) * 1000.0, rad_to_deg(tilt)])
 	m._work._planned = false
 	return true
 
@@ -1229,6 +1311,25 @@ static func _flat_drawn(q: Vector3, on: Vector4, by: Vector3, at: Vector3) -> Ve
 	var rel := q - at
 	var out := rel - n * rel.dot(n)
 	return q + n * lifted + out * lifted * by.z / maxf(out.length(), 0.004)
+
+
+## Point [param q] of a tool (its node's space) as prop_common.gdshaderinc draws it laid over a pot's mouth and bent down into it, then
+## pressed flat on its paint ([method TablePaint._drape_on]).
+static func _drape_drawn(q: Vector3, dr: Dictionary) -> Vector3:
+	var on: Vector4 = dr["on"]
+	var at: Vector4 = dr["at"]
+	var by: Vector4 = dr["by"]
+	var n := Vector3(on.x, on.y, on.z).normalized()
+	var rel := q - Vector3(at.x, at.y, at.z)
+	var lat := rel - n * rel.dot(n)
+	var d := lat.length() / at.w
+	var v := q
+	if d < 1.0:
+		var up := clampf((q.dot(n) - on.w) / maxf(by.z, 1e-5), 0.0, 1.0)
+		var fw := maxf(by.w, 0.05)
+		v -= n * (by.x * pow(1.0 - d * d, 2.0) + by.y * exp(-d * d / (2.0 * fw * fw)) * up)
+	var fb: Vector3 = dr["flat_by"]
+	return _flat_drawn(v, dr["flat_on"], fb, dr["flat_at"]) if fb.x > 0.0 else v
 
 
 ## [param node]'s own surface (its node's space): every corner of its meshes, and where each of a grid across each face of its box meets
@@ -1583,16 +1684,28 @@ static func _past_shape(tp: TablePaint, id: String, foot: Image, rect: Rect2) ->
 ## ONE COAT OF A PAINT (the user, 2026-11-07: "why are we making two passes of white at all? ... There ought to be one application of white,
 ## no more"): two coats of one paint over the whole face are one, as thick as both, and the act whose coat it was takes nothing up; the one
 ## coat's sponge cleaned and put down - THE CONTROLS: a line in a paint of its own kept, and the liner's act after them worked and cleaned.
+## A POWDER IS A PAINT OF ITS OWN (257002's setting powder, given the nearest cream's color, was folded into the white base and patted
+## nothing): patted on from its pot over the whole face, it keeps its layer, in its pot's powder, and its act pats - THE CONTROL: taken as
+## a cream, the nearest cream to its color is the white the base is laid in.
+## AN ACT LEFT NOTHING TO DO IS NO ACT (feedback 0002, the clean sponge dunked again): the sponge's next act after the folded coat, in a
+## thinned paint, begins damp from the white's rinse and takes it straight up - THE CONTROL: told nothing of being damp, it is wetted first.
 func _coats() -> bool:
 	var m := _medium()
 	var spec := station()
+	# (...the powder pot with its powder in it - the station's has none, and the puff checks above dip into it bare)
+	for th in spec["things"]:
+		if String((th as Dictionary)["name"]) == "powder pot":
+			((th as Dictionary)["parts"] as Array).insert(1, {"shape": "lathe", "profile": [[0, 0.3], [3.3, 0.3], [3.3, 2.6], [0, 2.7]], "material": "setting powder"})
+	(spec["materials"] as Dictionary)["setting powder"] = {"kind": "powder", "color": "#f4efe8"}
 	var at := {"mask": Vector3(0, 0, -0.06), "brush jar": Vector3(0.18, 0, 0.04), "sponge": Vector3(-0.16, 0, 0.08), "white pot": Vector3(-0.09, 0, 0.12),
-		"black pot": Vector3(0.09, 0, 0.12), "water cup": Vector3(0.22, 0, -0.06), "towel": Vector3(-0.24, 0, -0.08)}
+		"black pot": Vector3(0.09, 0, 0.12), "water cup": Vector3(0.22, 0, -0.06), "towel": Vector3(-0.24, 0, -0.08), "powder pot": Vector3(-0.3, 0, 0.14)}
 	for nm in at:
 		_stand(m, spec, nm, Vector3(Tables.ORIGIN.x, 0.0, Tables.ORIGIN.y) + (at[nm] as Vector3))
 	m._work.skin_doc = {"designs": [{"thing": "mask", "part": "face", "name": "coats", "elements": [
 		{"id": "coat one", "stage": "base", "paint": "#d5b9a1", "fill": "all", "opacity": 0.85},
 		{"id": "coat two", "stage": "base", "paint": "#efe3d6", "fill": "all", "opacity": 0.9},
+		{"id": "strip", "stage": "base", "paint": "#9a9a9a", "fill": "M 20 60 H 130 V 70 H 20 Z"},
+		{"id": "set", "stage": "base", "paint": "#f0dece", "fill": "all", "finish": "powder", "opacity": 0.22},
 		{"id": "brow", "stage": "lines", "paint": "#121214", "line": "M 30 72 C 40 58 58 55 66 62", "width": 1.4}]}]}
 	var sponge_track := func(id: String) -> Dictionary:
 		return {"thing": "sponge", "part": "wedge", "law": "paint", "on": "mask", "paint": [id], "manner": "stipple", "from": "white pot",
@@ -1600,11 +1713,15 @@ func _coats() -> bool:
 	m._work.build({"acts": [
 		{"name": "one", "beat": 1, "length": "under", "tracks": [sponge_track.call("coat one")]},
 		{"name": "two", "beat": 2, "length": "under", "tracks": [sponge_track.call("coat two")]},
-		{"name": "lines", "beat": 3, "length": "under", "tracks": [{"thing": "brush jar", "part": "liner", "law": "paint", "on": "mask", "paint": ["brow"],
-			"from": "black pot", "rinse": "water cup", "dry": "towel"}]}]}, 3)
+		{"name": "shade", "beat": 3, "length": "under", "tracks": [{"thing": "sponge", "part": "wedge", "law": "paint", "on": "mask", "paint": ["strip"],
+			"manner": "stipple", "from": "black pot", "rinse": "water cup", "dry": "towel"}]},
+		{"name": "powder", "beat": 4, "length": "under", "tracks": [{"thing": "powder pot", "part": "puff", "law": "paint", "on": "mask", "paint": ["set"],
+			"manner": "pat", "from": "powder pot"}]},
+		{"name": "lines", "beat": 5, "length": "under", "tracks": [{"thing": "brush jar", "part": "liner", "law": "paint", "on": "mask", "paint": ["brow"],
+			"from": "black pot", "rinse": "water cup", "dry": "towel"}]}]}, 5)
 	var tp: TablePaint = m._work.paint
-	_ok(tp != null and (m._work.acts as Array).size() == 3, "the coats' acts were kept: %s" % "; ".join(m._work.notes))
-	if tp == null or (m._work.acts as Array).size() < 3:
+	_ok(tp != null and (m._work.acts as Array).size() == 5, "the coats' acts were kept: %s" % "; ".join(m._work.notes))
+	if tp == null or (m._work.acts as Array).size() < 5:
 		m._root3.free()
 		return true
 	# (...one coat, as thick as the two designed come to together - 0.85 and 0.9 - the second taken out of the design)
@@ -1624,7 +1741,95 @@ func _coats() -> bool:
 		"the act whose coat is the one before's takes nothing up, and the one coat's sponge is cleaned and put down: %s / %s" % [k1, k2])
 	_ok((after_el.call(k3) as Array).has("rinse") and (after_el.call(k3) as Array).has("dry") and not k3.is_empty(),
 		"THE CONTROL: the liner's act after them is worked and cleaned: %s" % [k3])
+	var set_lay: Dictionary = tp._layers.get("0|set", {})
+	var kp: Array = kinds_of.call("powder")
+	_ok(not tp.element(0, "set").is_empty() and String(set_lay.get("pot", "")) == "#f4efe8" and kp.has("el"),
+		"a powder patted on from its pot keeps its layer in its powder (%s) and its act pats: %s" % [set_lay.get("pot", "none"), kp])
+	var as_cream := tp._cream_near("#f0dece", 0)
+	_ok(not as_cream.is_empty() and "#" + Color(as_cream["color"]).to_html(false) == String((tp._layers.get("0|coat one", {}) as Dictionary).get("pot", "")),
+		"THE CONTROL: taken as a cream, the powder's nearest is not the white the base is laid in: %s" % [as_cream.get("color", "none")])
+	# ...AN ACT LEFT NOTHING TO DO IS NO ACT: the sponge's next after the folded coat begins damp, its thinned paint taken straight up
+	var shade_t := _track_of(m, "shade")
+	var ks: Array = kinds_of.call("shade")
+	_ok(bool(shade_t.get("_damp", false)) and ks.has("el") and not (before_el.call(ks) as Array).has("rinse"),
+		"the sponge's act after the folded coat begins damp from the white's rinse and takes its thinned paint straight up: %s" % [ks])
+	var dry_t := shade_t.duplicate()
+	dry_t.erase("_damp")
+	var kd: Array = (tp.plan_of(dry_t, 120.0)["phases"] as Array).map(func(p: Dictionary) -> String: return String(p["kind"]))
+	_ok((before_el.call(kd) as Array).has("rinse"), "THE CONTROL: told nothing of being damp, its thinned paint was taken up on a sponge not wetted first: %s" % [kd])
 	m._root3.free()
+	return true
+
+
+## THE PAINTING IS THE DESIGN (next/painted_surface.md; [PaintLayers], TablePaint._from_picture): where the surface was painted first as a
+## picture, an element a brush fills is laid from it - its program the strokes the picture still wanted, its paint their coverage, nothing
+## looked for after - and lays its black where the picture is black, not on the white beside it inside its own shape; the foundation too,
+## whole, by the corner's own dabs. THE CONTROL: with no picture, the same design is laid as its shapes say.
+func _picture() -> bool:
+	var made_of := func(with_picture: bool) -> TableMedium:
+		var m := _medium()
+		var spec := station()
+		# (...a face of a skin's tone, as the show's: the station's bisque is all but the white, and a foundation of it has nothing to do)
+		(spec["materials"] as Dictionary)["bisque"] = {"kind": "ceramic", "color": "#c89e80", "polish": 0.05}
+		var at := {"mask": Vector3(0, 0, -0.06), "flat jar": Vector3(0.2, 0, 0.06), "sponge": Vector3(-0.16, 0, 0.08), "white pot": Vector3(-0.09, 0, 0.12),
+			"black pot": Vector3(0.09, 0, 0.12), "water cup": Vector3(0.22, 0, -0.06), "towel": Vector3(-0.24, 0, -0.08)}
+		for nm in at:
+			_stand(m, spec, nm, Vector3(Tables.ORIGIN.x, 0.0, Tables.ORIGIN.y) + (at[nm] as Vector3))
+		m._work.skin_doc = {"designs": [{"thing": "mask", "part": "face", "name": "picture", "elements": [
+			{"id": "base", "stage": "base", "paint": "#f6f2ea", "fill": "all"},
+			{"id": "eye", "stage": "eyes", "paint": "#121214", "fill": "M 40 80 L 75 80 L 75 105 L 40 105 Z"}]}]}
+		if with_picture:
+			# (...the picture: a white face, a black bar inside the eye's shape, white round it - 3 points a millimeter over the face's frame; the
+			# bar half again as tall as the flat brush is wide, so the brush's picture, judged over its own width, is black along it: 9 mm tall,
+			# whether it found a stroke there at all turned on the foundation's film under it)
+			var img := Image.create(450, 630, false, Image.FORMAT_RGBA8)
+			for y in 630:
+				for x in 450:
+					var q := Vector2(float(x) + 0.5, float(y) + 0.5) / 3.0
+					var inside := Vector2((q.x - 75.0) / 74.0, (q.y - 105.0) / 104.0).length() <= 1.0
+					var black := q.x > 47.0 and q.x < 68.0 and q.y > 85.0 and q.y < 100.0
+					img.set_pixel(x, y, Color("#121214") if black else Color("#f6f2ea") if inside else Color(0, 0, 0, 0))
+			m._work.skin_ref = img
+			m._work.skin_ref_on = "mask/face"
+		m._work.build({"acts": [
+			{"name": "base", "beat": 1, "length": "under", "tracks": [{"thing": "sponge", "part": "wedge", "law": "paint", "on": "mask", "paint": ["base"],
+				"manner": "stipple", "from": "white pot", "rinse": "water cup", "dry": "towel"}]},
+			{"name": "eye", "beat": 2, "length": "under", "tracks": [{"thing": "flat jar", "part": "flat", "law": "paint", "on": "mask", "paint": ["eye"],
+				"from": "black pot", "rinse": "water cup", "dry": "towel"}]}]}, 2)
+		return m
+	var m: TableMedium = made_of.call(true)
+	var tp: TablePaint = m._work.paint
+	var items: Dictionary = tp.skins[0]["items"] if tp != null else {}
+	var base_made: Dictionary = (items.get("base", {}) as Dictionary).get("made", {})
+	var eye_made: Dictionary = (items.get("eye", {}) as Dictionary).get("made", {})
+	var strokes_of := func(md: Dictionary) -> int: return ((md.get("program", {}) as Dictionary).get("strokes", []) as Array).size()
+	print("  laid from the picture: the foundation %d dabs, the eye %d strokes" % [strokes_of.call(base_made), strokes_of.call(eye_made)])
+	_ok(bool(base_made.get("laid", false)) and strokes_of.call(base_made) > 20 and base_made.get("foot") is Image,
+		"the foundation is not laid from the picture: %s" % [base_made.keys()])
+	_ok(bool(eye_made.get("laid", false)) and strokes_of.call(eye_made) > 0 and eye_made.get("foot") is Image,
+		"the brushed element is not laid from the picture: %s" % [eye_made.keys()])
+	_ok(tp != null and (tp.plan_of(_track_of(m, "eye"), 60.0)["phases"] as Array).map(func(p: Dictionary) -> String: return String(p["kind"])).has("el"),
+		"the brushed element's act lays nothing")
+	if eye_made.get("foot") is Image:
+		var foot: Image = eye_made["foot"]
+		var er: Rect2 = eye_made["rect"]
+		var at_mm := func(q: Vector2) -> float:
+			var px := Vector2i(((q - er.position) * PaintLayers.FOOT_PX).floor())
+			return foot.get_pixel(px.x, px.y).r if px.x >= 0 and px.y >= 0 and px.x < foot.get_width() and px.y < foot.get_height() else -1.0
+		# (...the most it laid anywhere on the bar: where along it the brush's stroke goes is the canvas's to say - the foundation's own film
+		# moved it 2.5 mm off the one point this had read)
+		var on_bar := 0.0
+		for yy in range(86, 100):
+			for xx in range(48, 68):
+				on_bar = maxf(on_bar, float(at_mm.call(Vector2(float(xx) + 0.5, float(yy) + 0.5))))
+		var beside: float = at_mm.call(Vector2(43.0, 102.0))
+		print("  the eye's paint on the picture's black %.2f, on its white inside the eye's shape %.2f" % [on_bar, beside])
+		_ok(on_bar > 0.5 and beside >= 0.0 and beside < 0.15, "the brush laid %.2f on the black and %.2f on the white beside it" % [on_bar, beside])
+	m._root3.free()
+	var mc: TableMedium = made_of.call(false)
+	var eye_c: Dictionary = (((mc._work.paint.skins[0] as Dictionary)["items"] as Dictionary).get("eye", {}) as Dictionary).get("made", {}) if mc._work.paint != null else {}
+	_ok(not bool(eye_c.get("laid", false)) and not eye_c.is_empty(), "THE CONTROL: with no picture the element was laid from one, or not at all")
+	mc._root3.free()
 	return true
 
 

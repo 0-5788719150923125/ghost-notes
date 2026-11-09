@@ -54,7 +54,9 @@ window with its version bar.
   writer makes, on table and proof notes that have no presentation of pictures. It shares the Pictures card's window and
   delete button.
 - **A table show's card paintings stay steps of its episode** (designed, painted, judged by the art director): rows of
-  the Pipeline card's Episode section.
+  the Pipeline card's Episode section. **Changed 2026-11-09**: they stay steps, and every picture an episode's agents made is now
+  also SHOWN on the Pictures card ("we will never see the reference image in the UI"; next/face_layers.md) - `EpisodeFeed.made_pictures`,
+  `MadePictures`; the card comes with a table show too. Making one again is still its row on the Pipeline card.
 
 ## Gates
 
@@ -65,6 +67,9 @@ its section with it; Generate all's count, read-only refusal, a captured page ne
 pictures as its presentation shows them, a medium with none as the control).
 
 ## Status
+
+**2026-11-09: it comes with the Medium alone** (`comes_with: ["medium"]`): the Picture card became the Medium card,
+and the Letter and the Dispatch desk its formats, so the three hosts above are one (next/notes.md, "The Medium card").
 
 Built 2026-11-06; the related gates pass (components, dispatch, doc_sync, letter_card, letter, notebook, notes_list,
 panel_fit, pictures_card, pictures_rows, pipeline, tablet, youtube). Not yet seen by the author in the app.

@@ -103,3 +103,38 @@ face:
       "verdict": "keep or repaint",
       "faults": ["when repaint: one fault per line, said to the painter - what is wrong and where, and what it must be instead"]
     }
+
+# THE ORDER THE PICTURE PAINTED FIRST IS PAINTED IN (TableProducer._make_layers; the lab, lab/paint/layers_gen.py): the picture passed and
+# the bare surface attached; the layers a hand lays it in, broad to fine, each said so the painter lays only it (the user, 2026-11-09:
+# "Split it into layers/stages ... along with instructions about what to do at each step"). No sample layer: one would be written every
+# time.
+# The code gives: {{thing}}, {{painted}}, `paints`, {{least}}, {{most}}.
+layers:
+  - >-
+      You are the ART DIRECTOR of this show. {{thing}} was painted as a picture, and you passed it; now it is painted again by
+      hand, on camera, one layer at a time. Write the order it is painted in.
+  - ""
+  - "WHAT IT WAS ASKED TO BE: {{painted}}"
+  - ""
+  - "The first attached image is the finished picture; the second, the bare surface it was painted on."
+  - when: paints
+    say: "THE PAINTS ON THE TABLE:"
+  - each: paints
+    say: "  - {{it}}"
+  - ""
+  - >-
+      A LAYER IS ONE KIND OF THING LAID AT ONE TIME, as a painter works: the ground over the whole surface first, then the broad
+      soft tones, then the large areas of color, then the shapes laid over them, then lines and small marks, then the shine last.
+      A thing that sits on another is a later layer. Things of one kind and one moment go in one layer, wherever they are on the
+      surface; a thing that is laid in two goes - a color and the darker color worked into it - is two layers.
+  - >-
+      SAY EACH LAYER SO A PAINTER LAYS ONLY IT: what it lays, where on the surface, its colors and its edges - soft or crisp - as
+      they are in the picture, and what it does not lay yet. Mark a layer "soft" when what it lays has no edge of its own: a
+      shading, a haze, a tone that fades out.
+  - "Between {{least}} and {{most}} layers, every part of the picture in one of them."
+  - ""
+  - "Reply with ONLY a JSON object, no other text:"
+  - |-
+    {
+      "layers": [{"name": "a few words", "add": "what this layer lays, said to the painter", "soft": false}]
+    }

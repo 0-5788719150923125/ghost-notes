@@ -57,6 +57,7 @@ built.
   `icons/icon_1024x1024`, `icons/icon_1024x1024_dark` and `icons/icon_1024x1024_tinted` should name
   them.
 - Windows' `.exe` keeps Godot's icon (`application/modify_resources=false`): an `.ico` from the
-  build's ghost and the preset's `application/icon` would carry it. macOS has no preset.
+  build's ghost and the preset's `application/icon` would carry it. The macOS preset's
+  `application/icon` names `macos_1024.png` (the `whole` layer; the exporter makes the `.icns`).
 - Exporting from the editor without build.sh finds no icons and fails ("No project icon specified").
 - More rows when wanted: poses, props (a page, a pen), a hat.

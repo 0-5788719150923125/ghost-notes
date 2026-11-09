@@ -109,7 +109,8 @@ func _run() -> void:
 	add_child(_letter._panel)
 	_letter.remove_child(_letter._cast._repace_timer)
 	add_child(_letter._cast._repace_timer)
-	var letter_card: Object = _letter._block_cards.get("letter")
+	var medium_card: Object = _letter._block_cards.get("medium")
+	var letter_card: Object = medium_card.call("own") if medium_card != null else null
 	if letter_card != null:
 		letter_card.set("_seen", FileAccess.get_file_as_string(_letter.note_path))
 		letter_card.set("_listed", LetterScript.sketches(String(letter_card.get("_seen"))))
@@ -117,7 +118,7 @@ func _run() -> void:
 		var pictures: Object = _letter._block_cards.get("illustrations")
 		if pictures != null:
 			pictures.call("set_script_text", String(letter_card.get("_seen")))
-	_ok(letter_card != null, "a Letter note's panel has the Letter card")
+	_ok(letter_card != null, "a Letter note's panel has the Medium card, the Letter's rows on it")
 	# a voice list as the host fills it - its longest name is what a picker sized to its items
 	# would be as wide as
 	for e in [_ed, _cards, _proof, _letter]:
@@ -346,11 +347,11 @@ func _check_the_old_arrangement_overflows() -> void:
 
 
 ## A card's rows as they were before there were cards: a shared card's own node (step 5 - the
-## Look, the Picture, the bookends; the Voice since NoteCards builds it) counts its rows, not itself.
+## Look, the Medium, the bookends; the Voice since NoteCards builds it) counts its rows, not itself.
 func _rows_in(body: Control) -> int:
 	var n := 0
 	for r in body.get_children():
-		n += r.get_child_count() if (r is LookCard or r is PictureCard or r is BookendsCard or r is VoiceCard) else 1
+		n += r.get_child_count() if (r is LookCard or r is MediumCard or r is BookendsCard or r is VoiceCard) else 1
 	return n
 
 

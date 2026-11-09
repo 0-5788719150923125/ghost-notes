@@ -36,6 +36,8 @@ TEMPLATES = {
     "linux": ("linux_debug.x86_64", "linux_release.x86_64"),
     "windows": ("windows_debug_x86_64.exe", "windows_release_x86_64.exe"),
     "android": ("android_debug.apk", "android_release.apk", "android_source.zip"),
+    # One universal bundle (arm64 and x86_64) holds both the debug and the release template.
+    "macos": ("macos.zip",),
 }
 
 

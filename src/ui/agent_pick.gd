@@ -14,12 +14,20 @@ class_name AgentPick
 ## level the agent no longer offers stays on its list, marked, so a show's choice is never silently
 ## lost. An agent whose CLI is not installed is listed and not choosable; a level picker for an agent
 ## that takes no setting is grayed out.
+##
+## THE ASSISTANT IS CHOSEN HERE TOO ([method assistant], 2026-11-07, the user: "Right now, I can pick an agent but I cannot
+## specify the model or effort level. Rather than re-implementing, I think it would be preferable to use the same agent
+## interface"): its agents are the CLIs [AssistantBackends] can hand a note to, each offering the models and levels of the
+## writer it is, after an "Off" ([member none]).
 
 ## A person changed the agent, the model or the level.
 signal changed
 
-## "writer" ([TextGen]'s agents) or "painter" ([ImageGen]'s).
+## "writer" ([TextGen]'s agents), "painter" ([ImageGen]'s) or "assistant" ([AssistantBackends]').
 var role := "writer"
+## The first agent listed where the job can go undone ([method assistant]: "Off"): its agent is "", with no model and no
+## level. "" lists none.
+var none := ""
 ## The backend registry the agents come from.
 var registry: Dictionary = {}
 var agent := ""
@@ -53,6 +61,22 @@ static func players(what: String, model_tip: String, effort_tip: String) -> Agen
 	return p
 
 
+## THE ASSISTANT'S ROW (the 💬 panel): Off, then every CLI [AssistantBackends] can hand a note to, each with the models and
+## levels of the writer it is - and its own blurb, for it runs with tools in the repository, as no writer does.
+static func assistant(what: String) -> AgentPick:
+	var reg := {}
+	for k in AssistantBackends.REGISTRY:
+		var w := AssistantBackends.writer(k)
+		reg[k] = {"label": AssistantBackends.label(k), "name": Registry.field(AssistantBackends.REGISTRY, k, "name", k),
+			"blurb": Registry.blurb(AssistantBackends.REGISTRY, k), "backend": Registry.field(TextGen.REGISTRY, w, "backend")}
+	var p := AgentPick.new()
+	p.role = "assistant"
+	p.none = "Off"
+	p._build("Agent", reg, what, "The model the assistant runs on. Default is the one each CLI is shown with.",
+		"How hard the assistant thinks before it acts. Higher is slower and spends more quota.")
+	return p
+
+
 ## A painter's row (an agent from [ImageGen]).
 static func painter(what: String, model_tip := "", effort_tip := "") -> AgentPick:
 	var p := AgentPick.new()
@@ -82,17 +106,35 @@ func choice() -> Dictionary:
 
 
 func _backend(k: String) -> GDScript:
-	var fallback: GDScript = TextGen.Claude if role == "writer" else ImageGen.Codex
+	var fallback: GDScript = ImageGen.Codex if role == "painter" else TextGen.Claude
 	return Registry.field(registry, k, "backend", fallback) as GDScript
 
 
 func _available(k: String) -> bool:
-	return TextGen.make(k).available() if role == "writer" else ImageGen.make(k).available()
+	match role:
+		"painter":
+			return ImageGen.make(k).available()
+		"assistant":
+			return AssistantBackends.installed().has(k)
+	return TextGen.make(k).available()
+
+
+## Which agents can be chosen, asked again - an install a rescan found lights its row up. One whose CLI is not installed
+## stays listed, grayed and saying so.
+func mark_available() -> void:
+	for i in _keys.size():
+		var k := String(_keys[i])
+		if k.is_empty():
+			continue
+		var here := _available(k)
+		# the CLI's own name in the row (its full label is in the tooltip): the row is shared with the model
+		agents.set_item_text(i, String(Registry.field(registry, k, "name", k.capitalize())) + ("" if here else "  (not installed)"))
+		agents.set_item_disabled(i, not here)
 
 
 func _build(title: String, reg: Dictionary, what: String, model_tip: String, effort_tip: String) -> void:
 	registry = reg
-	_keys = reg.keys()
+	_keys = ([""] if not none.is_empty() else []) + reg.keys()
 	add_theme_constant_override("separation", 6)
 	var l := Label.new()
 	l.text = title
@@ -101,13 +143,11 @@ func _build(title: String, reg: Dictionary, what: String, model_tip: String, eff
 	add_child(l)
 	agents = _picker()
 	var tips := PackedStringArray([what])
-	for i in _keys.size():
-		var k := String(_keys[i])
-		var here := _available(k)
-		# the CLI's own name in the row (its full label is in the tooltip): the row is shared with the model
-		agents.add_item(k.capitalize() + ("" if here else "  (not installed)"))
-		agents.set_item_disabled(i, not here)
-		tips.append("%s: %s" % [Registry.label(reg, k), Registry.blurb(reg, k)])
+	for k in _keys:
+		agents.add_item(none if String(k).is_empty() else String(k))
+		if not String(k).is_empty():
+			tips.append("%s: %s" % [Registry.label(reg, k), Registry.blurb(reg, k)])
+	mark_available()
 	agents.tooltip_text = "\n\n".join(tips)
 	add_child(agents)
 	models = _picker()
@@ -171,6 +211,7 @@ func fill_models() -> void:
 		at = models.item_count - 1
 	if models.item_count > 0:
 		models.select(at)
+	models.disabled = models.item_count == 0
 	_syncing = false
 
 

@@ -39,7 +39,7 @@ func _run() -> void:
 		return
 	var note := NoteStore.create(Showcase.TITLE, Showcase.BODY, {
 		"song": {"path": song},
-		"picture": {"medium": "full"},
+		"medium": {"format": "full"},
 		"scenes": {"storyboard": Showcase.STORYBOARD},
 		"bookends": {"intro": Showcase.INTRO, "outro": Showcase.OUTRO}})
 	if note.is_empty():

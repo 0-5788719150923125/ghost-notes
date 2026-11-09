@@ -33,7 +33,7 @@ func _ready() -> void:
 func _run() -> void:
 	_clean()
 	NoteStore.root = ROOT
-	NoteStore.create("A chapter", "Words.\n", {"voice": {}, "picture": {"medium": "book"}})
+	NoteStore.create("A chapter", "Words.\n", {"voice": {}, "medium": {"format": "book"}})
 	NoteStore.create("A show of cards", "A brief.\n", {"table": {}})
 	_main = preload("res://scenes/main.tscn").instantiate()
 	add_child(_main)
@@ -55,7 +55,7 @@ func _run() -> void:
 	# a note walking a storyboard, its editor open on a stage entry
 	var song: String = FixtureAudio.silence(20.0)
 	var note := NoteStore.create("The point", "Words.\n", {"song": {"path": song},
-		"picture": {"medium": "full"}, "scenes": Storyboard.own_block(Storyboard.read_raw("default")["data"])})
+		"medium": {"format": "full"}, "scenes": Storyboard.own_block(Storyboard.read_raw("default")["data"])})
 	_main._list._open(note)
 	await _frames(30)
 	panel = _main._note_panel

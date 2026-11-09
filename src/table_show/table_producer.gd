@@ -61,6 +61,9 @@ const SPREAD_MOST := 10
 ## How many times the art director may send one card's painting back ([method _land_check]): past
 ## that the last painting stands, and the reader is told what it gets wrong.
 const REPAINTS := 2
+## THE PICTURE PAINTED FIRST IS PAINTED AGAIN IN THIS MANY LAYERS at the least and the most ([method _land_layers]).
+const LAYERS_LEAST := 3
+const LAYERS_MOST := 16
 ## The most lines a written card's designer may write on it ([method _land_design]).
 const WRITING_MOST := 16
 ## How much of the deck goes into a card's references: the back, the first card (which set the
@@ -84,6 +87,8 @@ var _jobs := {}        # step -> AgentJobs id
 var _tools := {}       # step -> {url, set}: the tools a step's agent is working with, until it lands
 var _errors := {}      # step -> why it failed, once it is out of tries
 var _tries := {}       # step -> runs started
+var _hosts := {}       # step -> the painter host making it: {pid, out, log} ([method _make_skin_host])
+var _waiting := {}     # step -> what it waits on being installed
 
 
 func _init(ep: TableEpisode, sp: Dictionary) -> void:
@@ -107,13 +112,17 @@ func stop() -> void:
 		AgentJobs.cancel(String(_jobs[step]))
 		AgentJobs.forget(String(_jobs[step]))
 	_jobs.clear()
+	for step in _hosts:
+		Subprocess.stop(int((_hosts[step] as Dictionary)["pid"]))
+	_hosts.clear()
+	_waiting.clear()
 	for step in _tools.keys():
 		_close_tools(String(step))
 	changed.emit()
 
 
 func busy() -> bool:
-	return not _jobs.is_empty()
+	return not _jobs.is_empty() or not _hosts.is_empty()
 
 
 ## "ready", "running", "queued", "failed" or "missing".
@@ -123,6 +132,10 @@ func state_of(step: String) -> String:
 	if _jobs.has(step):
 		var st := AgentJobs.state(String(_jobs[step]))
 		return "running" if st == "running" else "queued"
+	if _hosts.has(step):
+		return "running"
+	if _waiting.has(step):
+		return "queued"
 	if _errors.has(step):
 		return "failed"
 	return "missing"
@@ -134,6 +147,12 @@ func error_of(step: String) -> String:
 
 ## What [param step]'s agent is doing now ([method AgentJobs.activity]); "" when it is not being made.
 func activity_of(step: String) -> String:
+	if _hosts.has(step):
+		# (...the painter host's last line: which layer, how far)
+		var lines := FileAccess.get_file_as_string(String((_hosts[step] as Dictionary)["log"])).strip_edges().split("\n")
+		return "the painter: " + String(lines[lines.size() - 1]).strip_edges() if not lines.is_empty() else "the painter is starting"
+	if _waiting.has(step):
+		return String(_waiting[step])
 	return AgentJobs.activity(String(_jobs[step])) if _jobs.has(step) else ""
 
 
@@ -150,10 +169,19 @@ func tick() -> void:
 		_jobs.erase(step)
 		_land(String(step), res)
 		moved = true
+	for step in _hosts.keys():
+		if Subprocess.alive(int((_hosts[step] as Dictionary)["pid"])):
+			continue
+		var h: Dictionary = _hosts[step]
+		_hosts.erase(step)
+		var err := _land_skin_host(h)
+		if not err.is_empty():
+			_errors[step] = err
+		moved = true
 	if running:
 		for step in episode.steps():
 			var s := String(step)
-			if episode.has(s) or _jobs.has(s) or _errors.has(s):
+			if episode.has(s) or _jobs.has(s) or _hosts.has(s) or _errors.has(s):
 				continue
 			var ready := true
 			for need in episode.needs(s):
@@ -164,7 +192,7 @@ func tick() -> void:
 				continue
 			_make(s)
 			moved = true
-		if _jobs.is_empty():
+		if _jobs.is_empty() and _hosts.is_empty() and _waiting.is_empty():
 			running = false          # done, or stopped on a failure nothing else can get past
 			moved = true
 	if moved:
@@ -204,6 +232,8 @@ func _make(step: String) -> void:
 			_make_acts()
 		"prep":
 			_make_prep()
+		"layers":
+			_make_layers()
 
 
 ## [param extra]: more of the job's spec - its tools and their timeout (see [method _make_table]).
@@ -463,6 +493,10 @@ func _make_image(step: String) -> void:
 		var thing: Dictionary = list[k] if k >= 0 and k < list.size() and list[k] is Dictionary else {}
 		_submit_image(step, TablePrompts.game_image(look, String(parts[1]), thing, target), [])
 		return
+	# A LAYER OF THE PICTURE PAINTED FIRST: painted over the one before (the bare surface, for the first), the picture itself its guide
+	if parts.size() == 3 and String(parts[1]) == "layer":
+		_make_layer(step, int(parts[2]), look, target)
+		return
 	match String(parts[1]):
 		"face":
 			_make_face(step, look, target)
@@ -654,7 +688,7 @@ func _make_face(step: String, look: Dictionary, target: String) -> void:
 		for f in DataPath.strings(round):
 			if not faults.has(f):
 				faults.append(f)
-	_submit_image(step, TablePrompts.face_image(look, _plan(), skin, target, faults), [bare])
+	_submit_image(step, TablePrompts.face_image(look, _plan(), skin, target, faults, Skins.table_paints(episode.read_json("table"))), [bare])
 
 
 ## THE FACE PAINTED FIRST, KEPT ONLY IF IT LIES ON THE SURFACE ([method Skins.face_fit]) - then cut back to the surface's millimeters as it
@@ -680,6 +714,202 @@ func _land_face() -> String:
 		"size": Vector2i(int((m["size"] as Array)[0]), int((m["size"] as Array)[1]))}
 	var ref := Skins.face_reference(painted, bare, canvas, surfaces[0])
 	return "" if ref.save_png(episode.dir.path_join("face_ref.png")) == OK else "could not write face_ref.png"
+
+
+## THE PAINTER AT THE TABLE, AS A HOST (next/face_layers.md; the user, 2026-11-09: "the old painter code is pointless, because it makes
+## a mess. I want to use the optimizer"): the episode's layers laid with real marks by hosts/paint/run.py - each layer's thin parts traced
+## on its own picture, its broad parts by strokes found by gradient descent - written as the show plays it (`paint/`): each element's
+## program and maps. Waits while its environment is installed; landed by [method _land_skin_host].
+func _make_skin_host() -> void:
+	_waiting.erase("skin")
+	if not Provision.ensure("paint_venv"):
+		_waiting["skin"] = "waiting for the painter's environment to be installed (%s)" % String(Deps.entry("paint_venv").get("size", ""))
+		return
+	var py := Deps.venv_bin("user://paint_venv", "python")
+	var host := BundledHosts.path("res://hosts/paint/run.py")
+	if not FileAccess.file_exists(py) or host.is_empty():
+		_errors["skin"] = "the painter's environment is not installed"
+		return
+	var tbl: Variant = episode.read_json("table")
+	var surfaces := Skins.skins_of(tbl)
+	var meta: Variant = JSON.parse_string(FileAccess.get_file_as_string(episode.dir.path_join("face.json")))
+	if surfaces.is_empty() or not (meta is Dictionary):
+		_errors["skin"] = "the table has no surface, or the picture's place on it is lost"
+		return
+	var paints := {}
+	for pd in (PainterTools.scan(tbl as Dictionary)["paints"] as Array):
+		if not bool((pd as Dictionary)["powder"]) and not bool((pd as Dictionary)["finish"]):
+			paints[String(pd["name"])] = "#" + (pd["color"] as Color).to_html(false)
+	var images := PackedStringArray()
+	var layers: Array = []
+	for k in range(1, episode.layer_count() + 1):
+		images.append(ProjectSettings.globalize_path(episode.file_of("image:layer:%d" % k)))
+		var l: Dictionary = episode.layers()[k - 1]
+		layers.append({"name": String(l.get("name", "")), "soft": bool(l.get("soft", false))})
+	var out := ProjectSettings.globalize_path(episode.dir.path_join("paint"))
+	DirAccess.make_dir_recursive_absolute(out)
+	var m: Dictionary = meta
+	var spec := out.path_join("spec.json")
+	var err := TextGen.put(spec, JSON.stringify({"out": out, "bare_image": ProjectSettings.globalize_path(episode.dir.path_join("face_bare.png")),
+		"at": m["at"], "size": m["size"], "px": float(m.get("px", 3.0)), "bare": String((surfaces[0] as Dictionary).get("color", "#c89e80")),
+		"paints": paints, "layers": layers, "images": images}, "\t"))
+	if not err.is_empty():
+		_errors["skin"] = err
+		return
+	var log := out.path_join("painter.log")
+	var pid := Subprocess.start_logged(py, PackedStringArray(["-I", host, spec]), log, "painter")
+	if pid <= 0:
+		_errors["skin"] = "the painter could not start"
+		return
+	_hosts["skin"] = {"pid": pid, "out": out, "log": log}
+
+
+## THE PAINTER'S WORK, KEPT AS THE DESIGN (`skin.json`): an element each run of one layer's marks with one tool in one paint, in order - its
+## tool the table's nearest ([method _table_tool]), its pot its paint's, its beat its layer's share of the painting's time ([method
+## _layer_beats]), and `plan.host` naming its program and maps in `paint/elements.json` (TablePaint._from_host). "" kept, else why not.
+func _land_skin_host(h: Dictionary) -> String:
+	var out := String(h["out"])
+	var done: Variant = JSON.parse_string(FileAccess.get_file_as_string(out.path_join("done.json"))) if FileAccess.file_exists(out.path_join("done.json")) else null
+	if not (done is Dictionary) or not bool((done as Dictionary).get("ok", false)):
+		var said := String((done as Dictionary).get("error", "")) if done is Dictionary else FileAccess.get_file_as_string(String(h["log"])).strip_edges().right(400)
+		return "the painter failed: " + said
+	var doc: Variant = JSON.parse_string(FileAccess.get_file_as_string(out.path_join("elements.json")))
+	var els: Array = (doc as Dictionary).get("elements", []) if doc is Dictionary else []
+	if els.is_empty():
+		return "the painter laid nothing"
+	var tbl: Variant = episode.read_json("table")
+	var scanned := PainterTools.scan(tbl as Dictionary)
+	var skin: Dictionary = Skins.skins_of(tbl)[0]
+	var beats := _layer_beats(els)
+	var elements: Array = []
+	for e in els:
+		var ed: Dictionary = e
+		var tool := _table_tool(String(ed["tool"]), scanned["tools"])
+		var r: Array = ed["rect"]
+		var x0 := float(r[0])
+		var y0 := float(r[1])
+		var x1 := x0 + float(r[2])
+		var y1 := y0 + float(r[3])
+		elements.append({"id": String(ed["id"]), "stage": String(ed.get("layer_name", "")), "paint": String(ed["color"]), "opacity": 1.0,
+			"finish": "matte", "fill": "M %.1f %.1f L %.1f %.1f L %.1f %.1f L %.1f %.1f Z" % [x0, y0, x1, y0, x1, y1, x0, y1],
+			"plan": {"thing": String(tool.get("thing", "")), "part": String(tool.get("part", "")), "how": String(ed["how"]),
+				"beat": String(beats[int(ed["layer"])]), "seconds": float(ed["seconds"]), "pot": _pot_of_paint(String(ed["paint"]), scanned["paints"]),
+				"host": String(ed["id"])}})
+	var design := {"thing": String(skin["thing"]), "part": String(skin["part"]), "frame": [(skin["frame"] as Vector2).x, (skin["frame"] as Vector2).y],
+		"outline": String(skin.get("outline", "")), "name": String(_plan().get("painted", "")).left(60), "elements": elements}
+	return episode.write_json("skin", {"designs": [design]})
+
+
+## Each layer's beat: the ground in the intro, the rest spread over the beats by their share of the painting's time, in order.
+func _layer_beats(els: Array) -> Dictionary:
+	var keys: Array = ["intro"]
+	for k in range(1, episode.beat_count() + 1):
+		keys.append(str(k))
+	keys.append("close")
+	var per := {}
+	var total := 0.0
+	for e in els:
+		per[int((e as Dictionary)["layer"])] = float(per.get(int((e as Dictionary)["layer"]), 0.0)) + float((e as Dictionary)["seconds"])
+		total += float((e as Dictionary)["seconds"])
+	var out := {}
+	var at := 0.0
+	var layers := per.keys()
+	layers.sort()
+	for li in layers:
+		out[li] = "intro" if int(li) == 0 else String(keys[mini(int(at / maxf(total, 1e-3) * keys.size()), keys.size() - 1)])
+		at += float(per[li])
+	return out
+
+
+## The table's tool nearest the painter's: a sponge for a sponge, else the brush nearest its width.
+static func _table_tool(name: String, tools: Array) -> Dictionary:
+	var want := {"sponge": 30.0, "round": 6.0, "flat": 10.0, "liner": 2.0, "blender": 16.0, "fan": 12.0, "handle": 1.6, "pencil": 0.8,
+		"lipstick": 4.0, "bud": 5.0, "finger": 12.0}
+	var kind := "sponge" if name == "sponge" else "brush"
+	var best := {}
+	var bd := INF
+	for t in tools:
+		var td: Dictionary = t
+		if String(td["kind"]) != kind:
+			continue
+		var d := absf(log(maxf(float(td["mm"]), 0.1) / float(want.get(name, 6.0))))
+		if d < bd:
+			bd = d
+			best = td
+	if best.is_empty():
+		for t in tools:
+			if String((t as Dictionary)["kind"]) in ["brush", "sponge"]:
+				return t
+	return best
+
+
+## The pot a paint is taken from: its own; a mix's, the paint there is most of; none for a clean brush.
+static func _pot_of_paint(paint: String, paints: Array) -> String:
+	if paint.is_empty():
+		return ""
+	var name := paint
+	var rx := RegEx.create_from_string("^(.+?)\\+(.+?) ([0-9.]+)$")
+	var m := rx.search(paint)
+	if m != null:
+		name = m.get_string(1) if float(m.get_string(3)) <= 0.5 else m.get_string(2)
+	for p in paints:
+		if String((p as Dictionary)["name"]) == name:
+			return String((p as Dictionary)["pot"])
+	return ""
+
+
+## THE ORDER THE PICTURE IS PAINTED IN (the user, 2026-11-09: "deconstructed the entire mask right from the start ... Split it into
+## layers/stages"; lab/paint/layers_gen.py): the art director, shown the picture passed and the bare surface it was painted on, writes
+## the layers a hand would lay it in, broad to fine, each in words a painter is told ([method _land_layers]).
+func _make_layers() -> void:
+	var images: Array = [{"path": episode.file_of("image:face"), "label": "THE PICTURE, finished:", "flip": false},
+		{"path": episode.dir.path_join("face_bare.png"), "label": "The bare surface it was painted on:", "flip": false}]
+	var surfaces := Skins.skins_of(episode.read_json("table"))
+	var p := TablePrompts.face_layers(String(spec.get("title", "")), String(spec.get("brief", "")), _plan(),
+		surfaces[0] if not surfaces.is_empty() else {}, Skins.table_paints(episode.read_json("table")))
+	p["images"] = images
+	_submit_text("layers", p, "best")
+
+
+## THE LAYERS, KEPT: `{"layers": [{name, add, soft}]}` - between [constant LAYERS_LEAST] and [constant LAYERS_MOST] of them, each named and
+## said; "" written, else why not.
+func _land_layers(text: String) -> String:
+	var d: Variant = TextGen.extract_json(text)
+	var list: Variant = (d as Dictionary).get("layers", []) if d is Dictionary else []
+	var out: Array = []
+	for l in (list as Array) if list is Array else []:
+		if l is Dictionary and not String((l as Dictionary).get("add", "")).strip_edges().is_empty():
+			out.append({"name": String((l as Dictionary).get("name", "layer %d" % (out.size() + 1))).strip_edges(),
+				"add": String((l as Dictionary)["add"]).strip_edges(), "soft": bool((l as Dictionary).get("soft", false))})
+	if out.size() < LAYERS_LEAST or out.size() > LAYERS_MOST:
+		return "the art director wrote %d layers (between %d and %d are wanted)" % [out.size(), LAYERS_LEAST, LAYERS_MOST]
+	return episode.write_json("layers", {"layers": out})
+
+
+## ONE LAYER PAINTED: the picture as painted so far (the bare surface, for the first layer) with layer [param k] laid on it, as it is in
+## the finished picture - and nothing else.
+func _make_layer(step: String, k: int, look: Dictionary, target: String) -> void:
+	var list := episode.layers()
+	if k < 1 or k > list.size():
+		_errors[step] = "there is no layer %d in the order written" % k
+		return
+	var before := episode.dir.path_join("face_bare.png") if k == 1 else episode.file_of("image:layer:%d" % (k - 1))
+	var l: Dictionary = list[k - 1]
+	_submit_image(step, TablePrompts.layer_image(look, String(l["add"]), target, k, list.size()), [before, episode.file_of("image:face")])
+
+
+## A LAYER, KEPT ONLY IF IT LIES ON THE SURFACE as the picture does ([method Skins.face_fit]); else removed, and why said.
+func _land_layer(step: String) -> String:
+	var painted := Image.load_from_file(episode.file_of(step))
+	var bare := Image.load_from_file(episode.dir.path_join("face_bare.png"))
+	if painted == null or bare == null or painted.is_empty() or bare.is_empty():
+		DirAccess.remove_absolute(episode.file_of(step))
+		return "the layer or the bare surface could not be read"
+	var wrong := Skins.face_fit(bare, painted)
+	if not wrong.is_empty():
+		DirAccess.remove_absolute(episode.file_of(step))
+		return "the layer did not lie on the surface: " + wrong
+	return ""
 
 
 ## THE ART DIRECTOR looks at the face painted first before anything is copied from it ([method _land_check]): shown it and the bare surface it
@@ -756,6 +986,8 @@ func looks_of(step: String) -> Array:
 		return [(t["set"] as ModelTools).looks_used(), ModelTools.LOOKS]
 	if t["set"] is DecoratorTools:
 		return [(t["set"] as DecoratorTools).looks_used(), DecoratorTools.LOOKS]
+	if t["set"] is PainterTools:
+		return [(t["set"] as PainterTools).looks_used(), PainterTools.LOOKS]
 	return []
 
 
@@ -785,6 +1017,10 @@ func _make_model() -> void:
 ## surface the set table has to paint and what earlier episodes painted. Given a writer that takes tools, it writes elements, looks at them
 ## painted on the surface and fixes what it sees; one that cannot is asked for the design in one reply.
 func _make_skin() -> void:
+	# ...WHERE THE PICTURE WAS PAINTED AGAIN IN LAYERS, the painter at the table is the host that lays them (next/face_layers.md)
+	if episode.layer_count() > 0:
+		_make_skin_host()
+		return
 	_close_tools("skin")
 	DirAccess.remove_absolute(episode.job_dir("skin").path_join(DecoratorTools.SUBMITTED))
 	var surfaces := Skins.skins_of(episode.read_json("table"))
@@ -802,6 +1038,22 @@ func _make_skin() -> void:
 	var face := episode.dir.path_join("face_ref.png")
 	var ref := Image.load_from_file(face) if FileAccess.file_exists(face) else null
 	var palette: Array = Skins.face_palette(ref) if ref != null and not ref.is_empty() else []
+	# ...PAINTED AGAIN AT THE TABLE, an operation at a time, by a painter that sees each land (PainterTools; the user, 2026-11-08: "an agent in
+	# the loop ... we can peak at each step, and make informed decisions about what to do next") - where there is a picture and a writer
+	# that takes tools; else traced as a design, as before
+	if not palette.is_empty() and TextGen.make(String(spec.get("writer", "claude"))).takes_tools():
+		var tbl: Variant = episode.read_json("table")
+		var painter := PainterTools.new(episode.job_dir("skin"), tbl if tbl is Dictionary else {}, _plan(), face)
+		if painter.ready():
+			var purl := AgentTools.open(episode.job_dir("skin"), painter)
+			if not purl.is_empty():
+				_tools["skin"] = {"url": purl, "set": painter}
+				var pp := TablePrompts.painting(String(spec.get("title", "")), String(spec.get("brief", "")), _plan(), painter.beats(),
+					PainterTools.BUDGET, PainterTools.LOOKS)
+				pp["images"] = [{"path": face, "label": "THE PICTURE TO PAINT AGAIN, the surface straight from its front (%d pixels a millimeter, its top-left corner at x 0, y 0):" % int(Skins.FACE_PX), "flip": false}]
+				_submit_text("skin", pp, "best", {"tools_url": purl})
+				return
+		painter.release()
 	var extra := {}
 	var looks := 0
 	if TextGen.make(String(spec.get("writer", "claude"))).takes_tools():
@@ -857,6 +1109,10 @@ func _land_skin(text: String) -> String:
 func _make_acts() -> void:
 	_close_tools("acts")
 	DirAccess.remove_absolute(episode.job_dir("acts").path_join(PuppeteerTools.SUBMITTED))
+	var painted := _acts_from_painting()
+	if painted != NOT_PAINTED:
+		_finish("acts", painted)
+		return
 	var table: Variant = episode.read_json("table")
 	var tbl: Dictionary = table if table is Dictionary else {}
 	var extra := {}
@@ -874,6 +1130,112 @@ func _make_acts() -> void:
 	var p := TablePrompts.puppeteer(String(spec.get("title", "")), String(spec.get("brief", "")), _plan(), episode.seed,
 		_drawn(episode.card_count()), Motions.table_text(things), looks)
 	_submit_text("acts", p, "best", extra)
+
+
+## What [method _acts_from_painting] says of a design no painter laid.
+const NOT_PAINTED := "-"
+
+
+## THE ACTS A PAINTER'S PAINTING MAKES (PainterTools; the user, 2026-11-08: "I would expect acts to be more fluid ... you still wouldn't
+## really restrict those acts to a single tool: you would restrict tools to the necessary job"): its operations beat by beat in the order
+## they were laid, each run of them with one tool and one way of laying an act - the hand putting one tool down and taking up the next as the
+## work asks, the beat's passage spoken over all of them - each told what its operations took ([method Skins.act_natural]). Written as
+## `acts.json`: "" done, else what was wrong; [constant NOT_PAINTED] for a design no painter laid (the puppeteer blocks it).
+func _acts_from_painting() -> String:
+	var got := acts_from_painting(episode.read_json("skin"), episode.read_json("table"), episode.beat_count())
+	if got.is_empty():
+		return NOT_PAINTED
+	if (got["acts"] as Array).is_empty():
+		return "the painting has no operation in any beat"
+	return episode.write_json("acts", got)
+
+
+## [method _acts_from_painting]'s acts, from the design [param doc] (`skin.json`) and table [param tbl] of an episode of [param beats]
+## beats: `{acts: [...]}`, or empty for a design no painter laid.
+static func acts_from_painting(doc: Variant, tbl: Variant, beats: int) -> Dictionary:
+	if not (doc is Dictionary) or not (tbl is Dictionary):
+		return {}
+	var design: Dictionary = {}
+	for g in (doc as Dictionary).get("designs", []):
+		if g is Dictionary:
+			design = g
+			break
+	var els: Array = design.get("elements", [])
+	if els.is_empty() or not els.all(func(e: Variant) -> bool: return e is Dictionary and (e as Dictionary).get("plan") is Dictionary):
+		return {}
+	var on := String(design.get("thing", ""))
+	var safe := Props.sanitize(tbl as Dictionary, [])
+	var water := _clearest_liquid(safe)
+	var towel := _towel(safe)
+	var keys: Array = ["intro"]
+	for k in range(1, beats + 1):
+		keys.append(str(k))
+	keys.append("close")
+	var acts: Array = []
+	for key in keys:
+		var run: Array = []
+		var run_of := ""
+		var k := [0]           # (a lambda keeps a number as it was: counted in a list)
+		var flush := func() -> void:
+			if run.is_empty():
+				return
+			k[0] += 1
+			var pl: Dictionary = (run[0] as Dictionary)["plan"]
+			var how := String(pl["how"])
+			var paints: PackedStringArray = []
+			for e in run:
+				var pot := String(((e as Dictionary)["plan"] as Dictionary).get("pot", ""))
+				if not pot.is_empty() and not paints.has(pot):
+					paints.append(pot)
+			var track := {"thing": String(pl["thing"]), "part": String(pl["part"]), "law": "paint", "on": on,
+				"paint": run.map(func(e: Dictionary) -> String: return String(e["id"])), "manner": String(Skins.PAINTER_HOWS.get(how, "pat"))}
+			if not water.is_empty():
+				track["rinse"] = water
+			if not towel.is_empty():
+				track["dry"] = towel
+			acts.append({"name": "%s %d %s" % ["intro" if key == "intro" else ("close" if key == "close" else "stage " + String(key)), k[0], String(pl["part"])],
+				"beat": key if key in ["intro", "close"] else int(key), "about": "%s with the %s: %s" % [how, String(pl["part"]), ", ".join(paints)],
+				"length": "under", "cues": [], "tracks": [track]})
+			run.clear()
+		for e in els:
+			var pl: Dictionary = (e as Dictionary)["plan"]
+			if String(pl.get("beat", "")) != String(key):
+				continue
+			var of := "%s/%s/%s" % [pl["thing"], pl["part"], pl["how"]]
+			if of != run_of:
+				flush.call()
+				run_of = of
+			run.append(e)
+		flush.call()
+	return {"acts": acts.slice(0, Motions.MAX_ACTS)}
+
+
+## The clearest liquid on table [param safe] (made safe): where a brush is rinsed; "" none.
+static func _clearest_liquid(safe: Dictionary) -> String:
+	var mats: Dictionary = safe.get("materials", {})
+	var best := ""
+	var clear := -1.0
+	for t in safe.get("things", []):
+		for pd in PainterTools._leaf_parts((t as Dictionary)["parts"]):
+			var m: Dictionary = mats.get(String((pd as Dictionary).get("material", "")), {})
+			if String(m.get("kind", "")) == "liquid" and float(m.get("clarity", 0.0)) > clear:
+				clear = float(m.get("clarity", 0.0))
+				best = String((t as Dictionary)["name"])
+	return best
+
+
+## A thing on table [param safe] all of cloth that nothing is taken from: where a tool is dried; "" none.
+static func _towel(safe: Dictionary) -> String:
+	var mats: Dictionary = safe.get("materials", {})
+	for t in safe.get("things", []):
+		var leaves := PainterTools._leaf_parts((t as Dictionary)["parts"])
+		var cloth := not leaves.is_empty()
+		for pd in leaves:
+			if String((mats.get(String((pd as Dictionary).get("material", "")), {}) as Dictionary).get("kind", "")) != "fabric" or (pd as Dictionary).has("work"):
+				cloth = false
+		if cloth:
+			return String((t as Dictionary)["name"])
+	return ""
 
 
 ## A step's tools stop answering, and what they built is given back.
@@ -975,7 +1337,7 @@ func say_prompt(who: String) -> Dictionary:
 			misses = Array(DataPath.strings((check as Dictionary).get("faults", [])))
 	var p := TablePrompts.reader(String(spec.get("title", "")), String(spec.get("brief", "")),
 		_plan(), who, said, drawn, beats, not images.is_empty(), TableEpisode.archive(episode.show, episode.seed), names,
-		_voices(), remark, link, misses, _acts_of(_beat_of("say:" + who, episode.cardless())))
+		_voices(), remark, link, misses, _acts_of(_beat_of("say:" + who, episode.cardless())), _said_word())
 	p["images"] = images
 	return p
 
@@ -1015,8 +1377,11 @@ func _acts_of(beat: String) -> Array:
 	# ...WHAT IS PAINTED TAKES WHAT ITS STROKES TAKE ([Skins]): a reader is told it, and its words leave room for it
 	if episode.has("skin"):
 		var doc: Variant = episode.read_json("skin")
+		var all_acts: Variant = episode.read_json("acts")
+		var folded := Skins.folded_coats((all_acts as Dictionary).get("acts", []) if all_acts is Dictionary else [], doc if doc is Dictionary else {})
 		for a in acts:
-			var natural := Skins.act_natural(a as Dictionary, doc if doc is Dictionary else {}, episode.read_json("table"))
+			var natural := Skins.act_natural(a as Dictionary, doc if doc is Dictionary else {}, episode.read_json("table"),
+				FileAccess.file_exists(episode.dir.path_join("face_ref.png")), folded)
 			if natural > 0.0:
 				(a as Dictionary)["_natural"] = natural
 				(a as Dictionary)["length"] = natural
@@ -1135,6 +1500,8 @@ func _land(step: String, res: Dictionary) -> void:
 				err = _land_plan(String(res.get("text", "")))
 			"design":
 				err = _land_design(step, String(res.get("text", "")))
+			"layers":
+				err = _land_layers(String(res.get("text", "")))
 			"check":
 				err = _land_check(step, String(res.get("text", "")))
 			"say":
@@ -1142,7 +1509,7 @@ func _land(step: String, res: Dictionary) -> void:
 				var beat_acts := _acts_of(_beat_of(step, episode.cardless()))
 				var cues: Array = beat_acts.map(func(a: Dictionary) -> String: return String(a["name"]))
 				var t := own_voices(clean_spoken(String(res.get("text", "")), cues), _voices(), _reader_name())
-				t = fit_silence(t, beat_acts)
+				t = fit_silence(t, beat_acts, _said_word())
 				err = "the reader wrote nothing speakable" if t.split(" ", false).size() < (1 if step.split(":")[1].is_valid_int() else 20) \
 					else episode.write_text(step, t)
 			"image":
@@ -1151,6 +1518,8 @@ func _land(step: String, res: Dictionary) -> void:
 					err = _land_height()
 				if err.is_empty() and step == "image:face":
 					err = _land_face()
+				if err.is_empty() and step.begins_with("image:layer:"):
+					err = _land_layer(step)
 			"model":
 				err = _land_model(String(res.get("text", "")))
 				if not err.is_empty() and had_tools:
@@ -1617,6 +1986,11 @@ func _voices() -> Array:
 	return out
 
 
+## How long a word takes the show's reader to say ([method ReadingCast.said_word], handed in the spec): what passages are written to.
+func _said_word() -> float:
+	return float(spec.get("said_word", TablePrompts.SAID_WORD))
+
+
 ## The reader's own name in the show's document (its first voice), or empty when it has none.
 func _reader_name() -> String:
 	var all: Array = spec.get("voices", [])
@@ -1668,7 +2042,7 @@ static func voice_marks_only(text: String, acts: Array = []) -> String:
 ## that long): a passage whose words and silences come to less than the least its acts can be hurried to has the difference added as
 ## a silence before its last sentence - so the work never runs on past the talk, and the talk is never quickened. It adds nothing to
 ## a passage whose acts have no such floor, or that gives them room.
-static func fit_silence(text: String, acts: Array) -> String:
+static func fit_silence(text: String, acts: Array, said_word := TablePrompts.SAID_WORD) -> String:
 	var least := 0.0
 	for a in acts:
 		least += float((a as Dictionary).get("_natural", 0.0)) * SILENCE_FITS
@@ -1678,7 +2052,7 @@ static func fit_silence(text: String, acts: Array) -> String:
 	var quiet := 0.0
 	for m in Manuscript._rx(CardReading.QUIET_MARK).search_all(text):
 		quiet += float(m.get_string(1))
-	var short := least - float(words) * TablePrompts.SAID_WORD - quiet
+	var short := least - float(words) * said_word - quiet
 	if short < SILENCE_LEAST:
 		return text
 	short = minf(short, CardReading.QUIET_MOST)

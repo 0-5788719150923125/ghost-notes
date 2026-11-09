@@ -595,7 +595,8 @@ func resolved_filters() -> Dictionary:
 
 
 ## PIN [param key] AS THE MEDIUM while [param by] is up ([member medium_override]): a mode's card that is its
-## medium (the Letter's, the Proof's desk, the card table, the Actor), as it enters the tree.
+## medium (the Proof's desk, the card table, the Actor), as it enters the tree. (A Letter and a Dispatch desk pinned theirs
+## too, until they became the Medium card's formats, 2026-11-09: a format IS [member medium].)
 func pin_medium(key: String, by: Object) -> void:
 	medium_override = key
 	_pinned_by = by.get_instance_id()

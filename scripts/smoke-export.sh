@@ -1,16 +1,24 @@
 #!/usr/bin/env bash
 # Start the exported app from outside the project with an empty user profile.
 # Linux: the .x86_64. Windows (from Git Bash, as on a CI runner): the .exe. It is a GUI program
-# with no stdout to read, so its words are read from the engine's own --log-file.
+# with no stdout to read, so its words are read from the engine's own --log-file. macOS: the
+# unpacked .app, whose program is the one file in Contents/MacOS.
+#
+# macOS keeps user:// under $HOME/Library/Application Support, so HOME is pointed at the empty
+# profile as well as XDG. It has no GNU `timeout` either: Perl's alarm stands in for it there.
 set -uo pipefail
 
 if [ "$#" -ne 1 ]; then
-	echo "usage: scripts/smoke-export.sh path/to/ghost-notes-linux.x86_64 (or ghost-notes.exe)" >&2
+	echo "usage: scripts/smoke-export.sh path/to/ghost-notes-linux.x86_64 (or ghost-notes.exe, or Ghost Notes.app)" >&2
 	exit 2
 fi
 
 artifact=$(realpath "$1")
-if [ ! -x "$artifact" ]; then
+program="$artifact"
+if [ -d "$artifact" ] && [[ "$artifact" == *.app ]]; then
+	program=$(find "$artifact/Contents/MacOS" -maxdepth 1 -type f -perm -u+x | head -n 1)
+fi
+if [ -z "$program" ] || [ ! -f "$program" ] || [ ! -x "$program" ]; then
 	echo "smoke-export.sh: no executable at $artifact" >&2
 	exit 2
 fi
@@ -19,7 +27,7 @@ profile=$(mktemp -d)
 trap 'rm -rf "$profile"' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-mkdir -p "$profile/data" "$profile/config" "$profile/cache" "$profile/work"
+mkdir -p "$profile/data" "$profile/config" "$profile/cache" "$profile/work" "$profile/home"
 log="$profile/run.log"
 note="$profile/work/cards-note.md"
 engine=()
@@ -29,6 +37,8 @@ case "$artifact" in
 		note=$(cygpath -m "$note")
 		engine=(--log-file "$(cygpath -m "$profile/engine.log")")
 		isolate=(APPDATA="$(cygpath -w "$profile/data")" LOCALAPPDATA="$(cygpath -w "$profile/cache")") ;;
+	*.app)
+		isolate+=(HOME="$profile/home") ;;
 esac
 cat >"$profile/work/cards-note.md" <<'EOF'
 ---
@@ -41,9 +51,20 @@ ghost:
 An exported note with a Cards block.
 EOF
 
+## Run "$@" for at most $1 seconds.
+within() {
+	local seconds=$1
+	shift
+	if command -v timeout >/dev/null 2>&1; then
+		timeout --foreground "$seconds" "$@"
+	else
+		perl -e 'alarm shift; exec @ARGV or die "smoke-export.sh: cannot run $ARGV[0]: $!\n"' "$seconds" "$@"
+	fi
+}
+
 (
 	cd "$profile/work" || exit 2
-	env "${isolate[@]}" timeout --foreground 30 "$artifact" --headless "${engine[@]}" -- \
+	within 30 env "${isolate[@]}" "$program" --headless "${engine[@]}" -- \
 		--export-smoke --export-smoke-note "$note"
 ) >"$log" 2>&1
 status=$?

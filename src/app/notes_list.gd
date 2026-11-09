@@ -18,7 +18,7 @@ class_name NotesList
 ##
 ## NEW MAKES A NOTE, AND THERE IS ONE KIND (2026-10-12, the user: "'New' has no options at all.
 ## Every note would open in exactly the same way"): its words and nothing else. What it becomes is
-## what "+" attaches to it inside ([Components]) - a song, a Picture, a Voice, a show of cards - so
+## what "+" attaches to it inside ([Components]) - a song, a Medium, a Voice, a show of cards - so
 ## the list never asks what a note is going to be. It offered a menu of the old modes until then,
 ## which was a mode switch with the word "template" on it.
 ##

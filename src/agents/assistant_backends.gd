@@ -20,13 +20,27 @@ class_name AssistantBackends
 ## shell ever parses it, and Windows' command-line quoting - which does not escape quotes
 ## inside an argument - never sees it.
 
-## Key -> display label + the [Deps] row that resolves its binary. Keys are what
-## `[assistant] backend` in ghost.cfg stores (the picker in assistant.gd); "claude_cli" predates this
-## file and must never change, or every saved choice and entry would stop resolving.
+## Key -> display label, the short `name` the agent picker shows, the [Deps] row that resolves its binary, and the
+## `writer`: the [TextGen] row whose models and reasoning levels it offers, so the Assistant is chosen with the same
+## agent, model and level a writer is ([AgentPick], the user 2026-11-07: "Rather than re-implementing, I think it would be
+## preferable to use the same agent interface"). Keys are what `[assistant] backend` in ghost.cfg stores; "claude_cli"
+## predates this file and must never change, or every saved choice and entry would stop resolving.
+##
+## A WRITER IS AN ASSISTANT ONLY WHERE ITS CLI IS AN AGENT that edits the working tree with tools of its own. Bedrock
+## is not: the AWS CLI makes one `converse` call, with no tools and no loop to run them.
 const REGISTRY := {
-	"claude_cli": {"label": "Claude Code CLI", "dep": "claude"},
-	"codex_cli": {"label": "Codex CLI (OpenAI)", "dep": "codex"},
+	"claude_cli": {"label": "Claude Code CLI", "name": "Claude", "dep": "claude", "writer": "claude",
+		"blurb": "Claude Code in this repository with its own tools and every permission, reading CLAUDE.md as an interactive session does. Uses the Claude Code login."},
+	"codex_cli": {"label": "Codex CLI (OpenAI)", "name": "Codex", "dep": "codex", "writer": "codex",
+		"blurb": "Codex in this repository with full access, no sandbox and no approvals. Uses the Codex login."},
+	"grok_cli": {"label": "Grok Build CLI (xAI)", "name": "Grok", "dep": "grok", "writer": "grok",
+		"blurb": "Grok Build in this repository with its own tools, every one approved. Uses the Grok login (grok login)."},
 }
+## THE MODEL WHEN NONE IS CHOSEN, where the CLI's own would not be what the picker says: a writer's Claude "Default" is
+## Opus (TextGen.Claude), and `claude -p` left to itself takes the author's own default instead.
+const CLAUDE_DEFAULT := "opus"
+## Codex's level when none is chosen: the writer's "Default (medium ...)".
+const CODEX_EFFORT := "medium"
 
 ## An entry saved before backends were recorded was dispatched to Claude, the only
 ## backend there was.
@@ -45,11 +59,28 @@ static func dep(key: String) -> String:
 	return String((REGISTRY.get(key, REGISTRY[LEGACY]) as Dictionary)["dep"])
 
 
-## The CLI's own argument vector for one run, the prompt excluded (it goes on stdin).
-## [param session] is empty for a fresh run and the saved session/thread id for a resume or
-## follow-up.
-static func argv(key: String, bin: String, session: String, repo_root: String) -> PackedStringArray:
+## The [TextGen] row whose models and levels [param key] offers.
+static func writer(key: String) -> String:
+	return String((REGISTRY.get(key, REGISTRY[LEGACY]) as Dictionary)["writer"])
+
+
+## A fresh session id (a random UUID, version 4) for a CLI that is handed one rather than making its own.
+static func new_session_id() -> String:
+	var b := Crypto.new().generate_random_bytes(16)
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	var h := b.hex_encode()
+	return "%s-%s-%s-%s-%s" % [h.substr(0, 8), h.substr(8, 4), h.substr(12, 4), h.substr(16, 4), h.substr(20, 12)]
+
+
+## The CLI's own argument vector for one run, the prompt excluded (it goes on stdin, or - for Grok, which reads no
+## stdin - from the file it is in). [param session] is empty for a fresh run and the saved session/thread id for a
+## resume or follow-up. [param run]: `model` and `effort` as the picker holds them ("" each: its "Default"),
+## `prompt_path` (Grok) and `fresh` (Grok: the id a fresh run is to take, so it is known before the run says it).
+static func argv(key: String, bin: String, session: String, repo_root: String, run := {}) -> PackedStringArray:
 	var a := PackedStringArray([bin])
+	var model := String(run.get("model", ""))
+	var effort := String(run.get("effort", ""))
 	match key:
 		"codex_cli":
 			# `resume` is its own subcommand with a narrower flag set - no -C, which is why
@@ -58,15 +89,32 @@ static func argv(key: String, bin: String, session: String, repo_root: String) -
 			if not session.is_empty():
 				a.append_array(["resume", session])
 			a.append_array(["--json", "--skip-git-repo-check",
-				"--dangerously-bypass-approvals-and-sandbox"])
+				"--dangerously-bypass-approvals-and-sandbox",
+				"-c", "model_reasoning_effort=" + (effort if not effort.is_empty() else CODEX_EFFORT)])
+			if not model.is_empty():
+				a.append_array(["-m", model])
 			if session.is_empty():
 				a.append_array(["-C", repo_root])
 			a.append("-")         # the prompt: read it from stdin
+		"grok_cli":
+			# Claude Code's own stream format (`streaming-messages-json`), so it reads as Claude's does
+			a.append_array(["--prompt-file", String(run.get("prompt_path", "")), "--cwd", repo_root,
+				"--always-approve", "--output-format", "streaming-messages-json"])
+			if not model.is_empty():
+				a.append_array(["-m", model])
+			if not effort.is_empty():
+				a.append_array(["--effort", effort])
+			if not session.is_empty():
+				a.append_array(["--resume", session])
+			elif not String(run.get("fresh", "")).is_empty():
+				a.append_array(["-s", String(run["fresh"])])
 		_:
-			# Sonnet 5, default (auto) effort - the CLI's --effort has no "auto" value, so it
-			# is simply omitted. stream-json needs --verbose alongside -p.
-			a.append_array(["-p", "--model", "sonnet", "--dangerously-skip-permissions",
-				"--output-format", "stream-json", "--verbose"])
+			# The level left out when none is chosen: the CLI's --effort has no "auto", and unset it
+			# takes the author's own. stream-json needs --verbose alongside -p.
+			a.append_array(["-p", "--model", model if not model.is_empty() else CLAUDE_DEFAULT])
+			if not effort.is_empty():
+				a.append_array(["--effort", effort])
+			a.append_array(["--dangerously-skip-permissions", "--output-format", "stream-json", "--verbose"])
 			if not session.is_empty():
 				a.append_array(["--resume", session])
 	return a
@@ -83,15 +131,18 @@ static func session_of(key: String, evt: Dictionary) -> String:
 			return str(evt.get("session_id", "")) if evt.has("session_id") else ""
 
 
-## Dig an id out of raw captured text, for a run whose id was never saved.
+## Dig an id out of raw captured text, for a run whose id was never saved: the first that is not empty (Grok's opening
+## event carries an empty one).
 static func recover_session(key: String, text: String) -> String:
 	var k := "\"thread_id\":\"" if key == "codex_cli" else "\"session_id\":\""
 	var i := text.find(k)
-	if i < 0:
-		return ""
-	i += k.length()
-	var j := text.find("\"", i)
-	return text.substr(i, j - i) if j > i else ""
+	while i >= 0:
+		i += k.length()
+		var j := text.find("\"", i)
+		if j > i:
+			return text.substr(i, j - i)
+		i = text.find(k, i)
+	return ""
 
 
 ## One event -> a short "what is it doing now" line, or "" for events not worth showing.
@@ -182,19 +233,32 @@ static func result(key: String, events: Array) -> Dictionary:
 				out.usage = "%s in (%s cached) · %s out" % [_k(int(tokens.get("input_tokens", 0))),
 					_k(int(tokens.get("cached_input_tokens", 0))), _k(int(tokens.get("output_tokens", 0)))]
 		_:
+			# Claude Code's stream, and Grok's in the same format: its result may carry no `result`
+			# text (the last thing it said is the reply then), and says what went wrong in `errors`
 			var parsed: Dictionary = {}
+			var last_text := ""
 			for e in events:
 				var evt: Dictionary = e
-				if out.session == "" and evt.has("session_id"):
+				if out.session == "" and String(evt.get("session_id", "")) != "":
 					out.session = str(evt.get("session_id", ""))
-				if String(evt.get("type", "")) == "result":
-					parsed = evt
-			if not parsed.is_empty() and parsed.get("is_error", true) == false and parsed.has("result"):
+				match String(evt.get("type", "")):
+					"result":
+						parsed = evt
+					"assistant":
+						for blk in (evt.get("message", {}) as Dictionary).get("content", []):
+							if blk is Dictionary and String(blk.get("type", "")) == "text" \
+									and not String(blk.get("text", "")).strip_edges().is_empty():
+								last_text = String(blk["text"])
+			if not parsed.is_empty() and parsed.get("is_error", true) == false \
+					and (parsed.has("result") or not last_text.is_empty()):
 				out.ok = true
-				out.response = str(parsed.get("result", ""))
-				out.session = str(parsed.get("session_id", out.session))
+				out.response = str(parsed.get("result", last_text))
+				if String(parsed.get("session_id", "")) != "":
+					out.session = str(parsed["session_id"])
 				out.cost_usd = float(parsed.get("total_cost_usd", 0.0))
 				out.usage = "$%.3f" % out.cost_usd
+			elif parsed.get("errors") is Array and not (parsed["errors"] as Array).is_empty():
+				out.error = "; ".join(PackedStringArray((parsed["errors"] as Array).map(func(x: Variant) -> String: return str(x))))
 	return out
 
 

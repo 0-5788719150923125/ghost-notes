@@ -17,10 +17,11 @@ func _init() -> void:
 
 
 ## WHAT IT HOLDS: the picture at [param path], titled [param heading], [param words] under it; then the bar - "version
-## [param at] + 1 of [param count]" and [param note] after it, between a ‹ and a › that call [param step] with -1 or 1
-## (left out where [param step] is not valid) - and [param extras], buttons its owner made, after them.
+## [param at] + 1 of [param count]" (or [param counted]'s word for what is stepped through) and [param note] after it, between a ‹
+## and a › that call [param step] with -1 or 1 (left out where [param step] is not valid) - and [param extras], buttons its owner
+## made, after them.
 func fill(heading: String, path: String, words: String, at: int, count: int, note := "", step := Callable(),
-		extras: Array = []) -> void:
+		extras: Array = [], counted := "version") -> void:
 	clear()
 	title = heading
 	var bg := PanelContainer.new()
@@ -56,7 +57,7 @@ func fill(heading: String, path: String, words: String, at: int, count: int, not
 			bar.add_child(b)
 		if dir < 0:
 			var v := Label.new()
-			v.text = "version %d of %d%s" % [at + 1, count, ("  " + note) if not note.is_empty() else ""]
+			v.text = "%s %d of %d%s" % [counted, at + 1, count, ("  " + note) if not note.is_empty() else ""]
 			bar.add_child(v)
 	for b in extras:
 		bar.add_child(b as Control)

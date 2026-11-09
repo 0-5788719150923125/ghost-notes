@@ -135,7 +135,7 @@ func _init(width := 380.0) -> void:
 
 
 ## What other furniture keeps clear of: the scrub bar starts to the right of an open panel.
-const GROUP := &"side_panel"
+const GROUP := Shell.PANELS
 
 const CardScript := preload("res://src/ui/card.gd")
 const CardRowScript := preload("res://src/ui/card_row.gd")

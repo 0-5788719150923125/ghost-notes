@@ -96,7 +96,7 @@ var _attached: Array = []
 ## The note's own cards this workspace shows ([constant HOSTED]), by block.
 var _block_cards := {}
 ## Of a note's component cards, the ones the lab can show: its show is the scenes, full frame, so
-## no Picture and no Storyboard - a Look over them, and the holds at either end.
+## no Medium and no Storyboard - a Look over them, and the holds at either end.
 const HOSTED := ["look", "bookends"]
 
 # Who contributed to the current candidate and how much - what

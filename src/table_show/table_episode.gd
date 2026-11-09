@@ -184,6 +184,8 @@ func file_of(step: String) -> String:
 			return dir.path_join("youtube.json")
 		"layout":
 			return dir.path_join(DealerTools.LAYOUT)
+		"layers":
+			return dir.path_join("layers.json")
 	return ""
 
 
@@ -294,6 +296,7 @@ func steps() -> Array:
 			out.append("image:height")
 		if wants_face():
 			out.append_array(["image:face", "check:face"])
+			out.append_array(_layer_steps())
 		if wants_skin():
 			out.append("skin")
 		if not work_plan().is_empty():
@@ -318,6 +321,7 @@ func steps() -> Array:
 	var works := work_plan()
 	if wants_face():
 		out.append_array(["image:face", "check:face"])
+		out.append_array(_layer_steps())
 	if wants_skin():
 		out.append("skin")
 	if not works.is_empty():
@@ -336,6 +340,30 @@ func steps() -> Array:
 			out.append("say:work:%d" % k)
 	out.append_array(["say:close", "script"])
 	return out
+
+
+## THE PICTURE PAINTED FIRST, AGAIN IN LAYERS (the user, 2026-11-09: "generate MULTIPLE images, each one including changes from the
+## last ... image 1 would be the white base, image 2 would include the rust regions, image 3 would include the black lines"; the lab,
+## lab/paint/layers_gen.py): the order it is painted in, written by the art director looking at it (`layers`, `layers.json`), then each
+## layer painted over the one before, as it is in the picture (`image:layer:K`, `layer_K.png`) - so what each layer lays is exactly what
+## changed, never guessed from colors. Its layers are listed once the order is written.
+func _layer_steps() -> Array:
+	var out := ["layers"]
+	for k in range(1, layer_count() + 1):
+		out.append("image:layer:%d" % k)
+	return out
+
+
+## How many layers the picture painted first is painted in (`layers.json`): 0 before the order is written.
+func layer_count() -> int:
+	return layers().size()
+
+
+## The layers, in order: `[{name, add, soft}]` (`layers.json`), [] before they are written.
+func layers() -> Array:
+	var d: Variant = read_json("layers") if has("layers") else null
+	var list: Variant = (d as Dictionary).get("layers", []) if d is Dictionary else []
+	return (list as Array).filter(func(l: Variant) -> bool: return l is Dictionary) if list is Array else []
 
 
 ## A GAME PLAYED AT THE TABLE (next/tabletop.md): the secret preparation, the table, the session played a stretch at a time, THEN what it turned out to need painted - a map of a boat, if there came to be a
@@ -470,6 +498,10 @@ func needs(step: String) -> Array:
 			if String(parts[1]) == "face":
 				# what is painted, painted first ON the surface the table stands it on (feedback 0023)
 				return ["plan", "table"]
+			if parts.size() == 3 and String(parts[1]) == "layer":
+				# ...a layer painted over the one before it, toward the picture, in the order written
+				var k := int(parts[2])
+				return ["layers", "image:face"] + (["image:layer:%d" % (k - 1)] if k > 1 else [])
 			return ["plan"]
 		"say":
 			var who := String(parts[1])
@@ -502,11 +534,19 @@ func needs(step: String) -> Array:
 			return out
 		"script":
 			return ["say:close"]
+		"layers":
+			# the order is written looking at the picture, once it is passed
+			return ["image:face", "check:face"]
 		"model":
 			return ["plan"]
 		"skin":
 			# what is painted is designed on the surface the table stands it on - copied from the face painted on it first, looked at
-			return ["plan", "table"] + (["image:face", "check:face"] if wants_face() else [])
+			# ...and, where it was painted again in layers, every layer: the painter at the table lays them (next/face_layers.md)
+			var out := ["plan", "table"] + (["image:face", "check:face", "layers"] if wants_face() else [])
+			if wants_face():
+				for k in range(1, layer_count() + 1):
+					out.append("image:layer:%d" % k)
+			return out
 		"table":
 			# the table is set from the plan, LOOKING AT the cloth it stands on - and at the room, which
 			# its light must agree with (where the windows are, which side the sun comes from)

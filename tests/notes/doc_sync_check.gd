@@ -407,22 +407,26 @@ func _check_outside_edit_survives() -> void:
 	_doc._autosave_for_test = false
 
 
-## THE PICTURE TRAVELS WITH THE DOCUMENT - medium, Look filters and the Director's dials. They
+## THE PICTURE TRAVELS WITH THE DOCUMENT - the Medium's format, Look filters and the Director's dials. They
 ## lived only in ghost.cfg, so a chapter opened on another machine came up in that machine's
-## medium and look. Set here, saved, changed, and read back by the next Play.
+## medium and look. Set here, saved, changed, and read back by the next Play. Only what the format
+## uses is kept (THE CONTROL: a notebook cuts no scenes, so no scene hold is written).
 func _check_the_picture_travels() -> void:
 	var was := {"medium": Director.medium, "filters": Director.filters.duplicate(),
-		"pacing": Director.pacing, "hand": Director.hand}
+		"pacing": Director.pacing, "camera": Director.camera, "hand": Director.hand}
 	Director.set_medium("notebook")
 	Director.set_hand("patrick")
 	Director.set_filter("static", 0.3)
 	Director.set_filter("vignette", 0.0)
-	Director.set_pacing(1.4)
+	Director.set_camera(1.4)
+	Director.set_pacing(1.6)
 	_ok(_doc.save(), "saving the picture into the document failed")
 	var raw := FileAccess.get_file_as_string(_path)
-	_ok(raw.contains("picture:") and raw.contains("medium: notebook"), "the picture was not written into the frontmatter")
+	_ok(raw.contains("medium:") and raw.contains("format: notebook"), "the medium was not written into the frontmatter")
+	_ok(not raw.contains("scene_hold"), "a notebook's block keeps a scene hold it does not use")
 	Director.set_medium("full")
 	Director.set_filter("static", 0.0)
+	Director.set_camera(1.0)
 	Director.set_pacing(1.0)
 	Director.set_hand("kalam")
 	# as a note opened from nothing builds the card: the dial and its number both at the registry's default
@@ -434,12 +438,12 @@ func _check_the_picture_travels() -> void:
 	_doc.pull()
 	_ok(Director.medium == "notebook", "the medium did not come back from the document (%s)" % Director.medium)
 	_ok(is_equal_approx(Director.filter_amount("static"), 0.3), "the Look did not come back from the document")
-	_ok(is_equal_approx(Director.pacing, 1.4), "the scene hold did not come back from the document")
+	_ok(is_equal_approx(Director.camera, 1.4), "the camera did not come back from the document")
 	_ok(Director.hand == "patrick", "the handwriting did not come back from the document (%s)" % Director.hand)
-	var pic: PictureCard = _ed._block_cards.get("picture")
+	var pic: MediumCard = _ed._block_cards.get("medium")
 	_ok(pic._hand_pick.get_item_text(pic._hand_pick.selected) == "Patrick",
 		"the panel does not show the document's handwriting")
-	_ok(is_equal_approx(pic._scene_hold.value, 1.4), "the panel does not show the document's scene hold")
+	_ok(is_equal_approx(pic._camera.value, 1.4), "the panel does not show the document's camera")
 	_ok((row["box"] as CheckBox).button_pressed, "the panel does not show the document's filter")
 	_ok(is_equal_approx((row["slider"] as HSlider).value, 0.3), "the dial does not show the document's filter amount")
 	_ok((row["readout"] as Label).text == "0.30",
@@ -449,10 +453,11 @@ func _check_the_picture_travels() -> void:
 	for k in Filters.REGISTRY:
 		Director.set_filter(k, float((was["filters"] as Dictionary).get(k, 0.0)))
 	Director.set_pacing(float(was["pacing"]))
+	Director.set_camera(float(was["camera"]))
 	Director.set_hand(String(was["hand"]))
 
 
-## ONE BLOCK PER COMPONENT (next/notes.md step 5): under `ghost:` the voice, the picture, the
+## ONE BLOCK PER COMPONENT (next/notes.md step 5): under `ghost:` the voice, the medium, the
 ## pictures' look, the Look and the bookends are siblings - each in its own block, none inside
 ## another, nothing of the old one-block-per-panel shape - and a block this panel has no card for
 ## is carried through a save untouched.
@@ -470,17 +475,17 @@ func _check_one_block_per_component() -> void:
 	_ok(_doc.save(), "saving every block failed")
 	var data: Dictionary = FrontMatter.read_block(FileAccess.get_file_as_string(_path)).data
 	var keys := data.keys()
-	_ok(keys.has("voice") and keys.has("picture") and keys.has("illustrations") and keys.has("look")
+	_ok(keys.has("voice") and keys.has("medium") and keys.has("illustrations") and keys.has("look")
 		and keys.has("bookends"), "the blocks are not all siblings under ghost: %s" % str(keys))
 	_ok(not keys.has("generative"), "the old one-block-per-panel key is still written: %s" % str(keys))
-	var pic: Dictionary = data.get("picture", {})
+	var pic: Dictionary = data.get("medium", {})
 	_ok(not pic.has("filters") and not pic.has("intro") and not pic.has("outro"),
-		"the picture block still holds the Look or the bookends: %s" % str(pic.keys()))
+		"the medium block still holds the Look or the bookends: %s" % str(pic.keys()))
 	_ok((data.get("look", {}) as Dictionary).get("filters") is Dictionary, "the Look is not its filters")
 	var ends: Dictionary = data.get("bookends", {})
 	_ok(ends.has("intro") and ends.has("outro"), "the bookends block lacks a hold: %s" % str(ends))
 	var voice: Dictionary = data.get("voice", {})
-	_ok(voice.get("voices") is Dictionary and voice.has("turn") and not voice.has("picture"),
+	_ok(voice.get("voices") is Dictionary and voice.has("turn") and not voice.has("medium"),
 		"the voice block is not the cast alone: %s" % str(voice.keys()))
 	_ok(str(data.get("synthesis", {})) == str({"lineage": [7, 9]}),
 		"a block this panel does not own was not carried through: %s" % str(data.get("synthesis")))
@@ -488,7 +493,7 @@ func _check_one_block_per_component() -> void:
 
 ## THE VOICE IS THE DOCUMENT'S, WHICHEVER PANEL SPEAKS IT: the cards_panel panel opens this chapter and
 ## its cast is the cast written here - it used to keep a copy of its own, and a chapter
-## opened in it had no voices. And what the cards_panel panel then writes leaves the picture alone.
+## opened in it had no voices. And what the cards_panel panel then writes leaves the medium alone.
 func _check_the_voice_is_the_documents() -> void:
 	var cards_panel = load("res://src/reading/reading_panel.gd").new()
 	cards_panel.workspace = "table"
@@ -513,7 +518,7 @@ func _check_the_voice_is_the_documents() -> void:
 	var before: Dictionary = FrontMatter.read_block(FileAccess.get_file_as_string(_path)).data
 	_ok(cards_panel._doc.save(), "the cards_panel panel could not save into the chapter")
 	var after: Dictionary = FrontMatter.read_block(FileAccess.get_file_as_string(_path)).data
-	_ok(str(after.get("picture")) == str(before.get("picture"))
+	_ok(str(after.get("medium")) == str(before.get("medium"))
 		and str(after.get("illustrations")) == str(before.get("illustrations")),
 		"the cards_panel panel's save touched blocks it has no card for")
 	_ok(after.get("table") is Dictionary and not (after["table"] as Dictionary).has("voices"),
@@ -561,14 +566,14 @@ func _check_the_look_travels() -> void:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(ref))
 
 
-## A LETTER'S PICTURES' LOOK IS ITS NOTE'S TOO (2026-10-27: the Letter card showed the style and the
+## A LETTER'S PICTURES' LOOK IS ITS NOTE'S TOO (2026-10-27: the Letter's card showed the style and the
 ## note had none - the Letter kept no `illustrations:` block): written into the letter's frontmatter
 ## with the painter's model and effort, and an edit made outside (an agent's) is the library's, and
 ## the card's, at the next Play.
 func _check_a_letters_look_travels() -> void:
 	var path := DIR + "/letter.md"
 	var fh := FileAccess.open(path, FileAccess.WRITE)
-	fh.store_string("---\ntitle: A Letter\nghost:\n  voice: {}\n  letter: {}\n---\n\nDear Friend,\n\nYours,\n")
+	fh.store_string("---\ntitle: A Letter\nghost:\n  voice: {}\n  medium:\n    format: letter\n---\n\nDear Friend,\n\nYours,\n")
 	fh.close()
 	Illustrations.use_for_test({}, false)
 	var letter = load("res://src/reading/reading_panel.gd").new()
@@ -591,7 +596,8 @@ func _check_a_letters_look_travels() -> void:
 	_ok(str((look.get("style", {}) as Dictionary).get("image", "")) == "Pen and wash: \"loose\"."
 		and str(look.get("painter_model", "")) == "gpt-image-1" and str(look.get("painter_effort", "")) == "high",
 		"the letter's look was not written into its note: %s" % str(data.keys()))
-	_ok(not data.has("picture"), "keeping a letter's look gave it a Picture: %s" % str(data.keys()))
+	_ok(String((data.get("medium", {}) as Dictionary).get("format", "")) == "letter",
+		"keeping a letter's look changed what it is shown in: %s" % str(data.get("medium")))
 	# AN AGENT EDITS THE NOTE: the style and the effort, in the file, with the app's look unchanged
 	var raw := FileAccess.get_file_as_string(path)
 	look["style"] = {"image": "Charcoal on gray paper."}

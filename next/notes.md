@@ -1608,6 +1608,37 @@ Gates: components_check and notes_list_check (rewritten), teardown_check (two ne
 storyboard_check and storyboard_editor_check (new).
 
 
+### The Medium card (2026-11-09)
+
+The user, of a chapter shown on a Tablet: "two almost-duplicate cards: Picture and Pictures. That is confusing." And,
+choosing between mediums as components and one card: "the 'Picture' card becomes 'Medium', and we would move Dispatch
+Desk and [Letter] modes into that card ... for the extra options we need for each of those mediums... we could just
+dynamically render them into the Medium card ... I already didn't like the fact that Journal and Dispatch Desk were
+top-level components." **Status: built; the gates below pass. Not yet seen by the user in the app.**
+
+- **One card, `medium`** ([MediumCard], block `medium:`, the `medium` family's green; the Pictures card keeps its
+  orange). Its picker is **Format** - Auto, Full frame, Comic book, Novel, Notebook, Tablet, Letter, Dispatch desk, every
+  `Medium.REGISTRY` row no component owns - and under it the SHARED ROWS by each format's `uses`: Frame, Scene hold and
+  Flourishes (`scenes`: Full frame and the comic only - the Novel, Notebook and Tablet "have no scenes to change to",
+  and showed both), Camera, Handwriting (the Notebook's and the Letter's: one hand row, `handwriting`; the voice's Ink
+  is `ink`, the Notebook's alone), Films. Then THE FORMAT'S OWN ROWS, a row's `card` by path ([LetterFormat],
+  [DispatchFormat]). The block holds only what the format uses, flat.
+- **What stays a component makes something** - Table and Proof the words, the Actor a person and their voice - and
+  brings its own medium, pinned. A way of SHOWING the words is a format. The Letter and the Dispatch desk were
+  components with a card that pinned their medium; now their format IS the Director's medium, set from the block.
+- **A format with rows of its own hands the reading its walk and publish**, so picking one or leaving one writes the
+  note and opens it again (`ctx.reshape`); every other pick is live. A format the note cannot have (a Letter whose
+  Voice was detached) is kept as it was, and says so.
+- **The notes moved once** (`main._adopt_old_media`, `Components.adopted_medium`; remove once run): `picture:`
+  (its `medium:` the format), `letter:` and `dispatch:` became `medium:` where they stood, over the notes list at the
+  first launch after.
+- **Not built:** one desk number shared by the Letter, the Dispatch desk and the desks under the Novel, Notebook and
+  Tablet; the Actor as a format; a tile's chip naming the format ("Medium" for now - `ui/` cannot read the media).
+
+Gates: components_check, letter_format_check (was letter_card_check), medium_pick_check, pictures_card_check,
+doc_sync_check, notes_list_check, note_grid_check, panel_fit_check, card_fold_check, teardown_check.
+
+
 ## Questions, answered
 
 The user answered the open questions on 2026-10-06. Each answer is recorded here and carried into

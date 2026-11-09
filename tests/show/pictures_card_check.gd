@@ -10,15 +10,20 @@ extends SceneTree
 ## picture pinned to a screen (THE CONTROL: the plain image marks miss it); a tablet adds its real pages, captured, with
 ## their `url`; the full frame shows none.
 ##
-## IT COMES WITH WHAT SHOWS PICTURES ([method Components.with_parts]): beside a Picture, a Letter, a Dispatch desk - never
-## beside a voice alone or a show at a table (THE CONTROL) - and it has no × of its own, where the Letter's card has one.
+## IT COMES WITH WHAT SHOWS PICTURES ([method Components.with_parts]): beside the Medium, and beside a show at a table, whose
+## agents paint pictures of their own (2026-11-09) - never beside a voice alone (THE CONTROL) - and it has no × of its own, where
+## the Medium card has one.
 ##
-## ONE CARD: built beside a Letter's, a Dispatch desk's and a Picture's cards, none of which carries a list of pictures of
-## its own (THE CONTROL: the Pictures card holds one).
+## ONE CARD: built beside the Medium card - as a letter, a dispatch desk and a tablet - which never carries a list of
+## pictures of its own (THE CONTROL: the Pictures card holds one).
 ##
 ## IT STANDS ONLY WHILE THE MEDIUM SHOWS PICTURES: pinned to a letter, the card stands, its list the letter's pictures and
 ## not its sketch, and its Pipeline section is listed; under the full frame the card and its section are put away (THE
 ## CONTROL); under a novel both are back, the sketch with them.
+##
+## WHAT A SHOW'S AGENTS PAINTED IS SHOWN ([MadePictures], [method EpisodeFeed.made_pictures]): under the full frame, which
+## shows no pictures of the note's, the card stands while the episode has a picture its agents made, a thumbnail of it listed;
+## with none made it is put away again (THE CONTROL).
 ##
 ## GENERATE ALL IS ON THE CARD, saying how many have none - a page captured is never counted - and grayed with none to
 ## paint; read-only, it is grayed and, pressed, says why. It is the Pipeline card's Generate: one function behind both.
@@ -65,13 +70,12 @@ func _which() -> void:
 	_ok(Medium.pictures_of("full", WORDS).is_empty() and Medium.pictures_of("comic", WORDS).is_empty(), "the full frame and the comic show none")
 
 
-## IT COMES WITH WHAT SHOWS PICTURES
+## IT COMES WITH WHAT SHOWS PICTURES: the Medium (whose formats include the Letter and the Dispatch desk, 2026-11-09)
 func _comes_with() -> void:
-	for host in ["picture", "letter", "dispatch"]:
-		_ok(Components.with_parts(["text", "voice", host]).has("illustrations"), "it comes with a %s" % host)
-	_ok(not Components.with_parts(["text", "voice"]).has("illustrations") and not Components.with_parts(["text", "table", "voice"]).has("illustrations"),
-		"the control: never beside a voice alone, or a show at a table")
-	_ok(Components.attach_blocks("illustrations").is_empty() and not Components.detach_blocker("illustrations", ["text", "voice", "letter"]).is_empty(),
+	_ok(Components.with_parts(["text", "voice", "medium"]).has("illustrations"), "it comes with the Medium")
+	_ok(Components.with_parts(["text", "table", "voice"]).has("illustrations"), "...and with a show at a table, whose agents paint")
+	_ok(not Components.with_parts(["text", "voice"]).has("illustrations"), "the control: never beside a voice alone")
+	_ok(Components.attach_blocks("illustrations").is_empty() and not Components.detach_blocker("illustrations", ["text", "voice", "medium"]).is_empty(),
 		"never attached or taken off by itself")
 
 
@@ -83,19 +87,21 @@ func _one_card() -> void:
 	var panel = load("res://src/ui/side_panel.gd").new()
 	panel.detach = func(_key: String) -> void: pass
 	root.add_child(panel)
-	var have := Components.with_parts(["text", "voice", "letter"])
-	var built: Dictionary = cards.build(panel, have, {"only": ["letter", "illustrations"]})
+	var have := Components.with_parts(["text", "voice", "medium"])
+	var built: Dictionary = cards.build(panel, have, {"only": ["medium", "illustrations"], "reading": true,
+		"blocks": {"medium": {"format": "letter"}}})
 	var pictures = built.get("illustrations")
-	_ok(pictures != null and built.has("letter"), "a Letter's panel builds the Pictures card beside the Letter's: %s" % str(built.keys()))
+	_ok(pictures != null and built.has("medium") and built["medium"].own() != null,
+		"a letter's panel builds the Pictures card beside the Medium card, the Letter's rows on it: %s" % str(built.keys()))
 	if pictures == null:
 		panel.queue_free()
 		return
 	var crosses: Array = panel._detach_buttons.map(func(d: Array) -> String: return String(d[1]))
-	_ok(crosses.has("letter") and not crosses.has("illustrations"), "the Letter's card has its ×, the Pictures card none: %s" % str(crosses))
-	_ok(_lists(built["letter"]) == 0 and _lists(pictures) == 1, "the Letter's card carries no list of its own, the Pictures card one")
-	for key in ["dispatch", "picture"]:
-		var other = cards.make(key, {"reading": true})
-		_ok(_lists(other) == 0, "...nor does a %s's card" % key)
+	_ok(crosses.has("medium") and not crosses.has("illustrations"), "the Medium card has its ×, the Pictures card none: %s" % str(crosses))
+	_ok(_lists(built["medium"]) == 0 and _lists(pictures) == 1, "the Medium card with the Letter's rows carries no list of its own, the Pictures card one")
+	for fmt in ["dispatch", "tablet"]:
+		var other = cards.make("medium", {"reading": true, "blocks": {"medium": {"format": fmt}}})
+		_ok(_lists(other) == 0, "...nor does it as a %s" % fmt)
 		other.free()
 	var pin := RefCounted.new()
 	director.pin_medium("letter", pin)
@@ -114,6 +120,20 @@ func _one_card() -> void:
 	pictures._follow(false)
 	_ok(not card.visible and not section.shown() and pictures.list()._images.is_empty(),
 		"the control: under the full frame the card and its section are put away")
+	# WHAT THE EPISODE'S AGENTS PAINTED: shown whatever the medium, and the card stood for it
+	var painted := "user://pictures_card_made_check.png"
+	Image.create(8, 12, false, Image.FORMAT_RGB8).save_png(painted)
+	var feed := MadeFeed.new()
+	feed.list = [{"path": ProjectSettings.globalize_path(painted), "label": "Picture to copy", "row": "image:face", "group": ""}]
+	section.episode = func() -> EpisodeFeed: return feed
+	pictures._stand()
+	_ok(card.visible and pictures.made().visible and pictures.made().shown().size() == 1 and pictures.made()._flow.get_child_count() == 1,
+		"under the full frame the card stands for a picture the episode's agents made, its thumbnail listed")
+	feed.list = []
+	pictures._stand()
+	_ok(not card.visible and not pictures.made().visible, "the control: with none made, it is put away again")
+	section.episode = Callable()
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(painted))
 	director.pin_medium("book", pin)
 	pictures._follow(false)
 	_ok(card.visible and section.shown() and pictures.list()._images.size() == 3, "under a novel both are back, the sketch with them")
@@ -128,6 +148,14 @@ func _one_card() -> void:
 	panel.queue_free()
 	await process_frame
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(made))
+
+
+## An episode whose agents painted what the gate says.
+class MadeFeed extends EpisodeFeed:
+	var list: Array = []
+
+	func made_pictures() -> Array:
+		return list
 
 
 ## How many picture lists [param node] holds.

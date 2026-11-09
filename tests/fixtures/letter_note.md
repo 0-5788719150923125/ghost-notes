@@ -2,7 +2,8 @@
 title: A Letter Built by Hand
 ghost:
   voice: {}
-  letter: {}
+  medium:
+    format: letter
 ---
 
 Dear Friend,

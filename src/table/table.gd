@@ -1651,6 +1651,7 @@ func _build_work(spec: Dictionary) -> void:
 	var beats := maxi(CardTable.beats(_plan.pay.get("plan", {}) if _plan.pay.get("plan") is Dictionary else {}), (_plan.pay.get("cards", []) as Array).size())
 	_work.since = _plan.since
 	_work.skin_doc = _skin_json()
+	_skin_picture()
 	_work.build(raw, beats, spec.get("sound", {}) if spec.get("sound") is Dictionary else {})
 	for n in _work.notes:
 		print("ghost: card table - work: %s" % n)
@@ -1668,6 +1669,7 @@ func rework(raw: Variant) -> void:
 	_acts_mt = FileAccess.get_modified_time(path) if FileAccess.file_exists(path) else -1
 	var beats := maxi(CardTable.beats(_plan.pay.get("plan", {}) if _plan.pay.get("plan") is Dictionary else {}), (_plan.pay.get("cards", []) as Array).size())
 	_work.skin_doc = _skin_json()
+	_skin_picture()
 	_work.rebind(raw, beats)
 	if not _sched.is_empty():
 		_work.schedule(_sched, _plan.parse, _follow.said0, _follow.said1, _est, _now)
@@ -1686,6 +1688,21 @@ func _skin_json() -> Dictionary:
 			# feedback 0049, skin_paint.gdshader)
 			return j.data
 	return {}
+
+
+## THE PICTURE THE DESIGNS WERE MADE FROM ([member TableWork.skin_ref]): the episode's `face_ref.png` and the surface `face.json` says it
+## is of, read from the files as the design is. It says where each operation's paint is still wanted; every mark is still a tool's.
+func _skin_picture() -> void:
+	var dir := String(_plan.pay.get("dir", ""))
+	var path := dir.path_join("face_ref.png")
+	_work.skin_dir = dir
+	_work.skin_ref = Image.load_from_file(path) if FileAccess.file_exists(path) else null
+	_work.skin_ref_on = ""
+	var fj := dir.path_join("face.json")
+	if _work.skin_ref != null and FileAccess.file_exists(fj):
+		var j := JSON.new()
+		if j.parse(FileAccess.get_file_as_string(fj)) == OK and j.data is Dictionary:
+			_work.skin_ref_on = String((j.data as Dictionary).get("on", ""))
 
 
 ## WHAT THE THINGS REFLECT: the table and the room, caught once when the table is set (see

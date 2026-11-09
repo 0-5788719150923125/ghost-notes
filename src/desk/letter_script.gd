@@ -38,7 +38,7 @@ class_name LetterScript
 ##                                             never said ([constant UNSAID]): `like <!-- struck: morning
 ##                                             --> <!-- unspoken: mourning. -->` says "like morning."
 ##     <!-- sketch: what it shows -->          a drawing the pen makes on the page WHERE THE MARK IS - an
-##                                             agent draws it from the words as SVG ([LetterCard]), TeX's
+##                                             agent draws it from the words as SVG ([LetterFormat]), TeX's
 ##                                             figure reader lays it out - the voice waiting for the pen
 ##                                             before the next written words (a big one dashed off, [method
 ##                                             drawn_alone]); a rule is left empty under it ([constant

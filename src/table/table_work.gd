@@ -31,6 +31,13 @@ var assembly_spec := {}
 ## `skin.json`, as parsed - [member skin_doc]) and the acts that paint them.
 var paint: TablePaint
 var skin_doc := {}
+## ...and THE PICTURE THE DESIGNS WERE MADE FROM (`face_ref.png`; null none) and the surface it is of (`face.json`'s `on`, "thing/part"):
+## where each operation's paint is still wanted ([PaintLayers]) - never laid itself, every mark a tool's (feedback 0049; next/painted_surface.md,
+## "The painting is the design").
+var skin_ref: Image = null
+var skin_ref_on := ""
+## The episode's folder, where the painter at the table kept what it laid (`paint/elements.json` - TablePaint._from_host); "" none.
+var skin_dir := ""
 ## A game played on this table ([TableGame]; null where there is none), what it was handed and where its pictures are.
 var game: TableGame
 var game_spec := {}

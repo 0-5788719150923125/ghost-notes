@@ -1,25 +1,28 @@
 extends VBoxContainer
-class_name DispatchCard
+class_name DispatchFormat
 
-## DispatchCard - the Dispatch desk component's card: the note played at a desk late at night, seen from the chair - a
-## terminal that types, a dozen labeled phones that ring and are held to the ear, a radar, a receiver, a printer, small
-## screens, roots growing across the desk ([DispatchMedium], next/dispatch.md).
+## DispatchFormat - the Dispatch desk's own rows on the Medium card: the note played at a desk late at night, seen from
+## the chair - a terminal that types, a dozen labeled phones that ring and are held to the ear, a radar, a receiver, a
+## printer, small screens, roots growing across the desk ([DispatchMedium], next/dispatch.md). The Dispatch desk was a
+## component of its own, with a card that pinned its medium, until it became one of the Medium card's formats
+## (2026-11-09, [MediumCard]).
 ##
 ## THE NOTE IS THE SCRIPT, word for word. Its `desk:` block (the author's, beside ghost's own) names the phones' labels in
 ## order; everything else on the desk is built by code. The pictures the script's image marks describe - on the desk's
 ## screens or over the whole frame - are the note's Pictures card's ([PicturesCard]: which marks they are is this
 ## medium's to say, [method DispatchMedium.pictures_in]); a picture not painted leaves its screen as it was.
 ##
-## A CARD ON THE READING, as the Letter's is: built by [NoteCards] from the `dispatch` row, it PINS ITS MEDIUM while it
-## is up ([member Director.medium_override]) and HANDS the reading what is read ([DispatchWalk]: the script with the
-## desk's rests in it, every voice through a phone marked) and how it goes out ([DispatchCard.Publish]: the document a
-## render draws the desk from).
+## ROWS ON THE READING'S MEDIUM CARD, as the Letter's are: built by [MediumCard] from the `dispatch` row's `card` while
+## the Dispatch desk is the format, they HAND the reading what is read ([DispatchWalk]: the script with the desk's rests
+## in it, every voice through a phone marked) and how it goes out ([DispatchFormat.Publish]: the document a render draws
+## the desk from). What they keep (`seed`) is part of the Medium's one block.
 ##
-## THE DESK'S NUMBER is the note's own file's unless the card is given one ([method desk_seed]): it places the things
+## THE DESK'S NUMBER is the note's own file's unless the rows are given one ([method desk_seed]): it places the things
 ## that can wander, grows the roots, and draws the radar's aircraft - never what the script does.
 
+## Its format's key in [constant Medium.REGISTRY].
 const KEY := "dispatch"
-## The block: the desk's seed (0: the note's own).
+## Its keys in the Medium's block: the desk's seed (0: the note's own).
 const KNOBS := {"seed": 0}
 
 signal noted(text: String)
@@ -35,25 +38,14 @@ var _seed_box: SpinBox
 var _about: Label
 
 
-static func for_note(ctx: Dictionary) -> DispatchCard:
-	var card := DispatchCard.new()
+static func for_note(ctx: Dictionary) -> DispatchFormat:
+	var card := DispatchFormat.new()
 	card._panel = ctx.get("workspace") as ReadingPanel
 	if card._panel != null:
 		card._panel.walk = DispatchWalk.new()
 		card._panel.publish = Publish.new(card)
 	card._build()
 	return card
-
-
-## THE DESK IS THE MEDIUM, pinned while the card is up.
-func _enter_tree() -> void:
-	if _panel != null:
-		Director.pin_medium("dispatch", self)
-
-
-func _exit_tree() -> void:
-	if _panel != null:
-		Director.unpin_medium(self)
 
 
 ## The script read again once its words have rested this long (seconds): a parse of a long note is a few tens of
@@ -92,11 +84,11 @@ func apply(cfg: Dictionary) -> void:
 
 # --- what it hands the reading -----------------------------------------------------------------------------------------
 
-## HOW IT GOES OUT: the document a render draws the desk from carries what this card made.
+## HOW IT GOES OUT: the document a render draws the desk from carries what these rows made.
 class Publish extends ReadingPublish:
-	var card: DispatchCard
+	var card: DispatchFormat
 
-	func _init(c: DispatchCard) -> void:
+	func _init(c: DispatchFormat) -> void:
 		card = c
 
 	func book(d: Dictionary, _body: String) -> Dictionary:
@@ -104,7 +96,7 @@ class Publish extends ReadingPublish:
 		return d
 
 
-## THE DESK'S SEED: the card's, or the note's own file's (a draft with no file, the first).
+## THE DESK'S SEED: the rows', or the note's own file's (a draft with no file, the first).
 func desk_seed() -> int:
 	if int(_knobs["seed"]) > 0:
 		return int(_knobs["seed"])
@@ -130,7 +122,7 @@ func _body() -> String:
 	return doc.pull() if doc != null else ""
 
 
-# --- the card ----------------------------------------------------------------------------------------------------------
+# --- the rows ----------------------------------------------------------------------------------------------------------
 
 func _build() -> void:
 	add_theme_constant_override("separation", 8)

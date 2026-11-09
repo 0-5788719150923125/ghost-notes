@@ -12,6 +12,9 @@ extends Node
 ##   - the recording's list is the resource cache's: a script this process has loaded is on it, one it
 ##     has not loaded is not (the control for the first).
 ##   - the trigger never records from a test (read-only) process.
+##   - AT MOST ONCE A DAY: a recording begun ([method Showcase.mark_started]) holds the next back for
+##     [constant Showcase.DAY]; the control is one begun a day and a minute ago, which does not. None
+##     begun, or a file that cannot be read, holds nothing back.
 ##   - the song is the storyboard's length, and made the same every time: the holds of
 ##     storyboards/showcase.yaml add up to [constant Showcase.SONG] (the control: the default board's
 ##     do not), and two songs written are byte-identical.
@@ -43,6 +46,7 @@ func _run() -> void:
 	_ok(not Showcase.skip_reason().is_empty(),
 		"the trigger does not record from a test process ('%s')" % Showcase.skip_reason())
 	_check_song(dir)
+	_check_day(dir)
 	_check_closing(dir)
 	for f in DirAccess.get_files_at(dir):
 		DirAccess.remove_absolute(dir.path_join(f))
@@ -112,6 +116,22 @@ func _check_song(dir: String) -> void:
 	_ok(bytes.size() == 44 + int(Showcase.SONG * ShowcaseRecorder.RATE) * 2,
 		"...%.1f seconds of it (%d bytes)" % [Showcase.SONG, bytes.size()])
 	_ok(bytes == FileAccess.get_file_as_bytes(two), "...and the same every time")
+
+
+func _check_day(dir: String) -> void:
+	var now := Time.get_unix_time_from_system()
+	var started := dir.path_join(Showcase.STARTED)
+	DirAccess.remove_absolute(started)
+	_ok(Showcase.next_due(dir) <= now, "none begun yet: a launch may record")
+	Showcase.mark_started(dir)
+	var due := Showcase.next_due(dir)
+	_ok(due > now and absf(due - (now + Showcase.DAY)) < 5.0,
+		"a recording begun holds the next back for a day (%.0f s)" % (due - now))
+	_put(started, str(int(now - Showcase.DAY - 60)))
+	_ok(Showcase.next_due(dir) <= now, "the control: one begun a day and a minute ago holds nothing back")
+	_put(started, "garbled")
+	_ok(Showcase.next_due(dir) <= now, "a file that cannot be read holds nothing back")
+	DirAccess.remove_absolute(started)
 
 
 ## The two watchers of a child, with the child gone: once because it died, once because ghost is

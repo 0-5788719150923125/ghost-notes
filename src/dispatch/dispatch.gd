@@ -8,7 +8,7 @@ class_name DispatchMedium
 ## who works it is never seen: the viewer sits where he sits, and everything on the desk moves on its own.
 ##
 ## WHAT IT DRAWS FROM: the reading's document - its `source`, the note with its marks ([DispatchScript]); its `dispatch`,
-## what the Dispatch desk's card hands ([method DispatchCard.document]): the desk's `seed` and each picture's file
+## what the Dispatch desk's rows on the Medium card hand ([method DispatchFormat.document]): the desk's `seed` and each picture's file
 ## (`pictures`). The desk itself ([DispatchSet]) is built from the note's `desk:` block (the phones' labels) and the seed;
 ## the roots ([DispatchRoots]) from the seed.
 ##

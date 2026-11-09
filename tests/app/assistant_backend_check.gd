@@ -13,9 +13,14 @@ extends SceneTree
 ##   show. It launches detached, exactly as the dispatch does. An `env` given to the launcher
 ##   reaches that child alone, its value byte for byte - against the same run without it.
 ##
+##   THE MODEL AND THE LEVEL the picker holds reach each CLI in its own flags, and a CLI's "Default"
+##   is what its writer's picker says it is (Claude: Opus) - the control is the same run with them set.
+##   Grok, which reads no stdin, is handed its prompt FILE, and the id a fresh run is to take.
+##
 ##   THE STREAM - recorded output (tests/fixtures/assistant/; the codex files are real
 ##   `codex exec --json` runs from codex-cli 0.150.0, one a resume of the other and one a
-##   failed turn) through progress, session id, final text and usage. Each backend's stream
+##   failed turn; grok_not_signed_in.jsonl a real grok 1.0.62 run on a machine not signed in,
+##   read as Claude's, for it is Claude Code's format) through progress, session id, final text and usage. Each backend's stream
 ##   is also read with the OTHER backend's rules and must NOT come out as a clean result,
 ##   which is the mix-up the registry exists to prevent.
 ##
@@ -39,6 +44,7 @@ func _init() -> void:
 	_launcher()
 	_claude_stream()
 	_codex_stream()
+	_grok_stream()
 	_tail()
 	_crossed()
 	if _fails.is_empty():
@@ -64,23 +70,41 @@ func _events(name: String) -> Array:
 func _commands() -> void:
 	print("-- commands")
 	var c := B.argv("claude_cli", "/bin/claude", "", "/repo")
-	_check(c == PackedStringArray(["/bin/claude", "-p", "--model", "sonnet",
+	_check(c == PackedStringArray(["/bin/claude", "-p", "--model", "opus",
 		"--dangerously-skip-permissions", "--output-format", "stream-json", "--verbose"]),
-		"claude fresh run: -p with no prompt argument (it reads stdin)")
+		"claude fresh run: -p with no prompt argument (it reads stdin), Default is Opus, no level")
+	c = B.argv("claude_cli", "/bin/claude", "", "/repo", {"model": "sonnet", "effort": "high"})
+	_check(c.slice(0, 6) == PackedStringArray(["/bin/claude", "-p", "--model", "sonnet", "--effort", "high"]),
+		"the control: a chosen model and level are what it runs (%s)" % " ".join(c.slice(1, 6)))
 	c = B.argv("claude_cli", "/bin/claude", "sid-1", "/repo")
 	_check(c.has("--resume") and c[c.find("--resume") + 1] == "sid-1",
 		"claude resume passes --resume <id>")
 	var x := B.argv("codex_cli", "/bin/codex", "", "/repo")
 	_check(x == PackedStringArray(["/bin/codex", "exec", "--json", "--skip-git-repo-check",
-		"--dangerously-bypass-approvals-and-sandbox", "-C", "/repo", "-"]),
+		"--dangerously-bypass-approvals-and-sandbox", "-c", "model_reasoning_effort=medium", "-C", "/repo", "-"]),
 		"codex fresh run: exec --json, full access, -C repo, `-` for a stdin prompt")
 	x = B.argv("codex_cli", "/bin/codex", "th-9", "/repo")
 	_check(x.slice(0, 4) == PackedStringArray(["/bin/codex", "exec", "resume", "th-9"]),
 		"codex resume is the `exec resume <id>` subcommand")
 	_check(not x.has("-C"), "codex resume does not pass -C (the subcommand has no such flag)")
 	_check(x.has("--json") and x[x.size() - 1] == "-", "codex resume still streams JSON, stdin prompt")
-	_check(B.label("nope") == B.label(B.LEGACY) and B.dep("codex_cli") == "codex",
-		"unknown key falls back to Claude; codex resolves through the codex Deps row")
+	_check(x.has("model_reasoning_effort=medium") and not x.has("-m"),
+		"codex with nothing chosen: its writer's Default level (medium), its own model")
+	x = B.argv("codex_cli", "/bin/codex", "th-9", "/repo", {"model": "gpt-x", "effort": "high"})
+	_check(x.has("model_reasoning_effort=high") and x[x.find("-m") + 1] == "gpt-x" and x[x.size() - 1] == "-",
+		"codex resume takes a chosen model and level too, the prompt still on stdin")
+	var g := B.argv("grok_cli", "/bin/grok", "", "/repo", {"prompt_path": "/f/0001.prompt.txt", "fresh": "u-1"})
+	_check(g == PackedStringArray(["/bin/grok", "--prompt-file", "/f/0001.prompt.txt", "--cwd", "/repo",
+		"--always-approve", "--output-format", "streaming-messages-json", "-s", "u-1"]),
+		"grok fresh run: its prompt file (it reads no stdin), the repo, every tool approved, Claude's stream, the id it takes")
+	g = B.argv("grok_cli", "/bin/grok", "sid-7", "/repo", {"prompt_path": "/f/p.txt", "fresh": "u-2", "model": "grok-x", "effort": "low"})
+	_check(g.has("--resume") and g[g.find("--resume") + 1] == "sid-7" and not g.has("-s")
+		and g[g.find("-m") + 1] == "grok-x" and g[g.find("--effort") + 1] == "low",
+		"grok resume: --resume <id>, no fresh id, the chosen model and level")
+	var u := B.new_session_id()
+	_check(u.length() == 36 and u[14] == "4" and u != B.new_session_id(), "a fresh session id is a random version-4 UUID (%s)" % u)
+	_check(B.label("nope") == B.label(B.LEGACY) and B.dep("codex_cli") == "codex" and B.writer("grok_cli") == "grok",
+		"unknown key falls back to Claude; codex resolves through the codex Deps row; Grok offers the grok writer's models")
 
 
 func _launcher() -> void:
@@ -151,6 +175,24 @@ func _claude_stream() -> void:
 	_check(bool(r.ok) and String(r.response) == "Fixed the fade in comic.gd.", "final result read")
 	_check(is_equal_approx(float(r.cost_usd), 0.4213) and String(r.usage) == "$0.421",
 		"cost in dollars")
+
+
+func _grok_stream() -> void:
+	print("-- grok stream (Claude Code's format)")
+	var ev := _events("grok_not_signed_in.jsonl")
+	var r: Dictionary = B.result("grok_cli", ev)
+	_check(not bool(r.ok) and String(r.error).contains("Not signed in") and String(r.session).is_empty(),
+		"a run not signed in is no result, says why, and has no session to resume ('%s')" % String(r.error).get_slice("\n", 0))
+	_check(B.recover_session("grok_cli", FileAccess.get_file_as_string(FIX + "grok_not_signed_in.jsonl")).is_empty(),
+		"its empty session ids are not taken for one")
+	_check(B.recover_session("grok_cli", "{\"session_id\":\"\"}\n{\"session_id\":\"g-5\"}") == "g-5",
+		"the control: the first id that is not empty is found past an empty one")
+	# The same stream as Claude's, carrying the reply in its last words where the result has no text of its own
+	var said := [{"type": "assistant", "message": {"content": [{"type": "text", "text": "Done: fixed it."}]}},
+		{"type": "result", "is_error": false, "session_id": "g-6", "total_cost_usd": 0.02}]
+	r = B.result("grok_cli", said)
+	_check(bool(r.ok) and String(r.response) == "Done: fixed it." and String(r.session) == "g-6",
+		"a result with no text of its own is the last thing said")
 
 
 func _tail() -> void:

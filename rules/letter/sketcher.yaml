@@ -1,4 +1,4 @@
-# THE SKETCHER - draws a letter's sketch (LetterCard, LetterSketches): the letter's
+# THE SKETCHER - draws a letter's sketch (LetterFormat, LetterSketches): the letter's
 # `<!-- sketch: ... -->` says in words what the writer draws on the page, and the pen draws what this
 # agent hands back, line by line, while the paragraph after it is said (LetterScript).
 #

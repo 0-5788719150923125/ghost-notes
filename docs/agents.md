@@ -11,7 +11,7 @@ Every agent is a command-line tool you install yourself, and each keeps its own 
 |---|---|---|---|---|
 | [Claude Code CLI](https://code.claude.com/docs/en/setup) | Claude (Claude Code CLI) | - | Claude Code CLI | yes |
 | [OpenAI Codex CLI](https://developers.openai.com/codex/cli) | OpenAI (Codex CLI) | OpenAI (Codex CLI) | Codex CLI (OpenAI) | yes |
-| [Grok Build CLI (xAI)](https://docs.x.ai/build/overview) | xAI (Grok Build CLI) | xAI (Grok Build CLI) | - | yes |
+| [Grok Build CLI (xAI)](https://docs.x.ai/build/overview) | xAI (Grok Build CLI) | xAI (Grok Build CLI) | Grok Build CLI (xAI) | yes |
 | [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) | Amazon Bedrock (AWS CLI) | Amazon Bedrock (AWS CLI) | - | - |
 
 A writer that takes **Ghost Notes' own tools** works in a loop: it calls a tool Ghost Notes serves while the app runs (build a thing, stand it on the table, photograph it), looks at what comes back and goes on (`AgentTools`). The card table's set dresser works that way when its writer can; any other writer is asked once and answers once.
@@ -120,12 +120,13 @@ WHAT AN IMAGE MODEL IS ASKED is per family (`SCHEMAS`): the catalog lists every 
 
 Runs the AWS CLI. Source: [src/agents/image_gen.gd:507](../src/agents/image_gen.gd#L507)
 
-## The assistant (2)
+## The assistant (3)
 
 `AssistantBackends.REGISTRY` in [src/agents/assistant_backends.gd](../src/agents/assistant_backends.gd). The CLIs `Assistant` can dispatch a feedback note to, and everything that differs between them: how a run is launched, how it is resumed, and how its event stream reads. It runs in the folder Ghost Notes runs from and edits it, so it is for working on Ghost Notes itself.
 
 - **Claude Code CLI** (`claude_cli`)
 - **Codex CLI (OpenAI)** (`codex_cli`)
+- **Grok Build CLI (xAI)** (`grok_cli`)
 
 ## Installing one
 

@@ -462,6 +462,16 @@ static func decorator(title: String, brief: String, plan: Dictionary, seed: int,
 	return {"system": show_context(title, brief), "prompt": Rules.say("table/decorator.prompt", vars)}
 
 
+## THE PAINTER AT THE TABLE ([PainterTools]): the picture painted first painted again with the table's tools, an operation at a time, told the
+## episode's [param beats] (`[{key, name, work}]`), the [param seconds] its painting has and its [param looks].
+static func painting(title: String, brief: String, plan: Dictionary, beats: Array, seconds: float, looks: int) -> Dictionary:
+	var vars := {"episode_title": String(plan.get("episode_title", "")), "premise": String(plan.get("premise", "")),
+		"painted": String(plan.get("painted", "")), "seconds": roundi(seconds), "looks": looks, "tools": looks > 0,
+		"beats": beats.map(func(b: Dictionary) -> Dictionary: return {"key": String(b["key"]), "name": String(b["name"]),
+			"work": String(b["work"]) if not String(b["work"]).is_empty() else "-"})}
+	return {"system": show_context(title, brief), "prompt": Rules.say("table/painting.prompt", vars)}
+
+
 ## THE GAME MASTER'S PREPARATION (next/tabletop.md): tonight's world and every player's sheet, made alone, secret from everyone else at the table.
 static func game_prep(title: String, brief: String, plan: Dictionary, people: PackedStringArray, past: Array) -> Dictionary:
 	var vars := _game_vars(title, plan, people)
@@ -601,10 +611,12 @@ static func _box_size(shoebox := false, contents := "file", look := {}) -> Dicti
 ## `[{name, about, length, under}]`, its beat's alone; a step "work:K" is card K's work passage.
 ##
 ## A SHOW THAT DRAWS NO CARDS ([method CardTable.cardless]): a step "K" is beat K, said while its work is done -
-## its name, what it does, the passages before it, its acts, and no card anywhere.
+## its name, what it does, the passages before it, its acts, and no card anywhere. [param said_word]: how long a word takes the show's
+## reader to say (ReadingCast.said_word) - what its words are counted to cover.
 static func reader(title: String, brief: String, plan: Dictionary, step: String, said: Array,
 		drawn: Array, spread_size: int, pictured := false, history: Array = [],
-		names: Array = [], voices: Array = [], remark := true, link := false, misses: Array = [], work: Array = []) -> Dictionary:
+		names: Array = [], voices: Array = [], remark := true, link := false, misses: Array = [], work: Array = [],
+		said_word := SAID_WORD) -> Dictionary:
 	# CARD K'S WORK PASSAGE: told as card K is, with no card of its own turning over
 	var work_k := int(step.trim_prefix("work:")) if step.begins_with("work:") else 0
 	if work_k > 0:
@@ -703,14 +715,14 @@ static func reader(title: String, brief: String, plan: Dictionary, step: String,
 			# a passage for the work alone, at least as long as the work - spoken at about two words a second - and room
 			# for the stories told around it (the user, 2026-10-29: "it would be nice if they told stories ... The videos are
 			# quite short now"): its acts wait for the words that start them
-			lo_hi = [maxi(30, roundi(seconds / SAID_WORD * WORK_WORDS.x)), maxi(60, roundi(seconds / SAID_WORD * WORK_WORDS.y))]
+			lo_hi = [maxi(30, roundi(seconds / said_word * WORK_WORDS.x)), maxi(60, roundi(seconds / said_word * WORK_WORDS.y))]
 		else:
-			lo_hi = [maxi(int(lo_hi[0]), roundi(seconds / SAID_WORD * 0.8)), maxi(int(lo_hi[1]), roundi(seconds / SAID_WORD * 1.2))]
+			lo_hi = [maxi(int(lo_hi[0]), roundi(seconds / said_word * 0.8)), maxi(int(lo_hi[1]), roundi(seconds / said_word * 1.2))]
 		# A SHOW THAT GOES QUIET ([method quiet_of]; the user, 2026-11-02: "There might be stretches where we do not talk at all"): the
 		# words cover its share of the work, and what is left is silence, said where it falls
 		var quiet := quiet_of(plan)
 		if quiet > 0.0:
-			var talk := seconds * (1.0 - quiet) / SAID_WORD
+			var talk := seconds * (1.0 - quiet) / said_word
 			# ...BUT IT OPENS TALKING ([method CardReading.opens_talking]): about a minute of it, whatever the work under it takes
 			var opening := step == "intro"
 			if opening:
@@ -718,7 +730,7 @@ static func reader(title: String, brief: String, plan: Dictionary, step: String,
 			lo_hi = [maxi(QUIET_WORDS_LEAST, roundi(talk * 0.8)), maxi(QUIET_WORDS_LEAST * 2, roundi(talk * 1.2))]
 			vars["quiet"] = true
 			vars["quiet_opening"] = opening
-			vars["quiet_seconds"] = maxi(roundi(seconds - talk * SAID_WORD), 0)
+			vars["quiet_seconds"] = maxi(roundi(seconds - talk * said_word), 0)
 			vars["quiet_most"] = roundi(CardReading.QUIET_MOST)
 	if work_k > 0:
 		vars["card"] = false
@@ -732,7 +744,7 @@ static func reader(title: String, brief: String, plan: Dictionary, step: String,
 	# THE VIDEO'S CHAPTER this passage begins, as the description calls it unless its reader names it
 	# ([method TableEpisode.upload_notes]) - a card's work passage begins one only when named; an aside, none
 	vars["chapters"] = not bool(vars.get("aside", false))
-	vars["chapter_words"] = roundi(60.0 / SAID_WORD)
+	vars["chapter_words"] = roundi(60.0 / said_word)
 	if step == "intro":
 		vars["chapter_now"] = TableEpisode.INTRO_CHAPTER
 	elif step == "close":
@@ -1206,13 +1218,31 @@ static func surface_image(look: Dictionary, target: String) -> String:
 
 
 ## THE FACE PAINTED FIRST (feedback 0023): what the plan paints, painted onto the attached picture of [param skin] bare from its front
-## ([method Skins.face_canvas]) - told what the art director sent back of the paintings before ([param sent_back]).
-static func face_image(look: Dictionary, plan: Dictionary, skin: Dictionary, target: String, sent_back := PackedStringArray()) -> String:
+## ([method Skins.face_canvas]) - told what the art director sent back of the paintings before ([param sent_back]), and the table's own
+## paints ([param paints], [method Skins.table_paints]) as the colors to paint with.
+static func face_image(look: Dictionary, plan: Dictionary, skin: Dictionary, target: String, sent_back := PackedStringArray(), paints: Array = []) -> String:
 	var vars := _look_vars(look, target)
 	var frame: Vector2 = skin.get("frame", Vector2.ZERO)
 	vars.merge({"painted": String(plan.get("painted", "")).strip_edges(), "premise": String(plan.get("premise", "")).strip_edges(),
-		"thing": String(skin.get("thing", "")), "width_mm": roundi(frame.x), "height_mm": roundi(frame.y), "sent_back": Array(sent_back)}, true)
+		"thing": String(skin.get("thing", "")), "width_mm": roundi(frame.x), "height_mm": roundi(frame.y), "sent_back": Array(sent_back),
+		"paints": paints}, true)
 	return Rules.say("table/painter.face", vars)
+
+
+## THE ORDER THE PICTURE PAINTED FIRST IS PAINTED IN ([method TableProducer._make_layers]): what it was asked to be, on [param skin], the
+## paints on the table - the picture and the bare surface go with the job.
+static func face_layers(title: String, brief: String, plan: Dictionary, skin: Dictionary, paints: Array = []) -> Dictionary:
+	var vars := {"painted": String(plan.get("painted", "")).strip_edges(), "thing": String(skin.get("thing", "the surface")),
+		"paints": paints, "least": TableProducer.LAYERS_LEAST, "most": TableProducer.LAYERS_MOST}
+	return {"system": show_context(title, brief), "prompt": Rules.say("table/art_director.layers", vars)}
+
+
+## ONE LAYER OF THE PICTURE PAINTED FIRST ([method TableProducer._make_layer]): layer [param k] of [param n], [param add] - what it lays,
+## as the art director said it - painted over the picture so far, the finished picture its guide.
+static func layer_image(look: Dictionary, add: String, target: String, k: int, n: int) -> String:
+	var vars := _look_vars(look, target)
+	vars.merge({"add": add.strip_edges(), "k": k, "n": n}, true)
+	return Rules.say("table/painter.layer", vars)
 
 
 ## THE ART DIRECTOR'S LOOK at the face painted first ([method TableProducer._make_face_check]): what it was asked to be, on [param skin] -

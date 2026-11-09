@@ -7,22 +7,22 @@ class_name NotePanel
 ##
 ## ITS CARDS ARE THE NOTE'S COMPONENTS, read off the note's blocks: the Script (the note's words,
 ## always), the Song, and whatever else is attached, built the one way every panel builds them
-## ([method NoteCards.build]) - the Picture (with Auto first among its media: the seeded show,
+## ([method NoteCards.build]) - the Medium (with Auto first among its formats: the seeded show,
 ## nothing to set), the Storyboard, the Look, the Intro & outro, YouTube. Each keeps its block in
 ## the note through the autosave every panel's frontmatter goes through ([DocSource]); the song's
 ## block is written only when another song is chosen.
 ##
 ## "+" OFFERS WHAT THE NOTE COULD HAVE NEXT ([method Components.attach_menu]): everything that can
-## be attached, each grayed with its reason when it cannot be had yet ("Needs a Picture - attach it
+## be attached, each grayed with its reason when it cannot be had yet ("Needs a Medium - attach it
 ## first", "This note's clock is its Song"). ATTACHING WRITES THE COMPONENT'S BLOCK into the note
 ## and opens the note again, as whatever its blocks now say it is ([method NoteCards.attach]) - and
 ## the × on a card takes it off the same way ([method NoteCards.detach]).
 ##
 ## THE SONG IS THE NOTE'S CLOCK, and main runs it ([member begin_song]): loaded as the panel comes
-## up, after its cards have applied the note's picture, holds and look - and waiting at its start,
-## because a note opens stopped. With no Picture there is no stage; with one, the Director cuts its
-## scenes on the song in the medium the Picture card names - the seed's choice, or the note's
-## Storyboard where one is written ([method show_plan]) - and a medium picked while the note is up
+## up, after its cards have applied the note's medium, holds and look - and waiting at its start,
+## because a note opens stopped. With no Medium there is no stage; with one, the Director cuts its
+## scenes on the song in the format the Medium card names - the seed's choice, or the note's
+## Storyboard where one is written ([method show_plan]) - and a format picked while the note is up
 ## is shown at once ([member restage]).
 
 ## The Settings section the script's source lives in (its remembered document).
@@ -37,7 +37,7 @@ var note_moved: Callable
 ## Set by main: (song: String, show: Dictionary) -> void - load the note's song, waiting at its
 ## start, with the show [method show_plan] describes.
 var begin_song: Callable
-## Set by main: (show: Dictionary) -> void - put the picture up again in the medium chosen now.
+## Set by main: (show: Dictionary) -> void - put the picture up again in the format chosen now.
 var restage: Callable
 
 var _panel: SidePanel
@@ -47,7 +47,7 @@ var _blocks := {}             # the note's blocks, as it opened
 var _attached: Array = []     # the components it has (Components.attached_of)
 var _cards := {}              # block key -> a card with capture() / apply()
 var _song: SongCard
-var _picture: PictureCard
+var _medium: MediumCard
 var _story: StoryboardCard
 var _youtube: YouTubeCard
 
@@ -57,10 +57,10 @@ func _ready() -> void:
 	_blocks = NoteStore.blocks_of(path) if not path.is_empty() else {}
 	_attached = Components.attached_of(_blocks)
 	var has_song := _attached.has("song")
-	# NOTHING TO RENDER without a show: a plain note, or a song with no picture yet, has no ⤓
+	# NOTHING TO RENDER without a show: a plain note, or a song with no medium yet, has no ⤓
 	# (released on the way out, keyed - see Chrome._export_claims)
 	var ch := Chrome.of(self)
-	if ch != null and not _attached.has("picture"):
+	if ch != null and not _attached.has("medium"):
 		ch.suppress_export(&"note_panel")
 	_panel = preload("res://src/ui/side_panel.gd").new(380.0)
 	_panel.title = "Note"
@@ -85,10 +85,10 @@ func _ready() -> void:
 		_song = SongCard.new(_song_path())
 		_song.chosen.connect(_choose_song)
 		_panel.add_card("song", "Song", &"sound", "song").add_child(_song)
-	_cards = NoteCards.build(_panel, _attached, {
+	_cards = NoteCards.build(_panel, _attached, {"blocks": _blocks, "reshape": _reshape,
 		"intro_tip": "Seconds held before the song starts, the picture fading up through them and up a few seconds before it.",
 		"outro_tip": "Seconds held after the song ends, picture and sound fading out together."})
-	_picture = _cards.get("picture") as PictureCard
+	_medium = _cards.get("medium") as MediumCard
 	_story = _cards.get("scenes") as StoryboardCard
 	_youtube = _cards.get("youtube") as YouTubeCard
 	if _youtube != null:
@@ -101,12 +101,12 @@ func _ready() -> void:
 	_status.add_theme_font_size_override("font_size", 11)
 	_status.add_theme_color_override("font_color", Color(0.55, 0.95, 0.75, 0.85))
 	box.add_child(_status)
-	# THE NOTE'S BLOCKS REACH THE CARDS as the source binds - the picture, the holds and the look are
+	# THE NOTE'S BLOCKS REACH THE CARDS as the source binds - the medium, the holds and the look are
 	# set before the song is loaded, because the lead-in is decided as playback starts
 	_writer.doc.capture = _doc_capture
 	_writer.doc.apply = _doc_apply
 	_writer.doc.bind_text(_writer.text_edit)
-	if _picture != null:
+	if _medium != null:
 		Director.medium_changed.connect(_on_medium)
 	if has_song and _song.ready_to_play() and begin_song.is_valid():
 		begin_song.call(_song.path(), show_plan())
@@ -136,10 +136,10 @@ func _note(msg: String) -> void:
 		_status.text = msg
 
 
-## WHAT THE NOTE'S SHOW IS, for main ([method main._attach_show]): whether it has a Picture, and
-## the storyboard it walks - {} where the note has none, or has written nothing in it.
+## WHAT THE NOTE'S SHOW IS, for main ([method main._attach_show]): whether it has a Medium (`picture`: something to be
+## seen in), and the storyboard it walks - {} where the note has none, or has written nothing in it.
 func show_plan() -> Dictionary:
-	var plan := {"picture": _picture != null, "board": {}, "source": ""}
+	var plan := {"picture": _medium != null, "board": {}, "source": ""}
 	if _story != null:
 		plan.merge(_story.plan(), true)
 	return plan
@@ -180,7 +180,7 @@ func _song_path() -> String:
 	return String((song as Dictionary).get("path", "")) if song is Dictionary else ""
 
 
-## The picture's medium changed: shown at once while a song is loaded (a reading's waits for the
+## The Medium's format changed: shown at once while a song is loaded (a reading's waits for the
 ## next reading; a song's has nothing to wait for).
 func _on_medium() -> void:
 	if restage.is_valid():
@@ -200,6 +200,15 @@ func _choose_song(song: String) -> void:
 ## card's title, visibility and playlist; {} without a card, or with its box clear.
 func upload_meta(take: String) -> Dictionary:
 	return _youtube.meta({"tags": []}, take) if _youtube != null else {}
+
+
+## WHAT THE CARDS HOLD, written into the note, and the note opened again around it: a format with rows of its own picked
+## on the Medium card, or one left ([member MediumCard._reshape]).
+func _reshape() -> void:
+	_rewrite(func(held: Dictionary) -> String:
+		var ghost := NoteStore.blocks_of(path)
+		ghost.merge(held, true)
+		return FrontMatter.write_block(path, ghost))
 
 
 ## A component picked from "+": its block into the note, and the note opened again as what it now is.

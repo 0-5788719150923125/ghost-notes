@@ -330,6 +330,19 @@ const MANAGED := [
 			+ "Proof's figures and a Letter's sketches. Built the first time a Proof or a Letter needs it.",
 	},
 	{
+		"key": "paint_venv",
+		"name": "Painter environment",
+		"kind": KIND_MANAGED,
+		"path": "user://paint_venv",
+		"requirements": "res://hosts/paint/requirements.txt",
+		"imports": "numpy, scipy, PIL, torch",
+		"size": "~3 GB",
+		"used_for": "numpy, SciPy, Pillow and PyTorch, for the painter at the table (hosts/paint/run.py, "
+			+ "next/face_layers.md): a show's picture painted again in layers, each laid with real "
+			+ "marks found by gradient descent - on the GPU where there is one. Built the first time a "
+			+ "table show paints its layers.",
+	},
+	{
 		"key": "compute_venv",
 		"name": "Compute environment",
 		"kind": KIND_MANAGED,

@@ -191,6 +191,7 @@ const PACKAGED := {
 	"ios": {"label": "iOS", "blurb": "The base icon iOS makes every other size from.", "file": "ios_1024.png", "layer": "square", "size": 1024},
 	"ios_dark": {"label": "iOS dark", "blurb": "The figure on nothing; iOS puts its dark backdrop behind.", "file": "ios_1024_dark.png", "layer": "figure_square", "size": 1024},
 	"ios_tinted": {"label": "iOS tinted", "blurb": "The white figure iOS tints.", "file": "ios_1024_tinted.png", "layer": "mono_square", "size": 1024},
+	"macos": {"label": "macOS", "blurb": "The app bundle's icon in Finder; the exporter makes its .icns from it.", "file": "macos_1024.png", "layer": "whole", "size": 1024},
 }
 
 

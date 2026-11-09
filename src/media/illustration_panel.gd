@@ -138,7 +138,7 @@ func _ready() -> void:
 	add_child(_refs)
 	# "NONE" IS A ROW OF ITS OWN, and wraps. In the flow it could not: a flow gives each child its
 	# own width, so the one long line set the panel's - 357 px, past a card's room on a 380 px panel
-	# (the Letter card, which shows this panel whatever the medium; panel_fit_check 2026-10-27).
+	# (the Letter's card, which showed this panel whatever the medium; panel_fit_check 2026-10-27).
 	_refs_none = Label.new()
 	_refs_none.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_refs_none.add_theme_font_size_override("font_size", 11)

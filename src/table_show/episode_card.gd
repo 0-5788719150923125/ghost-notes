@@ -39,7 +39,8 @@ const KNOBS := {"show": "", "seed": 1, "environment": 0.5,
 	"painter_effort": "", "players": "", "players_model": "", "players_effort": ""}
 ## Who makes each kind of step (a step's name up to its first ":"), as a row's status names them.
 const MAKERS := {"plan": "producer", "design": "designer", "image": "painter", "check": "art director",
-	"table": "set dresser", "say": "reader", "acts": "puppeteer", "model": "modeler", "skin": "decorator", "prep": "game master"}
+	"table": "set dresser", "say": "reader", "acts": "puppeteer", "model": "modeler", "skin": "decorator", "prep": "game master",
+	"layers": "art director"}
 ## EVERY STEP AS ITS ROW SAYS IT, "K" each card or beat: what it is called, and what its ⟳ does ("" for a step with no ⟳ of
 ## its own - the draw is a function of the seed, so dealing again deals the same cards, and a different deal is a different
 ## episode; a check and the depth come with their painting; the script with its readings). A ROW IS WHAT THE EPISODE HAS
@@ -56,6 +57,8 @@ const STEPS := {
 	"model": {"label": "Model", "again": "Design the model again"},
 	"image:face": {"label": "Picture to copy", "again": "Paint a new picture to copy"},
 	"check:face": {"label": "Art check", "again": ""},
+	"layers": {"label": "Layers", "again": "Write the order it is painted in again"},
+	"image:layer:K": {"label": "Layer", "again": "Paint this layer, and the ones after it, again"},
 	"skin": {"label": "What is painted", "again": "Design what is painted again"},
 	"prep": {"label": "Preparation", "again": "Prepare the game again"},
 	"table": {"label": "Set", "again": "Set the table again"},
@@ -335,12 +338,38 @@ class Feed extends EpisodeFeed:
 	func words() -> String:
 		return Manuscript.unspoken(episode.script()).strip_edges()
 
-	# the drawn cards' paintings, in drawing order
+	# the drawn cards' paintings, in drawing order (cards are counted from 1: counted from 0, the last card's painting was missed)
 	func pictures() -> PackedStringArray:
 		var out := PackedStringArray()
-		for k in episode.card_count():
+		for k in range(1, episode.card_count() + 1):
 			if episode.has("image:card:%d" % k):
 				out.append(ProjectSettings.globalize_path(episode.file_of("image:card:%d" % k)))
+		return out
+
+	# EVERY PICTURE ITS PAINTER MADE, in the order the episode makes them, each by its row's own name: the picture painted first that
+	# a surface copies, its layers, the cloth, the room, the depth, the backs, the cards' paintings, a game's pictures
+	func made_pictures() -> Array:
+		var out: Array = []
+		for st in episode.steps():
+			var step := String(st)
+			if not step.begins_with("image:") or not episode.has(step):
+				continue
+			var path := episode.file_of(step)
+			if not path.ends_with(".png"):
+				continue
+			var kind := EpisodeCard.kind_of(step)
+			var label := String((EpisodeCard.STEPS.get(kind, {}) as Dictionary).get("label", step))
+			var parts := step.split(":")
+			var group := ""
+			if step.begins_with("image:layer:"):
+				var layers := episode.layers()
+				var k := int(parts[2])
+				label = "Layer %d: %s" % [k, String((layers[k - 1] as Dictionary).get("name", "")) if k <= layers.size() else ""]
+				group = "Layers"
+			elif parts.size() > 2:
+				label += " " + String(parts[2])
+				group = "Cards" if step.begins_with("image:card:") else ""
+			out.append({"path": ProjectSettings.globalize_path(path), "label": label, "row": step, "group": group})
 		return out
 
 	func writer() -> Dictionary:
@@ -540,12 +569,12 @@ func _show_title() -> String:
 ## macros read, its notes to self gone - see [method TablePrompts.brief]), the deck the brief lists (or none, when the producer chooses each
 ## episode's - `chooses`), the show's voices
 ## (every one its document names - the reader's and any other, a familiar's - for the reader to
-## hand lines to), and the knobs.
+## hand lines to), how long a word takes its reader to say (what its passages are written to), and the knobs.
 func _spec() -> Dictionary:
 	var body := Manuscript.strip_frontmatter(_doc.pull())
 	return {"title": _show_title(), "byline": _show_byline(), "uploads_as": _uploads_as(),
 		"brief": TablePrompts.brief(body), "deck": CardDeck.of(body), "fixed": FixedTable.parse(body),
-		"chooses": CardDeck.chooses(body), "voices": reading.cast_names(), "seats": reading.cast_seats(),
+		"chooses": CardDeck.chooses(body), "voices": reading.cast_names(), "seats": reading.cast_seats(), "said_word": reading.reader_said_word(),
 		"writer": _knobs["writer"], "writer_model": _knobs["writer_model"], "writer_effort": _knobs["writer_effort"],
 		"painter": _knobs["painter"], "painter_model": _knobs["painter_model"], "painter_effort": _knobs["painter_effort"],
 		"players": _knobs["players"] if not String(_knobs["players"]).is_empty() else _knobs["writer"], "players_model": _knobs["players_model"], "players_effort": _knobs["players_effort"]}
@@ -1044,9 +1073,19 @@ func _step_rows() -> Array:
 	if bool(f["depth"]):
 		out.append(_row_of("image:height", "image:height", "Table", busy, f))
 	# ...WHAT IS PAINTED, painted first as a picture and looked at, then copied (TableEpisode.wants_face)
-	for st in ["image:face", "check:face", "skin"]:
+	for st in ["image:face", "check:face"]:
 		if has.has(st):
 			out.append(_row_of(st, st, "", busy, f))
+	# ...AND AGAIN IN LAYERS, the order written then each layer painted over the one before (TableEpisode._layer_steps)
+	if has.has("layers"):
+		out.append(_row_of("layers", "layers", "Layers", busy, f))
+		var layers := _episode.layers()
+		for k in range(1, layers.size() + 1):
+			var st := "image:layer:%d" % k
+			if has.has(st):
+				out.append(_row_of(st, "image:layer:K", "Layers", busy, f, "%d. %s" % [k, String((layers[k - 1] as Dictionary).get("name", "Layer"))]))
+	if has.has("skin"):
+		out.append(_row_of("skin", "skin", "", busy, f))
 	if has.has("acts"):
 		out.append(_row_of("acts", "acts", "", busy, f))
 	out.append(_row_of("say:intro", "say:intro", "", busy, f))
@@ -1073,6 +1112,23 @@ func _step_rows() -> Array:
 			if has.has(st):
 				out.append(_row_of(st, "image:%s:K" % word2, "Pictures", busy, f, String((list[k] as Dictionary).get("name", "%s %d" % [word2, k + 1]))))
 	return out
+
+
+## THE ROW KIND OF STEP [param step], as [constant STEPS] names it: a card's or a beat's number, a game picture's, a printing's key
+## made the kind's own ("image:card:3" -> "image:card:K", "image:back:gilt" -> "image:back:").
+static func kind_of(step: String) -> String:
+	if STEPS.has(step):
+		return step
+	var parts := step.split(":")
+	if parts.size() >= 3:
+		var k := "%s:%s:K" % [parts[0], parts[1]]
+		if STEPS.has(k):
+			return k
+		if STEPS.has("%s:%s:" % [parts[0], parts[1]]):
+			return "%s:%s:" % [parts[0], parts[1]]
+	if parts.size() == 2 and STEPS.has("%s:K" % parts[0]):
+		return "%s:K" % parts[0]
+	return step
 
 
 func _row_of(step: String, kind: String, group: String, busy: bool, f: Dictionary, named := "") -> PipelineRow:

@@ -508,8 +508,9 @@ func _build_ink_row(box: VBoxContainer) -> void:
 		_ink_raw = "" if i == 0 else String(NotebookLayout.INKS.keys()[i])
 		capture_slot())
 	row.add_child(_ink_pick)
-	# ONLY WHERE THE MEDIUM WRITES BY HAND: it showed on the card table, which writes nothing
-	(panel._medium_rows.get_or_add("handwriting", []) as Array).append(row)
+	# ONLY WHERE THE MEDIUM INKS A VOICE'S WORDS (the Notebook's `ink`): it showed on the card table, which writes
+	# nothing - and a Letter, written by hand, is written in its pens' inks, never a voice's
+	(panel._medium_rows.get_or_add("ink", []) as Array).append(row)
 
 
 ## A voice/delivery slider. `tip` is not optional in practice: an unlabeled dial
@@ -814,6 +815,20 @@ func slot_cfg(i: int) -> Dictionary:
 ## Which ear [param who] is heard in ([method Delivery.pan_of_seat]): what a voice over the line is placed by ([method ReadingJoin.side_between]).
 func pan_of(who: String) -> float:
 	return Delivery.pan_of_seat(float(cfg_of(who).get("seat", 0.0)))
+
+
+## Seconds a word each engine says at pace 1, its rests counted in ([method said_word]).
+const SAID_AT_PACE_ONE := {"piper": 0.52, "kokoro": 0.463}
+
+
+## HOW LONG A WORD TAKES voice [param cfg] (a cast entry: its `voice`, the engine, and its `pace`) to say, seconds - its sentences' rests
+## counted in - the pace each engine was measured at, quickened by its own: what a show's passages are written to cover (Proof's Piper
+## voices, 0.52; Joker Motivation's Kokoro at pace 1.2, 0.39 - 257002's 3,779 words and 463 s of silence read in 1,920 s, where the
+## producer had counted 0.52 for every voice, and every passage came out a quarter short of its work).
+static func said_word(cfg: Dictionary) -> float:
+	var engine := String(cfg.get("voice", ""))
+	var base := float(SAID_AT_PACE_ONE.get(engine, SAID_AT_PACE_ONE["piper"]))
+	return base / clampf(float(cfg.get("pace", 1.0)), 0.25, 4.0)
 
 
 func cfg_of(who: String) -> Dictionary:

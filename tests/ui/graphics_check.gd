@@ -174,6 +174,11 @@ func _kept_values() -> void:
 
 func _bounce() -> void:
 	print("-- bounce light reaches a medium")
+	# FROM THE DEFAULT, whatever the author chose (it read their bounce=true as "handed in, it is on", 2026-11-07): set here
+	# in memory, as a probe's Settings never reach the disk, and theirs put back at the end
+	var authors: Variant = Settings.read(Graphics.SECTION, "bounce", false)
+	Settings.write(Graphics.SECTION, "bounce", false)
+	Graphics.apply()
 	var env := Environment.new()
 	Graphics.dress(env)
 	_ok(not env.ssil_enabled and is_equal_approx(env.ssil_radius, Graphics.BOUNCE_REACH),
@@ -205,7 +210,7 @@ func _bounce() -> void:
 	var forgot := Thread.new()
 	forgot.start(func() -> bool: return bool(Graphics.value("bounce")))
 	_ok(not bool(forgot.wait_to_finish()), "CONTROL: with nothing read on the main thread, a worker reads bounce light on")
-	Settings.write(Graphics.SECTION, "bounce", false)
+	Settings.write(Graphics.SECTION, "bounce", authors)
 	Graphics.apply()
 
 

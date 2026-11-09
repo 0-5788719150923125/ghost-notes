@@ -1,6 +1,6 @@
 extends Node
 
-## Smoke test for the PICTURE SETTINGS in the Generative panel - the Medium picker, the film
+## Smoke test for the PICTURE SETTINGS in the Generative panel - the Medium card's Format picker, the film
 ## controls and the Look filters: build the whole panel and read the controls back. A parse
 ## check cannot see a wrong registry key or a Callable that captured the wrong thing, and
 ## these controls are the only way most people will ever reach the settings.
@@ -21,7 +21,7 @@ func _run() -> void:
 	# read its remembered values before the file had been loaded, got defaults, and the picker
 	# faithfully showed them. Nothing errored - a default is a valid value - and the only visible
 	# symptom was a setting quietly reverting. Asked BEFORE the panel is built: the panel syncs
-	# to the chapter it last had open and applies that chapter's picture block, and since every
+	# to the chapter it last had open and applies that chapter's medium block, and since every
 	# note resets the show (2026-10-06) the file holds the LAST note's medium, not that chapter's.
 	var on_disk := ConfigFile.new()
 	if on_disk.load(Settings.PATH) == OK:
@@ -33,20 +33,20 @@ func _run() -> void:
 	var ed := ReadingPanel.new()
 	add_child(ed)
 	await get_tree().process_frame
-	# THE PICTURE IS A CARD (next/notes.md step 5): its controls, and the rows that follow the
-	# medium - the card's and the panel's own (the Ink) - asked of both
-	var pic: PictureCard = ed._block_cards.get("picture")
+	# THE MEDIUM IS A CARD (next/notes.md step 5; the Picture card until 2026-11-09): its controls, and the rows that
+	# follow the format - the card's and the panel's own (the Ink) - asked of both
+	var pic: MediumCard = ed._block_cards.get("medium")
 	var rows := {}
 	for owner_rows in [ed._medium_rows, pic._medium_rows]:
 		for tag in owner_rows:
 			(rows.get_or_add(tag, []) as Array).append_array(owner_rows[tag])
-	var opt: OptionButton = pic._medium_pick
+	var opt: OptionButton = pic._format_pick
 	if opt == null:
 		print("vpick: FAILED - the picker was never built")
 		fails += 1
 	else:
-		# what a picker offers: every medium no mode owns (a row's `mode` - the card table is the
-		# Cards mode's, pinned for its sessions, and never a choice here)
+		# what a picker offers: every medium no component owns (a row's `mode` - the card table is the
+		# Table's, pinned for its sessions, and never a choice here) - the Letter and the Dispatch desk among them
 		var keys: Array = Medium.pickable()
 		print("vpick: %d items, selected %d (%s)" % [
 			opt.item_count, opt.selected, opt.get_item_text(maxi(0, opt.selected))])
@@ -108,8 +108,8 @@ func _run() -> void:
 			var vk := String(key)
 			# select() AND the signal: a real click does both, and the two are separate in
 			# Godot - emitting alone leaves `selected` on the previous item.
-			pic._medium_pick.select(Medium.pickable().find(vk))
-			pic._medium_pick.item_selected.emit(Medium.pickable().find(vk))
+			pic._format_pick.select(Medium.pickable().find(vk))
+			pic._format_pick.item_selected.emit(Medium.pickable().find(vk))
 			for tag in rows:
 				var want: bool = Medium.uses(vk, String(tag))
 				for row in rows[tag] as Array:
@@ -135,7 +135,7 @@ func _run() -> void:
 			fails += 1
 		Director.set_medium(cam)
 		Director._save_pacing()
-		pic._medium_pick.select(maxi(0, Medium.pickable().find(cam)))
+		pic._format_pick.select(maxi(0, Medium.pickable().find(cam)))
 		ed._sync_medium_rows()
 		pic.sync_medium()
 	# THE LOOK FILTERS, and the same three questions: a row per registry entry, each showing

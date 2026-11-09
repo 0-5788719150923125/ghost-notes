@@ -8,9 +8,11 @@ _A spectral experience_
 
 ---
 
-**Download:** [the latest Linux, Windows and Android builds](https://github.com/0-5788719150923125/ghost-notes/releases/latest) ([all releases](https://github.com/0-5788719150923125/ghost-notes/releases)).
+**Download:** [the latest Linux, Windows, macOS and Android builds](https://github.com/0-5788719150923125/ghost-notes/releases/latest) ([all releases](https://github.com/0-5788719150923125/ghost-notes/releases)).
 
 Portable Linux and Windows release builds check for newer builds automatically. The Environment panel (⚙) shows the running commit and update status. A verified update replaces the executable in its current folder when you close the app; use **restart** there to install and reopen immediately. Source and debug runs do not update themselves.
+
+The macOS build is not notarized, so macOS refuses it the first time: open it from System Settings > Privacy & Security > **Open Anyway**. A Mac gets new builds from the releases page.
 
 ---
 
@@ -26,7 +28,7 @@ Ghost Notes is a notes app made with [Godot](https://godotengine.org/) 4.7, in w
 
 Ghost Notes is built from registries. Each page below is generated from one, listing every entry and where it lives; [docs/index.md](docs/index.md) is the whole map.
 
-- [Components](docs/components.md) (19 components, 6 workspaces) - what a note can carry, the room each part takes, which panel runs it, and what each part asks of the platform.
+- [Components](docs/components.md) (17 components, 6 workspaces) - what a note can carry, the room each part takes, which panel runs it, and what each part asks of the platform.
 - [Scenes](docs/scenes.md) (55) - the visualizer scenes in the rotation, each from its own doc comment.
 - [Media](docs/media.md) (11) - what the show is carried on.
 - [Look filters](docs/filters.md) (8) - the post-process over the whole picture.
@@ -35,7 +37,7 @@ Ghost Notes is built from registries. Each page below is generated from one, lis
 - [Stage actors and verbs](docs/stage.md) (3 actors, 22 verbs) - what a storyboard's `stage` entries are made of.
 - [Masking effects](docs/masking.md) (21) - the video effects editor: its model, its effects and its headless tools.
 - [Script marks](docs/script.md) (67) - every mark a script may carry - the script editor's palette.
-- [Agents](docs/agents.md) (4 writers, 3 painters, 2 assistants) - the AI command-line tools Ghost Notes hands its words, pictures and fixes to: which does what, how each is run, and how to install one.
+- [Agents](docs/agents.md) (4 writers, 3 painters, 3 assistants) - the AI command-line tools Ghost Notes hands its words, pictures and fixes to: which does what, how each is run, and how to install one.
 
 <!-- AUTODOC:FEATURES:END -->
 
@@ -113,6 +115,7 @@ scripts/check.sh                       # every gate (--gpu adds the ones that ne
 scripts/build.sh                       # the gates, then every target exported into dist/
 scripts/build.sh --release linux       # checked Linux release export and standalone launch check
 scripts/build.sh --release android     # the phone build; fetches its own minimal Android SDK (debug-signed)
+scripts/build.sh --release macos       # the universal Mac .app, exported from Linux (signed ad hoc)
 scripts/build.sh --install android     # the phone build, onto a connected phone
 python docs.py                         # regenerate docs/ and this README's lists
 ```

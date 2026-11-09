@@ -299,6 +299,11 @@ static func _based(els: Array, outline: String, frame: Vector2, notes: PackedStr
 static func _element(e: Dictionary, frame: Vector2, notes: PackedStringArray, before: Array = []) -> Dictionary:
 	var id := Props._text(e.get("id", e.get("name", "")), 40)
 	var out := {"id": id, "stage": Props._text(e.get("stage", ""), 30).to_lower()}
+	# (...and, laid by a painter at the table, its PLAN: the tool, how it is laid, the beat and the seconds it took - the painter's tools)
+	if e.get("plan") is Dictionary:
+		var pl: Dictionary = e["plan"]
+		out["plan"] = {"thing": Props._text(pl.get("thing", ""), 60), "part": Props._text(pl.get("part", ""), 60), "how": Props._text(pl.get("how", ""), 12),
+			"beat": Props._text(str(pl.get("beat", "")), 20), "seconds": float(Props._num(pl.get("seconds"), 0.0, 0.0, 900.0)), "pot": Props._text(pl.get("pot", ""), 60)}
 	# A SMEAR takes the paint of what it drags, an element laid before it
 	if e.has("smear"):
 		var from := String(e["smear"]).strip_edges().to_lower()
@@ -605,6 +610,10 @@ static func manner_of(e: Dictionary, tool: String, asked := "") -> String:
 	var kind := String(e.get("kind", ""))
 	if asked == "blend":
 		return "blend"
+	# (...laid by a painter: as it said - the painter's tools)
+	var how := String((e.get("plan", {}) as Dictionary).get("how", "")) if e.get("plan") is Dictionary else ""
+	if not how.is_empty():
+		return String(PAINTER_HOWS.get(how, "pat"))
 	match kind:
 		"stones":
 			return "place"
@@ -635,6 +644,10 @@ static func blend_manner(kind: String) -> String:
 
 ## HOW WIDE a tool of [param kind] ("brush", "sponge" or "tool"), [param mm] millimeters across its face, lays paint in
 ## [param manner]: a sponge held by its corner ([constant FLAT_MANNERS]) lays [constant CORNER_WIDE] of it.
+## A painter's ways of laying, as the manners they are (the painter's tools; a powder patted on, a mist sprayed).
+const PAINTER_HOWS := {"sponge": "stipple", "dab": "dab", "sweep": "sweep", "line": "line", "blend": "blend", "pat": "pat", "spray": "spray"}
+
+
 static func width_for(kind: String, mm: float, manner: String) -> float:
 	return mm * CORNER_WIDE if kind == "sponge" and not manner in FLAT_MANNERS else mm
 
@@ -2056,7 +2069,8 @@ class _Prog:
 		at = c
 		t += pace.x
 		_key(c, 0.0, press)
-		strokes.append({"pts": PackedVector2Array([c]), "t": PackedFloat32Array([t]), "r": r, "load": PackedFloat32Array([load])})
+		strokes.append({"pts": PackedVector2Array([c]), "t": PackedFloat32Array([t]), "r": r, "load": PackedFloat32Array([load]),
+			"press": PackedFloat32Array([press])})
 		# ...A CLOUD ONLY OFF A LOADED PUFF: its first press after it took up its powder, and none after (feedback 0026: "Real life dust
 		# wouldn't make much of any effect, at all")
 		if pat and count == 1:
@@ -2374,6 +2388,19 @@ static func face_reference(painted: Image, bare: Image, canvas: Dictionary, skin
 	return out
 
 
+## THE PAINTS ON TABLE [param table] (`table.json`'s): each cream's and powder's name and color, `["name #rrggbb", ...]` - what the face
+## painted first is told to paint with, so a hand at the table can lay every color of it (257002's was painted a bright orange rust no
+## pot held, and its rust laid a dark brown).
+static func table_paints(table: Dictionary) -> Array:
+	var out: Array = []
+	var mats: Dictionary = table.get("materials", {})
+	for nm in mats:
+		var m: Dictionary = mats[nm] if mats[nm] is Dictionary else {}
+		if String(m.get("kind", "")) in ["cream", "powder"] and Props._is_color(m.get("color")):
+			out.append("%s %s" % [String(nm), Props._color(m["color"], "#808080")])
+	return out
+
+
 ## THE PAINTING'S OWN COLORS, as a decorator copies them: [param ref] ([method face_reference]) taken [param many] colors, most of the
 ## surface first - `[{hex, share}]`, each color's share of the surface's points.
 static func face_palette(ref: Image, many := 8) -> Array:
@@ -2481,7 +2508,7 @@ static func told(skin: Dictionary) -> String:
 
 ## HOW LONG PAINT ACT [param act] TAKES AT A HAND'S PACE (seconds), from the files alone - the designs ([param doc], `skin.json`) and
 ## the table ([param table], `table.json`) - as [TablePaint] works it out on a table that stands; what a reader is told before one does.
-static func act_natural(act: Dictionary, doc: Dictionary, table: Variant) -> float:
+static func act_natural(act: Dictionary, doc: Dictionary, table: Variant, pictured := false, folded := {}) -> float:
 	var most := 0.0
 	for tr in act.get("tracks", []):
 		var t: Dictionary = tr
@@ -2501,6 +2528,9 @@ static func act_natural(act: Dictionary, doc: Dictionary, table: Variant) -> flo
 		var total := TablePaint.FETCH + TablePaint.RETURN
 		var loaded := ""
 		for id in t.get("paint", []):
+			# (...a coat the table folds into one before it lays nothing: [method folded_coats], TablePaint._one_coat)
+			if folded.has(String(id).to_lower()):
+				continue
 			for e in made["elements"]:
 				var ed: Dictionary = e
 				if String(ed["id"]).to_lower() != String(id).to_lower():
@@ -2509,12 +2539,52 @@ static func act_natural(act: Dictionary, doc: Dictionary, table: Variant) -> flo
 				var mm := float(t["size"]) if t.has("size") else width_for(String(tool[0]), float(tool[1]), manner)
 				var rect := rect_of(ed, frame, 0.0)
 				var prog := program(ed, manner, mm, cover(ed, rect, WHEN_PX, String(design.get("outline", "")), frame), rect)
-				total += TablePaint.MOVE + float(prog["natural"])
+				# ...LAID FROM THE PICTURE, as long as the table lets it take ([method TablePaint._from_picture]): its shape's program's
+				# time and the share more it may run to - a foundation's, whole, the most
+				var slack := 1.0
+				if pictured and manner in TablePaint.PICTURE_MANNERS and String(ed["kind"]) in ["fill", "line", "dots"]:
+					slack = TablePaint.FOUNDATION_SLACK if String(ed["kind"]) == "fill" and String(ed.get("d", "")) == "all" else TablePaint.PICTURE_TOLD
+				# (...laid by a painter at the table: the seconds it took there - the painter's tools)
+				var planned := float((ed.get("plan", {}) as Dictionary).get("seconds", 0.0)) if ed.get("plan") is Dictionary else 0.0
+				total += TablePaint.MOVE + (planned if planned > 0.0 else float(prog["natural"]) * slack)
 				if not String(ed["kind"]) in ["stones", "smear", "mist"] and manner != "blend" and String(ed["paint"]) != loaded:
 					total += TablePaint.LOAD
 					loaded = String(ed["paint"])
 		most = maxf(most, total)
 	return most
+
+
+## THE COATS A TABLE FOLDS INTO ONE BEFORE (TablePaint._one_coat), as [param acts] (`acts.json`'s, in their order) and [param doc] say: each
+## fill over the whole surface taken up from a pot an earlier one was taken from - `{id: true}` (lowered). Their acts lay nothing: a
+## reader told 279 s for 257002's second white would talk five minutes over idle hands.
+static func folded_coats(acts: Array, doc: Dictionary) -> Dictionary:
+	var whole := {}
+	for g in doc.get("designs", []):
+		if not (g is Dictionary):
+			continue
+		# (...as the table reads it: an opening fill over most of the surface is one over all of it - [method _based])
+		var fr: Array = (g as Dictionary).get("frame", [150.0, 210.0])
+		var made := sanitize(g, Vector2(float(fr[0]), float(fr[1])), String((g as Dictionary).get("outline", "")))
+		for e in made["elements"]:
+			if String((e as Dictionary).get("kind", "")) == "fill" and String((e as Dictionary).get("d", "")) == "all":
+				whole[String((e as Dictionary).get("id", "")).to_lower()] = true
+	var seen := {}
+	var out := {}
+	for a in acts:
+		for tr in (a as Dictionary).get("tracks", []) if a is Dictionary else []:
+			var t: Dictionary = tr
+			if String(t.get("law", "")) != "paint":
+				continue
+			var pot := String(t.get("from", "")).to_lower()
+			for id in t.get("paint", []):
+				var k := String(id).to_lower()
+				if not whole.has(k) or pot.is_empty():
+					continue
+				if seen.has(pot) and seen[pot] != k:
+					out[k] = true
+				elif not seen.has(pot):
+					seen[pot] = k
+	return out
 
 
 ## WHAT TOOL [param thing] (its part [param part]) IS on table [param table]: [its kind - brush, sponge or tool -, how wide it works].

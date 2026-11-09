@@ -11,6 +11,49 @@ Researched 2026-10-07. Scaffolded the same day (below); the first real Actions r
 - Verified locally: both exports from a clean clone of HEAD (fresh import included), the Linux launch check, archive contents, checksums.
 - NOT verified: anything on a GitHub runner (the gatekeeping job on a clean Ubuntu image, the Windows launch check, the publish job); the full gate suite is not known green (`cards_choose_check` was failing); the Windows `.exe` has never been run.
 
+## macOS, and why not iOS (2026-11-09)
+
+The user: "I can't test them myself, since I have neither of those devices, but I think we should
+try to support it, if we can do so relatively easily. For any drive-by users."
+
+- **macOS: built.** Preset `macOS` (universal arm64 + x86_64, bundle id `eco.src.ghost`, category
+  Productivity, the build's ghost as its icon from `AppIcon.PACKAGED["macos"]`, a microphone line
+  for the voice sampler), exported on Linux like the rest: `scripts/build.sh --release macos` ->
+  `dist/ghost-notes-macos.zip` (`Ghost Notes.app`, 67 MB zipped; the pinned template archive
+  already carried `macos.zip`). Signed AD HOC by Godot's built-in signer - an Apple Silicon Mac runs
+  no unsigned code - and NOT NOTARIZED, which takes a paid Apple Developer account (the user's call
+  and credentials; Godot can notarize from Linux through rcodesign if that ever changes). So a copy
+  a browser downloads is refused once: System Settings > Privacy & Security > Open Anyway (the
+  release notes and README say so).
+- **CI**: the export job builds it, `package_release.py archive macos` copies the zip as-is (asset
+  `ghost-notes-macos-universal.zip`, no raw executable), and `macos-launch` on a `macos-15` (Apple
+  Silicon) runner verifies the signature (`codesign --verify --deep --strict`) and runs
+  `smoke-export.sh` on the .app from an empty profile (HOME and XDG pointed at it; Perl's alarm
+  where there is no GNU `timeout`). Publish needs it. Free: the repository is public.
+- **No in-app update on a Mac** (`AppUpdate`): the program is sealed in a signed bundle, and a
+  quarantined download runs translocated from a read-only folder. The Environment panel says new
+  builds are on GitHub Releases.
+- **What the app already had**: `Deps` rows and PATH extras for macOS (FFmpeg, uv, TeX, Lean,
+  Homebrew's folders), `Capabilities` counts it as a desktop, `Subprocess` runs there without the
+  Linux death pact, the exporter warns that there is no virtual display.
+- **Verified locally**: the cross-export from Linux with no warnings; the zip holds the .app with
+  its executable bit, `_CodeSignature`, `icon.icns` and an Info.plist with the bundle id, category
+  and microphone line.
+- **NOT verified**: anything on a Mac. The first Actions run is the first time the build meets
+  one, and the launch check is headless: it proves the app starts, reads a note and unpacks its
+  hosts, never that the picture draws (Forward+ on Metal, MoltenVK on an Intel Mac), the Intel half,
+  Gatekeeper's prompt, the Python hosts or any fetched program. If `codesign --verify --strict`
+  rejects Godot's ad hoc seal while the launch passes, drop `--strict` before blaming the build.
+
+**iOS: not built, and not easy.** Godot can only write an Xcode project on Linux; the `.ipa` needs
+Xcode on a Mac runner, and Godot's iOS export wants an App Store team id even for an unsigned
+build. No drive-by user can install an unsigned `.ipa`: it takes the user's paid developer account
+(TestFlight or the App Store, certificates and provisioning profiles as CI secrets) or a sideloading
+tool that re-signs it with the visitor's own Apple ID every seven days. And what it would install
+is the phone build - "on a phone, it is a notes app and nothing more" (no agents, voices, FFmpeg or
+export: iOS runs no child programs at all). The icons are ready (`ios_1024*.png`,
+next/app_icon.md). Revisit only with a developer account.
+
 ## Gatekeeping on four cores (2026-10-12)
 
 The user: "the `--jobs auto` flag doesn't seem to use all 4 cores, in CI builds. The gatekeeping is
@@ -64,7 +107,7 @@ The possible **one release per day** limit can be added later by changing the re
 
 ## Later platforms and updates
 
-- macOS needs its own export validation and distribution/signing decisions. Android needs signing credentials and a mobile distribution path. Add each as a new target of the same local scripts and a new validation job, rather than branching build logic inside one workflow.
+- macOS is built (above); notarization waits on an Apple Developer account. Android needs signing credentials and a mobile distribution path. Add each as a new target of the same local scripts and a new validation job, rather than branching build logic inside one workflow.
 - Desktop updater (2026-10-10): release exports embed `data/build_info.json` with their full commit hash. `AppUpdate` in the Environment panel checks published build releases at launch and every six hours when **keep up to date** is enabled, then confirms that the release commit is ahead of the current build. It downloads a raw Linux or Windows executable into `user://updates`, verifies the manifest checksum, and stages a copy beside the currently running executable. On any normal exit, the downloaded executable starts headlessly as a one-shot helper, waits for the old process to close, swaps the files, and keeps the previous executable as a rollback copy. The panel shows the running build and a restart action when an update is ready. Editor, debug, dirty and mobile builds do not auto-update. GitHub exposes release assets and `browser_download_url`; Godot has `HTTPRequest.download_file`. [GitHub release API](https://docs.github.com/en/rest/releases/releases), [release assets API](https://docs.github.com/en/rest/releases/assets), [Godot HTTPRequest](https://docs.godotengine.org/en/4.5/classes/class_httprequest.html)
 
 ## Scope boundary

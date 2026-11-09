@@ -36,14 +36,19 @@ uniform float bristle_splay = 0.0;
 const float BRISTLE_CORE_IN = 1.0;
 const float BRISTLE_CORE_DOWN = 1.0;
 const float BRISTLE_CORE_WET = 0.45;
-// how much wider a sponge squeezed in the hand bulges for how much thinner it is (mostly air, it gives little back)
+// how much wider a sponge squeezed in the hand bulges for how much thinner it is (mostly air, it gives little back), and how much
+// thicker its ends swell as the foam is pushed out from under the fingers
 const float SQUEEZE_BULGE = 0.15;
+const float SQUEEZE_EDGE_SWELL = 0.12;
 // A SPONGE GIVES where it is pressed: the way it is pressed (the mesh's space) and how far, a share of its depth; its middle
 uniform vec4 squash = vec4(0.0);
 uniform vec3 squash_at = vec3(0.0);
 // ...SQUEEZED IN THE HAND, its broad faces pressed together about its middle (squash_at): the way across them (the mesh's space) and
 // how much thinner it is, 0-1 - both sides in, then back out to its own shape, never longer than it is (TablePaint._squeeze_of)
 uniform vec4 squeeze = vec4(0.0);
+// ...PINCHED by a finger and thumb, not pressed between two palms: how far from its middle the press reaches (the mesh's space; 0, all
+// of it alike)
+uniform float squeeze_reach = 0.0;
 // a surface it is pressed onto (its own space): its normal toward it and how far along that the surface is; how far the deepest
 // of it went past it, the band over it that gives and how far it spreads; the deepest of it (TablePaint._flat_on)
 uniform vec4 flat_on = vec4(0.0, 1.0, 0.0, 0.0);
@@ -51,6 +56,14 @@ uniform vec3 flat_by = vec3(0.0);
 uniform vec3 flat_at = vec3(0.0);
 // (spread out from the deepest point as from a disc this wide, never from a point)
 const float FLAT_CORE = 0.004;
+// LAID OVER A POT'S MOUTH TOO NARROW FOR IT AND PUSHED DOWN IN ITS MIDDLE (TablePaint._drape_on; the user, 2026-11-08: "You would expected
+// it dabbed flat: resting on both sides of the container, and compressed/pushed from the middle, into the container. It would bend in the
+// middle"): the way up (its own space) and how high its face is along it; the mouth's middle (its own space) and how wide it is inside its
+// wall (0: not laid over one); how far its face's middle is pushed down, how much further its back is pressed in under the finger, how
+// thick it is along the way up, and how wide the finger presses (a share of the mouth). What rests on the rim, outside the mouth, stays.
+uniform vec4 drape_on = vec4(0.0, 1.0, 0.0, 0.0);
+uniform vec4 drape_at = vec4(0.0);
+uniform vec4 drape_by = vec4(0.0);
 // PRESSED ONTO A SKIN, A PAD OR A SPONGE TAKES ITS SHAPE (TablePaint._press_on and press_lands - the same arithmetic): what stands
 // over the skin, its heights along the skin's front every cell (meters; far under where nothing is); where its first cell is, how wide a
 // cell is (0: not on a skin) and how far its face sags into a hollow; this mesh's space into the front's and back; where its face is
@@ -157,7 +170,13 @@ void vertex() {
 		vec3 d = normalize(squeeze.xyz);
 		vec3 rel = VERTEX - squash_at;
 		float along = dot(rel, d);
-		VERTEX = squash_at + d * along * (1.0 - squeeze.w) + (rel - d * along) * (1.0 + squeeze.w * SQUEEZE_BULGE);
+		vec3 lateral = rel - d * along;
+		// PINCHED IN ITS MIDDLE (the user, 2026-11-08: "the entire sponge is compressed uniformly ... like praying. Instead, the sponge
+		// should compress from the middle - while the edges still try to expand, because we're only pressing in the center with our
+		// fingers and thumb"): thinnest under the fingers, falling off away from them, the ends their own thickness and a little more
+		float pinch = squeeze_reach > 0.0 ? exp(-dot(lateral, lateral) / (2.0 * squeeze_reach * squeeze_reach)) : 1.0;
+		float thick = 1.0 - squeeze.w * pinch + squeeze.w * SQUEEZE_EDGE_SWELL * (1.0 - pinch);
+		VERTEX = squash_at + d * along * thick + lateral * (1.0 + squeeze.w * SQUEEZE_BULGE * pinch);
 	}
 	// PRESSED ONTO A SKIN (TablePaint._press_on): each bit drawn as high over the skin as press_lands says, along the skin's depth so
 	// it lands where it says
@@ -171,6 +190,26 @@ void vertex() {
 			float h = press_lands(fs, zf, back, press_cells.w);
 			if (abs(h - fs) > 1e-6) {
 				VERTEX = (press_out * vec4(pq.xy, zs + h, 1.0)).xyz;
+			}
+		}
+	}
+	// LAID OVER A POT'S MOUTH, BENT DOWN INTO IT: most in the middle, nothing at the wall - its back pressed in further under the finger -
+	// and its faces turned as it bends
+	if (drape_at.w > 0.0) {
+		vec3 dn = normalize(drape_on.xyz);
+		vec3 rel = VERTEX - drape_at.xyz;
+		vec3 lat = rel - dn * dot(rel, dn);
+		float dl = length(lat);
+		float d = dl / drape_at.w;
+		if (d < 1.0) {
+			float sag = (1.0 - d * d) * (1.0 - d * d);
+			float up = clamp((dot(VERTEX, dn) - drape_on.w) / max(drape_by.z, 1e-5), 0.0, 1.0);
+			float fw = max(drape_by.w, 0.05);
+			float finger = exp(-d * d / (2.0 * fw * fw));
+			VERTEX -= dn * (drape_by.x * sag + drape_by.y * finger * up);
+			float slope = (drape_by.x * -4.0 * d * (1.0 - d * d) + drape_by.y * up * finger * -d / (fw * fw)) / drape_at.w;
+			if (dl > 1e-6) {
+				NORMAL = normalize(NORMAL + dot(NORMAL, dn) * slope * lat / dl);
 			}
 		}
 	}

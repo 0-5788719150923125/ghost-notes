@@ -107,7 +107,7 @@ static func blocks_of(path: String) -> Dictionary:
 ## `preview` (its words as a reader sees them, [method Manuscript.preview_of] - less a first line that only says the
 ## title again, as a chapter's heading does), `attached` (its components,
 ## [method Components.attached_of]) and `words`, everything a search looks through - the title, the
-## words and the components' names, lower-cased.
+## words, the components' names and the Medium's format, lower-cased.
 static func summary_of(path: String) -> Dictionary:
 	var raw := FileAccess.get_file_as_string(path)
 	var t := FrontMatter.field_of(raw, "title").strip_edges()
@@ -117,6 +117,10 @@ static func summary_of(path: String) -> Dictionary:
 	var attached := Components.attached_of(res.data if res.ok and res.data is Dictionary else {})
 	var body := plain_of(String(FrontMatter.split(raw)["body"]))
 	var names := " ".join(attached.map(func(k: String) -> String: return Registry.label(Components.REGISTRY, k)))
+	# ...and the format the Medium names ("letter", "dispatch", "tablet"), so a search for one finds it
+	var medium: Variant = (res.data as Dictionary).get("medium") if res.ok and res.data is Dictionary else null
+	if medium is Dictionary:
+		names += " " + String((medium as Dictionary).get("format", "")).replace("_", " ")
 	var lead := body.strip_edges(true, false).get_slice("\n", 0).strip_edges()
 	var shown := body.strip_edges(true, false).substr(lead.length()) if _same_words(lead, t) else body
 	return {"title": t, "preview": Manuscript.preview_of(shown), "attached": attached,

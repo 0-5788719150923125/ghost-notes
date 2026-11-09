@@ -23,7 +23,7 @@ _The original show with nothing to set: scenes chosen by the song's own fingerpr
 
 AutoMedium - the original show with nothing to set: one scene at a time, filling the frame, chosen by the song's own fingerprint and cut on its beat (2026-10-06, the user: an "auto" type "which removes all options from the user, and just automatically plays the scene, seeded by the audio, just like the original mode did it").
 
-IT DRAWS EXACTLY WHAT `FullMedium` DRAWS. What makes it a medium of its own is what it takes: no settings at all (its row's `bare`). The Picture card shows nothing under it but the picker, picking it puts the Director's dials back to their defaults, and its block in a note is the medium's name alone - so the same song is the same show in every note, whatever another note's dials were left at. The frame is landscape: a portrait show is Full frame's.
+IT DRAWS EXACTLY WHAT `FullMedium` DRAWS. What makes it a medium of its own is what it takes: no settings at all (its row's `bare`). The Medium card shows nothing under it but the picker, picking it puts the Director's dials back to their defaults, and its block in a note is the medium's name alone - so the same song is the same show in every note, whatever another note's dials were left at. The frame is landscape: a portrait show is Full frame's.
 
 Source: [src/media/auto.gd](../src/media/auto.gd)
 
@@ -103,6 +103,54 @@ Reuses the book's desk, lamp and springs (`BookMedium`); nothing about pages or 
 
 Source: [src/media/tablet.gd](../src/media/tablet.gd)
 
+## `letter` - Letter
+
+_Somebody writing a letter at a desk, reading it aloud as the pen puts it down in a cursive hand: a thought said and not written, a line crossed out, a sketch drawn as it is described, the pen tapped while the writer thinks or pointed at whoever watches, and a picture over the whole screen for a passage read over it._
+
+LetterMedium - somebody writing a letter at a desk, reading it aloud as the pen puts it down (next/letter.md). The desk's medium (`DeskMedium`) - its pad, its pen, its camera, the voice followed word by word - with the letter's own hand and the letter's own moments (`LetterScript`).
+
+WHAT IT DRAWS FROM: the reading's document (`_subs.document`) - its `source`, the letter with its marks, and its `letter`, what the Letter's rows on the Medium card hand the reading (`LetterFormat.document`): the hand's `seed`, each sketch's SVG (`svgs`), the ink step's layout of them (`ink`) and each picture's file (`pictures`). The words are the hand's own, so nothing else is needed to write them: a letter whose sketches and pictures are not made yet plays all the same, its sketches' paragraphs said and its pictures' passages read over the desk.
+
+THE PEN WRITES TWO WORDS AHEAD (`LetterScript`'s class note; 2026-10-27, the user: "maybe 2 words ahead of the speaking?"): the desk's elastic dictation, each word written while the voice says the one `LetterScript.AHEAD_WORDS` before it (`_due`, `_paced_end`, `_share`) - on the voice's own times, so at any voice's speed - and never quicker than `LetterScript.QUICKEST` the hand's pace; a paragraph the voice waits for, begun as the voice gets to it; for a page to turn, no sooner than the voice has read it. Where the pen cannot be that far ahead the voice waits for it (the rests the script wrote into it). Under a picture the dictation is the desk's own, the pen kept with the voice, unseen. A line's way back to the margin is a quick return (`LINE_RETURN`), as a hand's is.
+
+THE PEN IS PICKED UP FROM THE DESK (2026-10-28, the user: "at the beginning, the pen starts floating in the air already. I think it would be better if the pen started from a resting place upon the table, to the right of the paper, and if we gently picked it up at the beginning, after the intro-blur"): it lies beside the pad's right edge (`DeskLook.pen_rest`, nothing else on the desk set down there) through the intro and its focus pull, and over the page's blank moment is lifted, turned up into the hand and carried to the first stroke (`_pick_up_pose`). AND IT IS SET DOWN AGAIN (2026-10-30, the user: "can we set the pen down again, after writing the final line of text?"): a beat after its last action, the same way back to its place (`_set_down_pose`).
+
+A THOUGHT IS NOT WRITTEN: while the writer thinks a passage in italics the pen is lifted.
+
+THE CAMERA'S ARC OVER A PAGE (2026-10-27, the user: "The forward and backward zooming of the camera is nauseating. Like the journal and tablet mediums, we really need to dial that behavior back, and make it much more gradual/gentle"): as the book's and the tablet's (`_arc`) - a page opens on the whole pad, closes in on the writing as it gets under way and lets go before its turn - between two framings under twice as far apart (`LETTER_WIDE`, `LETTER_LOCAL`; it had been the desk's 1.45 m and 0.38, near four times, all the way out and back at every turn), on the tablet's slow springs (`LETTER_TAU`). Nothing else moves it in or out - a thought, a point and a tap move where it looks and never how close (each had stepped it back and in again) - but a point at the camera, a little back (`CAMERA_K`), and a still, held close on its drawing. Across, it holds the column's middle: close, the whole pad's width is in the frame, and it had swung between a short line and a long one.
+
+THE PEN TAPS (`<!-- tap -->`): it is lifted, turned over in the hand and its top tapped on the pad, or the desk beside it, a few times, then turned back - `_tap_pose`, laid over the pen's own place while it lasts.
+
+THE PEN POINTS AT WHOEVER WATCHES (`<!-- point: camera -->`): lifted off the page and its nib turned to the lens for the sentence - and in a thought for the rest after it (`LetterScript.POINT_LINGER`), as a point at a sketch lingers on what it points at - then put back (`_camera_pose`).
+
+A PICTURE TAKES THE SCREEN (`<!-- image (full): -->` ... `<!-- /image -->`): it fades up over the desk as the passage under it begins, moves slowly in its own way (`MOVES`: a pan its length guessed from the script, never from the voice's times, so it never jumps as a live reading's words arrive) and fades back to the desk as the passage ends. The pen writes on under it: the page the camera comes back to has the passage on it. PICTURES DISSOLVE INTO ONE ANOTHER (2026-10-27, the user: "blend from one picture into a second one, or a third one, directly without ever seeing the page again ... each with different panning/zooming behavior"): one whose passage begins where the last one's ends (its span's `blend`) comes up over it, the one under held whole until it has, so the page is never seen between them (`pictures_at`); and no picture moves as the one before it did. A HESITATION BEFORE ITS MARK IS THE WRITER'S FIRST (2026-10-28, the user, of Secular Haze's "Housing came into my room looking for you." and the `<!-- hesitation: 3 -->` after it: "the picture that follows is immediately displayed - not waiting for the hesitation at all"): the picture comes up as the pen is taken up again, `RESUME_LEAD` before the voice goes on, the desk seen through the pause - and one it dissolves from is held whole through it.
+
+A STILL IS DEAD STILL (`<!-- still -->`: "the camera holds still on the cross and the dot, with the pen well clear of them, or the test cannot work"): from the mark to the next written line the camera frames the last drawing on the page, its slow wander stopped where it was, and the pen is sent off the pad.
+
+THE SUBTITLES CAPTION ONLY WHAT CANNOT BE READ ON THE PAGE (2026-10-27, the user: "hide the subtitles for any text that is already being written on the page ... anything we can't see or didn't write directly on the page will need subtitles"): a line is drawn when any of its words is not written - a thought, one said as a sketch is drawn - or while a picture covers the screen (`_captioned`, `Subtitles.captions`); a line of the letter, written two words ahead of the voice, is read on the page instead.
+
+THE LETTER ENDS WHEN THE PEN DOES: an unspoken line after the last word ("Dear Ink," on a new page) is written before the camera stands back and the picture goes to black.
+
+Source: [src/desk/letter.gd](../src/desk/letter.gd)
+
+## `dispatch` - Dispatch desk
+
+_One desk late at night in a hollow under the ground, seen from the chair: an old terminal that types what is said, a dozen labeled flip phones that ring and are held to the ear (every voice but the room's heard through one), a radar, a shortwave receiver, a printer, small screens - the camera turning to whatever is active, roots growing across the desk._
+
+DispatchMedium - ONE DESK, LATE AT NIGHT, IN A HOLLOW UNDER THE GROUND, SEEN FROM THE CHAIR (next/dispatch.md; the user's Targeted Individuality: "the desk, with the terminal-style computer, and the cell phones, and the gadgets on the table - with the ability to shift between the different things ... look left and right, or shift left and right - as well as in/out, and possibly even tilting forward/back. But as before, we're looking for gentle transitions"). The man who works it is never seen: the viewer sits where he sits, and everything on the desk moves on its own.
+
+WHAT IT DRAWS FROM: the reading's document - its `source`, the note with its marks (`DispatchScript`); its `dispatch`, what the Dispatch desk's rows on the Medium card hand (`DispatchFormat.document`): the desk's `seed` and each picture's file (`pictures`). The desk itself (`DispatchSet`) is built from the note's `desk:` block (the phones' labels) and the seed; the roots (`DispatchRoots`) from the seed.
+
+THE DESK ACTS IN THE RESTS THE VOICE LEAVES FOR IT (`_place`): each action of the script before its spoken word, placed back from that word by what the script wrote after it in the same silence - or on from the word before when the next is not heard yet - and, begun, kept where it began (`_held`; a live reading's words arrive a sentence at a time). Everything on the desk is then a pure function of show time (`_pose`), so a render draws what the live reading drew, and a scrub lands where the reading is.
+
+THE CAMERA SITS IN THE CHAIR AND TURNS TO WHAT IS ACTIVE (`_attention`, `SPOTS`): a phone ringing, the terminal while it types or shows something, the radar on a ping, the receiver while it plays static, a picture landing on a screen, the printer printing; `look:` turns it on purpose and it stays. It leans toward what it looks at and its lens closes in on the small things (the terminal's text is read on it), on critically damped springs (`SPRING_TAU`) - nothing jumps, nothing whips; with nothing new for a while it eases back to the whole desk; a slow breath of wander under it. WHAT IT TURNS TO IS SEEN: every look holds long enough to settle (`LOOK_LEAST`), a ping to the end of the sentence said over it (`PING_HOLD`), and it never leaves a thing only to come straight back to it (`AWAY_LEAST`).
+
+A PHONE IN HAND IS HELD TO THE EAR: it rises out of its row, flips open and floats up beside the camera, in the frame's lower right, its screen saying who is on it and for how long - and goes back the same way. A CALL IS SPEED-DIALED: the phone comes up before the eye, 1 is held and Send pressed, then it goes to the ear for the rings. One on hold lies open on the desk in front of the rows, ON HOLD on its screen. A phone ringing buzzes and rattles in its row. A TEXT chimes, and the phone comes up open before the eye, the message on its screen - never captioned; a reply is typed into it as it is said, under the message, and sent; then it goes home (2026-11-06, the author: "It would be better to ding with a notification sound, then pick up the cell phone, open it, and look at the message on the screen").
+
+THE SUBTITLES CAPTION WHAT CANNOT BE READ ON THE DESK, the letter's rule: speech, never the words typed on the terminal as they are said (`_captioned`); a text is read on its phone and nowhere else.
+
+Source: [src/dispatch/dispatch.gd](../src/dispatch/dispatch.gd)
+
 ## `table` - Card table
 
 _A card reading at a table, seen from the reader's chair: the deck shuffles while the reader talks, each card is drawn, held up beside its booklet entry, read and laid into the spread. The Table mode's own medium - its deck, pictures and spread come from the episode the agents produced._
@@ -138,54 +186,6 @@ WHAT STANDS BEFORE THEM IS DRAWN OVER THEM, still (the fourth pass, 2026-10-22: 
 A PURE FUNCTION OF THE SHOW'S TIME: what is drawn at a moment depends on the plan and the phones, never on what was drawn before - so a seek lands where it should and an export draws what was heard.
 
 Source: [src/likeness/likeness.gd](../src/likeness/likeness.gd)
-
-## `letter` - Letter
-
-_Somebody writing a letter at a desk, reading it aloud as the pen puts it down in a cursive hand: a thought said and not written, a line crossed out, a sketch drawn as it is described, the pen tapped while the writer thinks or pointed at whoever watches, and a picture over the whole screen for a passage read over it. The Letter component's own medium._
-
-LetterMedium - somebody writing a letter at a desk, reading it aloud as the pen puts it down (next/letter.md). The desk's medium (`DeskMedium`) - its pad, its pen, its camera, the voice followed word by word - with the letter's own hand and the letter's own moments (`LetterScript`).
-
-WHAT IT DRAWS FROM: the reading's document (`_subs.document`) - its `source`, the letter with its marks, and its `letter`, what the Letter component hands the reading (`LetterCard.document`): the hand's `seed`, each sketch's SVG (`svgs`), the ink step's layout of them (`ink`) and each picture's file (`pictures`). The words are the hand's own, so nothing else is needed to write them: a letter whose sketches and pictures are not made yet plays all the same, its sketches' paragraphs said and its pictures' passages read over the desk.
-
-THE PEN WRITES TWO WORDS AHEAD (`LetterScript`'s class note; 2026-10-27, the user: "maybe 2 words ahead of the speaking?"): the desk's elastic dictation, each word written while the voice says the one `LetterScript.AHEAD_WORDS` before it (`_due`, `_paced_end`, `_share`) - on the voice's own times, so at any voice's speed - and never quicker than `LetterScript.QUICKEST` the hand's pace; a paragraph the voice waits for, begun as the voice gets to it; for a page to turn, no sooner than the voice has read it. Where the pen cannot be that far ahead the voice waits for it (the rests the script wrote into it). Under a picture the dictation is the desk's own, the pen kept with the voice, unseen. A line's way back to the margin is a quick return (`LINE_RETURN`), as a hand's is.
-
-THE PEN IS PICKED UP FROM THE DESK (2026-10-28, the user: "at the beginning, the pen starts floating in the air already. I think it would be better if the pen started from a resting place upon the table, to the right of the paper, and if we gently picked it up at the beginning, after the intro-blur"): it lies beside the pad's right edge (`DeskLook.pen_rest`, nothing else on the desk set down there) through the intro and its focus pull, and over the page's blank moment is lifted, turned up into the hand and carried to the first stroke (`_pick_up_pose`). AND IT IS SET DOWN AGAIN (2026-10-30, the user: "can we set the pen down again, after writing the final line of text?"): a beat after its last action, the same way back to its place (`_set_down_pose`).
-
-A THOUGHT IS NOT WRITTEN: while the writer thinks a passage in italics the pen is lifted.
-
-THE CAMERA'S ARC OVER A PAGE (2026-10-27, the user: "The forward and backward zooming of the camera is nauseating. Like the journal and tablet mediums, we really need to dial that behavior back, and make it much more gradual/gentle"): as the book's and the tablet's (`_arc`) - a page opens on the whole pad, closes in on the writing as it gets under way and lets go before its turn - between two framings under twice as far apart (`LETTER_WIDE`, `LETTER_LOCAL`; it had been the desk's 1.45 m and 0.38, near four times, all the way out and back at every turn), on the tablet's slow springs (`LETTER_TAU`). Nothing else moves it in or out - a thought, a point and a tap move where it looks and never how close (each had stepped it back and in again) - but a point at the camera, a little back (`CAMERA_K`), and a still, held close on its drawing. Across, it holds the column's middle: close, the whole pad's width is in the frame, and it had swung between a short line and a long one.
-
-THE PEN TAPS (`<!-- tap -->`): it is lifted, turned over in the hand and its top tapped on the pad, or the desk beside it, a few times, then turned back - `_tap_pose`, laid over the pen's own place while it lasts.
-
-THE PEN POINTS AT WHOEVER WATCHES (`<!-- point: camera -->`): lifted off the page and its nib turned to the lens for the sentence - and in a thought for the rest after it (`LetterScript.POINT_LINGER`), as a point at a sketch lingers on what it points at - then put back (`_camera_pose`).
-
-A PICTURE TAKES THE SCREEN (`<!-- image (full): -->` ... `<!-- /image -->`): it fades up over the desk as the passage under it begins, moves slowly in its own way (`MOVES`: a pan its length guessed from the script, never from the voice's times, so it never jumps as a live reading's words arrive) and fades back to the desk as the passage ends. The pen writes on under it: the page the camera comes back to has the passage on it. PICTURES DISSOLVE INTO ONE ANOTHER (2026-10-27, the user: "blend from one picture into a second one, or a third one, directly without ever seeing the page again ... each with different panning/zooming behavior"): one whose passage begins where the last one's ends (its span's `blend`) comes up over it, the one under held whole until it has, so the page is never seen between them (`pictures_at`); and no picture moves as the one before it did. A HESITATION BEFORE ITS MARK IS THE WRITER'S FIRST (2026-10-28, the user, of Secular Haze's "Housing came into my room looking for you." and the `<!-- hesitation: 3 -->` after it: "the picture that follows is immediately displayed - not waiting for the hesitation at all"): the picture comes up as the pen is taken up again, `RESUME_LEAD` before the voice goes on, the desk seen through the pause - and one it dissolves from is held whole through it.
-
-A STILL IS DEAD STILL (`<!-- still -->`: "the camera holds still on the cross and the dot, with the pen well clear of them, or the test cannot work"): from the mark to the next written line the camera frames the last drawing on the page, its slow wander stopped where it was, and the pen is sent off the pad.
-
-THE SUBTITLES CAPTION ONLY WHAT CANNOT BE READ ON THE PAGE (2026-10-27, the user: "hide the subtitles for any text that is already being written on the page ... anything we can't see or didn't write directly on the page will need subtitles"): a line is drawn when any of its words is not written - a thought, one said as a sketch is drawn - or while a picture covers the screen (`_captioned`, `Subtitles.captions`); a line of the letter, written two words ahead of the voice, is read on the page instead.
-
-THE LETTER ENDS WHEN THE PEN DOES: an unspoken line after the last word ("Dear Ink," on a new page) is written before the camera stands back and the picture goes to black.
-
-Source: [src/desk/letter.gd](../src/desk/letter.gd)
-
-## `dispatch` - Dispatch desk
-
-_One desk late at night in a hollow under the ground, seen from the chair: an old terminal that types what is said, a dozen labeled flip phones that ring and are held to the ear, a radar, a shortwave receiver, a printer, small screens - the camera turning to whatever is active, roots growing across the desk. The Dispatch desk component's own medium._
-
-DispatchMedium - ONE DESK, LATE AT NIGHT, IN A HOLLOW UNDER THE GROUND, SEEN FROM THE CHAIR (next/dispatch.md; the user's Targeted Individuality: "the desk, with the terminal-style computer, and the cell phones, and the gadgets on the table - with the ability to shift between the different things ... look left and right, or shift left and right - as well as in/out, and possibly even tilting forward/back. But as before, we're looking for gentle transitions"). The man who works it is never seen: the viewer sits where he sits, and everything on the desk moves on its own.
-
-WHAT IT DRAWS FROM: the reading's document - its `source`, the note with its marks (`DispatchScript`); its `dispatch`, what the Dispatch desk's card hands (`DispatchCard.document`): the desk's `seed` and each picture's file (`pictures`). The desk itself (`DispatchSet`) is built from the note's `desk:` block (the phones' labels) and the seed; the roots (`DispatchRoots`) from the seed.
-
-THE DESK ACTS IN THE RESTS THE VOICE LEAVES FOR IT (`_place`): each action of the script before its spoken word, placed back from that word by what the script wrote after it in the same silence - or on from the word before when the next is not heard yet - and, begun, kept where it began (`_held`; a live reading's words arrive a sentence at a time). Everything on the desk is then a pure function of show time (`_pose`), so a render draws what the live reading drew, and a scrub lands where the reading is.
-
-THE CAMERA SITS IN THE CHAIR AND TURNS TO WHAT IS ACTIVE (`_attention`, `SPOTS`): a phone ringing, the terminal while it types or shows something, the radar on a ping, the receiver while it plays static, a picture landing on a screen, the printer printing; `look:` turns it on purpose and it stays. It leans toward what it looks at and its lens closes in on the small things (the terminal's text is read on it), on critically damped springs (`SPRING_TAU`) - nothing jumps, nothing whips; with nothing new for a while it eases back to the whole desk; a slow breath of wander under it. WHAT IT TURNS TO IS SEEN: every look holds long enough to settle (`LOOK_LEAST`), a ping to the end of the sentence said over it (`PING_HOLD`), and it never leaves a thing only to come straight back to it (`AWAY_LEAST`).
-
-A PHONE IN HAND IS HELD TO THE EAR: it rises out of its row, flips open and floats up beside the camera, in the frame's lower right, its screen saying who is on it and for how long - and goes back the same way. A CALL IS SPEED-DIALED: the phone comes up before the eye, 1 is held and Send pressed, then it goes to the ear for the rings. One on hold lies open on the desk in front of the rows, ON HOLD on its screen. A phone ringing buzzes and rattles in its row. A TEXT chimes, and the phone comes up open before the eye, the message on its screen - never captioned; a reply is typed into it as it is said, under the message, and sent; then it goes home (2026-11-06, the author: "It would be better to ding with a notification sound, then pick up the cell phone, open it, and look at the message on the screen").
-
-THE SUBTITLES CAPTION WHAT CANNOT BE READ ON THE DESK, the letter's rule: speech, never the words typed on the terminal as they are said (`_captioned`); a text is read on its phone and nowhere else.
-
-Source: [src/dispatch/dispatch.gd](../src/dispatch/dispatch.gd)
 
 ## `desk` - Desk
 

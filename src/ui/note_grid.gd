@@ -14,7 +14,8 @@ class_name NoteGrid
 ## the column the tiles make is the header's width too ([method _layout]).
 ##
 ## THE SEARCH NARROWS THE GRID as it is typed: a note stays when every word typed is in its title, its words
-## or the names of its components ([method NoteStore.summary_of] `words`), so "letter" finds the letters.
+## or the names of its components and its Medium's format ([method NoteStore.summary_of] `words`), so "letter"
+## finds the letters.
 ## Escape clears it; Enter opens the first note left.
 ##
 ## A NOTE SAVED, MADE OR DELETED ELSEWHERE SHOWS UP within [constant POLL] seconds: the list is compared,

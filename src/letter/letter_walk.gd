@@ -5,15 +5,15 @@ class_name LetterWalk
 ## the pen's rests in it ([method LetterScript.speakable]) - a turn of the page, a strike, a tap, a
 ## drawing the pen owes after its paragraph, a line written and never said - sized from what the Letter
 ## card made exactly as [LetterMedium] writes and lays it out, so the voice and the pen keep time. A
-## [TextWalk] the Letter card hands its reading.
+## [TextWalk] the Letter's rows on the Medium card hand its reading ([LetterFormat]).
 ##
 ## NO TITLE IS ANNOUNCED: a letter does not begin with its own name - it is on the title screen, over the
 ## desk, while the intro holds.
 
-var card: LetterCard
+var card: LetterFormat
 
 
-func _init(c: LetterCard) -> void:
+func _init(c: LetterFormat) -> void:
 	card = c
 
 

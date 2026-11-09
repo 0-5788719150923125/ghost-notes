@@ -1,25 +1,27 @@
 extends VBoxContainer
-class_name LetterCard
+class_name LetterFormat
 
-## LetterCard - the Letter component's card: the note read as a letter, written by hand at a desk while
-## the voice reads it (next/letter.md, [LetterMedium]).
+## LetterFormat - the Letter's own rows on the Medium card: the note read as a letter, written by hand at a desk while
+## the voice reads it (next/letter.md, [LetterMedium]). The Letter was a component of its own, with a card that pinned
+## its medium, until it became one of the Medium card's formats (2026-11-09, [MediumCard]).
 ##
-## THE NOTE IS THE LETTER, word for word: nothing writes it but its author. What this card makes is what
+## THE NOTE IS THE LETTER, word for word: nothing writes it but its author. What these rows make is what
 ## the words only describe - each SKETCH, drawn as SVG by an agent and laid out by ghost's own TeX
 ## ([LetterSketches]), so the pen draws it. Each PICTURE a passage is read over is the note's Pictures card's
 ## ([PicturesCard]: the letter's pictures and never its sketches, [method LetterMedium.pictures_in]). A letter plays
 ## without either: a sketch not drawn yet is not drawn, the words round it as they are, a picture not painted leaves
 ## its passage over the desk.
 ##
-## A CARD ON THE READING, as the Actor's and Proof's are: built by [NoteCards] from the `letter` row, it
-## PINS ITS MEDIUM while it is up ([member Director.medium_override]) and HANDS the reading what is read
-## ([LetterWalk]: the letter as the voice says it, the pen's rests in it, no title announced) and how it
-## goes out ([LetterCard.Publish]: the document a render draws the letter from).
+## ROWS ON THE READING'S MEDIUM CARD: built by [MediumCard] from the `letter` row's `card` while the Letter is the
+## format, they HAND the reading what is read ([LetterWalk]: the letter as the voice says it, the pen's rests in it, no
+## title announced) and how it goes out ([LetterFormat.Publish]: the document a render draws the letter from). What they
+## keep is part of the Medium's one block.
 ##
-## THE DESK AND THE HAND ARE THE NOTE'S: the desk's seed is the note's own file's unless the card is given
+## THE DESK AND THE HAND ARE THE NOTE'S: the desk's seed is the note's own file's unless the rows are given
 ## one ([method desk_seed]); how each word wavers - and so where the lines break and the rests the voice takes - is
 ## always the note's own ([method hand_seed]), so the same letter is written the same way every time, whatever desk it
-## is written at; the hand is one of the journal's ([LetterHand], the Notebook's), Kalam unless the card names another.
+## is written at; the hand is one of the journal's ([LetterHand], the Notebook's): the Medium card's Handwriting, shared
+## with the Notebook ([method hand]).
 ##
 ## WHAT IS ON THE DESK AND HOW IT IS LIT ARE CHOSEN HERE (2026-10-29, the user: "It's really hard to find a good seed,
 ## because generating the scenes is kind of slow (startup is like 20 seconds) ... provide a multi-select bank of the
@@ -35,12 +37,13 @@ class_name LetterCard
 ## GENERATION IS EXPLICIT, AND ON THE NOTE'S PIPELINE CARD ([Section]; next/pipeline.md): Generate draws the sketches not
 ## drawn, then lays them out; a sketch's ⟳ draws it again. Nothing runs on open.
 
+## Its format's key in [constant Medium.REGISTRY].
 const KEY := "letter"
-## The block: the desk's seed (0: the note's own), its light ("": the seed's), the hand it is written in, who draws
-## the sketches and what is written on the index cards (`card_text`, [method DeskLook.picks_of]) - and, once chosen,
-## `things` (what is on the desk, [constant DeskLook.THINGS] keys; none written: the seed's).
-const KNOBS := {"seed": 0, "mood": "", "hand": LetterHand.DEFAULT, "writer": "claude", "writer_model": "", "writer_effort": "",
-	"card_text": ""}
+## Its keys in the Medium's block: the desk's seed (0: the note's own), its light ("": the seed's), who draws the
+## sketches and what is written on the index cards (`card_text`, [method DeskLook.picks_of]) - and, once chosen,
+## `things` (what is on the desk, [constant DeskLook.THINGS] keys; none written: the seed's). The hand is the Medium
+## card's own row (`hand`).
+const KNOBS := {"seed": 0, "mood": "", "writer": "claude", "writer_model": "", "writer_effort": "", "card_text": ""}
 ## How long the index cards' words rest unchanged before a playing letter's desk is dressed again with them (seconds):
 ## a desk is not built again a keystroke.
 const CARD_SETTLE := 0.6
@@ -65,12 +68,11 @@ var _light_pick: OptionButton    # the desk's light ([constant DeskLook.MOODS])
 var _bank := {}                  # a [constant DeskLook.THINGS] key -> its CheckBox
 var _card_box: TextField         # what is written on the index cards, shown while they are on the desk
 var _card_due := 0.0             # seconds till a playing letter's desk takes the cards' words, 0 for nothing waiting
-var _hand_pick: OptionButton
 var _writer: AgentPick
 
 
-static func for_note(ctx: Dictionary) -> LetterCard:
-	var card := LetterCard.new()
+static func for_note(ctx: Dictionary) -> LetterFormat:
+	var card := LetterFormat.new()
 	card._panel = ctx.get("workspace") as ReadingPanel
 	if card._panel != null:
 		card._panel.walk = LetterWalk.new(card)
@@ -86,17 +88,9 @@ static func for_note(ctx: Dictionary) -> LetterCard:
 	return card
 
 
-## THE LETTER IS THE MEDIUM, pinned while the card is up.
-func _enter_tree() -> void:
-	if _panel != null:
-		Director.pin_medium("letter", self)
-
-
 func _exit_tree() -> void:
 	if _sketches != null:
 		_sketches.stop()
-	if _panel != null:
-		Director.unpin_medium(self)
 
 
 func _process(delta: float) -> void:
@@ -129,7 +123,6 @@ func apply(cfg: Dictionary) -> void:
 			_knobs[k] = int(cfg[k]) if k == "seed" else String(cfg[k])
 	if not TextGen.has(String(_knobs["writer"])):
 		_knobs["writer"] = "claude"
-	_knobs["hand"] = LetterHand.of(String(_knobs["hand"]))
 	if not DeskLook.MOODS.has(String(_knobs["mood"])):
 		_knobs["mood"] = ""
 	if cfg.get("things") is Array:
@@ -143,11 +136,11 @@ func apply(cfg: Dictionary) -> void:
 
 # --- what it hands the reading -------------------------------------------------------------------
 
-## HOW IT GOES OUT: the document a render draws the letter from carries what this card made.
+## HOW IT GOES OUT: the document a render draws the letter from carries what these rows made.
 class Publish extends ReadingPublish:
-	var card: LetterCard
+	var card: LetterFormat
 
-	func _init(c: LetterCard) -> void:
+	func _init(c: LetterFormat) -> void:
 		card = c
 
 	func book(d: Dictionary, _body: String) -> Dictionary:
@@ -155,7 +148,7 @@ class Publish extends ReadingPublish:
 		return d
 
 
-## THE DESK'S SEED: the card's, or the note's own ([method hand_seed]).
+## THE DESK'S SEED: the rows', or the note's own ([method hand_seed]).
 func desk_seed() -> int:
 	return int(_knobs["seed"]) if int(_knobs["seed"]) > 0 else hand_seed()
 
@@ -166,6 +159,17 @@ func hand_seed() -> int:
 	var doc := _panel.doc_source() if _panel != null else null
 	var path := doc.doc_path() if doc != null else ""
 	return 1 if path.is_empty() else 1 + absi(hash(path)) % 99999
+
+
+## THE HAND IT IS WRITTEN IN: the Medium card's Handwriting ([member Director.hand], the Notebook's hands) - Random drawn
+## from the note's own number ([method hand_seed]), so the same letter is written the same way every time.
+func hand() -> String:
+	var h := String(Director.hand)
+	if h == "random":
+		var keys: Array = LetterHand.HANDS.keys()
+		keys.sort()
+		return String(keys[hand_seed() % keys.size()])
+	return LetterHand.of(h)
 
 
 ## THE DOCUMENT'S `letter`: the hand's seed (`seed`) and the desk's (`desk`), the hand, each sketch's drawing that is
@@ -185,7 +189,7 @@ func document() -> Dictionary:
 		var path := Illustrations.path_for(String((im as Dictionary)["key"]))
 		if not path.is_empty():
 			pictures[String(im["key"])] = ProjectSettings.globalize_path(path)
-	return {"seed": hand_seed(), "desk": desk_seed(), "hand": LetterHand.of(String(_knobs["hand"])), "svgs": svgs,
+	return {"seed": hand_seed(), "desk": desk_seed(), "hand": hand(), "svgs": svgs,
 		"ink": ink, "pictures": pictures, "things": desk_things(), "mood": desk_mood(), "card_text": String(_knobs["card_text"])}
 
 
@@ -266,14 +270,14 @@ func _stop() -> void:
 
 # --- on the Pipeline card ------------------------------------------------------------------------
 
-## WHAT THIS CARD MAKES, on the note's one list ([PipelineCard]): a row a sketch, and their ink.
+## WHAT THESE ROWS MAKE, on the note's one list ([PipelineCard]): a row a sketch, and their ink.
 class Section extends PipelineSection:
-	var card: LetterCard
+	var card: LetterFormat
 
-	func _init(c: LetterCard) -> void:
+	func _init(c: LetterFormat) -> void:
 		card = c
 		owner = c
-		title = String(Registry.field(Components.REGISTRY, LetterCard.KEY, "label", "Letter"))
+		title = Registry.label(Medium.REGISTRY, LetterFormat.KEY)
 
 	func shown() -> bool:
 		return not card._listed.is_empty()
@@ -344,7 +348,7 @@ func _say(text: String) -> void:
 	noted.emit(text)
 
 
-# --- the card -----------------------------------------------------------------------------------
+# --- the rows -----------------------------------------------------------------------------------
 
 func _build() -> void:
 	add_theme_constant_override("separation", 8)
@@ -451,30 +455,6 @@ func _build() -> void:
 		_card_due = CARD_SETTLE)
 	add_child(_card_box)
 
-	# THE HAND: the journal's (the Picture card's Handwriting row has the same three)
-	var hrow := HBoxContainer.new()
-	hrow.add_theme_constant_override("separation", 6)
-	add_child(hrow)
-	var hl := Label.new()
-	hl.text = "Hand"
-	hl.custom_minimum_size.x = 64.0
-	hl.add_theme_font_size_override("font_size", 12)
-	hrow.add_child(hl)
-	_hand_pick = OptionButton.new()
-	_hand_pick.focus_mode = Control.FOCUS_NONE
-	_hand_pick.fit_to_longest_item = false
-	_hand_pick.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_hand_pick.tooltip_text = ("The handwriting the letter is written in - the Notebook's hands, each written "
-		+ "stroke by stroke by the pen. Where the lines and pages break follows it, so the voice's rests do too.")
-	for k in _hand_keys():
-		_hand_pick.add_item(String(LetterHand.HANDS[k]["label"]))
-	_hand_pick.item_selected.connect(func(i: int) -> void:
-		if _syncing:
-			return
-		_knobs["hand"] = String(_hand_keys()[i])
-		_touch())
-	hrow.add_child(_hand_pick)
-
 	_writer = AgentPick.writer(("Who draws the letter's sketches: each one's words, turned into a drawing the "
 		+ "pen makes. Takes effect at the next Generate or ⟳."),
 		"The model that draws. Default is the CLI's own choice per job.",
@@ -510,7 +490,6 @@ func _show_knobs() -> void:
 	_writer.set_choice(String(_knobs["writer"]), String(_knobs["writer_model"]), String(_knobs["writer_effort"]))
 	_seed_box.value = int(_knobs["seed"])
 	_show_desk()
-	_hand_pick.select(maxi(0, _hand_keys().find(LetterHand.of(String(_knobs["hand"])))))
 	if _card_box.text != String(_knobs["card_text"]):
 		_card_box.text = String(_knobs["card_text"])
 	_syncing = false
@@ -552,13 +531,6 @@ static func _thing_name(label: String) -> String:
 		if label.begins_with(a):
 			label = label.substr(a.length())
 	return label.substr(0, 1).to_upper() + label.substr(1)
-
-
-## The hands, in the order the Picture card lists them.
-static func _hand_keys() -> Array:
-	var keys: Array = LetterHand.HANDS.keys()
-	keys.sort()
-	return keys
 
 
 func _touch() -> void:

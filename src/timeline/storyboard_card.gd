@@ -1,7 +1,7 @@
 extends VBoxContainer
 class_name StoryboardCard
 
-## StoryboardCard - the note's storyboard: the show written down, on a note with a Picture. What
+## StoryboardCard - the note's storyboard: the show written down, on a note with a Medium. What
 ## plays, in what order, for how long - and where nothing is written, the seed still chooses. The
 ## card says what the note holds and lists its entries, one a click away; the writing is done in
 ## the [StoryboardEditor] it opens along the bottom of the frame ("Timeline…").

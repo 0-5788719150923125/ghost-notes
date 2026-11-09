@@ -15,6 +15,15 @@ class_name Showcase
 ## prism, the panel or the transport records it again. The webp is written only when its bytes
 ## differ, so a recording that comes out the same leaves git with nothing to show.
 ##
+## AT MOST ONCE A DAY (2026-11-07, the user: "Can we limit this showcase generation to just once per
+## day, at most? It runs on basically every startup now, which makes the whole app slow at
+## startup"). The digest covers nearly every script, so with several sessions editing at once
+## almost every launch found something changed, and the recording - a second ghost drawing beside
+## the first - slowed every start. A launch records only once [constant DAY] has passed since the
+## last recording BEGAN ([method next_due]: `dist/showcase/started`, this checkout's alone, never in
+## git), finished or not; `--showcase-now` records regardless. The day is read before the digest, so
+## a launch inside it hashes nothing.
+##
 ## ONLY IN DEVELOPMENT: the trigger runs where Godot's own `editor` feature is (the project run from
 ## its source with the editor binary), never in an exported build ([method skip_reason]), and never
 ## in a render, a probe, a headless run or the phone shell. It needs `xvfb-run` - the recording runs
@@ -56,6 +65,10 @@ const WORK := "res://dist/showcase"
 ## A recording claimed less than this long ago (seconds) is left to finish: two launches at once
 ## record once.
 const CLAIM_S := 900
+## The least time between two recordings a launch starts (seconds), and the file in the work folder
+## that holds when the last one began (unix seconds).
+const DAY := 86400
+const STARTED := "started"
 ## Folders whose files a recording could load. Everything else in the project (tests, hosts,
 ## reference imagery, the work folder itself) is never part of the show.
 const SOURCE_DIRS := ["src", "shaders", "scenes", "fonts", "storyboards", "data"]
@@ -140,6 +153,21 @@ static func digest(files: PackedStringArray) -> String:
 	return ctx.finish().hex_encode()
 
 
+## When a launch may next start a recording (unix seconds): a [constant DAY] after the last one
+## began, in [param work] - 0 when none has, or what it wrote cannot be read.
+static func next_due(work: String) -> float:
+	var said := FileAccess.get_file_as_string(work.path_join(STARTED)).strip_edges()
+	return said.to_float() + DAY if said.is_valid_float() else 0.0
+
+
+## A recording begins now, in [param work]: the next is a [constant DAY] away ([method next_due]).
+static func mark_started(work: String) -> void:
+	var f := FileAccess.open(work.path_join(STARTED), FileAccess.WRITE)
+	if f != null:
+		f.store_string(str(int(Time.get_unix_time_from_system())))
+		f.close()
+
+
 ## Is the README's animation out of date: no webp, no stamp, or the files it loaded have changed?
 ## [param out] and [param stamp_path] are a gate's seam.
 static func stale(out := OUT, stamp_path := STAMP) -> bool:
@@ -159,9 +187,11 @@ func _ready() -> void:
 		if _quit_after:
 			_done("not recorded: %s" % why, 1)
 		return
+	_work = ProjectSettings.globalize_path(WORK)
+	if not _quit_after and Time.get_unix_time_from_system() < next_due(_work):
+		return
 	if not _quit_after and not stale():
 		return
-	_work = ProjectSettings.globalize_path(WORK)
 	var claim := _work.path_join("claim")
 	if not _quit_after and FileAccess.file_exists(claim) \
 			and Time.get_unix_time_from_system() - FileAccess.get_modified_time(claim) < CLAIM_S:
@@ -194,6 +224,7 @@ func _start(argv: PackedStringArray, claim: String) -> void:
 	if fc != null:
 		fc.store_string(str(OS.get_process_id()))
 		fc.close()
+	mark_started(_work)
 	argv.append_array(["--path", ProjectSettings.globalize_path("res://"),
 		"--log-file", _work.path_join("render.log"),
 		"--write-movie", frames_dir.path_join("frame.png"), "--fixed-fps", str(FPS),
@@ -205,18 +236,18 @@ func _start(argv: PackedStringArray, claim: String) -> void:
 	if _render_pid <= 0:
 		_done("could not start the README animation's recording", 1)
 		return
-	print("ghost showcase: recording the README animation in the background (pid %d, log %s)"
-		% [_render_pid, _work.path_join("render.log")])
+	print(("ghost showcase: recording the README animation in the background (pid %d, log %s) - the next"
+		+ " no sooner than a day from now") % [_render_pid, _work.path_join("render.log")])
 	set_process(true)
 
 
 func _process(_dt: float) -> void:
-	# stopped by ghost closing, not ended: nothing to encode, and the claim goes so the next launch
-	# records it ([method Subprocess.closing])
+	# stopped by ghost closing, not ended: nothing to encode, and the claim goes, so the first launch
+	# a day after it began records it ([method Subprocess.closing], [method next_due])
 	if Subprocess.closing():
 		_render_pid = -1
 		_encode_pid = -1
-		_done("stopped as Ghost Notes closed - the next launch records it", 0)
+		_done("stopped as Ghost Notes closed - a launch a day after it began records it (--showcase-now: at once)", 0)
 		return
 	if _render_pid > 0:
 		if Subprocess.alive(_render_pid):

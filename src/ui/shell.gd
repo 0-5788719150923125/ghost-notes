@@ -107,6 +107,9 @@ var _stage_claims := {}
 ## for itself, and an embedded popup the motion over it (Masking's pointer once vanished inside a color picker that way). The
 ## pointer is hidden and shown only on the way in and out, so Masking's own hiding of it is never fought.
 const FADES := &"fades_while_watching"
+## The group a side panel is found by ([constant SidePanel.GROUP] is this): named here, never read off SidePanel, whose
+## preloaded Card names the Settings autoload - a gate with no autoloads that builds a panel naming this class failed with it.
+const PANELS := &"side_panel"
 const IDLE_AFTER := 3.0
 const FADE_OUT := 0.6               # s from shown to gone
 const FADE_IN := 0.15               # s back
@@ -503,12 +506,15 @@ func _watch(delta: float) -> void:
 
 
 ## Whatever keeps the furniture up: everything but a show playing on its own with nobody at the controls.
+## The transport is found in the tree, never named: a gate that runs with no autoloads (mask_tracks_check) builds
+## a panel that names this class, and a `Spectrum` here failed to compile and took the whole class with it.
 func _stays_up() -> bool:
-	if not Spectrum.transport_playing() or Spectrum.waiting():
+	var transport := get_node_or_null(^"/root/Spectrum")
+	if transport == null or not transport.transport_playing() or transport.waiting():
 		return true
 	if panel_open() or stage_bottom > 0.0 or not _holds.is_empty():
 		return true
-	for n in get_tree().get_nodes_in_group(SidePanel.GROUP):
+	for n in get_tree().get_nodes_in_group(PANELS):
 		var c := n as CanvasItem
 		if c != null and c.is_visible_in_tree():
 			return true

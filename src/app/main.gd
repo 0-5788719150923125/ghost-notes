@@ -246,6 +246,8 @@ func _ready() -> void:
 	Spectrum.song_finished.connect(_on_song_finished)
 	# the episodes' folder, moved once since Cards became Table - before any way in that may open a show
 	_adopt_old_episodes()
+	# ...and each note's medium, moved once into its `medium:` block since the Medium card took the Picture's place
+	_adopt_old_media()
 	# THE COMMAND LINE'S WORKSPACES, through the one path a note takes - BELOW the chrome,
 	# deliberately: every interactive mode gets the full furniture. `--mask-edit` used to be read
 	# before Chrome existed, so a command-line Masking session had none of it (step 7).
@@ -305,6 +307,32 @@ func _adopt_old_episodes() -> void:
 		push_warning("ghost: could not move the episodes from %s to %s" % [old, now])
 		return
 	print("ghost: the episodes moved to %s" % now)
+
+
+## THE MEDIUM'S BLOCK, MOVED ONCE (2026-11-09, when the Picture card became the Medium card and the Letter and the
+## Dispatch desk its formats): each note in the list keeping a `picture:`, `letter:` or `dispatch:` block has it written
+## as the one `medium:` block ([method Components.adopted_medium]). Never in a process that may not write the author's
+## things, and once per machine (`[notes] media_moved`; a note that would not write is tried again next launch). Remove
+## once it has run.
+func _adopt_old_media() -> void:
+	if Settings.is_read_only() or NoteStore.root != NoteStore.DEFAULT \
+			or bool(Settings.read(NoteStore.SECTION, "media_moved", false)):
+		return
+	var moved := 0
+	for row in NoteStore.list():
+		var path := String((row as Dictionary)["path"])
+		var blocks := NoteStore.blocks_of(path)
+		var now := Components.adopted_medium(blocks)
+		if blocks.has("medium") or not now.has("medium"):
+			continue
+		var err := FrontMatter.write_block(path, now)
+		if not err.is_empty():
+			push_warning("ghost: could not move the medium of %s into its `medium:` block - %s" % [path.get_file(), err])
+			return
+		moved += 1
+	Settings.write(NoteStore.SECTION, "media_moved", true)
+	if moved > 0:
+		print("ghost: %d note(s) keep their medium in a `medium:` block now" % moved)
 
 
 ## OPEN A NOTE: every note opens the same way. What it has attached is read off its blocks
@@ -470,7 +498,7 @@ func _open_note_panel(path: String) -> void:
 
 ## A NOTE'S SONG, loaded and WAITING AT ITS START - a note opens stopped, and the transport plays it.
 ## [param show] is what the note's cards say of its picture ([method _attach_show]); without a
-## Picture the song plays to an empty frame.
+## Medium the song plays to an empty frame.
 func _begin_song(path: String, show: Dictionary) -> void:
 	Spectrum.lead_in = Director.intro_hold
 	Spectrum.tail = Director.outro_hold
@@ -1068,7 +1096,7 @@ func _begin_generative_stream(fp: int, sr: int, words: Array) -> AudioStreamGene
 	Director.detach()
 	Spectrum.stop()
 	var pb: AudioStreamGeneratorPlayback = Spectrum.begin_stream(fp, sr)
-	# THE READING'S SHOW IS THE NOTE'S: a Picture attached puts the stage up, a Storyboard is what
+	# THE READING'S SHOW IS THE NOTE'S: a Medium attached puts the stage up, a Storyboard is what
 	# it walks - and a voice alone is heard, with its words over an empty frame
 	_attach_show(_generative.show_plan() if _generative != null and is_instance_valid(_generative)
 		else {"picture": true})

@@ -16,12 +16,14 @@ is built and seeded (2026-10-27)**, in the table's own words, so an agent can wr
 
 ## What it is
 
-**A component, `letter`** ("+" Letter on a note; it brings a Voice; the reading's workspace runs it, as
-the Actor's card stands there). **The note's words are the letter, word for word**: no agent writes it.
-Its card ([LetterCard], `src/letter/`) pins the medium, draws the sketches and hands the reading the letter
-with the pen's rests in it ([LetterWalk]) and the document a render draws from ([LetterCard.Publish]). Its
-pictures are painted on the note's Pictures card, which comes with it (2026-11-06, next/pictures.md;
-[LetterMedium] `pictures_in` says which marks they are: never a sketch).
+**A format of the Medium card, `letter`** (2026-11-09; until then a component of its own, "+" Letter
+bringing a Voice): picked on a reading's Medium card, the note's `medium:` block saying `format: letter`.
+**The note's words are the letter, word for word**: no agent writes it. Its own rows on the Medium card
+([LetterFormat], `src/letter/`) draw the sketches and hand the reading the letter with the pen's rests in it
+([LetterWalk]) and the document a render draws from ([LetterFormat.Publish]); the format is the Director's
+medium, set from the block and never pinned. Its pictures are painted on the note's Pictures card, which
+comes with the Medium (2026-11-06, next/pictures.md; [LetterMedium] `pictures_in` says which marks they are:
+never a sketch).
 
 **A medium, `letter`** ([LetterMedium], `src/desk/letter.gd`): the Proof desk's ([DeskMedium]) - pad,
 pen, lamp, camera, the voice followed word by word, the elastic pen - with the letter's own hand and
@@ -30,8 +32,8 @@ moments. Its parts are the desk's; the hooks it needed are small and the desk's 
 
 **The journal's hands, written by the pen, no TeX** ([LetterHand], `src/desk/letter_hand.gd`; 2026-10-27,
 the user: "the font looks awful ... the journal medium had nicer fonts"): Kalam (the default), Caveat or
-Patrick Hand - the Notebook's ([NotebookLayout]) at its sizes - picked on the Letter card's Hand row and kept
-in the block (`hand`). An outline font is a shape to fill, so each is traced ONCE into the lines a pen draws
+Patrick Hand - the Notebook's ([NotebookLayout]) at its sizes - picked on the Medium card's Handwriting row,
+which the Notebook shares, and kept in the block (`hand`; Random is drawn from the note's own number). An outline font is a shape to fill, so each is traced ONCE into the lines a pen draws
 it with (`scripts/hand_strokes.py`, numpy and Pillow, a development tool): every printable ASCII character
 rendered at 400 px an em, thinned to its centerline (Zhang-Suen), cut where it branches - two junctions
 closer than a stroke's width one crossing, the stubs thinning leaves at a corner dropped - and walked into
@@ -359,17 +361,17 @@ exactly that.
   "It's really hard to find a good seed, because generating the scenes is kind of slow (startup is like 20
   seconds). I think it would be better to provide a multi-select bank of the standard objects ... Then, when
   we change the seed - the only thing being changed would be the placement of objects, and textures"): the
-  Letter card's "On the desk" bank, a tick a `DeskLook.THINGS` row (the mat and the candles among them),
+  Letter's "On the desk" bank, a tick a `DeskLook.THINGS` row (the mat and the candles among them),
   and a Light row of the moods in place of the mood shown beside the number. Chosen (`DeskLook.of`'s picks:
   the block's `things` and `mood`), each thing is drawn from a generator of its own kind and placed by it, so
   another seed moves and recolors them and ticking another changes nothing about how the rest look; until
   chosen they are what the number drew, and the first change of anything on the desk keeps them
-  (`LetterCard._hold_desk`). A candlelit desk given no candle gets a taper - its page would have no light.
+  (`LetterFormat._hold_desk`). A candlelit desk given no candle gets a taper - its page would have no light.
   Ticked while the letter plays, the desk is dressed again at once, the letter untouched
   (`LetterMedium._set_desk`). **The number is the desk's alone**: it had seeded the hand too - each word's
   wavers, so where the lines break and the rests the voice takes ([LetterWalk]) - so a new desk was a new take,
   the 20 seconds of a Play to see it. The hand's seed is now the note's own (the document's `seed`,
-  `LetterCard.hand_seed`) and the number the desk's (`desk`, [LetterMedium]'s `_seed`; `_hand` the hand's), so a
+  `LetterFormat.hand_seed`) and the number the desk's (`desk`, [LetterMedium]'s `_seed`; `_hand` the hand's), so a
   number changed while it plays, paused or not, dresses the desk again at once. The Hand row still waits for a Play.
   **Measured: the camera sees little of the desk.** The lens is 20 degrees high: at 0.85 m the widest framing,
   its corners cast onto the desk, sees 56 cm across at the binding and 52 at its foot, 31 deep (`DeskLook.SEEN`),
@@ -519,7 +521,7 @@ cursive, the strike, the picture over the desk, each sketch drawn and pointed at
 blind-spot test held dead still with the pen off the pad, both taps, the point at the camera, and the
 reply begun on a new page after the last word. The point at the camera is the weakest: the pen raised
 and foreshortened over the page, its shadow long, reads as lifted more than as aimed at the viewer. Gates: `tests/desk/letter_check.gd` (the hand,
-the format, the turns, the lag, the medium's clock), `tests/letter/letter_card_check.gd` (the row, the
+the format, the turns, the lag, the medium's clock), `tests/letter/letter_format_check.gd` (the row, the
 drawer's prompt, what is kept, the walk), `script_marks_check` (the eight marks).
 
 **Not yet tried:** a real agent drawing the chapter's sketches; a painted picture; a real voice and an

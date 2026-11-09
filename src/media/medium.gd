@@ -37,37 +37,51 @@ class_name Medium
 ## THE REGISTRY: one row a medium, the one shape every registry here has (a `label` a person reads, a
 ## `blurb`, and the fields of its own kind - next/structure.md, step 6). Adding a presentation is a
 ## row here, never new control flow in the Director (see the four vetoes above) - the same rule
-## [Layer] and [Primitives] follow. Keys are what `--medium NAME` and `[director] medium` in
-## `user://ghost.cfg` take; the order is the picker's.
+## [Layer] and [Primitives] follow. Keys are what `--medium NAME`, `[director] medium` in
+## `user://ghost.cfg` and a note's `medium: format:` take; the order is the Format picker's.
 ##
-##   label   its name in the Picture card's picker
+## A NOTE'S MEDIUM IS ONE CARD (2026-11-09, the user: "the 'Picture' card becomes 'Medium', and we would move Dispatch
+## Desk and [Letter] modes into that card ... for the extra options we need for each of those mediums... we could just
+## dynamically render them into the Medium card"): every row without a `mode` is a FORMAT of the Medium card
+## ([MediumCard]), its shared rows shown by `uses` and its own by `card`. The Letter and the Dispatch desk were
+## components of their own until then, each a thin card that pinned its medium.
+##
+##   label   its name in the Medium card's Format picker
 ##   script  the medium's script, by path - a medium a feature brings lives with that feature (the
 ##           card table, in `table/`)
-##   uses    WHICH OPTIONAL SETTINGS IT USES, as the panel's own group names. A medium decides what
+##   uses    WHICH OPTIONAL SETTINGS IT USES, as the Medium card's own group names. A medium decides what
 ##           the show is presented AS, so some of the Director's picture settings mean nothing to
 ##           some of them - the full-frame show has no camera to be severe with and no panels to
 ##           cut footage into. Reported as "there are a number of settings currently being
 ##           displayed that ONLY work with the comic book medium". Declared here rather than
 ##           branched on in the panel: a medium added later says what it uses and the panel
-##           follows. A setting EVERY medium uses (scene hold, flourishes, the Look, the holds)
-##           needs no tag. `opening`: it draws an opening of its own through the intro hold - out of
-##           focus, the show's name over it ([Openings], [ShowOpening]) - and the Intro & outro card
-##           offers the choice of one.
+##           follows. `scenes`: it cuts the Director's scenes, so Scene hold and Flourishes mean something (the
+##           Novel, the Notebook and the Tablet "have no scenes to change to", and showed both until 2026-11-09).
+##           `camera`, `films`, `illustrations` (the note's Pictures card stands), `handwriting` (the shared hand
+##           row: the Notebook's hands, the Letter's too), `ink` (a voice's pen color, on the Voice card). `opening`:
+##           it draws an opening of its own through the intro hold - out of focus, the show's name over it
+##           ([Openings], [ShowOpening]) - and the Intro & outro card offers the choice of one.
 ##   frames  THE FRAMES IT CAN BE SHOWN IN (next/notes.md, "Two frames"): landscape 16:9 for every
 ##           one, portrait 9:16 only where it was measured to work. The full-frame show does -
 ##           scenes size everything off the frame's short side. The tablet needs its camera
 ##           distances fitted on both axes first; the comic, the book, the notebook and the card
 ##           table frame a spread or a table a 9:16 view cannot hold: design work of their own.
 ##   needs   optional: WHAT IT NEEDS FROM THE NOTE beyond a sound to cut on. The novel, the
-##           notebook and the tablet print a READING - its words, timed by the voice - so a note
-##           with only a song has nothing to put on their pages, and its Picture card does not
-##           offer them.
-##   mode    optional: THE MODE IT BELONGS TO, which shows its readings in it (the desk is Proof's). The card table is
-##           drawn from an episode Cards produced - its deck, its pictures, its spread - so a
+##           notebook, the tablet, the letter and the dispatch desk show a READING - its words, timed by the voice -
+##           so a note with only a song has nothing to put on them, and its Medium card does not offer them.
+##   card    optional: THE FORMAT'S OWN ROWS, by path - a script answering `for_note(ctx)`, `capture()` and
+##           `apply(block)`, built into the Medium card under the shared rows while the format is picked. What it
+##           keeps is part of the Medium's one block; what it hands the reading (its `walk`, its `publish`) is why
+##           a change to or from such a format opens the note again.
+##   capabilities  optional: what the format asks of the platform beyond the stage ([Capabilities]): a format
+##           impossible here is grayed in the picker, saying why.
+##   intro_tip, outro_tip  optional: what the Intro & outro card's holds say under this format.
+##   mode    optional: THE COMPONENT IT BELONGS TO, which shows its readings in it (the desk is Proof's). The card
+##           table is drawn from an episode Table produced - its deck, its pictures, its spread - so a
 ##           chapter read anywhere else has nothing to put on it. Such a medium is never offered
-##           by a picker ([method pickable]) and never becomes the remembered setting; its mode
+##           by a picker ([method pickable]) and never becomes the remembered setting; its component
 ##           pins it for the session instead (see [member Director.medium_override]).
-##   bare    optional: it TAKES NO SETTINGS - the Picture card shows nothing under the picker,
+##   bare    optional: it TAKES NO SETTINGS - the Medium card shows nothing under the picker,
 ##           and picking it puts the Director's dials back to their defaults (see [AutoMedium]).
 ##   blurb   one line, for the picker's tooltip and docs/media.md - ONE string literal, not a `+`
 ##           continuation, so docs.py reads it whole
@@ -76,32 +90,39 @@ const REGISTRY := {
 		"uses": [], "frames": ["landscape"], "bare": true,
 		"blurb": "The original show with nothing to set: scenes chosen by the song's own fingerprint and cut on its beat, at the default pacing - the same song is the same show in every note."},
 	"full": {"label": "Full frame", "script": "res://src/media/full.gd",
-		"uses": [], "frames": ["landscape", "portrait"],
+		"uses": ["scenes"], "frames": ["landscape", "portrait"],
 		"blurb": "One scene at a time, filling the frame. The original show."},
 	"comic": {"label": "Comic book", "script": "res://src/media/comic.gd",
-		"uses": ["camera", "films"], "frames": ["landscape"],
+		"uses": ["scenes", "camera", "films"], "frames": ["landscape"],
 		"blurb": "The same scenes drawn into the panels of an open comic book - two facing pages, flown over by a real perspective camera. Each cut fills the next panel; a full spread turns the leaf on its spine."},
 	"book": {"label": "Novel", "script": "res://src/media/book.gd",
 		"uses": ["camera", "illustrations"], "frames": ["landscape"], "needs": ["reading"],
 		"blurb": "The chapter itself, typeset into the pages of an open novel on a desk, with each word lit as it is spoken and the leaf turning as the reading reaches the next spread. Pictures come from the chapter's image markers."},
 	"notebook": {"label": "Notebook", "script": "res://src/media/notebook.gd",
-		"uses": ["camera", "illustrations", "handwriting"], "frames": ["landscape"], "needs": ["reading"],
+		"uses": ["camera", "illustrations", "handwriting", "ink"], "frames": ["landscape"], "needs": ["reading"],
 		"blurb": "The chapter handwritten into a ruled research notebook - margin times, underlined emphasis, photos paper-clipped over the writing at an angle, and sketches (`<!-- sketch: ... -->`) drawn onto the page in the same ink. For a chapter drafted as a journal or a lab report."},
 	"tablet": {"label": "Tablet", "script": "res://src/media/tablet.gd",
 		"uses": ["camera", "illustrations"], "frames": ["landscape"], "needs": ["reading"],
 		"blurb": "Somebody browsing on a tablet lying on a desk: the chapter is web pages (`<!-- url: -->`), read aloud as they are scrolled, with searches, new tabs, a turn to landscape and links followed between them - every tap and keystroke timed into the rests the voice leaves for it."},
+	"letter": {"label": "Letter", "script": "res://src/desk/letter.gd",
+		"uses": ["opening", "illustrations", "handwriting"], "frames": ["landscape"], "needs": ["reading"],
+		"card": "res://src/letter/letter_format.gd",
+		"capabilities": ["subprocess", "agent:writer", "tex", "python:math"],
+		"intro_tip": "Seconds the desk holds before the letter is begun, its title over it.",
+		"outro_tip": "Seconds held after the pen's last stroke, the page on the desk, fading picture and sound out together.",
+		"blurb": "Somebody writing a letter at a desk, reading it aloud as the pen puts it down in a cursive hand: a thought said and not written, a line crossed out, a sketch drawn as it is described, the pen tapped while the writer thinks or pointed at whoever watches, and a picture over the whole screen for a passage read over it."},
+	"dispatch": {"label": "Dispatch desk", "script": "res://src/dispatch/dispatch.gd",
+		"uses": ["opening", "illustrations"], "frames": ["landscape"], "needs": ["reading"],
+		"card": "res://src/dispatch/dispatch_format.gd",
+		"intro_tip": "Seconds the desk holds, its title over it; then the desk at rest, a few seconds more, before the first word.",
+		"outro_tip": "Seconds held after the last word, the desk in the dark, fading picture and sound out together.",
+		"blurb": "One desk late at night in a hollow under the ground, seen from the chair: an old terminal that types what is said, a dozen labeled flip phones that ring and are held to the ear (every voice but the room's heard through one), a radar, a shortwave receiver, a printer, small screens - the camera turning to whatever is active, roots growing across the desk."},
 	"table": {"label": "Card table", "script": "res://src/table/table.gd",
 		"uses": ["opening"], "frames": ["landscape"], "mode": "table",
 		"blurb": "A card reading at a table, seen from the reader's chair: the deck shuffles while the reader talks, each card is drawn, held up beside its booklet entry, read and laid into the spread. The Table mode's own medium - its deck, pictures and spread come from the episode the agents produced."},
 	"likeness": {"label": "Likeness", "script": "res://src/likeness/likeness.gd",
 		"uses": [], "frames": ["landscape"], "needs": ["reading"], "mode": "likeness",
 		"blurb": "An actor reading the note in their own room, from their own footage: their real takes, joined where two frames nearly match, the mouth drawn from their own mouths to the voice's sounds through one mesh over the frame, their gestures on the words a director placed them. The Likeness component's own medium."},
-	"letter": {"label": "Letter", "script": "res://src/desk/letter.gd",
-		"uses": ["opening", "illustrations"], "frames": ["landscape"], "needs": ["reading"], "mode": "letter",
-		"blurb": "Somebody writing a letter at a desk, reading it aloud as the pen puts it down in a cursive hand: a thought said and not written, a line crossed out, a sketch drawn as it is described, the pen tapped while the writer thinks or pointed at whoever watches, and a picture over the whole screen for a passage read over it. The Letter component's own medium."},
-	"dispatch": {"label": "Dispatch desk", "script": "res://src/dispatch/dispatch.gd",
-		"uses": ["opening", "illustrations"], "frames": ["landscape"], "needs": ["reading"], "mode": "dispatch",
-		"blurb": "One desk late at night in a hollow under the ground, seen from the chair: an old terminal that types what is said, a dozen labeled flip phones that ring and are held to the ear, a radar, a shortwave receiver, a printer, small screens - the camera turning to whatever is active, roots growing across the desk. The Dispatch desk component's own medium."},
 	"desk": {"label": "Desk", "script": "res://src/desk/desk.gd",
 		"uses": ["opening"], "frames": ["landscape"], "mode": "proof",
 		"blurb": "A ghost doing math at a desk: a legal pad under a lamp, and a pen that writes each formula on it by itself while the teacher talks, in a hand drawn from TeX's own layout. The Proof component's own medium - what it writes comes from the lesson its agents made."},
