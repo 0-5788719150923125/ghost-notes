@@ -522,7 +522,9 @@ func prepare() -> void:
 		_canvas(si)
 	# ...what stands where the tools go, for their ways over it
 	_map_tops()
-	# ...WHAT THE PICTURE WANTS, laid by the tools element by element, where the surface was painted first ([method _from_picture])
+	# ...WHAT THE PAINTER AT THE TABLE LAID, played as it wrote it ([method _from_hosts]) - and what the picture wants, laid by the tools
+	# element by element, where the surface was painted first ([method _from_picture])
+	_from_hosts()
 	_from_picture()
 	# ...A HAND GOING BACK OVER WHAT IT MISSED, before any act's length is known ([method _cover_gaps])
 	_cover_gaps()
@@ -1203,10 +1205,8 @@ func _from_picture() -> void:
 		if item.is_empty():
 			continue
 		var made: Dictionary = item["made"]
-		# (...LAID BY THE PAINTER AT THE TABLE, a host: its program and maps as it wrote them, played as they are - next/face_layers.md)
-		var host_id := String((ed.get("plan", {}) as Dictionary).get("host", "")) if ed.get("plan") is Dictionary else ""
-		if not host_id.is_empty():
-			_from_host(item, host_id, String(od["id"]), si)
+		# (...laid by the painter at the table: played as it wrote it, never laid again here - [method _from_hosts])
+		if not _host_of(ed).is_empty():
 			continue
 		# (...AS LONG AS ITS ACT WAS PLANNED: the program its shape made, the length the readers' words were written to - kept from the
 		# first build, before it is laid)
@@ -1294,6 +1294,25 @@ func _from_picture() -> void:
 ## AN ELEMENT THE PAINTER AT THE TABLE LAID (next/face_layers.md; hosts/paint/export.py): its program - the hand's keys and strokes, on
 ## the show's own pace - and its maps - what each point holds after each of its marks and when, what it comes to, its own colors - read
 ## from `paint/elements.json` as the host wrote them, and played as they are: what the painter laid is what the show draws.
+## LAID BY THE PAINTER AT THE TABLE, a host (next/face_layers.md): every element it laid played from its program and maps as it wrote
+## them - whatever act it falls in, its manner, or whether the surface has a picture - never laid again by the show's own painter.
+func _from_hosts() -> void:
+	for si in skins.size():
+		var items: Dictionary = (skins[si] as Dictionary).get("items", {})
+		for id in items:
+			var item: Dictionary = items[id]
+			var host_id := _host_of(item["el"])
+			if not host_id.is_empty():
+				_from_host(item, host_id, String(id), si)
+
+
+## The painter host's element design element [param ed] plays; "" when the show lays it itself.
+static func _host_of(ed: Dictionary) -> String:
+	return String((ed.get("plan", {}) as Dictionary).get("host", "")) if ed.get("plan") is Dictionary else ""
+
+
+## Element [param id] of skin [param si] ([param item]) played from the painter host's element [param host_id]: its box, its maps on its
+## sprites' material, and its program - the tool's way over the surface, on the same clock as the maps.
 func _from_host(item: Dictionary, host_id: String, id: String, si: int) -> void:
 	var el := _host_element(host_id)
 	if el.is_empty():
@@ -1313,9 +1332,9 @@ func _from_host(item: Dictionary, host_id: String, id: String, si: int) -> void:
 	var w := int(maps["w"])
 	var h := int(maps["h"])
 	var cover := _host_map(maps, "cover", w, h, Image.FORMAT_L8)
-	var when := _host_map(maps, "when", w, h, Image.FORMAT_RGBF)
+	var when := _host_map(maps, "when", w, h, Image.FORMAT_RGBH)
 	var built := [_host_map(maps, "built0", w, h, Image.FORMAT_RGBA8), _host_map(maps, "built1", w, h, Image.FORMAT_RGBA8)]
-	var built_when := [_host_map(maps, "built_when0", w, h, Image.FORMAT_RGBAF), _host_map(maps, "built_when1", w, h, Image.FORMAT_RGBAF)]
+	var built_when := [_host_map(maps, "built_when0", w, h, Image.FORMAT_RGBAH), _host_map(maps, "built_when1", w, h, Image.FORMAT_RGBAH)]
 	var tint := _host_map(maps, "tint", w, h, Image.FORMAT_RGB8)
 	if cover == null or when == null or tint == null or built.has(null) or built_when.has(null):
 		push_warning("ghost: table - the painter's maps for %s could not be read" % host_id)
@@ -1384,7 +1403,7 @@ func _host_map(maps: Dictionary, tag: String, w: int, h: int, fmt: Image.Format)
 	if not FileAccess.file_exists(path):
 		return null
 	var bytes := FileAccess.get_file_as_bytes(path)
-	var want: int = w * h * {Image.FORMAT_L8: 1, Image.FORMAT_RGB8: 3, Image.FORMAT_RGBA8: 4, Image.FORMAT_RGBF: 12, Image.FORMAT_RGBAF: 16}[fmt]
+	var want: int = w * h * {Image.FORMAT_L8: 1, Image.FORMAT_RGB8: 3, Image.FORMAT_RGBA8: 4, Image.FORMAT_RGBH: 6, Image.FORMAT_RGBAH: 8}[fmt]
 	if bytes.size() != want:
 		return null
 	return Image.create_from_data(w, h, false, fmt, bytes)
@@ -4321,7 +4340,8 @@ func _one_coat() -> void:
 		for e in els:
 			var ed: Dictionary = e
 			var key := "%d|%s" % [si, String(ed["id"]).to_lower()]
-			if String(ed["kind"]) != "fill" or String(ed["d"]) != "all" or not _layers.has(key):
+			# (...never one the painter host laid: its own coat, as it laid it - folded in, 327484's first shading had gone into the base)
+			if String(ed["kind"]) != "fill" or String(ed["d"]) != "all" or not _layers.has(key) or not _host_of(ed).is_empty():
 				continue
 			var lay: Dictionary = _layers[key]
 			var pot := String(lay.get("pot", ed["paint"]))

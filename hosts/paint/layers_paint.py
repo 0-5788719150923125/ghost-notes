@@ -134,15 +134,45 @@ def technique(m, alpha, face, lab=None):
     return "fill"
 
 
-def core_color(m, alpha, lab):
-    """A part's own color where it is most itself: its points most fully laid, the darker half of those (a line's antialiased edge is
-    the face's color half over)."""
-    sel = m & (alpha > 0.8)
+def laid_paints(p, m, prev, cur, alpha, most=3, apart=12.0, least=0.1):
+    """THE PAINTS A THIN PART WAS LAID IN, read from what each point became over what it was (`prev` -> `cur`, sRGB floats): the paint
+    whose coverage over the old color comes nearest the new one, point by point in linear light, weighed by how far the point moved -
+    up to `most`, each `apart` (OKLab x100, hue weighed up) from the others and `least` of the weight. -> ([names], label map: the index
+    of each point's paint, -1 none). A hairline's own color is the face's half over: read as a color, 327484's gold threads had been
+    traced in grey, and a crackle redrawn a pixel aside had outweighed them. Where a darker paint laid thin and a paler one laid whole
+    come to the same, the darker wins - as a liner lays a line, whole down its middle (preferring the whole, even at a twenty-fifth of
+    the change, had turned the crackle a pale blue-grey and the gold a grey)."""
+    sel = m & (alpha > 0.3)
+    label = np.full(m.shape, -1, int)
     if sel.sum() < 4:
-        sel = m
-    cl = lab[sel]
-    dark = cl[cl[:, 0] <= np.median(cl[:, 0])]
-    return np.median(dark if len(dark) else cl, axis=0)
+        return [], label
+    P = dec(prev[sel])
+    dl = dec(cur[sel]) - P
+    O = dec(np.asarray(p.opt_cols, float))
+    res = np.empty((len(P), len(O)))
+    for k0 in range(0, len(O), 32):
+        D = O[None, k0:k0 + 32] - P[:, None]
+        a = np.clip((dl[:, None] * D).sum(-1) / np.maximum((D * D).sum(-1), 1e-6), 0.0, 1.0)
+        res[:, k0:k0 + 32] = np.linalg.norm(dl[:, None] - a[..., None] * D, axis=-1)
+    best = np.argmin(res, axis=1)
+    tot = np.bincount(best, weights=np.linalg.norm(dl, axis=1), minlength=len(O))
+    # (...each paint weighed with the mixes near it: a crackle's blue-black is near a dozen mixes, none of them a tenth of it alone)
+    opt_lab = oklab(O) * p.HUE
+    heads = []
+    for k in np.argsort(-tot):
+        if tot[k] <= 0:
+            break
+        if all(np.linalg.norm(opt_lab[k] - opt_lab[j]) >= apart for j in heads):
+            heads.append(int(k))
+    if not heads:
+        return [], label
+    gw = np.bincount(np.argmin(np.linalg.norm(opt_lab[:, None] - opt_lab[heads][None], axis=-1), axis=1), weights=tot,
+                     minlength=len(heads))
+    picked = [heads[j] for j in np.argsort(-gw)[:most] if gw[j] >= least * gw.sum()]
+    if not picked:
+        return [], label
+    label[sel] = np.argmin(res[:, picked], axis=1)
+    return [p.opt_names[k] for k in picked], label
 
 
 THIN = 1.0          # mm, a part's thickness (area-weighted, half its width): thinner, a line traced - lashes, a lash line, cracks
@@ -200,8 +230,9 @@ def layer_plan(alpha, lab, face, soft_step=False):
             else:
                 how = "numbers"
             out.append((e, how, sft, None))
-    for m in thin:
-        out.append((m, "trace", False, core_color(m, alpha, lab)))
+    # (...its thin parts traced together, each paint its own element - laid_paints splits them by what was laid, never by color)
+    if thin:
+        out.append((np.logical_or.reduce(thin), "trace", False, None))
     return out
 
 
@@ -309,10 +340,28 @@ def paint_layers(ref, steps, pics, log=print):
         sheet_alpha.append((name, np.stack([alpha] * 3, -1)))
         hows = []
         if st.get("how"):
-            groups = [(alpha > 0.15, st["how"], False)]
+            groups = [(alpha > 0.15, st["how"], False, None)]
         else:
             groups = layer_plan(alpha, labs[i], face, bool(st.get("soft")))
         fade = False
+        # (...BROAD COLOR, OPTIMIZED: each broad part's strokes found by gradient descent toward the step's own picture over the canvas as
+        # it stands - a soft part out to where its step's alpha fades - and the layer's strokes laid together, each brush taken up once
+        # for the layer, through its paints: part by part, each brush taken up again for each, 327484 had come to 52 acts - optimize.py)
+        if not st.get("no_opt"):
+            specs = []
+            for m, how, soft_edge, core in groups:
+                if how not in ("numbers", "shade_to", "strokes", "fill"):
+                    continue
+                fade = fade or soft_edge
+                reg = m if st.get("soft") else ((ndimage.binary_dilation(m, iterations=int(3 * PX)) & (alpha > 0.05)) if soft_edge else m)
+                names = paints_for(p, labs[i][reg & (alpha > 0.3)] if (reg & (alpha > 0.3)).any() else labs[i][reg],
+                                   int(st.get("colors", 5)))
+                specs.append((reg, names, soft_edge))
+            groups = [g for g in groups if g[1] not in ("numbers", "shade_to", "strokes", "fill")]
+            if specs:
+                from optimize import optimize_layer
+                p.layer_name = name
+                hows.append(optimize_layer(p, specs, pics[i], log=log, iters=int(st.get("iters", 260))))
         for m, how, soft_edge, core in groups:
             fade = fade or soft_edge
             L = {"name": name, "how": how, "mask": m, "colors": labs[i], "smooth": float(st.get("smooth", 0.3)), "min_area": 0.3,
@@ -323,20 +372,28 @@ def paint_layers(ref, steps, pics, log=print):
                 j = int(np.argmin(np.linalg.norm((oklab(dec(p.opt_cols)) - core) * p.HUE, axis=1)))
                 L["paint"] = p.opt_names[j]
             if how == "trace":
-                # (...the step's own lines inside where its part is, traced on its own picture, as the picture's lines are)
-                how = "lines"
-                L.update({"lines_from": pics[i], "mask": ndimage.binary_dilation(m, iterations=3) & face, "all": True,
-                          "tool": st.get("tool", "liner"), "line_smooth": float(st.get("line_smooth", 0.4)), "quick": True})
-            elif how in ("numbers", "shade_to", "strokes", "fill") and not st.get("no_opt"):
-                # (...BROAD COLOR, OPTIMIZED: strokes found by gradient descent toward the step's own picture over the canvas as it stands -
-                # a soft element out to where its step's alpha fades - optimize.py)
-                from optimize import optimize_element
-                reg = m if st.get("soft") else ((ndimage.binary_dilation(m, iterations=int(3 * PX)) & (alpha > 0.05)) if soft_edge else m)
-                names = paints_for(p, labs[i][reg & (alpha > 0.3)] if (reg & (alpha > 0.3)).any() else labs[i][reg],
-                                   int(st.get("colors", 5)))
-                p.layer_name = name
-                n0 = len(p.laid)
-                hows.append(optimize_element(p, reg, pics[i], names, soft_edge, log=log, iters=int(st.get("iters", 260))))
+                # (...THE STEP'S OWN LINES inside where its part is, traced on its own picture - each paint they were laid in on its own,
+                # a line kept for the paint most of its new points were laid in: a line already drawn, redrawn aside, is no one's)
+                names, label = laid_paints(p, m, pics[i - 1], pics[i], alpha)
+                near = ndimage.grey_dilation(label, size=3)
+                for g, nm in enumerate(names):
+                    mine = ndimage.binary_dilation(label == g, iterations=3) & face
+
+                    def keep(l, g=g, k=len(names)):
+                        ij = np.clip(np.round(np.asarray(l["pts"]) * PX).astype(int), 0, [near.shape[1] - 1, near.shape[0] - 1])
+                        at = near[ij[:, 1], ij[:, 0]]
+                        counts = np.bincount(at[at >= 0], minlength=k)
+                        return int(np.argmax(counts)) == g and counts.sum() >= 0.3 * len(at)
+
+                    Lg = dict(L, how="lines", paint=nm, lines_from=pics[i], mask=mine, all=True, keep=keep,
+                              tool=st.get("tool", "liner"), line_smooth=float(st.get("line_smooth", 0.4)), quick=True)
+                    p.layer_name = name
+                    n0 = len(p.laid)
+                    try:
+                        p._lines(Lg)
+                    except Exception as e:
+                        log("  %-20s lines failed: %s" % (name, e))
+                    hows.append("lines %d %s" % (len(p.laid) - n0, nm.split("+")[0].split(" ")[0]))
                 continue
             elif how == "numbers" and soft_edge:
                 # (...a soft element shaded out to where its step's alpha fades, toward the step's own colors)

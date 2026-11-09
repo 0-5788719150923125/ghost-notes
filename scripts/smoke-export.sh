@@ -6,6 +6,8 @@
 #
 # macOS keeps user:// under $HOME/Library/Application Support, so HOME is pointed at the empty
 # profile as well as XDG. It has no GNU `timeout` either: Perl's alarm stands in for it there.
+# And its bash is 3.2, where `set -u` calls an empty array unbound: `engine`, empty off Windows, is
+# spelled `${engine[@]+"${engine[@]}"}` (CI, 2026-11-09: "engine[@]: unbound variable").
 set -uo pipefail
 
 if [ "$#" -ne 1 ]; then
@@ -64,7 +66,7 @@ within() {
 
 (
 	cd "$profile/work" || exit 2
-	within 30 env "${isolate[@]}" "$program" --headless "${engine[@]}" -- \
+	within 30 env "${isolate[@]}" "$program" --headless ${engine[@]+"${engine[@]}"} -- \
 		--export-smoke --export-smoke-note "$note"
 ) >"$log" 2>&1
 status=$?

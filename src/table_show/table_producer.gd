@@ -765,8 +765,8 @@ func _make_skin_host() -> void:
 
 
 ## THE PAINTER'S WORK, KEPT AS THE DESIGN (`skin.json`): an element each run of one layer's marks with one tool in one paint, in order - its
-## tool the table's nearest ([method _table_tool]), its pot its paint's, its beat its layer's share of the painting's time ([method
-## _layer_beats]), and `plan.host` naming its program and maps in `paint/elements.json` (TablePaint._from_host). "" kept, else why not.
+## tool the table's nearest ([method _table_tool]), its pot its paint's, its beat where it begins in the painting's time ([method
+## _element_beats]), and `plan.host` naming its program and maps in `paint/elements.json` (TablePaint._from_host). "" kept, else why not.
 func _land_skin_host(h: Dictionary) -> String:
 	var out := String(h["out"])
 	var done: Variant = JSON.parse_string(FileAccess.get_file_as_string(out.path_join("done.json"))) if FileAccess.file_exists(out.path_join("done.json")) else null
@@ -780,7 +780,7 @@ func _land_skin_host(h: Dictionary) -> String:
 	var tbl: Variant = episode.read_json("table")
 	var scanned := PainterTools.scan(tbl as Dictionary)
 	var skin: Dictionary = Skins.skins_of(tbl)[0]
-	var beats := _layer_beats(els)
+	var beats := _element_beats(els)
 	var elements: Array = []
 	for e in els:
 		var ed: Dictionary = e
@@ -793,31 +793,29 @@ func _land_skin_host(h: Dictionary) -> String:
 		elements.append({"id": String(ed["id"]), "stage": String(ed.get("layer_name", "")), "paint": String(ed["color"]), "opacity": 1.0,
 			"finish": "matte", "fill": "M %.1f %.1f L %.1f %.1f L %.1f %.1f L %.1f %.1f Z" % [x0, y0, x1, y0, x1, y1, x0, y1],
 			"plan": {"thing": String(tool.get("thing", "")), "part": String(tool.get("part", "")), "how": String(ed["how"]),
-				"beat": String(beats[int(ed["layer"])]), "seconds": float(ed["seconds"]), "pot": _pot_of_paint(String(ed["paint"]), scanned["paints"]),
+				"beat": String(beats[String(ed["id"])]), "seconds": float(ed["seconds"]), "pot": _pot_of_paint(String(ed["paint"]), scanned["paints"]),
 				"host": String(ed["id"])}})
 	var design := {"thing": String(skin["thing"]), "part": String(skin["part"]), "frame": [(skin["frame"] as Vector2).x, (skin["frame"] as Vector2).y],
 		"outline": String(skin.get("outline", "")), "name": String(_plan().get("painted", "")).left(60), "elements": elements}
 	return episode.write_json("skin", {"designs": [design]})
 
 
-## Each layer's beat: the ground in the intro, the rest spread over the beats by their share of the painting's time, in order.
-func _layer_beats(els: Array) -> Dictionary:
+## EACH ELEMENT'S BEAT, by id: where it begins in the painting's time, spread over the intro and the beats - the ground in the intro, the
+## close left to its words. A layer to a beat, 327484's crackle (a third of the time) had taken one beat and left three empty, and the
+## close was given three layers.
+func _element_beats(els: Array) -> Dictionary:
 	var keys: Array = ["intro"]
 	for k in range(1, episode.beat_count() + 1):
 		keys.append(str(k))
-	keys.append("close")
-	var per := {}
 	var total := 0.0
 	for e in els:
-		per[int((e as Dictionary)["layer"])] = float(per.get(int((e as Dictionary)["layer"]), 0.0)) + float((e as Dictionary)["seconds"])
 		total += float((e as Dictionary)["seconds"])
 	var out := {}
 	var at := 0.0
-	var layers := per.keys()
-	layers.sort()
-	for li in layers:
-		out[li] = "intro" if int(li) == 0 else String(keys[mini(int(at / maxf(total, 1e-3) * keys.size()), keys.size() - 1)])
-		at += float(per[li])
+	for e in els:
+		var ed: Dictionary = e
+		out[String(ed["id"])] = "intro" if int(ed["layer"]) == 0 else String(keys[mini(int(at / maxf(total, 1e-3) * keys.size()), keys.size() - 1)])
+		at += float(ed["seconds"])
 	return out
 
 

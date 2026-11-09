@@ -8,8 +8,8 @@ a width at each point, how thick, how soft its belly), never by rules that fit o
 2. OPTIMIZE paths, widths, thickness and softness together (Adam, on the GPU), every stroke laid in order over the canvas as the show lays
    paint (pre-multiplied, decoded `pow 2.2`), against the step's picture in OKLab - fine and coarse - with paths kept smooth, widths
    within their brush's, and a little cost on paint so a stroke that earns nothing fades out.
-3. KEEP what earns its place: a stroke gone thin is dropped; the rest are laid with the real renderer, in the order optimized (a paint at
-   a time, lightest first, the broadest brush first in each), the hand's time counted.
+3. KEEP what earns its place: a stroke gone thin is dropped; the rest are laid with the real renderer, a layer's parts together
+   (`optimize_layer`): the broadest brush first, through its paints lightest first, then the next brush - the hand's time counted.
 """
 import numpy as np
 import torch
@@ -148,9 +148,10 @@ class LayerOpt:
             if len(strokes) <= most:
                 break
             spacing *= 1.4
-        # (...a paint at a time, lightest first, the broadest brush first in each - as the hand lays them, and as they are judged)
+        # (...THE BROADEST BRUSH FIRST, through its paints lightest first, then the next brush - as a painter works a layer broad to fine,
+        # and as they are judged; a paint at a time with the brushes taken up in turn had made a layer forty acts)
         rank = {j: r for r, j in enumerate(order)}
-        strokes.sort(key=lambda s: (rank[s["paint"]], -s["hw"]))
+        strokes.sort(key=lambda s: (-s["hw"], rank[s["paint"]]))
         self.strokes = strokes
         return len(strokes)
 
@@ -264,7 +265,7 @@ class LayerOpt:
             return 0
         order = sorted(range(len(self.names)), key=lambda j: -oklab(dec(self.cols[j]))[0])
         rank = {j: r for r, j in enumerate(order)}
-        self.strokes = sorted(self.strokes + new, key=lambda s: (rank[s["paint"]], -s["hw"]))
+        self.strokes = sorted(self.strokes + new, key=lambda s: (-s["hw"], rank[s["paint"]]))
         self.optimize(iters)
         return len(new)
 
@@ -280,54 +281,73 @@ class LayerOpt:
             l.backward()
             opt.step()
             if first is None:
-                first = float(fine)
-            last = float(fine)
+                first = float(fine.detach())
+            last = float(fine.detach())
         self.log("    optimized %d strokes: error %.1f -> %.1f" % (len(self.strokes), first ** 0.5, last ** 0.5))
         return first, last
 
     # --- laid for real --------------------------------------------------------------------------------------------------------------
 
-    def lay(self, name):
-        p = self.p
-        P = self.P.detach().cpu().numpy()
-        Wd = self.widths().detach().cpu().numpy()
+    def lay_order(self):
+        """Its strokes as they are laid, the faint ones dropped: `[(n, its brush's half width, its paint's name)]`."""
         TH = torch.sigmoid(self.th_logit).detach().cpu().numpy()
-        SOFT = torch.exp(self.soft_log).clamp(0.05, 4.0).detach().cpu().numpy()
-        laid = dropped = 0
-        for n, s in enumerate(self.strokes):
-            if TH[n] < 0.06:
-                dropped += 1
-                continue
-            pts = P[n]
-            if np.linalg.norm(np.diff(pts, axis=0), axis=1).sum() < 0.3:
-                pts = np.vstack([pts[0], pts[0] + np.array([0.3, 0.0])])
-                ws = np.full(2, Wd[n].mean())
-            else:
-                ws = Wd[n]
-            belly = float(np.clip(max(SOFT[n], 0.6 if self.soft else 0.05) / max(ws.mean(), 1e-3), 0.5 if self.soft else 0.05, 0.95))
-            nm = self.names[s["paint"]]
-            p.hand.take(s["tool"])
-            p.hand.need(nm)
-            m = mk.brush_stroke(p.cv, pts, ws, self.cols[s["paint"]], nm, float(TH[n]), 1.0, "sweep", s["tool"], edge=EDGE, belly=belly,
-                                streak=(0.03, 0.15, 0.15), tail=0.0, load_mm=1e9, seed=int(p.rng.integers(1 << 30)))
-            if p.try_lay(m, p.ref.lab, -1e9, pts[0]):
-                laid += 1
-        return laid, dropped
+        return [(n, s["hw"], self.names[s["paint"]]) for n, s in enumerate(self.strokes) if TH[n] >= 0.06]
+
+    def lay_one(self, n):
+        """Stroke `n` laid on the painter's canvas, as the soft model found it. -> whether it was kept."""
+        p = self.p
+        if not hasattr(self, "_found"):
+            self._found = (self.P.detach().cpu().numpy(), self.widths().detach().cpu().numpy(),
+                           torch.sigmoid(self.th_logit).detach().cpu().numpy(),
+                           torch.exp(self.soft_log).clamp(0.05, 4.0).detach().cpu().numpy())
+        P, Wd, TH, SOFT = self._found
+        s = self.strokes[n]
+        pts = P[n]
+        if np.linalg.norm(np.diff(pts, axis=0), axis=1).sum() < 0.3:
+            pts = np.vstack([pts[0], pts[0] + np.array([0.3, 0.0])])
+            ws = np.full(2, Wd[n].mean())
+        else:
+            ws = Wd[n]
+        belly = float(np.clip(max(SOFT[n], 0.6 if self.soft else 0.05) / max(ws.mean(), 1e-3), 0.5 if self.soft else 0.05, 0.95))
+        nm = self.names[s["paint"]]
+        p.hand.take(s["tool"])
+        p.hand.need(nm)
+        m = mk.brush_stroke(p.cv, pts, ws, self.cols[s["paint"]], nm, float(TH[n]), 1.0, "sweep", s["tool"], edge=EDGE, belly=belly,
+                            streak=(0.03, 0.15, 0.15), tail=0.0, load_mm=1e9, seed=int(p.rng.integers(1 << 30)))
+        return bool(p.try_lay(m, p.ref.lab, -1e9, pts[0]))
 
 
-def optimize_element(p, region, target_srgb, names, soft=False, log=print, iters=260, rounds=2):
-    """Element `region` of a layer painted toward `target_srgb` in `names` (paints or mixes): strokes optimized, then laid. Words."""
-    lo = LayerOpt(p, region, target_srgb, names, soft, iters, log)
-    lo.setup()
-    n = lo.init_strokes()
-    if n == 0:
-        return "opt 0"
-    lo.optimize()
+def optimize_layer(p, specs, target_srgb, log=print, iters=260, rounds=2):
+    """A LAYER'S BROAD PARTS (`specs`: `[(region, paint names, soft)]`) painted toward `target_srgb`: each part's strokes optimized on
+    its own, against the canvas as the layer finds it, then all of them laid together - the broadest brush first, through its paints
+    lightest first, then the next brush - and each soft part worked over wet after. Words."""
+    los = []
     added = 0
-    for _ in range(rounds):
-        added += lo.refine()
-    laid, dropped = lo.lay("")
-    # (...and a soft element worked over wet with a clean brush, as a painter blends a haze - the strokes' own edges gone into it)
-    if soft:
-        p._feather_area(region & (ndimage.distance_transform_edt(region) > PX * 1.0), 1.5, None, 1)
-    return "opt %d laid (%d added), %d dropped" % (laid, added, dropped)
+    for region, names, soft in specs:
+        if not region.any() or not names:
+            continue
+        lo = LayerOpt(p, region, target_srgb, names, soft, iters, log)
+        lo.setup()
+        if lo.init_strokes() == 0:
+            continue
+        lo.optimize()
+        for _ in range(rounds):
+            added += lo.refine()
+        los.append(lo)
+    if not los:
+        return "opt 0"
+    light = {}
+    order = []
+    for k, lo in enumerate(los):
+        for n, hw, nm in lo.lay_order():
+            if nm not in light:
+                light[nm] = float(oklab(dec(p._color(nm)))[0])
+            order.append((-hw, -light[nm], k, n))
+    order.sort()
+    laid = sum(1 for _, _, k, n in order if los[k].lay_one(n))
+    dropped = sum(len(lo.strokes) for lo in los) - len(order)
+    # (...and a soft part worked over wet with a clean brush, as a painter blends a haze - the strokes' own edges gone into it)
+    for lo in los:
+        if lo.soft:
+            p._feather_area(lo.region & (ndimage.distance_transform_edt(lo.region) > PX * 1.0), 1.5, None, 1)
+    return "opt %d parts, %d laid (%d added), %d dropped" % (len(los), laid, added, dropped)

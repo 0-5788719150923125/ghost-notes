@@ -6,7 +6,7 @@ THE PROGRAM is the show's own (src/table/skins.gd, `Skins._Prog.done()`): keys `
 surface's frame; `where` 1 back at the pot) and strokes `{pts, t, r, load, press}`, at the show's own pace - the constants below are
 `Skins`', line for line. THE MAPS are what skin_paint.gdshader draws an element from (PaintLayers.render's): what each point holds after
 each of its first seven marks and after its last (`built`, `built_when`, 0-1 of the element's time), when it is first reached (`when`),
-what it comes to (`cover`), and its color (`tint`) - the canvas before and after the element, so the element laid over what is under it
+what it comes to (`cover`), and its color (`tint`) - the times half floats (a third of an episode's maps had been them) - the canvas before and after the element, so the element laid over what is under it
 comes to exactly what the painter's canvas did.
 """
 import json
@@ -253,7 +253,9 @@ def export(p, starts, steps, out, log=print):
         dpre = np.abs(pre1 - pre0).max(-1)
         a_alpha = np.where(alp0 < 0.999, np.clip((alp1 - alp0) / np.maximum(1 - alp0, 1e-6), 0, 1), 0.0)
         a_color = np.clip((dpre - 0.004) / 0.03, 0, 1)
-        a = np.maximum(a_alpha, a_color)
+        # (...the color's own change counted only over paint all but whole: over a thin coat it had stood in for the coverage, and a half
+        # laid white came out a whole grey - 327484's ground a field of grey dabs)
+        a = np.where(alp0 < 0.95, a_alpha, np.maximum(a_alpha, a_color))
         a = np.where(n > 0, a, 0.0)
         col = np.where(a[..., None] > 1e-4, (pre1 - pre0 * (1 - a[..., None])) / np.maximum(a[..., None], 1e-4), 0.0)
         col = np.clip(col, 0, 1)
@@ -276,11 +278,11 @@ def export(p, starts, steps, out, log=print):
             maps[tag] = f
 
         put("cover", (np.clip(a, 0, 1) * 255 + 0.5).astype(np.uint8))
-        put("when", when)
+        put("when", when.astype(np.float16))
         put("built0", (np.clip(st_c[..., :4], 0, 1) * 255 + 0.5).astype(np.uint8))
         put("built1", (np.clip(st_c[..., 4:], 0, 1) * 255 + 0.5).astype(np.uint8))
-        put("built_when0", st_t[..., :4].astype(np.float32))
-        put("built_when1", st_t[..., 4:].astype(np.float32))
+        put("built_when0", st_t[..., :4].astype(np.float16))
+        put("built_when1", st_t[..., 4:].astype(np.float16))
         put("tint", (col * 255 + 0.5).astype(np.uint8))
         how = "sweep"
         for kd in kinds:

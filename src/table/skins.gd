@@ -299,11 +299,15 @@ static func _based(els: Array, outline: String, frame: Vector2, notes: PackedStr
 static func _element(e: Dictionary, frame: Vector2, notes: PackedStringArray, before: Array = []) -> Dictionary:
 	var id := Props._text(e.get("id", e.get("name", "")), 40)
 	var out := {"id": id, "stage": Props._text(e.get("stage", ""), 30).to_lower()}
-	# (...and, laid by a painter at the table, its PLAN: the tool, how it is laid, the beat and the seconds it took - the painter's tools)
+	# (...and, laid by a painter at the table, its PLAN: the tool, how it is laid, the beat and the seconds it took - the painter's tools -
+	# and, laid by the painter host, the element of its output it plays (`host`, [method TablePaint._from_host]; dropped here, every
+	# element of the host's had fallen back to the old painter, its bounding box drawn as a line)
 	if e.get("plan") is Dictionary:
 		var pl: Dictionary = e["plan"]
 		out["plan"] = {"thing": Props._text(pl.get("thing", ""), 60), "part": Props._text(pl.get("part", ""), 60), "how": Props._text(pl.get("how", ""), 12),
 			"beat": Props._text(str(pl.get("beat", "")), 20), "seconds": float(Props._num(pl.get("seconds"), 0.0, 0.0, 900.0)), "pot": Props._text(pl.get("pot", ""), 60)}
+		if pl.get("host") is String and not String(pl["host"]).is_empty():
+			out["plan"]["host"] = Props._text(pl["host"], 40)
 	# A SMEAR takes the paint of what it drags, an element laid before it
 	if e.has("smear"):
 		var from := String(e["smear"]).strip_edges().to_lower()

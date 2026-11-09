@@ -36,31 +36,33 @@ tear with its gold rim, clean runs, shaped glossy lips with their smear, a teal-
   after it again; the picture's ⟳ throws all of them away. Gates: skin_step_check (order, inputs, what a redo throws away, files,
   prompts), pictures_card_check (shown under the full frame; the control: none made, put away).
 
-## What is left - the painter (decided in the lab, not built)
+## The painter at the table (built 2026-11-09)
 
-**The lab becomes the painter, Godot the player.** The Python of `lab/paint/` runs as a host, as the voice does (`hosts/paint/`, a `Deps`
-environment of its own - numpy, SciPy, Pillow, PyTorch; the GPU where there is one), given an episode's layers, the table's paints and
-tools, and it writes:
+**The lab became the painter, Godot the player.** `hosts/paint/` is the lab's Python run as a host, as the voice is (`run.py <spec.json>`,
+its own `Deps` environment `paint_venv` - numpy, SciPy, Pillow, PyTorch; the GPU where there is one). When an episode has layers, the
+producer's skin step (`TableProducer._make_skin_host`) writes a spec (the bare picture, the surface's place in it, the table's creams, the
+layers and their pictures) and runs it; `export.py` writes, per element - a run of one layer's marks with one tool in one paint - its
+program on the show's own pace (`Skins._Prog` keys and strokes, `Skins`' constants line for line) and the maps skin_paint.gdshader draws
+(`cover`, `when`, the staged `built`/`built_when`, `tint`). `_land_skin_host` keeps them as the design (`skin.json`, each element's
+`plan.host` naming its output), its tool the table's nearest, its beat where it begins in the painting's time. `TablePaint._from_hosts`
+plays every such element from its maps and program - never laid again by the show's own painter. What the painter saw is what the show
+draws, by construction (`hosts/paint/test_export.py`: the maps laid in order come to the painter's canvas; control, the reverse order).
 
-- the marks, in order, with the hand's time for each (`marks.json` - the lab's `Hand` is the show's `Skins` pace);
-- per layer, the maps the skin shader already draws (coverage built up over time - `laid_map`/`laid_when` - and color, `tint_map`), at
-  `PaintLayers.FOOT_PX`;
-- the hand's program (`Skins._Prog` keys: where the tool is, lifted or down, pressed how hard, back to the pot), so the puppeteer moves the
-  real tool along the marks.
-
-Godot plays them: `TablePaint` loads each element's maps and program instead of laying operations itself; the acts are the layers, a
-layer an act (or a few, by tool). What the painter saw is what the show draws - by construction.
+- **A layer's broad parts** are optimized part by part, then laid together, the broadest brush first through its paints (`optimize_layer`):
+  part by part, each brush taken up again for each, 327484 had come to 52 acts (`Motions.MAX_ACTS` is 40).
+- **A thin part's paint** is read from what each point became over what it was (`laid_paints`): read as a color, the gold threads had
+  been traced in grey, and lines redrawn a pixel aside by the image model had outweighed them.
 
 Open questions for the author:
 
-- **The environment.** PyTorch is large (about 3 GB with CUDA). The optimizer also runs on the CPU, slower (minutes a face). The rule is
-  "nothing from upstream until a week old, every helper sandboxed" (next/supply_chain.md).
-- **The sponge.** The lab's sponge is a disc with pores; the table's is a real shape with sides (`TablePaint._side_touch`). Either the host
-  is given the sponge's contact shapes once per table, or the base is laid by the table itself as now.
-- **The time.** 46 minutes for 327484, a quarter of it the crackle's 550 lines. The readers' passages are written to the work's length.
+- **The environment.** PyTorch is large (about 3 GB with CUDA); the first painting installs it. The optimizer also runs on the CPU,
+  slower. The rule is "nothing from upstream until a week old, every helper sandboxed" (next/supply_chain.md).
+- **The sponge.** The lab's sponge is a disc with pores; the table's is a real shape with sides (`TablePaint._side_touch`).
+- **The time.** About 47 minutes for 327484, a third of it the crackle's 550 lines. The readers' passages are written to the work's length.
 - **The rust mask** (257002): its layers made and painted in the lab; judged by the author.
 
 ## Status
 
 The made-pictures feed, the Pictures card on table notes and the layers steps: built and gated, not yet seen by the author in the app.
-The painter host and the show's playback: planned above.
+The painter host and the show's playback: built; 327484 stood from the host's output in `paint_preview_probe` (the bruise, runs, closed
+eye and brow as the lab painted them). Not yet run from the app end to end, nor watched by the author.

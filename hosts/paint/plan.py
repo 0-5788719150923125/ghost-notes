@@ -735,6 +735,9 @@ class PlanPainter(Painter):
         if L.get("lines_from") is not None:
             # (...the lines its own step painted, found on that step's picture - layers_paint.py)
             found, _ = lines_mod.find(np.asarray(L["lines_from"]), PX, np.asarray(L.get("mask", self.ref.face), bool) & self.ref.face)
+            # (...those its step laid in this paint, where it says which - layers_paint.laid_paints)
+            if L.get("keep") is not None:
+                found = [l for l in found if L["keep"](l)]
         else:
             found, _ = lines_mod.find(self.ref.hi[..., :3], self.ref.hi_px, inside)
         if "near" in L and "darker" not in L and "warmer" not in L:
