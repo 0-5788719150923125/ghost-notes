@@ -47,14 +47,21 @@ def changed(prev_lab, cur_lab, face, shift=1):
     return ndimage.gaussian_filter(best, PX * 0.2) * face
 
 
+# A soft step's change counted only past this many times the face's median change (layer_alpha).
+SOFT_DRIFT = 2.0
+
+
 def layer_alpha(d, face, floor=3.0, span=10.0, soft=False):
     """A layer's alpha from its change `d`: the face's typical change (the redraw's drift) and `floor` under it none, full by `span` more.
     A SOFT step (`soft` - shading, a haze, a step whose change is broad and gentle) is told from the redraw by its jitter alone - the
     change's fine-scale wobble, never its size: measured against the typical change, the socket shading round a closed eye (four units
-    darker, the typical change on a step that shades much of the face) had been thrown away as drift."""
+    darker, the typical change on a step that shades much of the face) had been thrown away as drift. NOR UNDER TWICE THE FACE'S MEDIAN
+    CHANGE: a step whose picture was redrawn a shade lighter all over (732687's "the shine", its median change 1.7) had a quarter of the face
+    for its own, 478 pale strokes blotched over it in its last 25 minutes - and the socket's shading, a fifth of the face, keeps all of
+    it."""
     if soft:
         jitter = float(np.median(np.abs(d - ndimage.gaussian_filter(d, PX * 2.0))[face]))
-        lo = max(1.5, 3.0 * jitter)
+        lo = max(1.5, 3.0 * jitter, SOFT_DRIFT * float(np.median(d[face])))
         return np.clip((d - lo) / (span * 0.6), 0.0, 1.0)
     drift = float(np.median(d[face])) + 2.0 * float(np.median(np.abs(d[face] - np.median(d[face]))))
     lo = max(floor, drift)
@@ -309,6 +316,83 @@ def by_numbers(p, ext, alpha, lab, st, soft_edge):
     return out
 
 
+# A LAYER'S SPILL ([tidy]): a point this much further from its layer's picture than it was before the layer (OKLab x100), past where the
+# layer changes anything by this far (mm), in a patch at least this big (mm^2) - smaller is not seen. Blotted with a cotton swab if at most
+# this big (mm^2) or at most this strong, its print this wide (mm) and taking this much up; else painted back over.
+SPILL_SEEN = 3.0
+SPILL_CLEAR = 1.5
+SPILL_LEAST = 1.5
+SWAB_MOST = 14.0
+SWAB_FAINT = 6.0
+SWAB_R = 2.2
+SWAB_TAKE = 0.85
+
+
+def tidy(p, before, alpha, target, face):
+    """THE LAYER'S SPILLS, CLEANED UP (the user, 2026-11-09, of feedback 0020: "hands can make mistakes, and spill over the edge, dragging/
+    blending color with it. If it does, we could clean that up with more white (or other colors), or we might be able to wipe it away with a
+    cotton swab (if the mistake was small, or the color was faint)"): where this layer left the canvas further from its own picture than
+    it found it, away from where the layer changes anything, each patch big enough to be seen is blotted off with a cotton swab - small, or
+    faint - its fresh paint taken up and what was under it showing again (marks.blot); a bigger, stronger one painted back over in the
+    paint that WAS there, by a brush that fits it. AND NEVER INTO THE LAYER (feedback 0005, 2026-11-09: "The correction looks worse than
+    the mistake, because it left white regions on each side of the eye, on the outside, which don't match the color of the mask. And on
+    the inside of those corrections, it caused the makeup to lighten by a lot"): painted back in the paint nearest the PICTURE, a cream
+    face got white patches - its ground a mix the table's paints could only come near - and a swab's print or a round brush's pull at the
+    eye's edge took its makeup off with the spill; the hand now keeps every mark out of where the layer changes things (`keep_out`), and
+    paints back what the canvas held before the layer. `before`: the canvas as the layer began. -> what was done ("" nothing)."""
+    from canvas import PX
+    worse = delta(p.cv.lab(), target) - delta(before.lab(), target)
+    mine = ndimage.binary_dilation(alpha > 0.05, iterations=max(int(SPILL_CLEAR * PX), 1))
+    spill = ndimage.binary_closing(face & ~mine & (worse > SPILL_SEEN), iterations=2) & face & ~mine
+    comps, n = ndimage.label(spill)
+    was = before.lab()
+    blotted = painted = 0
+    p.keep_out = mine
+    try:
+        blotted, painted = _tidy_patches(p, before, was, worse, comps, target, face)
+    finally:
+        p.keep_out = None
+    if not blotted and not painted:
+        return ""
+    return "tidied: %d blotted, %d painted back" % (blotted, painted)
+
+
+def _tidy_patches(p, before, was, worse, comps, target, face):
+    """Each spilled patch of `comps` blotted or painted back ([tidy]). -> (blots laid, marks painted back)."""
+    from canvas import PX
+    blotted = painted = 0
+    spill = comps > 0
+    for q, bx in enumerate(ndimage.find_objects(comps)):
+        blob = np.zeros(spill.shape, bool)
+        blob[bx] = comps[bx] == q + 1
+        area = blob.sum() / (PX * PX)
+        if area < SPILL_LEAST:
+            continue
+        if area <= SWAB_MOST or float(worse[blob].mean()) <= SWAB_FAINT:
+            p.hand.take("bud")
+            p.hand.need("")
+            # (...pressed over the whole patch, a print's width apart, the strongest of it first)
+            ys, xs = np.nonzero(blob)
+            order = np.argsort(-worse[ys, xs])
+            done = []
+            for k in order:
+                c = ((xs[k] + 0.5) / PX, (ys[k] + 0.5) / PX)
+                if any(np.hypot(c[0] - d[0], c[1] - d[1]) < SWAB_R * 1.2 for d in done):
+                    continue
+                done.append(c)
+                if p.try_lay(mk.blot(p.cv, c, SWAB_R, before.pre, before.alp, SWAB_TAKE, seed=len(p.laid)), target, 0.0):
+                    blotted += 1
+        else:
+            # (...in the paint nearest what the canvas held there before the layer, by the brush its patch is wide enough for)
+            med = np.median(was[blob], axis=0)
+            j = int(np.argmin(np.linalg.norm((oklab(dec(p.opt_cols)) - med) * p.HUE, axis=1)))
+            n0 = len(p.laid)
+            p._solid(ndimage.binary_dilation(blob, iterations=max(int(0.5 * PX), 1)) & face, p.opt_cols[j], p.opt_names[j], 1.0, None,
+                     passes=1)
+            painted += len(p.laid) - n0
+    return blotted, painted
+
+
 def paint_layers(ref, steps, pics, log=print):
     """EVERY LAYER PAINTED, IN ORDER: `ref` the surface (its frame, paints, bare color, face), `steps` the layers (`{name, soft, ...}`),
     `pics` each layer's picture at the canvas's resolution (sRGB floats). -> (the painter, where each layer's marks begin in its
@@ -325,11 +409,12 @@ def paint_layers(ref, steps, pics, log=print):
     for i, st in enumerate(steps):
         name = st["name"]
         starts.append(len(p.laid))
+        before = p.cv.copy()
         prev = labs[i - 1] if i else bare_lab
         if i == 0 or st.get("how") == "base":
             L = {"name": name, "how": "base", "paint": st.get("paint", "auto"), "colors": labs[0]}
             p.layer_name = name
-            col, pn = p.paint_of({**L, "paint": L["paint"]}, face)
+            col, pn = p.paint_of({**L, "paint": L["paint"]}, face, pure=True)
             p._base({"name": name, "how": "base", "paint": pn if L["paint"] == "auto" else L["paint"]})
             p.stage_done(name)
             sheet_alpha.append((name, np.stack([face * 1.0] * 3, -1)))
@@ -474,6 +559,11 @@ def paint_layers(ref, steps, pics, log=print):
             p._smudge({"name": name, "how": "smudge", "mask": alpha > 0.5, "band": float(st.get("fade", 5.0)), "size": 5.0,
                        "strength": 0.55, "inside": 0.25, "smooth": 1.0})
             hows.append("fade")
+        # (...and what it spilled where it was not to go, cleaned up before the next is begun)
+        p.layer_name = name
+        tidied = tidy(p, before, alpha, labs[i], face)
+        if tidied:
+            hows.append(tidied)
         p.stage_done(name)
         log("  %-20s %s; the painting at %.1f min" % (name, ", ".join(hows), p.hand.t / 60))
     return p, starts, sheet_alpha

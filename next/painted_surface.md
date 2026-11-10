@@ -160,6 +160,14 @@ As for the voice actor, you can just copy from the 'Secular Hazing' script for n
   press"): lowered in and squeezed three times as it soaks, lifted over the cup and wrung out hard twice, then blotted on the towel in
   three firm presses, each held and each on a fresh place (`TablePaint._sponge_trip`; 8 s and 4.6 s where a brush's are 4 and 2.6). Not
   built: the drops running off it as it is wrung (a look of falling drops is not among `Effects`').
+- **A brush is laid on its paint, the cup's floor and the towel** (feedback 0002, 2026-11-09: "we need the bottom 30% to 50% of bristles
+  touching, laying on their side") - leaned 55 to 5 degrees off upright, whichever keeps it inside the vessel's wall, and pushed down
+  until 30% of each hair lies flat along the surface, the rest bowed down to it (`TablePaint._laid_hold`, `Bristles.laid`, prop_common's
+  `bristle_lay`) - drawn, 41-46% of each hair within a touch of it (paint_check); a flat brush is leaned across its broadside as it comes
+  rolled, so its flat lies down. Feedback 0017's hold (21 degrees, pushed its give, bent until the tip met it) had laid 0-5%. And it comes
+  to what it is laid on no faster than the solver carries a held thing near others (`TablePaint.TRIP_PACE`): going to 732687's towel 40
+  cm off in a trip's fixed share, the flat brush had been drawn 15 cm behind its hand and 2.6 cm over the towel as its wipe began. Not
+  yet judged by the user's eye.
 - **The water clouds** - each paint act that rinses gets a track of its own on the cup's water, law `cloud` (`TableWork._cloud_of`,
   `TablePaint.cloud_at`) - a real tint entry, so the drawn cup and the physics' liquid both follow it, and a scrub lands where a play does.
   The water needs a `name`. It had gone a tenth of the way toward each color rinsed out, a liner's rinse as much as a sponge's, and was

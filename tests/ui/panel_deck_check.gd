@@ -12,15 +12,15 @@ extends Node
 ## (THE CONTROL: off the bars, the pointer finds what scrolls).
 ## A TITLE SHOWS WHOLE IN A PILE, on a component's card too, whose × must not make its bar taller and push the title under the next
 ## bar (THE CONTROL: a bar made taller by what is on it does hide its title's line).
-## FOLDED CARDS OVERLAP, a later bar on an earlier one (THE CONTROL: over a line that is no card, a bar keeps its height).
-## A PRESS: where its card is, a bar folds or opens it; in a pile, it brings the card into view, opening it if it is folded, and
-## an open card in a pile is not folded by it. OPENING SLIDES: the height passes between its ends, what is under it going with
-## it, and an assigned fold is there at once and says nothing (THE CONTROL: fold() says). THE WHEEL over a bar scrolls.
+## A PRESS BRINGS ITS CARD INTO VIEW WHOLE, wherever its bar lies (2026-11-09, the user: folding "doesn't belong here anymore"):
+## one cut off by the bottom pile comes up until its foot clears it, one in the bottom pile comes whole, one in the top pile
+## comes under the bars above it, and one taller than the room comes with its bar there (THE CONTROL: a card already whole in view
+## stays where it is, and a press never folds it). A CHIP'S PRESS brings its card as a bar's does. THE WHEEL over a bar scrolls.
 ## THE FAN: pointing at a bar in a pile moves those on it off it (THE CONTROL: a bar the other side of it stays).
 ## A VIEW AT THE END STAYS THERE as what is in the cards grows, in the last card or above it, a list built again and a list gone
 ## shorter too, and a panel that fits follows its last card past the window's foot (THE CONTROLS: a view at the top, or short of
 ## the end, stays where it is; the wheel lets go of the end; a panel that fits does not follow a card above its last, or a new card; a card
-## the viewer opens comes as a press brings it, never dragged back to the end, and one opened where it stands keeps its bar under the pointer).
+## a press brings is never dragged back to the end, and one pressed where it stands whole keeps its bar under the pointer).
 ## A SMALL WINDOW closes the piles up, and a large one holds them at their peek. A CARD FREED takes its bar along.
 
 var _fails: Array = []
@@ -35,9 +35,7 @@ func _run() -> void:
 	await _fits()
 	await _piles()
 	await _titles_show()
-	await _folded_overlap()
 	await _presses()
-	await _slides()
 	await _fan()
 	await _keeps_the_end()
 	_sizes()
@@ -63,7 +61,7 @@ func _settle(frames := 6) -> void:
 		await get_tree().process_frame
 
 
-## A panel in the tree with [param count] cards, each [param rows] rows tall, all open; a stored fold is never read (no key).
+## A panel in the tree with [param count] cards, each [param rows] rows tall.
 func _panel(count: int, rows: int) -> SidePanel:
 	var panel := SidePanel.new()
 	add_child(panel)
@@ -222,106 +220,94 @@ func _titles_show() -> void:
 	await _settle(1)
 
 
-## FOLDED CARDS OVERLAP
-func _folded_overlap() -> void:
-	var panel := await _panel(4, 3)
-	var line := Label.new()
-	line.text = "a line that is no card"
-	panel.body.add_child(line)
+## Whether [param card]'s foot lies above the bars of the bottom pile, or on them.
+func _clears_pile(panel: SidePanel, card: Card) -> bool:
 	var all := _cards(panel)
-	for c in all:
-		(c as Card).folded = true
+	var i := all.find(card)
+	var foot := card.global_position.y + card.size.y
+	if i + 1 < all.size():
+		return foot <= (all[i + 1] as Card).head.global_position.y + 1.0
+	return foot <= panel._scroll.global_position.y + panel._scroll.size.y + 1.0
+
+
+## Lets a glide run out.
+func _glided() -> void:
+	await get_tree().create_timer(0.4).timeout
 	await _settle()
-	var a: Card = all[0]
-	var b: Card = all[1]
-	_ok(a.head.get_global_rect().intersects(b.head.get_global_rect()), "a run of folded cards overlaps: a bar's foot under the next one's")
-	_ok(absf(b.head.global_position.y - a.head.global_position.y - panel._deck.peek()) < 1.0, "...by their peek")
-	_ok(not a.body.is_visible_in_tree(), "a folded card's body is not showing")
-	var d: Card = all[3]
-	_ok(not d.head.get_global_rect().intersects(line.get_global_rect().grow(-1.0)), "the control: over a line that is no card, a bar keeps its whole height")
-	panel.free()
-	await _settle(1)
 
 
 ## A PRESS
 func _presses() -> void:
-	var panel := await _panel(8, 40)
+	# A CARD WHOLE IN VIEW STAYS WHERE IT IS, AND IS NEVER FOLDED
+	var panel := await _panel(3, 4)
+	var first: Card = _cards(panel)[0]
+	var tall := first.size.y
+	var y := first.head.global_position.y
+	_ok(first.body.is_visible_in_tree() and tall > first.head.size.y + 50.0, "the control: a card whole in view, its rows showing")
+	_click(first)
+	await _glided()
+	_ok(first.body.is_visible_in_tree() and absf(first.size.y - tall) < 0.5, "a press on its bar never folds it")
+	_ok(absf(first.head.global_position.y - y) < 0.5, "...and it stays where it is")
+	# CARDS SHORTER THAN THE VIEW, MORE OF THEM THAN FIT: each about 0.6 of it (a row and its gap are 32 px), so the second stands
+	# in view with its foot under the bottom pile, whatever the window makes of the view
+	var room := panel.room()
+	panel.free()
+	await _settle(1)
+	panel = await _panel(8, int(room * 0.6 / 32.0))
 	var all := _cards(panel)
-	var said := []
-	var first: Card = all[0]
-	first.folding_changed.connect(func(f: bool) -> void: said.append(f))
-	first.folded = true
-	_ok(said.is_empty(), "an assigned fold says nothing")
-	first.folded = false
-	_click(first)
-	_ok(first.folded and said == [true], "a press on a bar where its card is folds it, and says so")
-	_click(first)
-	_ok(not first.folded and said == [true, false], "...and opens it again")
-	await _settle(20)
-	# A PILE'S OPEN CARD IS BROUGHT, NOT FOLDED
-	var far: Card = all[5]
-	_ok(panel._deck.side_of(far) == 1 and not far.folded, "the control: a later card is open, in the bottom pile")
-	_click(far)
-	await get_tree().create_timer(0.4).timeout
-	await _settle()
-	_ok(not far.folded, "a press on it in a pile does not fold it")
-	_ok(panel._deck.side_of(far) == 0 and absf(far.head.global_position.y - far.global_position.y) < 1.0, "...it brings the card to view")
-	# A PILE'S FOLDED CARD IS OPENED AND BROUGHT
-	var last: Card = all[7]
-	last.folded = true
-	await _settle()
-	_click(last)
-	await get_tree().create_timer(0.4).timeout
-	await _settle()
-	_ok(not last.folded and panel._deck.side_of(last) == 0, "a press on a folded card in a pile opens it, and brings it")
-	_ok(last.body.is_visible_in_tree() and last.body.get_global_rect().position.y < panel._scroll.global_position.y + panel._scroll.size.y,
-		"...its body showing")
-	# OPENED FROM ANYWHERE: another bar's fold, as a chip does
-	var chip_card: Card = all[1]
-	chip_card.folded = true
-	await _settle()
-	panel._scroll.get_v_scroll_bar().value = panel._scroll.get_v_scroll_bar().max_value
-	await _settle()
-	chip_card.expand()
-	await get_tree().create_timer(0.4).timeout
-	await _settle()
-	_ok(panel._deck.side_of(chip_card) == 0, "a card opened from elsewhere comes into view")
-	# THE WHEEL
 	var bar := panel._scroll.get_v_scroll_bar()
+	var cut: Card = all[1]
+	var from := _bar_y(panel, cut)
+	_ok(panel._deck.side_of(cut) == 0 and not _clears_pile(panel, cut), "the control: a card in view, its foot under the bottom pile")
+	_click(cut)
+	await _glided()
+	_ok(panel._deck.side_of(cut) == 0 and _clears_pile(panel, cut) and _bar_y(panel, cut) < from - 1.0,
+		"a press brings it up until it shows whole (%d to %d)" % [int(from), int(_bar_y(panel, cut))])
+	var far: Card = all[5]
+	_ok(panel._deck.side_of(far) == 1, "the control: a later card in the bottom pile")
+	_click(far)
+	await _glided()
+	_ok(panel._deck.side_of(far) == 0 and _clears_pile(panel, far), "a press on it in the pile brings it, whole")
+	bar.value = bar.max_value
+	await _settle()
+	var high: Card = all[2]
+	_ok(panel._deck.side_of(high) == -1, "the control: scrolled to the end, an earlier card in the top pile")
+	_click(high)
+	await _glided()
+	_ok(panel._deck.side_of(high) == 0 and absf(_bar_y(panel, high) - 2.0 * panel._deck.peek()) < 1.0 and _clears_pile(panel, high),
+		"a press on it in the pile brings it, its bar under the bars above it, whole")
+	# A CHIP'S PRESS
+	var chips := CardRow.new()
+	add_child(chips)
+	chips.track(all[6])
+	bar.value = 0.0
+	await _settle()
+	_ok(panel._deck.side_of(all[6]) == 1, "the control: at the top, a card in the bottom pile")
+	var ev := InputEventMouseButton.new()
+	ev.button_index = MOUSE_BUTTON_LEFT
+	ev.pressed = true
+	(chips._chips[all[6]] as Button).gui_input.emit(ev)
+	await _glided()
+	_ok(panel._deck.side_of(all[6]) == 0 and _clears_pile(panel, all[6]), "a press on its chip brings it, whole")
+	chips.free()
+	panel.free()
+	await _settle(1)
+	# A CARD TALLER THAN THE ROOM COMES WITH ITS BAR UNDER THE BARS ABOVE IT
+	panel = await _panel(8, 40)
+	all = _cards(panel)
+	far = all[5]
+	_ok(panel._deck.side_of(far) == 1 and far.size.y > panel._scroll.size.y, "the control: a card taller than the view, in the bottom pile")
+	_click(far)
+	await _glided()
+	_ok(panel._deck.side_of(far) == 0 and absf(_bar_y(panel, far) - 5.0 * panel._deck.peek()) < 1.0,
+		"a press brings it, its bar under the bars above it and its start showing")
+	# THE WHEEL
+	bar = panel._scroll.get_v_scroll_bar()
 	bar.value = 200.0
 	await _settle()
 	var was := bar.value
 	_click(all[7], MOUSE_BUTTON_WHEEL_DOWN)
 	_ok(bar.value > was, "the wheel over a bar scrolls the panel (%d to %d)" % [int(was), int(bar.value)])
-	panel.free()
-	await _settle(1)
-
-
-## OPENING SLIDES
-func _slides() -> void:
-	var panel := await _panel(3, 4)
-	var all := _cards(panel)
-	var c: Card = all[0]
-	var under: Card = all[1]
-	var tall := c.size.y
-	var from := under.global_position.y
-	c.fold()
-	await _settle(2)
-	var mid := c.size.y
-	_ok(c.folded and mid < tall - 0.5 and mid > c.head.size.y * 0.5, "folding slides: its height on the way is %d, of %d" % [int(mid), int(tall)])
-	_ok(under.global_position.y < from - 0.5, "...and what is under it goes with it")
-	await get_tree().create_timer(0.3).timeout
-	await _settle()
-	_ok(c.size.y <= c.head.size.y + 0.5 and not c.body.is_visible_in_tree(), "...to its bar")
-	c.expand()
-	await _settle(2)
-	_ok(c.body.is_visible_in_tree() and c.size.y < tall - 0.5, "opening slides too")
-	await get_tree().create_timer(0.3).timeout
-	await _settle()
-	_ok(absf(c.size.y - tall) < 1.0, "...back to its height")
-	c.folded = true
-	await _settle(2)
-	_ok(c.size.y <= c.head.size.y + 0.5, "the control: an assigned fold is there at once")
 	panel.free()
 	await _settle(1)
 
@@ -424,34 +410,27 @@ func _keeps_the_end() -> void:
 	_grow(last, 6)
 	await _settle(2)
 	_ok(is_equal_approx(bar.value, away), "...and from there it is left where it is")
-	# A CARD THE VIEWER OPENS COMES AS A PRESS BRINGS IT
+	# A CARD A PRESS BRINGS IS NOT DRAGGED BACK TO THE END
 	var above: Card = all[1]
-	above.folded = true
-	await _settle(2)
 	bar.value = bar.max_value
 	await _settle(2)
-	_ok(panel._deck.side_of(above) == -1 and _at_end(panel), "the control: at the end, a folded card lies in the top pile")
+	_ok(panel._deck.side_of(above) == -1 and _at_end(panel), "the control: at the end, an earlier card lies in the top pile")
 	_click(above)
-	await get_tree().create_timer(0.4).timeout
-	await _settle()
-	_ok(not above.folded and panel._deck.side_of(above) == 0 and not _at_end(panel), "a press opens it and brings it, and the view is not dragged back to the end")
+	await _glided()
+	_ok(panel._deck.side_of(above) == 0 and not _at_end(panel), "a press brings it, and the view is not dragged back to the end")
 	# ...AND THE LAST CARD ITSELF, LONG, SHOWS ITS BAR AND ITS FIRST ROWS, NOT ITS FOOT
-	last.folded = true
-	await _settle(2)
 	bar.value = bar.max_value
 	await _settle(2)
-	_ok(_at_end(panel), "the control: the last card folded, at the end")
+	_ok(_at_end(panel) and panel._deck.side_of(last) == -1, "the control: at the end, the long last card's bar lies in the top pile")
 	_click(last)
-	await get_tree().create_timer(0.4).timeout
-	await _settle()
-	_ok(not last.folded and panel._deck.side_of(last) == 0 and not _at_end(panel), "a press opens the last card from its bar, and shows its start, not its foot")
+	await _glided()
+	_ok(panel._deck.side_of(last) == 0 and not _at_end(panel), "a press on the last card's bar shows its start, not its foot")
 	panel.free()
 	await _settle(1)
-	# A SHORT CARD OPENED WHERE IT STANDS: nothing has to bring it, so nothing else takes the view from the end, and its bar stays under the pointer
+	# A SHORT CARD WHOLE WHERE IT STANDS: nothing has to bring it, so nothing takes the view from the end, and its bar stays under the pointer
 	panel = await _panel(2, 40)
 	for key in ["short", "foot"]:
 		var box := panel.add_card(key, key, &"paper")
-		# the last card tall enough that the short one, open, still clears its bar: nothing need scroll to bring it
 		for r in (3 if key == "short" else 14):
 			var l := Label.new()
 			l.custom_minimum_size.y = 24.0
@@ -459,18 +438,16 @@ func _keeps_the_end() -> void:
 	await _settle()
 	all = _cards(panel)
 	var short_card: Card = all[2]
-	short_card.folded = true
-	await _settle(2)
 	bar = panel._scroll.get_v_scroll_bar()
 	bar.value = bar.max_value
 	await _settle(2)
 	var bar_y := _bar_y(panel, short_card)
-	_ok(panel._deck.side_of(short_card) == 0 and _at_end(panel), "the control: at the end, a short folded card lies where it is, in no pile")
+	_ok(panel._deck.side_of(short_card) == 0 and _clears_pile(panel, short_card) and _at_end(panel),
+		"the control: at the end, a short card lies whole where it is, in no pile")
 	_click(short_card)
-	await get_tree().create_timer(0.4).timeout
-	await _settle()
-	_ok(not short_card.folded and absf(_bar_y(panel, short_card) - bar_y) < 1.0,
-		"a press opens it with its bar staying under the pointer, not following the end (%d to %d)" % [int(bar_y), int(_bar_y(panel, short_card))])
+	await _glided()
+	_ok(absf(_bar_y(panel, short_card) - bar_y) < 1.0 and _at_end(panel),
+		"a press leaves its bar under the pointer and the view at the end (%d to %d)" % [int(bar_y), int(_bar_y(panel, short_card))])
 	panel.free()
 	await _settle(1)
 	# A PANEL THAT FITS FOLLOWS ITS LAST CARD PAST THE WINDOW'S FOOT
@@ -501,19 +478,6 @@ func _keeps_the_end() -> void:
 		new_box.add_child(l)
 	await _settle(4)
 	_ok(bar.value == 0.0 and bar.max_value - bar.page > 100.0, "the control: a new card past the window's foot does not move it")
-	panel.free()
-	await _settle(1)
-	panel = await _panel(3, 2)
-	all = _cards(panel)
-	bar = panel._scroll.get_v_scroll_bar()
-	(all[0] as Card).folded = true
-	_grow(all[0], 60)
-	await _settle(4)
-	_ok(bar.max_value - bar.page < 1.0, "the control: its first card folded, long, the panel fits")
-	_click(all[0])
-	await get_tree().create_timer(0.4).timeout
-	await _settle()
-	_ok(not (all[0] as Card).folded and bar.value == 0.0 and bar.max_value - bar.page > 100.0, "a press opens it past the window's foot, and the view stays with it")
 	panel.free()
 	await _settle(1)
 

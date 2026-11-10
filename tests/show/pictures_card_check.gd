@@ -12,7 +12,8 @@ extends SceneTree
 ##
 ## IT COMES WITH WHAT SHOWS PICTURES ([method Components.with_parts]): beside the Medium, and beside a show at a table, whose
 ## agents paint pictures of their own (2026-11-09) - never beside a voice alone (THE CONTROL) - and it has no × of its own, where
-## the Medium card has one.
+## the Medium card has one. EVERY PANEL SHOWS WHAT COMES WITH THE CARDS IT SHOWS (its workspace's `hosts`; THE CONTROL: the table's
+## without the Pictures card, as it was when a table show's never stood).
 ##
 ## ONE CARD: built beside the Medium card - as a letter, a dispatch desk and a tablet - which never carries a list of
 ## pictures of its own (THE CONTROL: the Pictures card holds one).
@@ -77,6 +78,28 @@ func _comes_with() -> void:
 	_ok(not Components.with_parts(["text", "voice"]).has("illustrations"), "the control: never beside a voice alone")
 	_ok(Components.attach_blocks("illustrations").is_empty() and not Components.detach_blocker("illustrations", ["text", "voice", "medium"]).is_empty(),
 		"never attached or taken off by itself")
+	# ...AND ON THE PANEL OF WHAT IT COMES WITH (2026-11-09: the table's panel showed no card it does not list in its `hosts`, and the
+	# Pictures card was missing from a table show's)
+	var unhosted := _unhosted(Components.WORKSPACES)
+	_ok(unhosted.is_empty(), "every panel shows what comes with the cards it shows: missing %s" % str(unhosted))
+	var cut: Dictionary = Components.WORKSPACES.duplicate(true)
+	((cut["table"] as Dictionary)["hosts"] as Array).erase("illustrations")
+	_ok(_unhosted(cut) == [["table", "illustrations"]], "the control: a table panel without it is found: %s" % str(_unhosted(cut)))
+
+
+## `[workspace, part]` for each part that comes with a card a panel shows ([method Components.with_parts]) but is not among its `hosts`:
+## made for the note, and put on no panel.
+static func _unhosted(workspaces: Dictionary) -> Array:
+	var out: Array = []
+	for ws in workspaces:
+		var hosts: Variant = (workspaces[ws] as Dictionary).get("hosts")
+		if not (hosts is Array):
+			continue
+		for k in Components.REGISTRY:
+			var with: Array = (Components.REGISTRY[k] as Dictionary).get("comes_with", [])
+			if not (hosts as Array).has(k) and with.any(func(h: String) -> bool: return (hosts as Array).has(h)):
+				out.append([ws, k])
+	return out
 
 
 ## ONE CARD, STANDING ONLY WHILE THE MEDIUM SHOWS PICTURES. (Nothing here is typed by a card's class: a `--script` gate

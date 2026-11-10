@@ -44,7 +44,7 @@ core. The commitments:
 - [Forces](forces.md) (8) - the physics primitives particles compose.
 - [Stage actors and verbs](stage.md) (3 actors, 22 verbs) - what a storyboard's `stage` entries are made of.
 - [Masking effects](masking.md) (21) - the video effects editor: its model, its effects and its headless tools.
-- [Script marks](script.md) (67) - every mark a script may carry - the script editor's palette.
+- [Script marks](script.md) (68) - every mark a script may carry - the script editor's palette.
 - [Agents](agents.md) (4 writers, 3 painters, 3 assistants) - the AI command-line tools Ghost Notes hands its words, pictures and fixes to: which does what, how each is run, and how to install one.
 
 ## Subsystems
@@ -225,12 +225,12 @@ The note as a file: where notes live, a document kept in step with its file, the
 
 ### `ui/` - The panel kit
 
-What every note's panel is built from, and what it asks of the window it is in: a side panel that cannot outgrow the window and its "+", a component's folding card in its family's color and the chips over the cards, the cards a note's components bring (built from the registry's rows, attached and detached), the one list of what is made for a note (`PipelineCard`), the Script card every note has (its editor window and highlighter), rows drawn from a table of fields, two small controls, and `Shell` - the bottom-right row, room along the bottom edge, the way back to the notes. Above `notes/` because it is a kit for a note's components.
+What every note's panel is built from, and what it asks of the window it is in: a side panel that cannot outgrow the window and its "+", a component's card in its family's color and the chips over the cards, the cards a note's components bring (built from the registry's rows, attached and detached), the one list of what is made for a note (`PipelineCard`), the Script card every note has (its editor window and highlighter), rows drawn from a table of fields, two small controls, and `Shell` - the bottom-right row, room along the bottom edge, the way back to the notes. Above `notes/` because it is a kit for a note's components.
 
 - [`agent_pick.gd`](../src/ui/agent_pick.gd) **AgentPick** - who does one job, as one row: the AGENT (a CLI from a backend registry, `TextGen` for a writer, `ImageGen` for a painter), the MODEL it runs and how hard it REASONS - each list the chosen agent's own, read from its backend (`TextGen.Backend.models`, `efforts`). Every card that runs agents ...
 - [`armed_delete.gd`](../src/ui/armed_delete.gd) **ArmedDelete** - A DELETE PRESSED TWICE, because it cannot be undone: the first press arms it for `ARMED` seconds ("Delete?", in red), the second calls what it deletes. A dialog for every bad picture would make clearing a run of them a chore, which is exactly when it is used. One button for whatever a card ...
-- [`card.gd`](../src/ui/card.gd) **Card** - one component's settings on a side panel: a titled box that folds, bordered in its FAMILY's color (next/notes.md, "A card").
-- [`card_row.gd`](../src/ui/card_row.gd) **CardRow** - the chips under a panel's title, one per `Card` in its color (next/notes.md, "The component row"). A click opens or closes that card; Ctrl-click opens it alone and folds the rest, as Blender's panel headers do. A chip shows ● while its card is open and ○ while it is folded, so the row also answers ...
+- [`card.gd`](../src/ui/card.gd) **Card** - one component's settings on a side panel: a titled box, bordered in its FAMILY's color (next/notes.md, "A card").
+- [`card_row.gd`](../src/ui/card_row.gd) **CardRow** - the chips under a panel's title, one per `Card` in its color (next/notes.md, "The component row"). A click brings that card into view whole, as a press on its title bar does (`Card.reveal`); a card never folds (2026-11-09), so a chip has no open or folded to show.
 - [`graphics_panel.gd`](../src/ui/graphics_panel.gd) **GraphicsPanel** - how finely the picture is drawn, live and in an export, above the bottom-right row (Chrome's framed-picture button, beside the Environment's).
 - [`icons.gd`](../src/ui/icons.gd) **Icons** - the few pictures a button wears in place of words (2026-10-31, the user, of the notes list: "remove the 'New' and 'Existing note...' buttons and just replace them plain icons, no text").
 - [`note_cards.gd`](../src/ui/note_cards.gd) **NoteCards** - a note's component cards, built ONE way on whichever panel shows the note, and the two edits that change what a note is made of: attach and detach.

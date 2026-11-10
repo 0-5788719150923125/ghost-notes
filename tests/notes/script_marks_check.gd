@@ -286,7 +286,7 @@ func _parsers_agree() -> void:
 			"thought", "strike", "struck", "color", "unspoken", "sketch_timed", "point", "tap", "image_end", "still", "new_page":
 				_letter_mark(k, ex)
 			"call", "hang_up", "ring", "text_msg", "ping", "desk_sound", "static", "print", "sleep", "screen_off", "look", "lift", \
-					"switch", "live", "image_screen", "typed", "shown", "session", "moving", "reply":
+					"switch", "live", "image_screen", "typed", "shown", "session", "moving", "reply", "redact":
 				_dispatch_mark(k, ex)
 			_:
 				_ok(false, "%s has no check in script_marks_check - prove it before shipping it" % k)
@@ -537,6 +537,12 @@ func _dispatch_mark(k: String, ex: String) -> void:
 			_ok(String(a["kind"]) == "session" and steps.size() == 2 and String(steps[0]["typed"]) == "search ryan brooks"
 				and (steps[0]["out"] as PackedStringArray) == PackedStringArray(["1 MATCH"]) and not (d["spoken"] as PackedStringArray).has("brooks")
 				and float(a["rest"]) > 2.0, "a session's commands are not typed and answered in order, silent, the voice waiting")
+		"redact":
+			var d := DispatchScript.parse(head + "```screen\nNAME ........ " + ex + "\n```" + tail)
+			var line := String(String(d["actions"][0]["text"]).split("\n")[0])
+			var drawn := DispatchScript.unredacted(line)
+			_ok(String(drawn["text"]) == "NAME ........ DOE, JANE" and drawn["spans"] == [Vector2i(14, 23)] and not line.contains("DOE")
+				and not (d["spoken"] as PackedStringArray).has("doe"), "redacted words are not on the screen as themselves, hidden (%s)" % str(drawn))
 
 
 ## A LETTER'S MARK ([LetterScript]), read by the letter's own parser: what each does to what the pen

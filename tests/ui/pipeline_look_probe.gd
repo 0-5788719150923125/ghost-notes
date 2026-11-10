@@ -7,9 +7,8 @@ extends Node
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/ui/pipeline_look_probe.gd 60 [--out=<dir>]
 ##
-## Writes `top.png` (scrolled to the top, its piles), `middle.png` (a pile at each end), `folded.png` (every card folded, a
-## run overlapping), `fanned.png` (the pointer on a bar in a pile) and `small.png` (a 720-tall window) under the out folder, and
-## the panel's numbers to the log.
+## Writes `top.png` (scrolled to the top, its piles), `middle.png` (a pile at each end), `fanned.png` (the pointer on a bar in a
+## pile) and `small.png` (a 720-tall window) under the out folder, and the panel's numbers to the log.
 
 const ROOT := "user://pipeline_look_probe"
 
@@ -63,12 +62,6 @@ func _ready() -> void:
 	await _shot("middle")
 	bar.value = 0.0
 	await _shot("fanned", _ed._panel.cards()[_ed._panel.cards().size() - 3])
-	var all: Array = _ed._panel.cards()
-	for c in all:
-		(c as Card).folded = true
-	await _shot("folded")
-	for c in all:
-		(c as Card).folded = false
 	get_tree().root.size = Vector2i(1280, 720)
 	await _shot("small")
 	print("pipeline_look_probe: rows %s" % str(_pipe.names()))

@@ -64,7 +64,7 @@ const SHAPES := {
 	"skull": "a skull, resting on its jaw and facing the thing's front: `kind` \"human\", \"horned\" (a cow's, a goat's or a ram's, long-snouted, with `horns` \"straight\", \"curved\" or \"curled\", or \"none\") or \"bird\" (a long beak); `length` (centimeters, front to back - a person's is about 19). Its sockets are deep and its openings go through. It is bone, not a head: no eyes, no skin, nothing living.",
 	"sculpt": "a form modeled freely, as clay is, from STROKES - for what no other shape makes: the skull or the jaw of a creature not listed, a shell, an antler, a gnarled root, a seed pod, a mushroom, a stone worn into a shape, a carved charm. `strokes` [{`points` [[x, y, z, r], ...]}, ...] in order: each stroke a rod through its points (curving through them; `smooth` false joins them straight), r its thickness there (a radius, centimeters), so it swells and narrows as it goes; one point is a ball, stretched to `size` [width, height, depth] if given. Each stroke melts into what came before it, `blend` centimeters soft (0 a crisp seam); `carve` true cuts it out of what came before instead - a socket, a groove, a hollow, a hole right through, the gap under an arch. `mirror` true makes it the same on both sides of x = 0: draw only its middle and its right side. It is one surface, its hollows shut in from the light; a rod much thinner than a hundredth of the whole comes out broken. Draw it blind and you will not get it right first: look at it from every side, and put it again.",
 	"mask": "A FACE WITH NO ONE IN IT, life size or any size: a mask form, a makeup artist's practice face, a mannequin's face, a milliner's block - its eyes closed, its lips closed, no hair and no ears, smooth all over, standing on its chin and facing the thing's front (+z). `size` [width, height, depth] (a person's: [15, 21, 8] - depth from its rim to the tip of its nose), `relief` 0.3-1.5 (how strongly its features stand out: 1 a person's), `thick` (its flat back's depth behind its rim, centimeters). Stand it on a stand or prop it against something: it has no foot of its own. Give it `skin` true to paint its face.",
-	"tuft": "A BRUSH'S HAIRS: a bundle of fine hairs rising from y = 0 (where they leave the ferrule) to their tips, which bend as the brush is pulled and pressed and spring back as it lifts. `kind` round (a soft point), liner (long and fine), flat (a chisel edge, wide across x), fan (spread wide) or dome (full and rounded - a blending or powder brush); `length` (centimeters out of the ferrule), `width` (across, at the ferrule), `thick` (a flat or fan's thinness), `hairs` (6-140). Build a brush as a group: a `tube` handle, a short `lathe` or `loft` ferrule, and the tuft standing out of it - give the group a free `joint` and `points` {\"tip\": the tuft's end, \"grip\": the handle's} so it can be picked up and painted with.",
+	"tuft": "A BRUSH'S HAIRS: a bundle of fine hairs rising from y = 0 (where they leave the ferrule) to their tips, which bend as the brush is pulled and pressed and spring back as it lifts. `kind` round (a soft point), liner (long and fine), flat (a chisel edge, wide across x), fan (spread wide), dome (full and rounded - a blending or powder brush) or bud (a cotton swab's tip: short, dense and rounded, barely bending - it lays no paint, it lifts a small or faint spill of fresh paint); `length` (centimeters out of the ferrule), `width` (across, at the ferrule), `thick` (a flat or fan's thinness), `hairs` (6-140). Build a brush as a group: a `tube` handle, a short `lathe` or `loft` ferrule, and the tuft standing out of it - give the group a free `joint` and `points` {\"tip\": the tuft's end, \"grip\": the handle's} so it can be picked up and painted with. A cotton swab is a thin `tube` stick with a bud tuft at its end, built the same way.",
 	"grains": "LOOSE STUFF, poured and never one piece: sand, salt, sugar, snow, ash, flour, seeds, peppercorns, ground herbs, tea, powder, gravel, beads. Drawn where it lies, `at` inside the vessel that holds it - it fills that vessel's inside from the bottom up to `fill` (0-1 of the way to its rim) - or on the cloth or a dish, where it lies in a little heap of `amount` grains (up to 240). `grain`: one grain's size in centimeters (0.1 sugar or flour, drawn as small clumps, to 1 a pea or a bead); its material is its look, and how it behaves - heavy or light, whether it dissolves. It is REAL: tipped, its vessel spills it from the mouth and it falls, runs and heaps where it lands, and in a liquid it sinks, floats or dissolves.",
 	"extrude": "an outline raised straight up: trays, tiles, plaques, tablets, boxes, dishes and candles of any plan - a star, a hexagon, a heart. `outline` (polygon with `sides` 3-12, star with `sides` points, circle, rect, heart, lens (pointed at both ends, as a leaf or an eye is) or drop (round behind, pointed in front) - or `points` [[x, z], ...] for any outline, which may go in and out), `size` [width, depth], `height`; optional `taper` 0-0.9 (narrower at the top), `bevel` (centimeters cut off the top edge), `wall` (centimeters: hollow, as a tray or a dish is, its floor as thick as its wall). A wax extrude takes `wick` or `wicks` as a turned candle does.",
 }
@@ -1075,6 +1075,7 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 	var box := AABB(all[0], Vector3.ZERO)
 	for p in all:
 		box = box.expand(p)
+	_rest_free(inner, meshes, works, box.position.y)
 	# TOO BIG IS SCALED DOWN WHOLE: an agent's 2-meter vase is a mistake in units, not a vase
 	var k := minf(1.0, MAX_SIZE * 0.01 / maxf(box.size.x, maxf(box.size.y, box.size.z))) if not keep else 1.0
 	var shift := Vector3(-box.get_center().x, -box.position.y, -box.get_center().z) if not keep else Vector3.ZERO
@@ -1241,6 +1242,62 @@ static func _assemble(parts: Array, seed: int, path: Array, gives := {}) -> Arra
 			cs.append(chain)
 		leaf["chains"] = cs
 	return out
+
+
+## A FREE PART RESTS ON WHAT IS UNDER IT (feedback 0011, 2026-11-09, of a powder puff drawn at its pot's rim and narrower than its
+## mouth, 5 mm over the powder: "it looks like a flying saucer right now"): each part with a free joint, drawn with air between it and
+## the rest of its thing, is lowered until it first touches it - or the table's top, [param ground] - never raised, never into anything:
+## points of its own surface (at most [constant REST_LOOKS] of a mesh's) looked at straight down, the least gap taken. Only what it is
+## drawn over is asked, in [param inner]'s space, before the thing is scaled; the physics takes the part where it then lies.
+static func _rest_free(inner: Node3D, meshes: Array, works: Array, ground: float) -> void:
+	var free: Array = works.filter(func(wd: Dictionary) -> bool:
+		return String(((wd["work"] as Dictionary).get("joint", {}) as Dictionary).get("kind", "")) == "free")
+	if free.is_empty():
+		return
+	# (each mesh of the thing once: its rays' mesh and where it stands in [param inner]'s space)
+	var all: Array = []
+	for m in meshes:
+		var mi := m as MeshInstance3D
+		if mi != null and mi.mesh != null:
+			var x := _in_space(mi, inner)
+			all.append({"mi": mi, "x": x, "back": x.affine_inverse(), "tm": TableWork._ray_mesh(mi.mesh.get_faces())})
+	for wd in free:
+		var wn: Node3D = (wd as Dictionary)["node"]
+		var drop := INF
+		for o in all:
+			if not wn.is_ancestor_of(o["mi"]):
+				continue
+			var faces: PackedVector3Array = (o["mi"] as MeshInstance3D).mesh.get_faces()
+			for i in range(0, faces.size(), maxi(faces.size() / REST_LOOKS, 1)):
+				var p: Vector3 = (o["x"] as Transform3D) * faces[i]
+				var gap := p.y - ground
+				for u in all:
+					if wn.is_ancestor_of(u["mi"]):
+						continue
+					var back: Transform3D = u["back"]
+					var hit := TableWork._ray(u["tm"], back * p, (back.basis * Vector3.DOWN).normalized())
+					if not hit.is_empty():
+						gap = minf(gap, p.y - ((u["x"] as Transform3D) * (hit["position"] as Vector3)).y)
+				drop = minf(drop, gap)
+		if drop > REST_LEAST and drop < INF:
+			var parent := wn.get_parent() as Node3D
+			wn.position += (_in_space(parent, inner).basis.inverse() if parent != inner else Basis()) * (Vector3.DOWN * drop)
+
+
+## How many points of a free part's mesh [method _rest_free] looks down from, and the least gap worth closing (meters).
+const REST_LOOKS := 300
+const REST_LEAST := 0.0005
+
+
+## Node [param n]'s transform in [param top]'s space (one of its ancestors), composed by hand - a thing is built away from the tree.
+static func _in_space(n: Node3D, top: Node3D) -> Transform3D:
+	var x := Transform3D.IDENTITY
+	var at: Node = n
+	while at != null and at != top:
+		if at is Node3D:
+			x = (at as Node3D).transform * x
+		at = at.get_parent()
+	return x
 
 
 ## ONE COPY'S WORK ([Motions]), as a link in its chain ([method _holder]): `{key, work}` - its work as written

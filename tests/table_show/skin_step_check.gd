@@ -18,6 +18,9 @@ extends SceneTree
 ##   is given them whatever it wrote - a thing of the same name replaced. The set dresser starts with them standing and can neither put
 ##   them again, move them nor take them away. The control: a brief with no such heading fixes nothing and reads as it was.
 ## - THE PAINTER AT THE TABLE ([method _painter]): its tools, its handing in, the acts its painting makes - and the controls.
+## - A COTTON SWAB FOR THE PAINTER'S SWAB AND FOR NOTHING ELSE ([method _swab]; feedback 0020): a brush whose tuft is a bud is found as a tool
+##   with that tip, lifts the host's spills ([method TableProducer._table_tool] "bud") and is never the brush nearest a round's width -
+##   the control, a table with no swab, gives the lift to the brush nearest its width.
 ## - EVERY PROMPT RENDERS WHOLE: the painter's; the decorator's, with tools and without; the puppeteer's told the design; the set dresser's told what is
 ##   painted and what stands fixed.
 ## - WHAT THE TABLE READS REACHES A PREVIEW: every file the table reads from its episode's folder (`path_join("...")` in table.gd) is
@@ -48,6 +51,7 @@ func _run() -> void:
 	_surfaces()
 	await _tools()
 	await _painter()
+	_swab()
 	await _fixed()
 	_prompts()
 	_preview_files()
@@ -259,6 +263,47 @@ func _tools() -> void:
 	var p2 := TableProducer.new(one, {"title": "Show", "brief": "A brief."})
 	_ok(p2._land_skin(JSON.stringify({"name": "a face", "elements": [{"id": "base", "paint": "#ffffff", "fill": "all"}]})).is_empty() and one.has("skin"), "a writer with no tools hands it in in one reply")
 	_ok(not p2._land_skin("{\"name\": \"none\", \"elements\": [{\"id\": \"x\", \"fill\": \"hello\"}]}").is_empty(), "control: a design with nothing paintable does not land")
+
+
+## A COTTON SWAB ON THE TABLE: a brush whose tuft is a bud, found with its tip; the painter's lifts go to it, and no brush's strokes do -
+## and with none on the table, a lift goes to the brush nearest its width.
+func _swab() -> void:
+	var brush := func(nm: String, kind: String, width: float) -> Dictionary:
+		return {"name": nm, "joint": {"kind": "free"}, "at": [0, 1, 0], "turn": [0, 0, 90], "parts": [
+			{"shape": "tube", "path": [[0, 0, 0], [0, 7, 0]], "radii": [0.15, 0.12], "material": "stick"},
+			{"shape": "tuft", "kind": kind, "length": 0.9 if kind == "bud" else 1.8, "width": width, "at": [0, 6.6, 0], "material": "hair"}]}
+	var table := func(with_swab: bool) -> Dictionary:
+		var parts: Array = [{"shape": "box", "size": [12, 1, 9], "material": "stick"}, brush.call("round brush", "round", 0.9)]
+		if with_swab:
+			parts.append(brush.call("swab", "bud", 0.55))
+		return {"things": [{"name": "tray", "at": [20, 0], "parts": parts}],
+			"materials": {"stick": {"kind": "wood", "color": "#e8e0d0"}, "hair": {"kind": "fabric", "color": "#f4f2ec"}}}
+	var tools: Array = PainterTools.scan(table.call(true))["tools"]
+	var tips := tools.map(func(t: Dictionary) -> String: return "%s:%s" % [t["part"], t.get("tip", "")])
+	_ok(tips.has("swab:bud") and tips.has("round brush:round"), "each brush is found with its tip's kind: %s" % str(tips))
+	_ok(String(TableProducer._table_tool("bud", tools).get("part", "")) == "swab", "the painter's lifts go to the swab: %s" % TableProducer._table_tool("bud", tools).get("part", ""))
+	# (...a 5.5 mm swab is nearer a 6 mm round than a 9 mm brush is - and is still never it)
+	_ok(String(TableProducer._table_tool("round", tools).get("part", "")) == "round brush", "and a round's strokes never do: %s" % TableProducer._table_tool("round", tools).get("part", ""))
+	var plain: Array = PainterTools.scan(table.call(false))["tools"]
+	_ok(String(TableProducer._table_tool("bud", plain).get("part", "")) == "round brush", "control: with no swab, a lift goes to the brush nearest its width")
+	# A MIX OF A MIX IS TAKEN FROM THE POT MOST OF IT IS (feedback 0006): each paint after the first mixed in at its share
+	var pots := [{"name": "amber cream", "pot": "amber pot"}, {"name": "olive cream", "pot": "olive pot"},
+		{"name": "white paint", "pot": "white pot"}, {"name": "black paint", "pot": "black pot"}]
+	_ok(TableProducer._pot_of_paint("amber cream+olive cream+white paint 0.75 0.75", pots) == "white pot",
+		"a mix of a mix three quarters white is taken from the white pot: %s" % TableProducer._pot_of_paint("amber cream+olive cream+white paint 0.75 0.75", pots))
+	_ok(TableProducer._pot_of_paint("amber cream+olive cream+white paint 0.75 0.25", pots) == "olive pot",
+		"...and one a quarter white, from the olive's: %s" % TableProducer._pot_of_paint("amber cream+olive cream+white paint 0.75 0.25", pots))
+	_ok(TableProducer._pot_of_paint("amber cream+black paint 0.25", pots) == "amber pot" and TableProducer._pot_of_paint("white paint", pots) == "white pot",
+		"control: a mix of two, and a paint alone, as before")
+	# THE WORDS KEPT WHEN THE WORK IS MADE AGAIN ([method TableProducer.recue_map]): a passage's cues, its beat's acts recounted, each
+	# pointed at the act at its place - fewer acts, the first and last cues kept and the rest spread; the same, nothing
+	var olds := ["s-1-a", "s-1-b", "s-1-c", "s-1-d", "s-1-e", "s-1-f", "s-1-g"]
+	var m4 := TableProducer.recue_map(olds, ["s-1-p", "s-1-q", "s-1-r", "s-1-s"])
+	_ok(m4.get("s-1-a") == "s-1-p" and m4.get("s-1-g") == "s-1-s" and m4.values().filter(func(v: String) -> bool: return not v.is_empty()).size() == 4
+		and m4.values().count("") == 3, "seven cues over four acts: the first and last kept, two between, three taken out: %s" % str(m4))
+	var m3 := TableProducer.recue_map(["s-3-a", "s-3-b", "s-3-c"], ["s-3-x", "s-3-y", "s-3-z"])
+	_ok(m3 == {"s-3-a": "s-3-x", "s-3-b": "s-3-y", "s-3-c": "s-3-z"}, "as many acts as cues, each at its place: %s" % str(m3))
+	_ok(TableProducer.recue_map(["i-1", "i-2"], ["i-1", "i-2"]).is_empty(), "control: cues that are their acts already are left")
 
 
 static func _line_of(text: String, head: String) -> String:

@@ -583,6 +583,35 @@ func _game_needs(parts: PackedStringArray) -> Array:
 	return []
 
 
+## A STEP UNLOCKED IS MADE AGAIN ALONE (the user, 2026-11-09: "a 'lock' button next to the regenerate buttons, for every step ... If
+## toggled to 'locked,' then the current behavior is maintained ... Tainting future steps is a good default behavior, because of the
+## sequential nature of most things we do here. But if set to 'unlocked,' then a step would be detached from that behavior - allowing
+## us to regenerate just a single step, without breaking all of the other ones"): every step is locked until it is unlocked, and which
+## are unlocked is the episode's own (`unlocked.json`) - a 40-minute painting made again had thrown away a script worth keeping.
+func unlocked(step: String) -> bool:
+	return (_unlocked_steps() as Array).has(step)
+
+
+## ...and [param step] unlocked ([param on]) or locked again. "" written, else why not.
+func set_unlocked(step: String, on: bool) -> String:
+	var steps: Array = _unlocked_steps()
+	if on and not steps.has(step):
+		steps.append(step)
+	elif not on:
+		steps.erase(step)
+	DirAccess.make_dir_recursive_absolute(dir)
+	return TextGen.put(dir.path_join(UNLOCKED_FILE), JSON.stringify({"steps": steps}))
+
+
+func _unlocked_steps() -> Array:
+	var p := dir.path_join(UNLOCKED_FILE)
+	var d: Variant = JSON.parse_string(FileAccess.get_file_as_string(p)) if FileAccess.file_exists(p) else null
+	return ((d as Dictionary).get("steps", []) as Array).duplicate() if d is Dictionary and (d as Dictionary).get("steps") is Array else []
+
+
+const UNLOCKED_FILE := "unlocked.json"
+
+
 ## Everything made from [param step], directly or through another step. A card's picture is NOT
 ## made from the card before it in this sense - it is only shown it - so redoing one picture
 ## leaves the rest of the deck alone (the [Illustrations] rule: the chain is not the signature).
@@ -703,11 +732,11 @@ func model_words() -> String:
 	return "\n".join(lines)
 
 
-## REDO [param step]: delete it and everything made from it. Returns what went. A card painted or
-## designed again starts with nothing sent back ([method sent_back]) - but [param keep_sent] keeps it,
-## for the art director's own send-back, which the painter is told of.
-func invalidate(step: String, keep_sent := false) -> Array:
-	var gone := [step] + dependents(step)
+## REDO [param step]: delete it and everything made from it - or, [param alone], it and nothing else ([method unlocked]). Returns
+## what went. A card painted or designed again starts with nothing sent back ([method sent_back]) - but [param keep_sent] keeps
+## it, for the art director's own send-back, which the painter is told of.
+func invalidate(step: String, keep_sent := false, alone := false) -> Array:
+	var gone := [step] if alone else [step] + dependents(step)
 	# the plan decides how many cards there are: going back to it takes every card step with it,
 	# including ones a smaller spread no longer lists
 	if (step == "plan" or step == "draw") and DirAccess.dir_exists_absolute(dir):

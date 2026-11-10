@@ -40,6 +40,7 @@ SEARCH BY NAME, PLATE OR KEYWORD
 ```screen
 NAME ........ SUBJECT
 STATUS ...... CONTAINED
+PLATE ....... <!-- redact: XKC 4417 -->
 ```
 
 There he is. He does not go out at this hour.

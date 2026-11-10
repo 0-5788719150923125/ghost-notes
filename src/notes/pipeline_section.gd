@@ -85,6 +85,14 @@ func busy() -> bool:
 	return false
 
 
+## WHETHER GENERATE WOULD START MORE HERE WHILE IT IS BUSY (the user, 2026-11-09: "Can we perhaps make that "Generate" button available
+## for clicking immediately after steps become tainted ... That way, I could click both buttons at the same time - and come back to the
+## full pipeline finished later"): making only some of what it is missing - a row made again, what was made from it waiting - so Generate
+## widens it to the rest, and what is under way carries on. False by default: a busy section is left to finish.
+func widens() -> bool:
+	return false
+
+
 ## Whether [method make] has anything to do. Asked at its turn in Generate's walk, so a step made from the words of the
 ## section before it answers once they are written.
 func missing() -> bool:

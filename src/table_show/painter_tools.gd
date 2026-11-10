@@ -36,6 +36,8 @@ const SPONGE_GROUND := 0.5
 ## How each way of laying is named to the writer, and what [PaintLayers] lays it as - a blend no paint of its own, the paint already on
 ## moved by a clean brush; what each finish is laid as (no color of its own the canvas follows).
 const HOWS := {"sponge": "stipple", "dab": "dab", "sweep": "sweep", "line": "line", "blend": "blend"}
+## A BRUSH WHOSE TIP IS A COTTON SWAB'S BUD ([constant Bristles.KINDS]) lays no paint of its own: it lifts, or blends (feedback 0020).
+const SWAB_TIP := "bud"
 const FINISHES := {"pat": "powder"}
 
 var dir := ""
@@ -52,7 +54,7 @@ var _ground := Color.WHITE
 var _bare := Color.WHITE
 var _creams: Array = []
 var _surface := PackedByteArray()
-var _tools: Array = []       # [{name, thing, part, kind, mm}]
+var _tools: Array = []       # [{name, thing, part, kind, mm, tip}]
 var _paints: Array = []      # [{name, color, pot, powder}]
 var _beats: Array = []       # [{key, name, work}]
 var _ops: Array = []         # the operations laid, in order
@@ -187,7 +189,7 @@ func _call(name: String, args: Dictionary) -> Dictionary:
 # --- the table: its tools, its paints, the episode's beats -------------------------------------------------------------------------
 
 ## THE TABLE'S TOOLS AND PAINTS as the painter is given them ([method _find_tools]), for a step that paints without one - the painter
-## at the table run as a host (TableProducer._land_skin_host): `{tools: [{name, thing, part, kind, mm}], paints: [{name, color, pot,
+## at the table run as a host (TableProducer._land_skin_host): `{tools: [{name, thing, part, kind, mm, tip}], paints: [{name, color, pot,
 ## powder, finish}]}`.
 static func scan(table_doc: Dictionary) -> Dictionary:
 	var pt := PainterTools.new("", table_doc, {}, "", true)
@@ -221,8 +223,9 @@ func _tools_in(parts: Array, thing: String, mats: Dictionary) -> void:
 			var got := Skins._tool_of_parts([pd], mats)
 			var kind := String(got[0]) if not got.is_empty() else ""
 			if kind in ["brush", "sponge"] or (kind == "tool" and _soft(pd, mats)):
+				# (...and a brush's tip, its tuft's kind: a cotton swab's bud lays no paint - [constant Bristles.KINDS])
 				_tools.append({"name": "%s/%s" % [thing, named], "thing": thing, "part": named, "kind": kind if kind != "tool" else "puff",
-					"mm": float(got[1])})
+					"mm": float(got[1]), "tip": String(got[2]) if got.size() > 2 else ""})
 				continue
 		if pd.get("parts") is Array:
 			_tools_in(pd["parts"], thing, mats)
@@ -325,6 +328,8 @@ func _paint(args: Dictionary) -> Dictionary:
 		var kind := String(tool["kind"])
 		if (how == "sponge" and kind != "sponge") or (how in ["dab", "sweep", "line", "blend"] and kind != "brush") or (how == "pat" and kind != "puff"):
 			wrong.append("a %s does not lay `%s`" % [kind, how])
+		elif String(tool.get("tip", "")) == SWAB_TIP and how != "blend":
+			wrong.append("a cotton swab lays no paint: it only blends")
 	var where := str(args.get("where", "")).strip_edges()
 	var region := PackedByteArray()
 	if where.to_lower() == "all":
@@ -484,7 +489,8 @@ func _said() -> String:
 			var mixed := "" if (od.get("mix", []) as Array).is_empty() else " mixed with " + ", ".join(od["mix"])
 			lines.append("    \"%s\": %s, %s%s with the %s in %s, strength %.2f - %d marks, %.0f s" % [od["id"], od["how"], od["paint"], mixed, od["tool"],
 				"the whole surface" if String(od["where"]) == "all" else "a region", float(od["strength"]), int(od["marks"]), float(od["took"])])
-	lines.append("THE TOOLS: " + ", ".join(_tools.map(func(t: Dictionary) -> String: return "\"%s\" (a %s, %.0f mm)" % [t["name"], t["kind"], float(t["mm"])])))
+	lines.append("THE TOOLS: " + ", ".join(_tools.map(func(t: Dictionary) -> String: return "\"%s\" (a %s, %.0f mm)" % [t["name"],
+		"cotton swab, which lays no paint and only blends" if String(t.get("tip", "")) == SWAB_TIP else t["kind"], float(t["mm"])])))
 	lines.append("THE PAINTS: " + ", ".join(_paints.map(func(p: Dictionary) -> String: return "\"%s\" %s%s" % [p["name"], "#" + (p["color"] as Color).to_html(false), " (a powder)" if bool(p["powder"]) else ""])))
 	lines.append("Looks left: %d. Operations left: %d." % [LOOKS - _looks, PAINTS_MOST - _ops.size()])
 	return "\n".join(lines)

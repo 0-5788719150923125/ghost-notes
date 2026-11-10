@@ -1537,6 +1537,28 @@ func schedule(sched: Array, parse: Dictionary, said0: PackedFloat32Array, said1:
 				cued[String(cd["name"])] = ended + float(cd["quiet"]) if ended != INF else INF
 		else:
 			cued[String(cd["name"])] = float(w0.call(int(cd["si"])))
+	# ...AND A CUE AT THE WORD A SILENCE COMES BEFORE MAY BEGIN AS THE SILENCE DOES, the hand free by then (feedback 0013, 2026-11-09: "we
+	# have been sitting here for at least 15 seconds, doing nothing. No animations, no speaking"): a silence is written for the work to be
+	# watched, and a paint act's end is kept from the guess made as it began - 732687's sponge, its words read slower than guessed, was done
+	# 15 s into the 24 s silence after them, and the liner cued at the word after it waited the rest out. Where the guess held, the act
+	# before ends at that word and nothing moves.
+	# (...and the word each act is cued at, for the act before it to be sized by while that word is still to come)
+	var cue_si := {}
+	var cue_into := {}     # ...a cue in a silence: how far into it, after the word the silence follows
+	for c in parse.get("cues", []):
+		cue_si[String((c as Dictionary)["name"])] = int((c as Dictionary)["si"])
+		if (c as Dictionary).has("quiet"):
+			cue_into[String((c as Dictionary)["name"])] = float((c as Dictionary)["quiet"])
+	var early := {}
+	var before_quiet := {}
+	for q in parse.get("quiets", []):
+		before_quiet[int((q as Dictionary)["si"])] = true
+	for c in parse.get("cues", []):
+		var cd: Dictionary = c
+		var si := int(cd["si"])
+		# (...a cue INSIDE the silence too - one at its end, the next passage's first act, is one: 732687's liner waited out the intro's 24 s)
+		if (cd.has("quiet") or before_quiet.has(si)) and si > 0 and si - 1 < said1.size() and said1[si - 1] != ReadingFollower.NO_TIME:
+			early[String(cd["name"])] = said1[si - 1]
 	var out: Array = []
 	var busy := {}            # channel -> when the last act placed on it ends
 	for beat in spans:
@@ -1565,7 +1587,10 @@ func schedule(sched: Array, parse: Dictionary, said0: PackedFloat32Array, said1:
 			# from where the last ended, or at its word - and not before that word is heard
 			var t0 := t
 			if cued.has(nm):
-				t0 = maxf(t0, maxf(float(cued[nm]), span.x))
+				var at := float(cued[nm])
+				if early.has(nm):
+					at = minf(at, maxf(float(early[nm]), t0))
+				t0 = maxf(t0, maxf(at, span.x))
 			var parts := _channels_of(a)
 			# ...ONE HAND PAINTS ONE THING AT A TIME: an act that paints waits for the last to be done with its tool, whichever it was (a
 			# paint act is never hurried far, [constant TablePaint.LEAST], and one run past its words had the next tool start beside it)
@@ -1594,6 +1619,14 @@ func schedule(sched: Array, parse: Dictionary, said0: PackedFloat32Array, said1:
 					var b: Dictionary = acts[mine[k]]
 					if cued.has(String(b["name"])) and float(cued[String(b["name"])]) < INF:
 						until = minf(until, float(cued[String(b["name"])]))
+						break
+					# ...OR AS FAR AS ITS WORD IS GUESSED TO COME, where it is not heard yet (2026-11-09, the user: "At 2:30, there is at least
+					# 30 seconds of speaking but no actions being taken at all. The sponge was put down ... Around 3:15, a brush is picked
+					# up"): an act cued at a later word cannot begin before that word, so the acts after it took no share of this one's
+					# time - shared with them, 732687's sponge had been sized to a seventh of the intro and put down 45 s before the
+					# liner's word. The guess only ends this act; nothing is begun by it.
+					if cue_si.has(String(b["name"])) and int(cue_si[String(b["name"])]) > 0:
+						until = minf(until, float(guess.call(int(cue_si[String(b["name"])]) - 1)) + float(cue_into.get(String(b["name"]), 0.0)))
 						break
 					shared += float(b.get("_natural", 0.0))
 					after += maxf(1.5, float(b.get("_min_length", 0.0))) if bool(b["under"]) else maxf(float(b["length"]) * quick, float(b.get("_min_length", 0.0)))

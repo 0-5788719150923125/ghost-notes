@@ -57,7 +57,8 @@ extends SceneTree
 ##   painting, every deck's planned to the least, no heavier than allowed, light ink kept light; the foil
 ##   keys none of its type. Controls: the stock and ink as they were need a veil all but opaque.
 ## - THE EPISODE'S TITLE is written for the line it goes up in: the producer is shown that line with
-##   its own part marked, asked for title case, and its reply is no longer called the video's whole
+##   its own part marked, asked for title case, and its reply is no longer called the video's whole; one written in capitals
+##   alone lands in sentence case (the control: one with small letters of its own lands as written)
 ##   title. Two-sided: with no line, none is spoken of. A title lands as it was written.
 ## - THE TITLE SCREEN: the name as large as the frame's width allows (two lines for a long one), in
 ##   proportion at any frame size; the set dresser's color kept and junk dropped for the default; a
@@ -436,6 +437,13 @@ func _redo() -> bool:
 		_ok(ep.has(s), "redoing design 2 took %s with it" % s)
 	ep.invalidate("image:back")
 	_ok(not ep.has("image:back") and ep.has("image:card:3"), "redoing the back took a card's picture with it")
+	# A STEP UNLOCKED IS MADE AGAIN ALONE (2026-11-09, the user: a "lock" ... "If set to 'unlocked,' then a step would be detached from
+	# that behavior - allowing us to regenerate just a single step, without breaking all of the other ones"); locked, as it was
+	_ok(not ep.unlocked("say:intro") and ep.set_unlocked("say:intro", true).is_empty() and ep.unlocked("say:intro"), "a step was not unlocked")
+	var alone := ep.invalidate("say:intro", false, ep.unlocked("say:intro"))
+	_ok(alone == ["say:intro"] and not ep.has("say:intro") and ep.has("say:1"), "an unlocked step made again took more with it: %s" % str(alone))
+	ep.write_text("say:intro", "Hello.")
+	_ok(ep.set_unlocked("say:intro", false).is_empty() and not ep.unlocked("say:intro"), "the control: a step locked again is not")
 	ep.invalidate("say:intro")
 	_ok(not ep.has("say:1") and ep.has("design:1"), "redoing the intro did not redo every passage after it")
 	ep.invalidate("plan")
@@ -1577,7 +1585,8 @@ func _retired_heap(n: int, jit: float, radius: float, bounds: Dictionary, rng: R
 
 ## THE EPISODE'S TITLE (the user, 2026-10-11: "Yes Or No Tarot: Ask As Many Times As It Takes" went up
 ## after "True Tarot: " - two colons, "Tarot" twice, a capital on every word): the producer is shown
-## the line its title goes up in and asked for title case, and no code recases what it writes.
+## the line its title goes up in and asked for title case, and no code recases what it writes - but a title in capitals alone
+## (2026-11-09), set in sentence case.
 func _episode_title() -> bool:
 	var line := "Test Tarot: " + TablePrompts.TITLE_MARK
 	var told := String(TablePrompts.producer("Test Tarot", "B", 7, CardTable.FACES, CardTable.FRAMES, [],
@@ -1601,6 +1610,15 @@ func _episode_title() -> bool:
 	var plan: Variant = ep.read_json("plan")
 	_ok(err.is_empty() and plan is Dictionary and String((plan as Dictionary).get("episode_title", "")) == "ask as Many times as it takes",
 		"a title did not land as written: %s %s" % [err, str((plan as Dictionary).get("episode_title", "") if plan is Dictionary else plan)])
+	# ...BUT NEVER SHOUTED (2026-11-09: "the title of this episode is in ALL CAPS"): one with no small letter lands in sentence case
+	ep.invalidate("plan")
+	err = prod._land_plan(JSON.stringify({"episode_title": "THEY SAID I'D DRIFT, AND I DID",
+		"spread": {"name": "S", "positions": ["a", "b", "c"]}, "look": {"deck_name": "D"}}))
+	plan = ep.read_json("plan")
+	_ok(err.is_empty() and plan is Dictionary and String((plan as Dictionary).get("episode_title", "")) == "They said I'd drift, and I did",
+		"a title in capitals was kept shouted: %s" % str((plan as Dictionary).get("episode_title", "") if plan is Dictionary else plan))
+	_ok(TableProducer.not_shouted("Get Ready With Me: NASA Edition") == "Get Ready With Me: NASA Edition" and TableProducer.not_shouted("OK") == "OK",
+		"control: a title with its own small letters, or too short to be shouting, was recased")
 	return true
 
 

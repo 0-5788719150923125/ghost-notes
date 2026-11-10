@@ -177,6 +177,10 @@ func tick() -> void:
 		var err := _land_skin_host(h)
 		if not err.is_empty():
 			_errors[step] = err
+			# ...said in the log as an agent's failure is, with the host's own last lines (its traceback), or it shows only on the card
+			push_warning("ghost: table %s - %s" % [step, err])
+			var tail := FileAccess.get_file_as_string(String(h["log"])).strip_edges().split("\n")
+			print("ghost: table %s - the painter's log (%s) ends:\n%s" % [step, String(h["log"]), "\n".join(tail.slice(maxi(tail.size() - 12, 0)))])
 		moved = true
 	if running:
 		for step in episode.steps():
@@ -750,8 +754,11 @@ func _make_skin_host() -> void:
 	DirAccess.make_dir_recursive_absolute(out)
 	var m: Dictionary = meta
 	var spec := out.path_join("spec.json")
+	# (...pixels as whole numbers: JSON keeps no ints, and `face.json`'s `[0, 22]` comes back `[0.0, 22.0]`, which Python cannot slice by)
+	var at := [int((m["at"] as Array)[0]), int((m["at"] as Array)[1])]
+	var size := [int((m["size"] as Array)[0]), int((m["size"] as Array)[1])]
 	var err := TextGen.put(spec, JSON.stringify({"out": out, "bare_image": ProjectSettings.globalize_path(episode.dir.path_join("face_bare.png")),
-		"at": m["at"], "size": m["size"], "px": float(m.get("px", 3.0)), "bare": String((surfaces[0] as Dictionary).get("color", "#c89e80")),
+		"at": at, "size": size, "px": float(m.get("px", 3.0)), "bare": String((surfaces[0] as Dictionary).get("color", "#c89e80")),
 		"paints": paints, "layers": layers, "images": images}, "\t"))
 	if not err.is_empty():
 		_errors["skin"] = err
@@ -797,7 +804,16 @@ func _land_skin_host(h: Dictionary) -> String:
 				"host": String(ed["id"])}})
 	var design := {"thing": String(skin["thing"]), "part": String(skin["part"]), "frame": [(skin["frame"] as Vector2).x, (skin["frame"] as Vector2).y],
 		"outline": String(skin.get("outline", "")), "name": String(_plan().get("painted", "")).left(60), "elements": elements}
-	return episode.write_json("skin", {"designs": [design]})
+	var wrote := episode.write_json("skin", {"designs": [design]})
+	# ...AND THE WORK THAT IS MADE FROM IT, where it was kept - the painting made again alone ([method TableEpisode.unlocked]): it is the
+	# painting's own, made from it here in a moment, and kept it would block elements there are no longer; the words pointed at it
+	if wrote.is_empty() and episode.has("acts"):
+		var again := _acts_from_painting()
+		if again.is_empty():
+			_recue_words()
+		elif again != NOT_PAINTED:
+			push_warning("ghost: table acts - made again from the painting: " + again)
+	return wrote
 
 
 ## EACH ELEMENT'S BEAT, by id: where it begins in the painting's time, spread over the intro and the beats - the ground in the intro, the
@@ -819,37 +835,68 @@ func _element_beats(els: Array) -> Dictionary:
 	return out
 
 
-## The table's tool nearest the painter's: a sponge for a sponge, else the brush nearest its width.
+## The table's tool nearest the painter's: a sponge for a sponge, else the brush nearest its width - A COTTON SWAB FOR THE PAINTER'S SWAB
+## AND FOR NOTHING ELSE (feedback 0020, 2026-11-09: "we might be able to wipe it away with a cotton swab (if the mistake was small, or the
+## color was faint)"): its lifts go to a brush whose tip is a bud ([constant PainterTools.SWAB_TIP]) where the table has one, else to the
+## brush nearest its width, a clean brush lifting as well; and a swab, 5 mm across, is never the brush nearest a 6 mm round's.
 static func _table_tool(name: String, tools: Array) -> Dictionary:
 	var want := {"sponge": 30.0, "round": 6.0, "flat": 10.0, "liner": 2.0, "blender": 16.0, "fan": 12.0, "handle": 1.6, "pencil": 0.8,
 		"lipstick": 4.0, "bud": 5.0, "finger": 12.0}
 	var kind := "sponge" if name == "sponge" else "brush"
+	var swab := name == "bud"
 	var best := {}
 	var bd := INF
-	for t in tools:
-		var td: Dictionary = t
-		if String(td["kind"]) != kind:
-			continue
-		var d := absf(log(maxf(float(td["mm"]), 0.1) / float(want.get(name, 6.0))))
-		if d < bd:
-			bd = d
-			best = td
+	for pass_ in ([true, false] if swab else [false]):
+		for t in tools:
+			var td: Dictionary = t
+			if String(td["kind"]) != kind or (String(td.get("tip", "")) == PainterTools.SWAB_TIP) != bool(pass_):
+				continue
+			var d := absf(log(maxf(float(td["mm"]), 0.1) / float(want.get(name, 6.0))))
+			if d < bd:
+				bd = d
+				best = td
+		if not best.is_empty():
+			break
 	if best.is_empty():
 		for t in tools:
-			if String((t as Dictionary)["kind"]) in ["brush", "sponge"]:
+			if String((t as Dictionary)["kind"]) in ["brush", "sponge"] and (swab or String((t as Dictionary).get("tip", "")) != PainterTools.SWAB_TIP):
 				return t
 	return best
 
 
-## The pot a paint is taken from: its own; a mix's, the paint there is most of; none for a clean brush.
+## The pot a paint is taken from: its own; a mix's, the paint there is most of; none for a clean brush. A MIX OF A MIX TOO (feedback
+## 0006, 2026-11-09): "amber cream+olive cream+white paint 0.75 0.75" - each paint after the first mixed in at its share, so the white
+## here is three quarters of it - had been read as one mix of "amber cream" and "olive cream+white paint 0.75", no paint at all, and its
+## element named no pot.
 static func _pot_of_paint(paint: String, paints: Array) -> String:
 	if paint.is_empty():
 		return ""
-	var name := paint
-	var rx := RegEx.create_from_string("^(.+?)\\+(.+?) ([0-9.]+)$")
-	var m := rx.search(paint)
-	if m != null:
-		name = m.get_string(1) if float(m.get_string(3)) <= 0.5 else m.get_string(2)
+	var names := PackedStringArray()
+	var shares: Array = []
+	var num := RegEx.create_from_string("\\s+([0-9]*\\.?[0-9]+)$")
+	for piece in paint.split("+"):
+		var p := String(piece).strip_edges()
+		var found: Array = []
+		var m := num.search(p)
+		while m != null:
+			found.push_front(float(m.get_string(1)))
+			p = p.substr(0, m.get_start()).strip_edges()
+			m = num.search(p)
+		shares.append_array(found)
+		names.append(p)
+	# (...the shares as they were written, in order: the second paint's first; a share over each paint after the first)
+	var most := [1.0]
+	for k in range(1, names.size()):
+		var s: float = clampf(float(shares[k - 1]) if k - 1 < shares.size() else 0.5, 0.0, 1.0)
+		for w in most.size():
+			most[w] = float(most[w]) * (1.0 - s)
+		most.append(s)
+	var name := names[0]
+	var best := -1.0
+	for k in names.size():
+		if float(most[k]) > best:
+			best = float(most[k])
+			name = names[k]
 	for p in paints:
 		if String((p as Dictionary)["name"]) == name:
 			return String((p as Dictionary)["pot"])
@@ -1110,6 +1157,9 @@ func _make_acts() -> void:
 	var painted := _acts_from_painting()
 	if painted != NOT_PAINTED:
 		_finish("acts", painted)
+		# (...and the words kept from before it pointed at it - [method _recue_words])
+		if painted.is_empty():
+			_recue_words()
 		return
 	var table: Variant = episode.read_json("table")
 	var tbl: Dictionary = table if table is Dictionary else {}
@@ -1366,6 +1416,76 @@ static func _beat_of(step: String, bare := false) -> String:
 	return ""
 
 
+## THE WORDS KEPT WHEN THE WORK IS MADE AGAIN (the user, 2026-11-09: "I REALLY don't want to lose this script. It's a really good one.
+## Is there any way we can apply the painter fixes without losing the script?"): each passage's act cues pointed at its beat's acts as
+## they are now ([method recue_map]), and the script put together from them again. A step unlocked made again alone keeps the words
+## ([method TableEpisode.unlocked]); the work it is made from, made again, renames and recounts the acts - 732687's stage 2 went from
+## seven to four - and its cues had named acts there were no longer. Nothing but the cues changes.
+func _recue_words() -> void:
+	var cue := RegEx.create_from_string(CardReading.ACT_MARK)
+	var bare := episode.cardless()
+	var mapping := {}
+	var texts := {}
+	for st in episode.steps():
+		var step := String(st)
+		if not step.begins_with("say:") or not episode.has(step):
+			continue
+		var beat := _beat_of(step, bare)
+		if beat.is_empty():
+			continue
+		var text := episode.read_text(step)
+		texts[step] = text
+		var olds: Array = []
+		for m in cue.search_all(text):
+			olds.append(m.get_string(1).strip_edges().to_lower())
+		var news: Array = _acts_of(beat).map(func(a: Dictionary) -> String: return String(a["name"]))
+		mapping.merge(recue_map(olds, news))
+	if mapping.is_empty():
+		return
+	for step in texts:
+		var text := String(texts[step])
+		var out := ""
+		var at := 0
+		for m in cue.search_all(text):
+			out += text.substr(at, m.get_start() - at)
+			at = m.get_end()
+			var name := m.get_string(1).strip_edges().to_lower()
+			if not mapping.has(name):
+				out += m.get_string()
+			elif not String(mapping[name]).is_empty():
+				out += "<!-- act: %s -->" % String(mapping[name])
+			elif text.substr(at, 1) == " ":
+				at += 1
+		out += text.substr(at)
+		if out != text:
+			episode.write_text(String(step), out)
+	if episode.has("script"):
+		_make_script()
+
+
+## WHICH ACT EACH OF A PASSAGE'S CUES NOW NAMES: [param olds] its cues in order, [param news] its beat's acts in order (names as a cue
+## writes them). Each cue the act at its place, the first to the first; with fewer acts than cues, the first and the last kept and the
+## rest spread evenly through the words between, the others named "" (taken out); with more, the cues as many as there are, the rest
+## following on. Nothing for a passage whose cues are its acts already. -> {old: new or ""}.
+static func recue_map(olds: Array, news: Array) -> Dictionary:
+	var out := {}
+	if olds.is_empty() or olds == news:
+		return out
+	var keep: Array = range(olds.size())
+	if news.size() < olds.size():
+		keep = [0] if news.size() == 1 else []
+		if news.size() > 1:
+			for i in news.size():
+				var k := roundi(float(i) * float(olds.size() - 1) / float(news.size() - 1))
+				if not keep.has(k):
+					keep.append(k)
+	for o in olds:
+		out[String(o)] = ""
+	for j in mini(keep.size(), news.size()):
+		out[String(olds[int(keep[j])])] = String(news[j])
+	return out
+
+
 ## THE ACTS OF [param beat], as the puppeteer blocked them (`acts.json`, made safe) - none for a beat with no
 ## work, or before they are blocked. A reader is handed its own beat's alone: NO CHEATING holds for the work.
 func _acts_of(beat: String) -> Array:
@@ -1599,6 +1719,7 @@ func _land_plan(text: String) -> String:
 	spread["name"] = _str(spread.get("name", ""))
 	for k in ["episode_title", "description", "audience", "topic", "premise", "reader_mood", "running_bit", "work_intro", "work_close", "build", "painted"]:
 		plan[k] = _str(plan.get(k, ""))
+	plan["episode_title"] = not_shouted(String(plan["episode_title"]))
 	plan["game"] = plan.get("game") == true
 	plan["table_note"] = _str(plan.get("table_note", ""))
 	plan["beat_word"] = beat_word_of(plan.get("beat_word", ""))
@@ -1684,6 +1805,7 @@ func _land_beats(plan: Dictionary) -> String:
 	plan["spread"] = {"name": "", "positions": pos}
 	for k in ["episode_title", "description", "audience", "topic", "premise", "reader_mood", "running_bit", "work_intro", "work_close", "build", "painted"]:
 		plan[k] = _str(plan.get(k, ""))
+	plan["episode_title"] = not_shouted(String(plan["episode_title"]))
 	plan["game"] = plan.get("game") == true
 	plan["table_note"] = _str(plan.get("table_note", ""))
 	plan["beat_word"] = "Part" if plan["game"] else beat_word_of(plan.get("beat_word", ""))
@@ -1943,6 +2065,34 @@ func _land_table(text: String) -> String:
 			(d as Dictionary)["assembly"] = {}
 		((d as Dictionary)["assembly"] as Dictionary)["model"] = designed
 	return episode.write_json("table", d)
+
+
+## A TITLE IS NEVER SHOUTED (the user, 2026-11-09: "the title of this episode is in ALL CAPS. We probably shouldn't allow for that, as a
+## rule"): one written with no small letter at all is set in sentence case - its first letter a capital, the rest small, "I" itself (a
+## brief had asked for "capitals", 732687's "THEY CALLED IT DRIFTING BECAUSE THEY COULDN'T SEE WHERE YOU WERE GOING"). Never a capital on
+## every word (2026-10-11, of one that had them): title case's small words want a list of words, and the writer is asked for title case
+## itself. One with any small letter is the writer's own casing, kept: an acronym in a title as written stays.
+static func not_shouted(title: String) -> String:
+	var letters := 0
+	for i in title.length():
+		var c := title.substr(i, 1)
+		if c.to_lower() != c.to_upper():
+			letters += 1
+			if c == c.to_lower():
+				return title
+	if letters < 4:
+		return title
+	var words := title.to_lower().split(" ")
+	for i in words.size():
+		var w := String(words[i])
+		if w == "i" or w.begins_with("i'"):
+			words[i] = "I" + w.substr(1)
+	var out := " ".join(words)
+	for i in out.length():
+		var c := out.substr(i, 1)
+		if c.to_lower() != c.to_upper():
+			return out.substr(0, i) + c.to_upper() + out.substr(i + 1)
+	return out
 
 
 ## A reply's field as text, whatever the writer made it (JSON numbers arrive as floats).

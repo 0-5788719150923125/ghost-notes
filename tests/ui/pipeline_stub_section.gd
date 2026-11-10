@@ -8,6 +8,7 @@ var is_busy := false
 var has_missing := true
 var made := 0
 var stopped := 0
+var is_part := false               # busy making only some of what it is missing (a row made again)
 
 
 func _init(named := "") -> void:
@@ -42,3 +43,7 @@ func busy() -> bool:
 
 func missing() -> bool:
 	return has_missing
+
+
+func widens() -> bool:
+	return is_part and has_missing

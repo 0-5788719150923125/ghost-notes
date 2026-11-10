@@ -169,6 +169,9 @@ SWITCHES = [
     ("They will present the case.", "present", "verb", ()),
     ("The refuse was piled by the door.", "refuse", "noun", ()),
     ("He had wound the clock too tight.", "wound", "wound", ()),
+    # JOINED ON WITH NO SUBJECT OF ITS OWN, a verb takes its first conjunct's form: a participle's is past
+    ("She had opened the letter and read it twice.", "read", "past", ()),
+    ("The header row is shown and never read.", "read", "past", ()),
     # THE REPORT (north-star ch43, 2026-10-27: "Live like a Spartan" used the wrong pronunciation): a first
     # word is tagged a proper noun for its capital, and was left to eSpeak's default, the adjective
     ("Live like a Spartan, so there's enough to go around.", "live", "verb", ()),
@@ -225,6 +228,15 @@ HOLDS = [
     ("Read it aloud.", "read", PAST_NARRATIVE),
     ("Now read the list again.", "read", PAST_NARRATIVE),
     ("Read from the near face and stop.", "read", PAST_NARRATIVE),
+    # ...AND SO ARE THE VERBS JOINED TO ONE (732687, 2026-11-09: "and read their words back to them" was said ɹˈɛd, "It
+    # should have sounded like 'reed'"): `Let's` was a word the tagger never saw whole, and the second came back VBD
+    ("Let's open that file, then, and read their words back to them in good light.", "read", PAST_NARRATIVE),
+    ("So let's take their words one last time, and turn each one over, and read the side that was facing you.", "read",
+     PAST_NARRATIVE),
+    ("Open the file and read it to me.", "read", PAST_NARRATIVE),
+    # A CONTRACTION SPLIT FOR THE TAGGER, as it learned it: whole, `I'll` and `doesn't` hid the modal and the auxiliary
+    ("Tonight we write it, and I'll read it back as we go.", "read", PAST_NARRATIVE),
+    ("The coordinator doesn't read the good ones.", "read", PAST_NARRATIVE),
     # words eSpeak does not distinguish at all - there is nothing to switch to
     ("He led the way with a lead pipe.", "lead", ()),
     ("Wait one minute.", "minute", ()),

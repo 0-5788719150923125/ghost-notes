@@ -39,6 +39,10 @@ extends SceneTree
 ##   (`<!-- act: name -->`) starts as that word is said, an uncued one where the one before it ended, and
 ##   an "under" one fills what its beat leaves. The control: the cued act moved off its word is not found
 ##   there.
+## - A SILENCE IS FOR THE WORK (feedback 0013: "sitting here for at least 15 seconds, doing nothing"): an act cued at the word a
+##   silence comes before begins as the silence does, the hand free by then. The control: with no silence it waits for its word.
+## - AN ACT FILLS UP TO THE NEXT ONE'S WORD (2026-11-09: "30 seconds of speaking but no actions"): the next act's cue word, unheard, is
+##   guessed for the act before it to end by. The control: with no cue, it fills to the beat's end less the next act.
 ## - A PART'S COPIES ARE ONE PART (2026-10-26: a stack of slips' bottom slip lifted alone, into the four
 ##   above it, and the puppeteer probed for a quarter of an hour): the stack named alone lifts as one and
 ##   passes through nothing, every copy risen alike; its top copy by its number lifts alone; a glow on the
@@ -81,7 +85,7 @@ func _ok(cond: bool, what: String) -> void:
 func _run() -> void:
 	await process_frame
 	for check in [_formula, _clock, _clock_law, _grind, _at_the_spot, _seated, _set_down, _carry, _through_keys, _copies, _cued,
-			_live_words, _cue_order, _safe, _write, _held_up, _loose_size, _put_back, _aloft]:
+			_live_words, _cue_order, _after_quiet, _until_its_word, _safe, _write, _held_up, _loose_size, _put_back, _aloft]:
 		var done: Variant = (check as Callable).call()
 		_ok(done == true, "%s stopped part way (a script error - see above)" % (check as Callable).get_method())
 	print("table_work_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
@@ -765,6 +769,95 @@ func _cue_order() -> bool:
 	m._work.schedule(sched, parse, PackedFloat32Array([ReadingFollower.NO_TIME, 3.0, 14.0]),
 		PackedFloat32Array([ReadingFollower.NO_TIME, 3.5, 15.0]), PackedFloat32Array(), 0.0)
 	_ok(m._work.runs.is_empty(), "a later known cue bypassed an earlier unheard cue")
+	m._root3.free()
+	return true
+
+
+## A SILENCE IS FOR THE WORK (feedback 0013, 2026-11-09: "we have been sitting here for at least 15 seconds, doing nothing"): an act
+## cued at the word a silence comes before begins as the silence does, the act before it done by then - never waiting the silence out
+## with nothing moving - and where the act before runs into the silence, as that one ends. The control: the same cue with no silence
+## before its word waits for its word.
+func _after_quiet() -> bool:
+	var m := _medium()
+	_stand(m, _mortar_spec(), "mortar", Vector3(Tables.ORIGIN.x, 0.0, Tables.ORIGIN.y))
+	m._work.build({"acts": [
+		{"name": "open", "beat": 1, "length": 5, "tracks": [{"thing": "mortar", "part": "herbs", "state": "glow", "law": "to", "value": 0.5}]},
+		{"name": "pinch", "beat": 1, "length": 3, "tracks": [{"thing": "mortar", "part": "herbs", "state": "grow", "law": "to", "value": 0.3}]}]}, 1)
+	var action := {"kind": "work", "card": 1, "after": 0, "dur": 0.0}
+	var said0 := PackedFloat32Array([0.0, 1.0, 11.5, 12.0])
+	var said1 := PackedFloat32Array([0.5, 1.5, 11.9, 12.4])
+	var sched := [{"a": action, "t0": 0.0, "s": 1.0}]
+	var placed := func(quiets: Array) -> Dictionary:
+		var parse := {"actions": [action], "spoken": PackedStringArray(["one", "two", "three", "four"]),
+			"cues": [{"name": "open", "si": 0}, {"name": "pinch", "si": 2}], "quiets": quiets}
+		m._work._begun = {}
+		m._work._last_now = -INF
+		m._work._plan_key = ""
+		m._work.schedule(sched, parse, said0, said1, PackedFloat32Array(), 0.0)
+		var by := {}
+		for r in m._work.runs:
+			by[String((m._work.acts[int((r as Dictionary)["i"])] as Dictionary)["name"])] = r
+		return by
+	var placed_in := func() -> Dictionary:
+		var parse := {"actions": [action], "spoken": PackedStringArray(["one", "two", "three", "four"]),
+			"cues": [{"name": "open", "si": 0}, {"name": "pinch", "si": 2, "quiet": 10.0}], "quiets": [{"si": 2, "s": 10.0}]}
+		m._work._begun = {}
+		m._work._last_now = -INF
+		m._work._plan_key = ""
+		m._work.schedule(sched, parse, said0, said1, PackedFloat32Array(), 0.0)
+		var by := {}
+		for r in m._work.runs:
+			by[String((m._work.acts[int((r as Dictionary)["i"])] as Dictionary)["name"])] = r
+		return by
+	var quiet: Dictionary = placed.call([{"si": 2, "s": 10.0}])
+	_ok(quiet.has("pinch") and absf(float(quiet["pinch"]["t0"]) - 5.0) < 0.01,
+		"an act cued after a silence waited it out: it begins at %s, the act before ends at 5.0" % str(quiet.get("pinch", {}).get("t0", "-")))
+	# ...and a cue INSIDE the silence, at its end - the next passage's first act after a passage that ends on one
+	var inside: Dictionary = placed_in.call()
+	_ok(inside.has("pinch") and absf(float(inside["pinch"]["t0"]) - 5.0) < 0.01,
+		"an act cued inside a silence, at its end, begins as the silence does too: it begins at %s" % str(inside.get("pinch", {}).get("t0", "-")))
+	var plain: Dictionary = placed.call([])
+	_ok(plain.has("pinch") and absf(float(plain["pinch"]["t0"]) - 11.5) < 0.01,
+		"the control: with no silence before its word it does not wait for its word (begins at %s, its word at 11.5)" % str(plain.get("pinch", {}).get("t0", "-")))
+	m._root3.free()
+	return true
+
+
+## AN ACT FILLS UP TO THE NEXT ONE'S WORD, GUESSED WHILE UNHEARD (2026-11-09, the user: "At 2:30, there is at least 30 seconds of speaking
+## but no actions being taken at all ... Around 3:15, a brush is picked up"): an act that fills its beat, the act after it cued at a word
+## not yet said, ends about when that word is guessed to come - never where the beat ends less the next act's own time. THE CONTROL: with
+## no word cueing the next act, it fills to the beat's end less what that act takes, as it did.
+func _until_its_word() -> bool:
+	var m := _medium()
+	_stand(m, _mortar_spec(), "mortar", Vector3(Tables.ORIGIN.x, 0.0, Tables.ORIGIN.y))
+	m._work.build({"acts": [
+		{"name": "grind", "beat": 1, "length": "under", "tracks": [{"thing": "mortar", "part": "herbs", "state": "grow", "law": "to", "value": 0.3}]},
+		{"name": "settle", "beat": 1, "length": 1, "tracks": [{"thing": "mortar", "part": "herbs", "state": "glow", "law": "to", "value": 0.5}]}]}, 1)
+	var action := {"kind": "work", "card": 1, "after": 0, "dur": 0.0}
+	var spoken := PackedStringArray(["one", "two", "three", "four", "five", "six", "seven", "eight"])
+	var none := ReadingFollower.NO_TIME
+	var said0 := PackedFloat32Array([0.0, none, none, none, none, none, none, none])
+	var said1 := PackedFloat32Array([0.5, none, none, none, none, none, none, none])
+	var est := PackedFloat32Array([0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5])
+	var placed := func(cues: Array) -> Dictionary:
+		m._work._begun = {}
+		m._work._last_now = -INF
+		m._work._plan_key = ""
+		m._work.schedule([{"a": action, "t0": 0.0, "s": 1.0}], {"actions": [action], "spoken": spoken, "cues": cues, "quiets": []},
+			said0, said1, est, 0.0)
+		var by := {}
+		for r in m._work.runs:
+			by[String((m._work.acts[int((r as Dictionary)["i"])] as Dictionary)["name"])] = r
+		return by
+	var cued: Dictionary = placed.call([{"name": "grind", "si": 0}, {"name": "settle", "si": 5}])
+	_ok(cued.has("grind") and absf(float(cued["grind"]["t1"]) - 4.5) < 0.6,
+		"an act ends about when the next one's unheard word is guessed to come (4.5 s): it ends at %s" % str(cued.get("grind", {}).get("t1", "-")))
+	var in_quiet: Dictionary = placed.call([{"name": "grind", "si": 0}, {"name": "settle", "si": 5, "quiet": 3.0}])
+	_ok(in_quiet.has("grind") and absf(float(in_quiet["grind"]["t1"]) - 7.5) < 0.6,
+		"...and when the next is cued 3 s into a silence after that word, it ends then (7.5 s): it ends at %s" % str(in_quiet.get("grind", {}).get("t1", "-")))
+	var plain: Dictionary = placed.call([{"name": "grind", "si": 0}])
+	_ok(plain.has("grind") and float(plain["grind"]["t1"]) > 6.0,
+		"THE CONTROL: with no word cueing the next, it fills to the beat's end less that act's time (%s)" % str(plain.get("grind", {}).get("t1", "-")))
 	m._root3.free()
 	return true
 

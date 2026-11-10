@@ -7,7 +7,7 @@ class_name PipelineCard
 ## LAST IN THE DECK, ALWAYS ONE CLICK AWAY (2026-11-02, the user of it pinned under the scroll: "It's weird that there are now
 ## two panels on the left ... They should all be scrollable"): it is a card like any other, its list scrolling with the
 ## panel, and its title bar lies on the panel's bottom pile until it is scrolled to ([PanelDeck]). Generate, Stop and how far
-## along it is are on that bar, so they stay when it is folded and wherever it lies. There is no component and no "+": it
+## along it is are on that bar, so they stay in sight wherever it lies. There is no component and no "+": it
 ## stands while anything on the note has something to make.
 ##
 ## ONE WAY IN: a card hands a [PipelineSection] ([method add]). The list is made of what those say ([PipelineRow]), and
@@ -29,6 +29,9 @@ const NAME_MOST := 124.0
 const INDENT := 12.0
 ## Rows ask the disk what exists, so four times a second, as the cards' rows always did.
 const EVERY := 0.25
+## The [Settings] section its groups' folds are kept in: the viewer's, never the note's (every card's fold was kept there too,
+## until cards stopped folding on 2026-11-09).
+const FOLDS := "folds"
 
 ## The [Card] it is on, once [method put_on] a panel.
 var card: Card = null
@@ -54,7 +57,7 @@ var _folds := {}                 # "<section>/<group>" -> folded
 var _fold_prefix := ""
 
 
-## [param prefix] names the panel in its groups' stored folds, as a [Card]'s are named.
+## [param prefix] names the panel in its groups' stored folds, as a [Card]'s key names it.
 func _init(prefix := "") -> void:
 	_fold_prefix = prefix
 	add_theme_constant_override("separation", 4)
@@ -91,7 +94,7 @@ func _bar_button(text: String, tip: String) -> Button:
 	return b
 
 
-## ON [param panel], after the cards there, its Generate and Stop on the card's title bar so they stay when it is folded. Hidden
+## ON [param panel], after the cards there, its Generate and Stop on the card's title bar so they stay wherever it lies. Hidden
 ## until something on the note has something to make.
 ##
 ## THE CARD AND ITS BAR COME FIRST, AND IT JOINS LAST: the app's panel is in the tree as it is built, so joining runs [method _ready]
@@ -285,7 +288,7 @@ func refresh() -> void:
 		plan.append((s as PipelineSection).title)
 		for r in rows:
 			var it := r as PipelineRow
-			plan.append("%s|%s|%s|%s|%s" % [it.key, it.group, it.label, not it.again.is_empty(), not it.go.is_empty()])
+			plan.append("%s|%s|%s|%s|%s|%s" % [it.key, it.group, it.label, not it.again.is_empty(), not it.go.is_empty(), it.lockable])
 	var key := "\n".join(plan)
 	if key != _built:
 		_built = key
@@ -393,7 +396,7 @@ func _group_of(section: PipelineSection, group: String) -> Dictionary:
 	var g := {"section": section, "group": group, "head": head, "rows": []}
 	_groups[at] = g
 	if not _folds.has(at):
-		_folds[at] = bool(Settings.read(Card.SECTION, _fold_key(group), false))
+		_folds[at] = bool(Settings.read(FOLDS, _fold_key(group), false))
 	return g
 
 
@@ -432,6 +435,13 @@ func _add_row(section: PipelineSection, it: PipelineRow) -> Label:
 		make = _small_button("▶", it.go)
 		make.pressed.connect(_press_make.bind(at))
 		row.add_child(make)
+	# A LOCK BESIDE ITS ⟳ (TableEpisode.unlocked): locked, making it again throws away what was made from it; unlocked, it alone
+	var lock_b: Button = null
+	if it.lockable:
+		lock_b = _small_button("", "")
+		lock_b.icon = _lock_icon(true)
+		lock_b.pressed.connect(_press_lock.bind(at))
+		row.add_child(lock_b)
 	var redo := _small_button("⟳", it.again)
 	redo.pressed.connect(_press_redo.bind(at))
 	# A ROW WITH NO ⟳ KEEPS ITS PLACE: the column stays straight down the list
@@ -440,7 +450,7 @@ func _add_row(section: PipelineSection, it: PipelineRow) -> Label:
 		redo.disabled = true
 		redo.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(redo)
-	_rows[at] = {"section": section, "row": it, "glyph": glyph, "name": name_l, "text": text, "redo": redo, "make": make, "line": row}
+	_rows[at] = {"section": section, "row": it, "glyph": glyph, "name": name_l, "text": text, "redo": redo, "make": make, "line": row, "lock": lock_b}
 	return name_l
 
 
@@ -454,10 +464,13 @@ func _show(shown: Array, of: Dictionary) -> void:
 	var lines := PackedStringArray()
 	var any_missing := false
 	var any_busy := walking_now
+	var any_widens := false
 	for s in shown:
 		var section: PipelineSection = s
 		var busy_here := section.busy()
 		any_busy = any_busy or busy_here
+		var widens_here := busy_here and section.widens()
+		any_widens = any_widens or widens_here
 		var missing_here := section.missing()
 		any_missing = any_missing or missing_here
 		var said := section.told if not section.told.is_empty() else section.line()
@@ -465,7 +478,7 @@ func _show(shown: Array, of: Dictionary) -> void:
 			lines.append(said)
 		var head: Dictionary = _heads.get(section, {})
 		if not head.is_empty():
-			(head["go"] as Button).disabled = busy_here or walking_now or not missing_here
+			(head["go"] as Button).disabled = (busy_here and not widens_here) or walking_now or not missing_here
 		for r in of[section]:
 			var it := r as PipelineRow
 			if PipelineRow.counted(it.state):
@@ -479,7 +492,9 @@ func _show(shown: Array, of: Dictionary) -> void:
 		_show_group(at)
 	_tally.text = "%s %d/%d" % ["✗" if failed else ("◌" if working else ("✓" if all > 0 and made == all else "·")), made, all]
 	_tally.tooltip_text = "%d of %d made here." % [made, all]
-	_generate.disabled = any_busy or not any_missing
+	# (...and while a section makes only some of what it is missing - a row made again - Generate widens it to the rest: [method
+	# PipelineSection.widens])
+	_generate.disabled = walking_now or (any_busy and not any_widens) or not any_missing
 	_stop.disabled = not any_busy
 	var line := "\n".join(lines)
 	if _line.text != line:
@@ -513,6 +528,54 @@ func _show_row(section: PipelineSection, it: PipelineRow, walking_now: bool) -> 
 	if make is Button:
 		(make as Button).disabled = walking_now or not it.go_open
 		(make as Button).tooltip_text = it.go
+	var lock_b: Variant = r.get("lock")
+	if lock_b is Button:
+		(lock_b as Button).icon = _lock_icon(it.locked)
+		(lock_b as Button).disabled = walking_now
+		(lock_b as Button).tooltip_text = ("Locked: making this again also throws away what was made from it. Press to unlock it."
+			if it.locked else "Unlocked: making this again makes it alone, and keeps what was made from it. Press to lock it again.")
+
+
+## A PADLOCK, closed or open, drawn here (a glyph the theme's fonts lack is a font search at every layout - Boot.lend_symbol_fonts): 12 by
+## 14 pixels, white, its shackle raised and off its body when open.
+static func _lock_icon(closed: bool) -> ImageTexture:
+	var key := "closed" if closed else "open"
+	if _locks.has(key):
+		return _locks[key]
+	var img := Image.create(12, 14, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	var ink := Color(1, 1, 1, 0.85)
+	for y in range(7, 14):
+		for x in range(1, 11):
+			img.set_pixel(x, y, ink)
+	img.set_pixel(5, 10, Color(0, 0, 0, 0))
+	img.set_pixel(6, 10, Color(0, 0, 0, 0))
+	img.set_pixel(5, 11, Color(0, 0, 0, 0))
+	img.set_pixel(6, 11, Color(0, 0, 0, 0))
+	# (...closed: its shackle's top on row 1, both legs down into the body; open: raised to row 0, its left leg stopping short of it)
+	var top := 1 if closed else 0
+	for x in range(4, 8):
+		img.set_pixel(x, top, ink)
+	for y in range(top + 1, 7):
+		img.set_pixel(8, y, ink)
+	for y in range(top + 1, 7 if closed else 4):
+		img.set_pixel(3, y, ink)
+	_locks[key] = ImageTexture.create_from_image(img)
+	return _locks[key]
+
+
+static var _locks := {}
+
+
+## A ROW'S LOCK PRESSED: locked becomes unlocked and back ([member PipelineRow.lock]), its ⟳'s words read again.
+func _press_lock(at: String) -> void:
+	var r: Dictionary = _rows.get(at, {})
+	if r.is_empty():
+		return
+	var it: PipelineRow = r["row"]
+	if it.lock.is_valid():
+		it.lock.call(not it.locked)
+	refresh()
 
 
 func _show_group(at: String) -> void:
@@ -546,11 +609,11 @@ func _toggle(at: String) -> void:
 	_folds[at] = folded
 	var g: Dictionary = _groups.get(at, {})
 	if not g.is_empty():
-		Settings.write(Card.SECTION, _fold_key(String(g["group"])), folded)
+		Settings.write(FOLDS, _fold_key(String(g["group"])), folded)
 	_apply_folds()
 
 
-## The fold's key beside the [Card]'s: kept with every fold, the viewer's, never the note's.
+## A group's fold's key: "<panel>.pipeline.<group>".
 func _fold_key(group: String) -> String:
 	return ("%s.pipeline.%s" % [_fold_prefix, group]) if not _fold_prefix.is_empty() else "pipeline.%s" % group
 

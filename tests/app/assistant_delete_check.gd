@@ -38,7 +38,7 @@ func _run() -> void:
 	_put(dir, "listen.wav", "not a note's")
 	Assistant.root = DIR
 	var a: Assistant = preload("res://src/app/assistant.gd").new()
-	a._running_count = Assistant.MAX_CONCURRENT     # nothing can start, whatever is queued
+	a.hold = true     # nothing can start, whatever is queued
 	add_child(a)
 	await _frames(2)
 	_ok(a._entries.size() == 5, "the five notes are listed (%d)" % a._entries.size())

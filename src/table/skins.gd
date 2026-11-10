@@ -2620,7 +2620,8 @@ static func _tool_parts(parts: Array, part: String, within: bool, mats: Dictiona
 
 
 ## A TOOL MADE OF [param parts] (made safe), measured as [method TablePaint.tool_of] measures one that stands: a tuft makes it a brush
-## as wide as its hairs; sponge makes it a sponge as wide as its face; anything else a tool as thin as it is.
+## as wide as its hairs - and says its tip's kind, a third (a cotton swab's bud lays no paint: [constant Bristles.KINDS]); sponge makes it
+## a sponge as wide as its face; anything else a tool as thin as it is.
 static func _tool_of_parts(parts: Array, mats: Dictionary) -> Array:
 	var leaves: Array = []
 	_leaves_of(parts, Transform3D.IDENTITY, leaves)
@@ -2630,7 +2631,7 @@ static func _tool_of_parts(parts: Array, mats: Dictionary) -> Array:
 	for lf in leaves:
 		var pd: Dictionary = lf[0]
 		if String(pd.get("shape", "")) == "tuft":
-			return ["brush", float(pd.get("width", 0.7)) * 10.0]
+			return ["brush", float(pd.get("width", 0.7)) * 10.0, String(pd.get("kind", "round"))]
 		var m: Dictionary = mats.get(String(pd.get("material", "")), {})
 		sponge = sponge or String(m.get("kind", "")) == "sponge"
 		var rng := RandomNumberGenerator.new()

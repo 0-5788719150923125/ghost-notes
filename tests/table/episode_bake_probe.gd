@@ -43,6 +43,8 @@ extends Node
 ##   jump between frames; a hand's thing not held far off its hand; nothing let go hanging in the air; a loose thing inside its vessel's walls; a surface moving smoothly;
 ##   a painting tool's own surface in nothing but what gives, to a millimeter (a pot's wall is three).
 ##   Each said once, with when and how much - what a viewer would report, found before they must.
+## - `--plan-only` (with `--heard`): the live plans alone, nothing baked - each act's time and every stretch over 8 s the painting hand
+##   stands idle. Minutes for a whole episode where a bake takes many.
 ## - `--heard[=LEAD]`: THE SHOW AS A LIVE PLAN COMES TO KNOW IT, on this thread: the words a sentence at a time, `--ahead` seconds before
 ##   they are said, the bake LEAD seconds (12) past the clock, each new plan taken as the app takes it, to the end - and whatever follows
 ##   (`--audit`, `--series`) reads that bake. No wall clock, so as quick as the bake.
@@ -146,6 +148,8 @@ func _run() -> void:
 	var ahead := _arg(args, "ahead", "4").to_float()
 	var all_words: Array = subs.words
 	var heard := _arg(args, "heard", "") != ""
+	# (`--plan-only`, with `--heard`: the plans alone, nothing baked - each act's time and every stretch the painting hand stands idle)
+	var plan_only := _arg(args, "plan-only", "") != ""
 	if live:
 		TablePhysics.threaded = true
 	if live or heard:
@@ -291,7 +295,8 @@ func _run() -> void:
 			medium.advance(Spectrum.current, 1.0 / 60.0, 1.0)
 			w = medium._work
 			ph = w.physics
-			ph.bake_until(s_at + lead)
+			if not plan_only:
+				ph.bake_until(s_at + lead)
 			if s_at - said_at >= 60.0:
 				said_at = s_at
 				print("  heard to %6.1f s, %d plans, in %6.1f s, baked to %.1f" % [s_at, plans, float(Time.get_ticks_msec() - clock) / 1000.0, ph.baked_to()])
@@ -303,6 +308,21 @@ func _run() -> void:
 		t_to = _arg(args, "to", str(end)).to_float()
 		Spectrum.virtual_clock = -1.0
 		print("episode_bake_probe: heard, %d plans in %.1f s" % [plans, float(Time.get_ticks_msec() - clock) / 1000.0])
+		if plan_only:
+			var rs: Array = w.runs.duplicate()
+			rs.sort_custom(func(x: Dictionary, y: Dictionary) -> bool: return float(x["t0"]) < float(y["t0"]))
+			var hand_end := -INF
+			var gaps := 0
+			for r in rs:
+				var a: Dictionary = w.acts[int((r as Dictionary)["i"])]
+				if hand_end > -INF and float(r["t0"]) - hand_end > 8.0:
+					print("    IDLE %.1f s (%.1f - %.1f)" % [float(r["t0"]) - hand_end, hand_end, float(r["t0"])])
+					gaps += 1
+				print("  act %-26s %7.2f - %7.2f" % [a["name"], float(r["t0"]), float(r["t1"])])
+				hand_end = maxf(hand_end, float(r["t1"]))
+			print("episode_bake_probe: plan only, %d acts, %d idle stretches over 8 s" % [rs.size(), gaps])
+			get_tree().quit(0)
+			return
 	if _arg(args, "profile", "") != "":
 		var at := _arg(args, "profile", "0").to_float()
 		ph.bake_until(at + 2.0)
@@ -1366,7 +1386,7 @@ func _audit_paint(w: TableWork, ph: TablePhysics, t_to: float, note: Callable) -
 				if skin_tm != null and not plan.is_empty():
 					var tt := t - AUDIT_PAINT_STEP
 					var h := TablePaint._hold_of(w.paint._held_at(plan, tr, clampf(tt - float(e["t0"]), 0.0, span), tt, e["from"],
-						w._rest.get(cs, Transform3D.IDENTITY)), tool)
+						w._rest.get(cs, Transform3D.IDENTITY), w.paint._home_of(e, e["from"])), tool)
 					if bool(h[3]) and float(h[2]) > 0.5:
 						var c := TablePaint._contact(tool, TablePaint._contact_of(h))
 						var tip_w := x * (c["tip"] as Vector3)

@@ -89,7 +89,8 @@ const WORKSPACES := {
 	"table": {"label": "Table", "section": "cards", "mode": "table",
 		"blurb": "A show at a table: the episodes agents make from the note's brief - cards drawn, things made, or both - and the voice that reads them.",
 		"hint": "Open a show: its body is the brief every agent works from. Each seed is one episode - planned, shuffled, painted and written one card (or one beat of work) at a time by the agents, then read here in the voice below, at the table.",
-		"hosts": ["table", "voice", "voice_training", "look", "bookends"],
+		# (...and the Pictures card, which comes with a show at a table: left out here, it was built for none - 2026-11-09)
+		"hosts": ["table", "voice", "voice_training", "illustrations", "look", "bookends"],
 		"classic": ["text", "table", "voice", "look", "bookends"]},
 	"proof": {"label": "Proof", "section": "proof",
 		"blurb": "A ghost doing math at a desk: the episodes agents make from the note's problem, and the voice that teaches them.",

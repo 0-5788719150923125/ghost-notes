@@ -125,11 +125,6 @@ func _run() -> void:
 		(e as ReadingPanel)._cast.voice_pick.add_item("libritts high  (downloads)")
 		(e as ReadingPanel)._cast.voice_pick.add_item("en_GB southern english female medium  (downloads)")
 
-	# OPEN, whatever the person running this has folded: a probe reads their real settings, and
-	# a panel with its cards folded is short enough to fit any window - which would prove nothing.
-	for p in [_ed._panel, _synth._panel, _cards._panel, _proof._panel, _letter._panel]:
-		for c in (p as SidePanel).cards():
-			(c as Card).folded = false
 	await _check_fits("Generative", _ed._panel)
 	await _check_fits("Synthesis", _synth._panel)
 	await _check_fits("Cards", _cards._panel)

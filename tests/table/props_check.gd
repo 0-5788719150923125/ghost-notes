@@ -47,6 +47,9 @@ extends SceneTree
 ## - A HEAP OF COINS NEVER SHARES SPACE (feedback 0008, coins in a dish cut through each other): fourteen
 ##   coins heaped on seven seeds lie flat, and no two discs overlap in plan and in height. Two-sided: two
 ##   coins laid on the same spot are found overlapping.
+## - A COTTON SWAB'S TIP IS A TUFT (feedback 0020): a `bud` tuft builds short and rounded - wider in the middle of its length than at its
+##   root, its outer hairs shorter than its middle's - and barely bends: dragged and pressed alike, its tip goes a fifth as far aside as a
+##   round brush's of the same length. The control: the round brush's bends the whole way.
 ## - THE SET DRESSER IS TOLD all of it.
 
 var _fails: Array = []
@@ -70,6 +73,7 @@ func _initialize() -> void:
 	_sculpts()
 	_coins()
 	_facets()
+	_bud()
 	_told()
 	if _fails.is_empty():
 		print("props_check: ALL OK")
@@ -98,6 +102,29 @@ func _geo(p: Dictionary, seed := 1) -> Props.Tris:
 	rng.seed = seed
 	var geos := Props._geometry(_part(p), rng)
 	return (geos[0] as Dictionary)["geo"]
+
+
+## A COTTON SWAB'S TIP: a bud tuft built short and rounded, and bending a little where a round brush's bends the whole way.
+func _bud() -> void:
+	var g := _geo({"shape": "tuft", "kind": "bud", "length": 0.9, "width": 0.5, "material": "cotton"})
+	var top := 0.0
+	var root_w := 0.0
+	var mid_w := 0.0
+	for q in g.v:
+		top = maxf(top, q.y)
+	for q in g.v:
+		var r := Vector2(q.x, q.z).length()
+		if q.y < top * 0.1:
+			root_w = maxf(root_w, r)
+		elif absf(q.y - top * 0.45) < top * 0.1:
+			mid_w = maxf(mid_w, r)
+	_ok(g.v.size() > 0 and absf(top - 0.009) < 0.002, "a bud tuft is built its length long: %.4f m" % top)
+	_ok(mid_w > root_w * 1.05, "a bud tuft is rounded, wider in its middle than at its root: %.4f against %.4f" % [mid_w, root_w])
+	var bend := func(kind: String) -> float:
+		var got: Array = Bristles.target(Vector3(0.05, 0.0, 0.0), 1.0, 0.009, Vector3.UP, Vector3(0.0, 0.0, 0.2), Bristles.bends_of(kind))
+		return (got[0] as Vector3).length() + float(got[1]) * 0.009
+	_ok(bend.call("bud") < bend.call("round") * 0.2 + 1e-9, "a bud barely bends: %.5f, a round brush %.5f" % [bend.call("bud"), bend.call("round")])
+	_ok(bend.call("round") > 0.001, "control: a round brush of its length bends the whole way: %.5f" % bend.call("round"))
 
 
 ## How many edges of [param g] have a face on one side only (an odd count of faces): 0 is closed.

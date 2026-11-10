@@ -10,7 +10,8 @@ extends SceneTree
 ## - THE DESK IS SEEN FIRST: nothing happens and the camera stays home through the opening rest;
 ## - THE TERMINAL: asleep (dark) until a block wakes it; A SESSION wakes it to a bare prompt, each command typed a key at a
 ##   time and its answer printed after it, the prompt back at the end; a shown block drawn down a line at a time (the
-##   control: just begun, its last line is not there yet); a typed block SAID BEHIND ITS KEYS - its first words typed before
+##   control: just begun, its last line is not there yet), its redacted words under a mosaic's rect and nowhere as written
+##   (the control: its plain lines have none); a typed block SAID BEHIND ITS KEYS - its first words typed before
 ##   the voice begins (the control: the rest not yet), every word's keys done before the voice says it; struck, it is gone;
 ## - THE CAMERA turns to what is active (the terminal while it types, the receiver in a storm, a ringing phone) and a look
 ##   holds it while nothing else is; THE RADAR: the target sets off at a moving mark and arrives at a ping, under the voice,
@@ -118,6 +119,14 @@ func _run() -> void:
 	var shown := md.terminal_at(t0[screen_i] + 1.0)
 	_ok(not bool(shown["asleep"]) and "\n".join(shown["lines"]).contains("STATUS ...... CONTAINED") and begun.contains("NAME ...") and not begun.contains("STATUS"),
 		"a shown block is drawn down the glass a line at a time (the control, just begun: %s)" % begun.replace("\n", " / "))
+	var shown_lines: PackedStringArray = shown["lines"]
+	var covers: Array = md._screens.redactions(shown_lines)
+	var plates := shown_lines.slice(shown_lines.size() - 1)
+	_ok(covers.size() == 1 and not "\n".join(shown_lines).contains("XKC") and String(DispatchScript.unredacted(plates[0])["text"]).ends_with("XKC 4417")
+		and (covers[0] as Rect2).get_center().y > DispatchScreens.TERM_MARGIN.y + DispatchScreens.TERM_LINE * float(shown_lines.size() - 2),
+		"a shown block's redacted words lie under a mosaic on their own line, and nowhere as written (%d rects)" % covers.size())
+	_ok(md._screens.redactions(PackedStringArray(["NAME ........ SUBJECT", "STATUS ...... CONTAINED"])).is_empty(),
+		"the control: plain lines have no mosaic")
 	var type_i := _first(actions, "type")
 	var ty: Dictionary = actions[type_i]
 	var mid := int(ty["from"]) + 2

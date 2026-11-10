@@ -42,7 +42,7 @@ static func build(panel: SidePanel, attached: Array, ctx := {}) -> Dictionary:
 			continue
 		var card := make(key, ctx)
 		var row: Dictionary = Components.REGISTRY[key]
-		# the card's id is its row's `card` (the panel keeps each card's fold under it), its title
+		# the card's id is its row's `card`, its title
 		# the row's `heading` where it has one; a part that only comes with another has no × of its own
 		var body := panel.add_card(String(row.get("card", card.KEY)), String(row.get("heading", row["label"])),
 			row["family"], key if not Components.attach_blocks(key).is_empty() else "")

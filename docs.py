@@ -132,7 +132,7 @@ FOLDERS: List[Tuple[str, str, str]] = [
      "`EpisodeSteps`)."),
     ("ui", "The panel kit",
      "What every note's panel is built from, and what it asks of the window it is in: a side panel that cannot outgrow "
-     "the window and its \"+\", a component's folding card in its family's color and the chips over the cards, the "
+     "the window and its \"+\", a component's card in its family's color and the chips over the cards, the "
      "cards a note's components bring (built from the registry's rows, attached and detached), the one list of what is "
      "made for a note (`PipelineCard`), the Script card every "
      "note has (its editor window and highlighter), rows drawn from a table of fields, two small controls, and `Shell` "

@@ -163,7 +163,7 @@ def sponge_print(cv, c, r, color, paint, load=1.0, press=1.0, corner=False, seed
     pores = np.clip(0.55 + (fbm(X / PORE + seed * 1.7, Y / PORE, seed + 7) - 0.5) * 2 * (0.75 if corner else 0.55), 0, 1)
     a = a * dep * (pores + (1 - pores) * dep * dep) * (0.4 + 0.6 * np.clip((edge - d) / min(EDGE_FADE, rr * 0.5), 0, 1))
     pre, alp = Canvas.over(cv.pre[sl], cv.alp[sl], a, color)
-    return Mark(kind, tool, sl, pre, alp, np.array([c]), 0.0, 1, paint, {"c": list(c), "r": rr, "press": press, "load": load})
+    return Mark(kind, tool, sl, pre, alp, np.array([c]), 0.0, 1, paint, {"c": list(c), "r": rr, "press": press, "load": load, "corner": bool(corner)})
 
 
 BELLY = 0.5          # the outer share of a brush's half width its paint thins out over
@@ -364,20 +364,33 @@ def move(cv, pts, half_w, pick, lay, kind, tool, soft=0.8, wet_only=None, now=0.
     alp = cv.alp[sl].copy()
     X, Y = grid(sl)
     wet = np.ones(alp.shape) if wet_only is None else np.clip(1 - (now - cv.laid_t[sl]) / wet_only, 0, 1)
-    held_pre = None
-    held_alp = 0.0
-    # (...taken off as much as `take` over its whole width, however many steps pass over a point)
-    step = max(half_w * 0.35, 0.2)
-    take_step = 1 - (1 - take) ** (step / (2 * half_w)) if take > 0 else 0.0
-    for p in dense:
-        prof = _profile(X, Y, p, half_w, soft) * wet
-        wsum = prof.sum()
-        if wsum < 1e-6:
-            continue
-        if take > 0:
+    if take > 0:
+        # (...taken off as much as `take` over its whole width, however many steps pass over a point)
+        step = max(half_w * 0.35, 0.2)
+        take_step = 1 - (1 - take) ** (step / (2 * half_w))
+        for p in dense:
+            prof = _profile(X, Y, p, half_w, soft) * wet
+            if prof.sum() < 1e-6:
+                continue
             f = 1 - take_step * prof
             pre *= f[..., None]
             alp *= f
+    else:
+        pre, alp = _carry(pre, alp, X, Y, dense, half_w, soft, pick, lay, wet)
+    return Mark(kind, tool, sl, pre, alp, pts, float(s[-1]), 1, "", {"pts": pts.tolist(), "half_w": half_w})
+
+
+def _carry(pre, alp, X, Y, dense, half_w, soft, pick, lay, wet=None):
+    """What a tool drawn along `dense` (mm) carries: at each step it takes up `pick` of what lies under it and lays `lay` of what it holds
+    - the paint already on moved along the way it goes. -> (pre, alp)."""
+    held_pre = None
+    held_alp = 0.0
+    for p in dense:
+        prof = _profile(X, Y, p, half_w, soft)
+        if wet is not None:
+            prof = prof * wet
+        wsum = prof.sum()
+        if wsum < 1e-6:
             continue
         under_pre = (pre * prof[..., None]).sum(axis=(0, 1)) / wsum
         under_alp = float((alp * prof).sum() / wsum)
@@ -389,13 +402,15 @@ def move(cv, pts, half_w, pick, lay, kind, tool, soft=0.8, wet_only=None, now=0.
         g = lay * prof
         pre = pre + (held_pre - pre) * g[..., None]
         alp = alp + (held_alp - alp) * g
-    return Mark(kind, tool, sl, pre, alp, pts, float(s[-1]), 1, "", {"pts": pts.tolist(), "half_w": half_w})
+    return pre, alp
 
 
-def soften(cv, pts, half_w, reach=0.8, strength=0.8, kind="feather", tool="round"):
+def soften(cv, pts, half_w, reach=0.8, strength=0.8, kind="feather", tool="round", drag=0.0):
     """FEATHERING: a clean, damp brush drawn along `pts` moves the paint under it a little way each way - each point it passes taken
     toward what lies within `reach` mm round it, as much as `strength` where the brush bears hardest. An edge becomes a gradient; the
-    tones either side stay their own (a brush that carried one average over all it touched had flattened both)."""
+    tones either side stay their own (a brush that carried one average over all it touched had flattened both). AND IT DRAGS (`drag`,
+    0-1: what it takes up and lays as it goes - feedback 0020: a fat brush "spill[ing] over the edge, dragging/blending color with it"):
+    drawn from a color out over the white, it carries a little of it, fading, where a blur alone had left the white untouched."""
     pts = np.asarray(pts, dtype=float)
     dense, s, k = resample(pts, max(half_w * 0.3, 0.2))
     sl = box(dense, half_w + reach * 3, cv.h, cv.w)
@@ -410,7 +425,11 @@ def soften(cv, pts, half_w, reach=0.8, strength=0.8, kind="feather", tool="round
     pre_m = np.stack([ndimage.gaussian_filter(pre[..., c], sig) for c in range(3)], -1)
     alp_m = ndimage.gaussian_filter(alp, sig)
     g = prof[..., None]
-    return Mark(kind, tool, sl, pre + (pre_m - pre) * g, alp + (alp_m - alp) * prof, pts, float(s[-1]), 1, "",
+    pre2, alp2 = pre + (pre_m - pre) * g, alp + (alp_m - alp) * prof
+    if drag > 0:
+        X, Y = grid(sl)
+        pre2, alp2 = _carry(pre2, alp2, X, Y, dense, half_w, 0.8, drag, drag * 0.8)
+    return Mark(kind, tool, sl, pre2, alp2, pts, float(s[-1]), 1, "",
                 {"pts": pts.tolist(), "half_w": half_w, "reach": reach})
 
 
@@ -433,6 +452,64 @@ def sponge_blend(cv, c, r, rng, tool="sponge", n=6):
 
 def smudge(cv, pts, half_w, tool="finger"):
     return move(cv, pts, half_w, 0.6, 0.55, "smudge", tool, soft=0.95)
+
+
+# A HAND'S PULL AS IT IS DRAWN ([slipped]): a steady hand's wander across it, a share of the brush's half width, over this wavelength (mm);
+# a slip aside this often, as far as this many half widths at the most (most much less: the square of a uniform); run on past its end this
+# often, by up to this many half widths.
+SLIP_STEADY = 0.06
+SLIP_WAVE = 12.0
+SLIP_EVERY = 0.12
+SLIP_MOST = 1.2
+OVER_EVERY = 0.10
+OVER_MOST = 1.0
+
+
+def slipped(pts, half_w, seed):
+    """THE PULL AS A HAND DRAWS IT (the user, 2026-11-09, of feedback 0020: "You would want a hand that generally tries to keep its whole
+    brush inside of the edge; however hands can make mistakes, and spill over the edge, dragging/blending color with it ... we want
+    naturally-looking behaviors here"): the planned path `pts` (mm) with a steady hand's slow wander, now and then a slip aside - a smooth
+    bump, mostly small, rarely as far as SLIP_MOST half widths - and now and then run on past its end. The mark is laid where the hand
+    went, so the show's brush and its paint agree. Seeded: the same pull slips the same way every time."""
+    pts = np.asarray(pts, float)
+    if len(pts) < 2:
+        return pts
+    rng = np.random.default_rng(int(seed) & 0xFFFFFFFF)
+    seg = np.diff(pts, axis=0)
+    s = np.concatenate([[0.0], np.cumsum(np.hypot(seg[:, 0], seg[:, 1]))])
+    if s[-1] < 1e-6:
+        return pts
+    tang = np.gradient(pts, axis=0)
+    tang /= np.maximum(np.linalg.norm(tang, axis=1, keepdims=True), 1e-9)
+    nrm = np.stack([-tang[:, 1], tang[:, 0]], 1)
+    ph = rng.uniform(0, 2 * np.pi, 2)
+    off = SLIP_STEADY * half_w * (0.6 * np.sin(2 * np.pi * s / SLIP_WAVE + ph[0]) + 0.4 * np.sin(2 * np.pi * s / (SLIP_WAVE * 0.43) + ph[1]))
+    if rng.random() < SLIP_EVERY:
+        u = rng.random()
+        h = half_w * SLIP_MOST * (0.25 + 0.75 * u * u) * (1.0 if rng.random() < 0.5 else -1.0)
+        at = rng.uniform(0.15, 0.85) * s[-1]
+        span = rng.uniform(3.0, 7.5)
+        off = off + h * np.exp(-((s - at) / span) ** 2)
+    out = pts + nrm * off[:, None]
+    if rng.random() < OVER_EVERY:
+        out = np.vstack([out, out[-1] + tang[-1] * half_w * OVER_MOST * (0.3 + 0.7 * rng.random())])
+    return out
+
+
+def blot(cv, c, r, under_pre, under_alp, take=0.85, seed=0, tool="bud"):
+    """A SPILL BLOTTED OFF WITH A COTTON SWAB (feedback 0020: "we might be able to wipe it away with a cotton swab (if the mistake was
+    small, or the color was faint)"): pressed at `c`, its tip takes up `take` of the fresh paint under it, as much as it bears there - what
+    was under the spill (`under_pre`, `under_alp`: the whole canvas before it) showing again - in a soft, slightly ragged round print."""
+    sl = box(np.array([c]), r + 1.0, cv.h, cv.w)
+    if sl is None:
+        return None
+    X, Y = grid(sl)
+    d = np.hypot(X - c[0], Y - c[1])
+    edge = r + (fbm(X / 1.2 + seed * 0.37, Y / 1.2, seed) - 0.5) * 0.6
+    prof = np.clip((edge - d) / 0.6 + 0.5, 0, 1) * take
+    pre = cv.pre[sl] + (under_pre[sl] - cv.pre[sl]) * prof[..., None]
+    alp = cv.alp[sl] + (under_alp[sl] - cv.alp[sl]) * prof
+    return Mark("blot", tool, sl, pre, alp, np.array([c]), 0.0, 1, "", {"c": list(c), "r": r, "press": 1.0, "load": 1.0, "corner": False})
 
 
 def lift(cv, pts, half_w, take=0.35, tool="bud"):

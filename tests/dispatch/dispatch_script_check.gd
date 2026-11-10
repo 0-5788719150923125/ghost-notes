@@ -19,6 +19,10 @@ extends SceneTree
 ##   next words typed into the phone that texted, still said (THE CONTROL: with no text before it, a warning);
 ## - THE TERMINAL: a typed block's every spoken word has its characters, a strike strikes the block before it, a print
 ##   prints what was typed;
+## - REDACTED WORDS: in a shown block and a session they are on the screen as themselves, moved into the private plane
+##   (never as written, never the mark), each character one, and drawn back with their columns; a session types them a key
+##   each; a redacted run wraps whole (THE CONTROL: the same words plain wrap between them); in a typed block they are
+##   warned of and neither shown nor said;
 ## - THE CONTROLS: a call to a phone not on the desk, a phone voice with no phone open, and a call left open are each said.
 ##
 ## Run: godot --headless --path . --script tests/dispatch/dispatch_script_check.gd
@@ -170,6 +174,31 @@ func _init() -> void:
 	_ok(Array(printed["lines"]).has("23:21. Grocery store. Watcher in place."), "a print prints what was typed (%s)" % str(printed.get("lines")))
 	var shown := DispatchScript.shown_of("WHAT <!-- hesitation --> DO WE <!-- hesitation --> DO")
 	_ok(shown == "WHAT DO WE DO", "a typed block's marks leave no gap on the screen (%s)" % shown)
+	# REDACTED WORDS
+	var screen_a: Dictionary = {}
+	for a in actions:
+		if String((a as Dictionary)["kind"]) == "screen":
+			screen_a = a
+	var plate := String(String(screen_a["text"]).split("\n")[2])
+	var drawn := DispatchScript.unredacted(plate)
+	_ok(not plate.contains("XKC") and not plate.contains("<!--") and plate.length() == "PLATE ....... XKC 4417".length()
+		and String(drawn["text"]) == "PLATE ....... XKC 4417" and drawn["spans"] == [Vector2i(14, 22)],
+		"a shown block's redacted words are on the screen as themselves, hidden, by their columns (%s, %s)" % [plate, str(drawn)])
+	_ok((DispatchScript.unredacted("STATUS ...... CONTAINED")["spans"] as Array).is_empty(), "the control: a plain line has no redacted run")
+	var hid := DispatchScript.parse("<!-- speaker: Control -->\n\nHi.\n\n```terminal\n> search <!-- redact: jane doe -->\n1 MATCH\n```\n\nThere.\n")
+	var hstep: Dictionary = hid["actions"][0]["steps"][0]
+	var hkeys: PackedFloat32Array = hid["actions"][0]["plan"]["steps"][0]["keys"]
+	var htyped := DispatchScript.unredacted(String(hstep["typed"]))
+	_ok(String(htyped["text"]) == "search jane doe" and htyped["spans"] == [Vector2i(7, 15)] and hkeys.size() == "search jane doe".length()
+		and not String(hstep["typed"]).contains("jane"), "a session types its redacted words a key each, hidden (%s, %d keys)" % [str(htyped), hkeys.size()])
+	var wide := "x".repeat(66) + " "
+	var run_lines := DispatchScript.wrapped(wide + DispatchScript.redacted("<!-- redact: AB CD EF -->"), DispatchScript.COLUMNS)
+	var plain_lines := DispatchScript.wrapped(wide + "AB CD EF", DispatchScript.COLUMNS)
+	_ok(run_lines.size() == 2 and String(DispatchScript.unredacted(run_lines[1])["text"]) == "AB CD EF" and String(plain_lines[0]).ends_with("AB"),
+		"a redacted run wraps whole (the control: plain, it wraps between its words - %s / %s)" % [str(run_lines), str(plain_lines)])
+	var said_hid := DispatchScript.parse("<!-- speaker: Control -->\n\nHi.\n\n```type\nLOGGED <!-- redact: JANE DOE -->.\n```\n")
+	_ok(String(said_hid["warnings"][0]).begins_with("redact:") and not (said_hid["spoken"] as PackedStringArray).has("jane")
+		and not String(said_hid["actions"][0]["text"]).contains("JANE"), "a typed block's redacted words are warned of, never shown or said")
 	# PICTURES
 	var full: Array = d["spans"]
 	_ok(full.size() == 1 and int(full[0]["to"]) > int(full[0]["from"]), "a picture over the whole screen spans its passage")

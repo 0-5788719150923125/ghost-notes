@@ -27,12 +27,11 @@ const COL_USES := Color(0.42, 0.48, 0.58)
 ## show up (status "orphaned") so they stay reviewable/deletable - they just
 ## never get sent anywhere on their own.
 ##
-## Up to MAX_CONCURRENT subprocesses run at once; anything past that queues.
-## Each is a fresh, permission-bypassed agent editing the SAME working tree,
-## so two runs CAN still land conflicting edits on the same file - kept
-## deliberately small, and each dispatch prompt tells the agent to scope its
-## edit narrowly rather than roam, precisely so concurrent runs mostly land on
-## different files.
+## EVERY SUBMISSION STARTS AT ONCE, however many are running (the user, 2026-11-09: "I don't understand why assistant sessions
+## are limited ... that gate was forcing me to wait for one session to finish for the next to even start" - three at a time had
+## held the rest queued). Each is a fresh, permission-bypassed agent editing the SAME working tree, so two runs CAN land
+## conflicting edits on the same file - each dispatch prompt tells the agent to scope its edit narrowly rather than roam,
+## precisely so concurrent runs mostly land on different files.
 ##
 ## Conversations persist to feedback/NNNN.assistant.json (paired with the
 ## feedback console's own NNNN.json/.png) so they survive an app restart, and
@@ -60,10 +59,8 @@ static func _feedback_dir() -> String:
 		return root
 	return DIR if OS.has_feature("editor") else "user://feedback"
 const PANEL_W := 380
-## How many dispatched subprocesses may be live at once - past this, entries
-## queue same as before. Kept small: these are permission-bypassed agents
-## editing the same live working tree, not isolated sandboxes.
-const MAX_CONCURRENT := 3
+## A GATE'S HOLD: while set, nothing queued is started (a check that looks at a queue without running agents). Never set by the app.
+var hold := false
 
 ## The pure half: per-backend command lines and stream parsing. Preloaded rather than
 ## named by class so a headless run never depends on the class cache being fresh.
@@ -256,17 +253,13 @@ func _max_ghost_source_mtime(dirs: Array = ["res://src", "res://shaders"]) -> fl
 
 
 func _pump_queue() -> void:
-	while _running_count < MAX_CONCURRENT:
-		var started := false
-		for e in _entries:
-			if e.status == "queued":
-				var pending: String = e.get("pending_prompt", "")
-				e.pending_prompt = ""
-				_dispatch(e, pending if pending != "" else _build_prompt(e))
-				started = true
-				break
-		if not started:
-			return
+	if hold:
+		return
+	for e in _entries.duplicate():
+		if e.status == "queued":
+			var pending: String = e.get("pending_prompt", "")
+			e.pending_prompt = ""
+			_dispatch(e, pending if pending != "" else _build_prompt(e))
 
 
 ## `prompt` is either the initial dispatch prompt (built from the feedback
@@ -1093,8 +1086,7 @@ func _build_followup_row(entry: Dictionary) -> Control:
 	if not missing.is_empty():
 		send.tooltip_text = missing + " - a follow-up continues that CLI's own session"
 	# Goes through the SAME queue as a fresh submission (see
-	# enqueue/_pump_queue) - a follow-up on an idle, already-done entry only
-	# waits if MAX_CONCURRENT other entries are already running.
+	# enqueue/_pump_queue), which starts it at once.
 	send.pressed.connect(func():
 		var text := edit.text.strip_edges()
 		if text.is_empty():

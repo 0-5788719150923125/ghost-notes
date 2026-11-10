@@ -23,6 +23,7 @@ from color import dec, delta, enc, mix, oklab
 from tools import TOOLS, Hand
 
 WORSE = 2.5
+NOTHING = 0.006      # a mark changing no point of the canvas more than this (its paint, its coverage) changes nothing
 MIX_SHARES = (0.1, 0.25, 0.5, 0.75)   # (a tenth: a white made cream, never a quarter's orange)
 THICKS = (1.0, 0.6, 0.3)
 
@@ -126,6 +127,17 @@ class Painter:
     def try_lay(self, m, target, least, start=None, paint=None, soft=0.0):
         """Mark `m` weighed against `target` and laid if it brings it at least `least` (mm^2 x OKLab) nearer; the hand's time spent."""
         if m is None:
+            return False
+        # WHAT THE HAND KEEPS ITS MARKS OUT OF (`keep_out`, a mask of the canvas, while set): a careful edge, cut in - the mark's paint
+        # stops at it (feedback 0005: a spill's cleanup reached into the eye it spilled from and lightened its makeup)
+        keep = getattr(self, "keep_out", None)
+        if keep is not None and keep[m.sl].any():
+            k = keep[m.sl]
+            m.pre = np.where(k[..., None], self.cv.pre[m.sl], m.pre)
+            m.alp = np.where(k, self.cv.alp[m.sl], m.alp)
+        # A MARK THAT CHANGES NOTHING IS NEVER MADE (feedback 0020: a fat brush's pulls run over the white, moving nothing - time spent and a
+        # tool seen working for nothing)
+        if np.abs(m.pre - self.cv.pre[m.sl]).max() < NOTHING and np.abs(m.alp - self.cv.alp[m.sl]).max() < NOTHING:
             return False
         g, worse, changed = self._gain(m, target)
         if soft > 0:

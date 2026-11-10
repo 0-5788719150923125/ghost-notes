@@ -9,8 +9,8 @@ extends Node
 ## A BOOT probe: the box is remembered through [Settings] and the backend is read through
 ## [AssistantBackends]. It never touches the author's feedback: the console writes into a scratch folder,
 ## the backend is chosen in memory only (a probe's Settings never reach the disk), and the
-## Assistant it asks is held at its concurrency limit throughout, so even an entry that wrongly
-## queues cannot start a run - the control case below queues one on purpose.
+## Assistant it asks is held (`hold`) throughout, so even an entry that wrongly queues cannot start
+## a run - the control case below queues one on purpose.
 ##
 ## AN ASSISTANT THAT IS NOT INSTALLED IS NO ASSISTANT ("If no AI is installed, we cannot support
 ## that feature and should definitely gate on it"): the box goes off for a chosen CLI that is
@@ -100,7 +100,9 @@ func _run() -> void:
 	_ok(AssistantBackends.choice() == "claude_cli" and AssistantBackends.runnable() == "",
 		"the choice is kept, and the backend reads as off")
 	fc._close()
-	_present("codex", false)
+	# (...every assistant the registry knows missing: this machine's Grok CLI had made "no AI at all" untrue)
+	for key in AssistantBackends.REGISTRY:
+		_present(String((AssistantBackends.REGISTRY[key] as Dictionary)["dep"]), false)
 	fc._open_console()
 	_ok(fc._ask.disabled and fc._ask.tooltip_text.begins_with("No AI assistant is installed"),
 		"no AI at all: shown off, and says so (%s)" % fc._ask.tooltip_text)
@@ -113,7 +115,7 @@ func _run() -> void:
 
 	print("the assistant")
 	var a: Assistant = preload("res://src/app/assistant.gd").new()
-	a._running_count = Assistant.MAX_CONCURRENT   # nothing can start, whatever is queued
+	a.hold = true   # nothing can start, whatever is queued
 	add_child(a)
 	await get_tree().process_frame
 	a.enqueue(int(logged[0]), String(logged[1]), stem, false)

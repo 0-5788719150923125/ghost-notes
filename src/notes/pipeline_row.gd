@@ -44,6 +44,12 @@ var open := true
 var asks := ""
 ## Its ⟳.
 var redo := Callable()
+## WHETHER ITS ⟳ ALSO THROWS AWAY WHAT WAS MADE FROM IT ([member lockable] rows): locked (the default), it does, and [member asks]
+## says what; unlocked, it makes this row again alone and keeps the rest (TableEpisode.unlocked).
+var lockable := false
+var locked := true
+## ...and how it is locked or unlocked: (on: bool) -> void, true locked.
+var lock := Callable()
 ## WHAT ITS ▶ DOES, "" for a row with none: what is made without throwing anything away (an actor's step and what it needs).
 var go := ""
 ## Whether its ▶ is offered now.

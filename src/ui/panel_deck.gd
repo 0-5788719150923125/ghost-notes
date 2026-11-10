@@ -13,18 +13,17 @@ class_name PanelDeck
 ## THE BARS ARE ONE LAYER, over the scroll, in the order of the cards: a later one lies on an earlier one, and all of them on
 ## whatever is scrolling. Each is the card's own [member Card.head], never a copy, so what is on it (the Pipeline's Generate, a
 ## card's ×) works from a pile. A card keeps the room for its bar in the scroll, and the bar is put over it
-## ([method _place]): where the card is, held inside the piles. A folded card keeps less room than its bar, so a run of
-## folded cards overlaps.
+## ([method _place]): where the card is, held inside the piles.
 ##
-## A PRESS: a bar where its card is folds or opens it; a bar in a pile brings its card here, opening it if it is folded
-## ([method reveal]). ONE OPENED FROM ANYWHERE (a chip, too) comes into view. THE FAN: pointing at a bar in a pile spreads
-## the pile there, so the whole bar shows, however tightly a small window stacks them.
+## A PRESS ON A BAR BRINGS ITS CARD INTO VIEW WHOLE, wherever the bar lies, or its start where it is taller than the view
+## ([method reveal]); a chip's press does the same ([method Card.reveal]). A card never folds (2026-11-09, the user: folding
+## "doesn't belong here anymore, now that cards overlap while scrolling"). THE FAN: pointing at a bar in a pile spreads the pile
+## there, so the whole bar shows, however tightly a small window stacks them.
 ##
 ## A VIEW AT THE END STAYS THERE (the user, 2026-11-03: Generate "can insert new steps into the pipeline card, which causes it to
 ## start overflowing, requiring me to scroll again"): what grows while the view is at the end of the scroll keeps it at the end
-## ([method _on_length]), and a turn of the wheel lets go. NOT WHAT THE VIEWER OPENS: a card sliding open is brought by
-## [method reveal], which shows its start. A PANEL THAT FITS is at its end only trivially, so it follows its last card alone: a note's
-## words filling in as it opens must leave it at its top.
+## ([method _on_length]), and a turn of the wheel lets go. A PANEL THAT FITS is at its end only trivially, so it follows its last
+## card alone: a note's words filling in as it opens must leave it at its top.
 
 ## How much of each bar in a pile shows, at most: a title's whole line, the foot of the bar under the next one's.
 const PEEK := 21.0
@@ -34,7 +33,7 @@ const PEEK_LEAST := 5.0
 const ROOM := 200.0
 ## A bar's height, for working out how close the piles must lie.
 const BAR := 30.0
-## How long bringing a card into view takes, seconds: past [constant Card.SLIDE], for a card opening as it comes.
+## How long bringing a card into view takes, seconds.
 const GLIDE := 0.22
 ## How quickly a pile fans, per second.
 const FAN := 18.0
@@ -69,16 +68,14 @@ func _init(scroll: ScrollContainer, body: VBoxContainer, room: Callable) -> void
 	add_child(_clip)
 
 
-## TAKES [param card]'S BAR ONTO THE LAYER: from here on it is put where it should lie.
+## TAKES [param card]'S BAR ONTO THE LAYER: from here on it is put where it should lie, and its presses are the deck's.
 func adopt(card: Card) -> void:
 	var bar := card.head
 	if bar.get_parent() != null:
 		bar.get_parent().remove_child(bar)
 	_clip.add_child(bar)
-	card.on_head = _on_head
-	card.folding_changed.connect(func(is_folded: bool) -> void:
-		if not is_folded:
-			reveal(card))
+	bar.gui_input.connect(_on_head.bind(card))
+	card.reveal_asked.connect(reveal.bind(card))
 	card.visibility_changed.connect(_place)
 
 
@@ -155,7 +152,6 @@ func _place(delta := 0.0) -> void:
 	var shown := cards()
 	var n := shown.size()
 	var close := peek_for(n, float(_room.call()))
-	_rests(close)
 	var view := _scroll.size.y
 	var ys: Array = []
 	_sides = {}
@@ -189,23 +185,6 @@ func _place(delta := 0.0) -> void:
 			_above = maxf(_above, y + tall)
 		elif _sides[card] > 0:
 			_below = minf(_below, y)
-
-
-## A FOLDED CARD KEEPS LESS ROOM THAN ITS BAR when another card comes next: the bars of a run of them overlap as the piles'
-## do. Over anything else - a line of status - it keeps its bar's.
-func _rests(close: float) -> void:
-	var gap := float(_body.get_theme_constant("separation"))
-	var kids := _body.get_children()
-	for i in kids.size():
-		var card := kids[i] as Card
-		if card == null or not card.visible:
-			continue
-		var next: Control = null
-		for j in range(i + 1, kids.size()):
-			if kids[j] is Control and (kids[j] as Control).visible:
-				next = kids[j]
-				break
-		card.set_rest(maxf(close - gap, 1.0) if next is Card else -1.0)
 
 
 ## THE FAN: the bar pointed at in a pile shows whole, the bars that lie on it moved off it. Eased; a pile not pointed at closes.
@@ -243,7 +222,7 @@ func _pointed_at() -> Card:
 	return null
 
 
-func _on_head(card: Card, ev: InputEvent) -> void:
+func _on_head(ev: InputEvent, card: Card) -> void:
 	if _is_wheel(ev):
 		# the bars are not inside the scroll view, so the wheel does not reach it by itself
 		_stop_glide()
@@ -257,19 +236,12 @@ func _on_head(card: Card, ev: InputEvent) -> void:
 	if press == null or not press.pressed or press.button_index != MOUSE_BUTTON_LEFT:
 		return
 	card.head.accept_event()
-	if side_of(card) == 0:
-		if card.folded:
-			card.expand()
-		else:
-			card.fold()
-	elif card.folded:
-		card.expand()       # which brings it here ([method adopt])
-	else:
-		reveal(card)
+	reveal(card)
 
 
-## BRINGS [param card] INTO VIEW: from the top pile its bar comes just under the bars above it; from anywhere below, as far up as
-## shows it whole, or as near that as it can be. A card already in view is left where it is.
+## BRINGS [param card] INTO VIEW WHOLE: from the top pile its bar comes just under the bars above it; from anywhere below, as far
+## up as shows it whole above the bottom pile, or, taller than that room, its bar just under the bars above it. A card already
+## whole in view is left where it is.
 func reveal(card: Card) -> void:
 	var shown := cards()
 	var i := shown.find(card)
@@ -284,7 +256,7 @@ func reveal(card: Card) -> void:
 	if at >= top:
 		var last_tall: float = (shown[n - 1] as Card).head.get_combined_minimum_size().y
 		var free := bottom_spot(i + 1, n, view, close, last_tall) if i + 1 < n else view
-		to = clampf(free - card.open_height(), top, at)
+		to = clampf(free - card.get_combined_minimum_size().y, top, at)
 	if absf(at - to) >= 1.0:
 		_glide_to(_scroll.get_v_scroll_bar().value + at - to)
 
@@ -322,11 +294,9 @@ func _last_grew() -> bool:
 	return grew
 
 
-## Whether the scroll or a card's height is moving because the viewer asked for it.
+## Whether the scroll is moving because the viewer asked for it.
 func _moving() -> bool:
-	if _glider != null and _glider.is_running():
-		return true
-	return cards().any(func(c: Card) -> bool: return c.sliding())
+	return _glider != null and _glider.is_running()
 
 
 func _glide_to(value: float) -> void:

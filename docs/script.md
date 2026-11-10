@@ -11,7 +11,7 @@ AN ENTRY DOES NOT IMPLEMENT ITS MARK. The parsers of record stay where they are 
 
 A CARDS BRIEF IS NOT A SCRIPT, AND HAS MARKS OF ITS OWN (2026-10-12, the user: "why are all of the supported macros and features missing from 'cards' editor mode? I would expect that most if not all of the features from generative mode should also work here"). The palette was empty there because no entry named the mode: a show's document is the BRIEF its agents work from, never read aloud, so a mark in it does something only where the code reads it out of the brief or an agent is told to honor it. Those are offered ("table" in `modes`), each saying what it does THERE (`blurbs`): a speaker cue gives the show another voice, a `## Cards` section is its deck, a macro reads as its default and a note to self is taken out before any agent sees the brief (`TablePrompts.brief`), and a hesitation, a delivery or a stressed word stands in a line the brief gives the host word for word (rules/table/reader.yaml, `spoken`). The marks of a page or a tablet (pictures, scene lines, web pages) and the inline pronunciation are not: the table is the only medium there, its pictures are the painter's, and a reader's passage keeps no bracket (`TableProducer.clean_spoken`).
 
-Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/script_marks.gd) (67 entries). Each one is proven against the parser that reads it by `tests/notes/script_marks_check.gd`.
+Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/script_marks.gd) (68 entries). Each one is proven against the parser that reads it by `tests/notes/script_marks_check.gd`.
 
 ## Voices
 
@@ -136,6 +136,7 @@ STATUS ...... CONTAINED
 1 MATCH
 > open 1
 ```` | Generative | Dispatch desk: a session at the terminal, silent, the voice waiting - each line opening > is a command, typed at the prompt a key at a time and entered, and the lines after it are what the terminal answers, printed a line at a time. Asleep, the terminal wakes to a bare prompt first; the prompt comes back after the last answer. A shown block straight after is what the last command opened. |
+| Redacted | `<!-- redact: DOE, JANE -->` | Generative | Dispatch desk: inside a shown or session block, these words are on the terminal as written but covered by a mosaic of flat hexagons, each the average color of what lies under it, as a video hides a name. Typed in a session, the mosaic grows a key at a time. Not in a typed block, which is said aloud. |
 
 ## Notes
 

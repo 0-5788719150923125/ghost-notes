@@ -3,8 +3,8 @@ tool in one paint, as a hand works - and each element's program and maps, on one
 appears under it can never drift apart.
 
 THE PROGRAM is the show's own (src/table/skins.gd, `Skins._Prog.done()`): keys `[t, x, y, lift, press, where]` (millimeters over the
-surface's frame; `where` 1 back at the pot) and strokes `{pts, t, r, load, press}`, at the show's own pace - the constants below are
-`Skins`', line for line. THE MAPS are what skin_paint.gdshader draws an element from (PaintLayers.render's): what each point holds after
+surface's frame; `where` 1 back at the pot) and strokes `{pts, t, r, load, press}` (a press's also `side`, "face" or "corner"), at
+the show's own pace - the constants below are `Skins`', line for line. THE MAPS are what skin_paint.gdshader draws an element from (PaintLayers.render's): what each point holds after
 each of its first seven marks and after its last (`built`, `built_when`, 0-1 of the element's time), when it is first reached (`when`),
 what it comes to (`cover`), and its color (`tint`) - the times half floats (a third of an episode's maps had been them) - the canvas before and after the element, so the element laid over what is under it
 comes to exactly what the painter's canvas did.
@@ -29,6 +29,12 @@ LOOK, LOOK_LIFT, LOOK_EVERY = (0.6, 1.8), 9.0, 6
 PULL_DOWN, PULL_UP, PULL_LIFT = 0.22, 0.2, 1.2
 DAB, DAB_LIFT, DAB_MOVE = (0.16, 0.1, 0.16), 2.5, 70.0
 RELOAD, RELOAD_LINE, RELOAD_SWEEP, RELOAD_DABS = 3.4, 110.0, 260.0, 16
+# A LOAD ONLY RUNS OUT (feedback 0006, 2026-11-09: "This brush just went from painting very faint, almost imperceptable yellow strokes
+# ... to an extremely dark yellow stroke ... applied without ever returning to the container, to pickup a heavier load. Logically, it
+# makes no sense"): the optimizer finds each pull's strength on its own (its `th`), 0.06 to whole, and one load laid them in any order. A
+# pull laying more than the last since the brush was loaded by this much (of a whole stroke's strength) goes back to the pot first -
+# pressed harder accounts for less. Only the trips change: the marks, their order and what they lay are the painter's.
+LOAD_HEAVIER = 0.2
 PRESS_NARROW = 0.12
 NEVER = 1000.0
 DAB_MEETS = 0.18
@@ -37,11 +43,11 @@ SLOTS = 8
 STROKES = {"sweep": SWEEP_SPEED, "glaze": SWEEP_SPEED, "shade": SWEEP_SPEED, "lipstick": SWEEP_SPEED, "dry_brush": SWEEP_SPEED,
            "scumble": SWEEP_SPEED, "line": LINE_SPEED, "pencil": LINE_SPEED, "crack": CRACK_SPEED, "flick": CRACK_SPEED,
            "feather": BLEND_SPEED, "wet_blend": BLEND_SPEED, "smudge": BLEND_SPEED, "lift": BLEND_SPEED, "soften": BLEND_SPEED}
-PRESSES = ("pat", "stipple", "dab", "dot", "spatter", "sponge_blend")
+PRESSES = ("pat", "stipple", "dab", "dot", "spatter", "sponge_blend", "blot")
 # how the show names what an element does (Skins.PAINTER_HOWS' keys)
 HOW = {"line": "line", "pencil": "line", "crack": "line", "flick": "line", "dab": "dab", "dot": "dab", "pat": "sponge",
        "stipple": "sponge", "spatter": "sponge", "sponge_blend": "sponge", "feather": "blend", "wet_blend": "blend", "smudge": "blend",
-       "lift": "blend", "soften": "blend"}
+       "lift": "blend", "soften": "blend", "blot": "dab"}
 
 
 class Program:
@@ -55,6 +61,7 @@ class Program:
         self.marks = 0
         self.used_mm = 0.0
         self.used_presses = 0
+        self.last_strength = None    # what the last pull since the brush was loaded laid (LOAD_HEAVIER)
 
     def key(self, x, lift, press, where=0):
         self.keys.append([round(self.t, 4), float(x[0]), float(x[1]), float(lift), float(press), int(where)])
@@ -83,12 +90,16 @@ class Program:
         self.key(x, HOVER * 3.0, 0.0)
         self.used_mm = 0.0
         self.used_presses = 0
+        self.last_strength = None
 
-    def stroke(self, pts, speed, r, press, reload_mm, clean):
-        """A pull along `pts` at `speed`, pressed `press` a point: its points' times."""
+    def stroke(self, pts, speed, r, press, reload_mm, clean, strength=None):
+        """A pull along `pts` at `speed`, pressed `press` a point, laying `strength` (its paint's, 0-1; None unknown): its points' times.
+        Back to the pot first when its load would have run out by then - by the way it has gone, or by laying more than the last pull
+        could have left on it (LOAD_HEAVIER)."""
         pts = np.asarray(pts, float)
         length = float(np.linalg.norm(np.diff(pts, axis=0), axis=1).sum())
-        if not clean and self.used_mm + length > reload_mm and self.marks > 0:
+        heavier = strength is not None and self.last_strength is not None and strength > self.last_strength + LOAD_HEAVIER
+        if not clean and self.marks > 0 and (self.used_mm + length > reload_mm or heavier):
             self.trip_back()
         self.go(pts[0], HOVER)
         self.t += PULL_DOWN
@@ -107,6 +118,8 @@ class Program:
         self.at = pts[-1]
         self.used_mm += length
         self.marks += 1
+        if strength is not None:
+            self.last_strength = float(strength)
         look = self.marks % LOOK_EVERY == 0
         self.t += UP if look else PULL_UP
         self.key(self.at, HOVER if look else PULL_LIFT, 0.0)
@@ -115,8 +128,8 @@ class Program:
             self.key(self.at, LOOK_LIFT, 0.0)
         return ts
 
-    def press(self, c, r, press, per_load, clean):
-        """A press at `c`: when it comes down."""
+    def press(self, c, r, press, per_load, clean, side="face"):
+        """A press at `c` by the tool's `side` ("face" or "corner"): when it comes down."""
         if not clean and self.used_presses >= per_load and self.marks > 0:
             self.trip_back()
         c = np.asarray(c, float)
@@ -129,7 +142,7 @@ class Program:
         self.t += DAB[0]
         self.key(c, 0.0, press)
         t_down = self.t
-        self.strokes.append({"pts": [c.tolist()], "t": [round(t_down, 4)], "r": float(r), "load": [1.0], "press": [float(press)]})
+        self.strokes.append({"pts": [c.tolist()], "t": [round(t_down, 4)], "r": float(r), "load": [1.0], "press": [float(press)], "side": side})
         self.t += DAB[1]
         self.key(c, 0.0, press)
         self.t += DAB[2]
@@ -164,6 +177,138 @@ def _press_of(hw, r):
     return np.clip((np.asarray(hw, float) / max(r, 1e-3) - PRESS_NARROW) / (1.0 - PRESS_NARROW), 0.0, 1.0)
 
 
+# --- the hand's order ----------------------------------------------------------------------------------------------------------------
+
+# A PULL TURNED THE OTHER WAY, AND PULLS GATHERED BY THE WAY THEY GO (feedback 0016, 2026-11-09: "This brush is flipping and twirling and
+# twisting and repositioning and it just looks chaotic. A real artist would prefer keep a neutral position, and only reposition when the
+# stroke requires it. They might choose to batch certain strokes from certain directions, before repositioning to work on strokes from
+# other directions"): the optimizer's pulls run whichever way it found them - in 732687 a flat's, a round's and a liner's next pull ran
+# the other way to the last a quarter to a third of the time (31%, 32%, 23%), 89 degrees between pulls on average - and the show leans a
+# brush the way it is pulled, so its handle was thrown from side to side. A pull whose paint is laid alike at both ends is drawn the way
+# nearest the one before it (where they are about parallel: within HEADING_SAME), else up the face and out to its side, the way the show
+# holds a brush (src/table/table_paint.gd, HELD_OUT) - 36 degrees between them on average; and a run of such pulls laid in bins of
+# HEADING_BIN degrees of the way they go, the one first come to first, each swept across - the same paint over itself, in any order, is
+# what it was. A pull whose ends differ (a tail, a load running out: ENDS_ALIKE) keeps its own way and place.
+HEADING_SAME = 0.5
+HEADING_BIN = 45.0
+ENDS_ALIKE = 0.85
+RECOVER_MOST = 0.01
+
+
+def _hand_order(marks, pre, alp, col, width_mm):
+    """AN ELEMENT'S MARKS AS A HAND LAYS THEM (above): each pull drawn the way that turns least from the last, and runs of pulls gathered
+    by the way they go - laid again in that order over the canvas before the element (`pre`, `alp`), each its own coverage of `col`
+    recovered from the painter's canvas before and after it (`Canvas.over`), so the maps are staged from the order the program plays.
+    The marks as they were where any of them is not paint `col` laid over (a clean brush, a blend), or their own coverage cannot be
+    recovered to RECOVER_MOST. -> the marks (new ones where changed; the painter's own are never touched)."""
+    import dataclasses
+    from marks import path_field, resample
+    if col is None or len(marks) < 2:
+        return marks
+    col = np.asarray(col, float)
+    y0 = min(m.sl[0].start for m in marks)
+    y1 = max(m.sl[0].stop for m in marks)
+    x0 = min(m.sl[1].start for m in marks)
+    x1 = max(m.sl[1].stop for m in marks)
+    wp, wa = pre[y0:y1, x0:x1].copy(), alp[y0:y1, x0:x1].copy()
+    own, free = [], []
+    for m in marks:
+        loc = (slice(m.sl[0].start - y0, m.sl[0].stop - y0), slice(m.sl[1].start - x0, m.sl[1].stop - x0))
+        b_pre, b_alp = wp[loc], wa[loc]
+        # (...its own coverage: by how much nearer whole it made the canvas, else - over paint already whole - how far toward `col`)
+        to = col - b_pre
+        tt = (to * to).sum(-1)
+        by_col = np.where(tt > 1e-4, ((m.pre - b_pre) * to).sum(-1) / np.maximum(tt, 1e-4), 0.0)
+        a = np.clip(np.where(b_alp < 0.999, (m.alp - b_alp) / np.maximum(1.0 - b_alp, 1e-6), by_col), 0.0, 1.0)
+        r_pre = col * a[..., None] + b_pre * (1.0 - a[..., None])
+        r_alp = a + b_alp * (1.0 - a)
+        if max(float(np.abs(r_pre - m.pre).max()), float(np.abs(r_alp - m.alp).max())) > RECOVER_MOST:
+            return marks
+        own.append(a)
+        # (...a pull, laid alike at both ends: as much of it in its first quarter as in its last, along its middle - and pressed alike)
+        ok = False
+        rec = m.rec
+        if m.kind not in PRESSES and "pts" in rec and len(rec["pts"]) >= 2:
+            pts = np.asarray(rec["pts"], float)
+            hw = np.asarray(rec.get("half_w", 1.0), float)
+            hw = np.broadcast_to(hw, (len(pts),)) if hw.ndim == 0 or len(np.ravel(hw)) != len(pts) else hw
+            if float(np.linalg.norm(pts[-1] - pts[0])) >= 1.0 and float(np.abs(hw - hw[::-1]).max()) <= 0.15 * max(float(hw.max()), 1e-3):
+                dense, s, k = resample(pts, 0.2)
+                d, i, _ = path_field(dense, m.sl)
+                u = s[i] / max(float(s[-1]), 1e-6)
+                core = d <= 0.8 * np.interp(k[i], np.arange(len(hw)), hw)
+                a0, a1 = a[core & (u < 0.25)], a[core & (u > 0.75)]
+                if len(a0) >= 6 and len(a1) >= 6:
+                    m0, m1 = float(a0.mean()), float(a1.mean())
+                    ok = max(m0, m1) > 0.05 and min(m0, m1) >= ENDS_ALIKE * max(m0, m1)
+        free.append(ok)
+        wp[loc], wa[loc] = m.pre, m.alp
+    # THE ORDER: each run of pulls that may turn, gathered by the way they go - the way first come to first, swept across it
+    heads = []
+    for m in marks:
+        pts = np.asarray(m.rec.get("pts", [[0.0, 0.0]]), float)
+        heads.append(float(np.degrees(np.arctan2(pts[-1, 1] - pts[0, 1], pts[-1, 0] - pts[0, 0]))) % 180.0 if len(pts) >= 2 else 0.0)
+    order = []
+    i = 0
+    while i < len(marks):
+        if not free[i]:
+            order.append(i)
+            i += 1
+            continue
+        j = i
+        while j < len(marks) and free[j]:
+            j += 1
+        run = list(range(i, j))
+        bins = {}
+        for q in run:
+            bins.setdefault(int(((heads[q] + HEADING_BIN * 0.5) % 180.0) // HEADING_BIN), []).append(q)
+        for b, qs in bins.items():
+            ang = np.radians(b * HEADING_BIN)
+            across = np.array([-np.sin(ang), np.cos(ang)])
+            mids = [np.asarray(marks[q].rec["pts"], float).mean(axis=0) for q in qs]
+            order.extend(q for _, q in sorted(zip([float(np.dot(c, across)) for c in mids], qs)))
+        i = j
+    # THE WAY EACH IS DRAWN: about parallel to the last, as it went; else up the face and out to its side
+    out = []
+    last = None
+    for q in order:
+        m = marks[q]
+        if free[q]:
+            pts = np.asarray(m.rec["pts"], float)
+            v = pts[-1] - pts[0]
+            v = v / max(float(np.linalg.norm(v)), 1e-9)
+            mid = pts.mean(axis=0)
+            pref = np.array([0.5 * np.sign(mid[0] - width_mm * 0.5), -1.0])
+            pref = pref / np.linalg.norm(pref)
+            ref = last if last is not None and abs(float(np.dot(v, last))) >= HEADING_SAME else pref
+            if float(np.dot(v, ref)) < 0.0:
+                rec = dict(m.rec)
+                rec["pts"] = pts[::-1].tolist()
+                hw = m.rec.get("half_w")
+                if hw is not None and np.ndim(hw) > 0:
+                    rec["half_w"] = list(np.asarray(hw)[::-1])
+                for key in ("press", "th"):
+                    if key in m.rec and np.ndim(m.rec[key]) > 0 and len(np.ravel(m.rec[key])) == len(pts):
+                        rec[key] = list(np.asarray(m.rec[key])[::-1])
+                m = dataclasses.replace(m, rec=rec, pts=np.asarray(m.pts)[::-1].copy() if np.ndim(m.pts) == 2 else m.pts)
+                v = -v
+            last = v
+        out.append((q, m))
+    if [q for q, _ in out] == list(range(len(marks))):
+        return [m for _, m in out]
+    # ...LAID AGAIN IN THAT ORDER over the canvas before the element: each mark's canvas after it, as the maps are staged from
+    wp, wa = pre[y0:y1, x0:x1].copy(), alp[y0:y1, x0:x1].copy()
+    laid = []
+    for q, m in out:
+        loc = (slice(m.sl[0].start - y0, m.sl[0].stop - y0), slice(m.sl[1].start - x0, m.sl[1].stop - x0))
+        a = own[q]
+        n_pre = col * a[..., None] + wp[loc] * (1.0 - a[..., None])
+        n_alp = a + wa[loc] * (1.0 - a)
+        wp[loc], wa[loc] = n_pre, n_alp
+        laid.append(dataclasses.replace(m, pre=n_pre, alp=n_alp))
+    return laid
+
+
 def _pixel_times(m, sl, ts_pts, pts):
     """Each pixel of `sl`'s time along stroke `pts` (its points' times `ts_pts`): its nearest point's, along the way."""
     from marks import grid, path_field, resample
@@ -190,6 +335,8 @@ def export(p, starts, steps, out, log=print):
         tool = g["tool"]
         r = TOOLS.get(tool, {"mm": 6.0})["mm"] * 0.5
         clean = not g["paint"]
+        # (...in the order a hand lays them, each pull the way nearest the last: _hand_order)
+        marks = _hand_order(marks, pre, alp, None if clean else p._color(g["paint"]), W / PX)
         # (...its program, on the show's pace)
         prog = Program()
         times = []
@@ -201,14 +348,19 @@ def export(p, starts, steps, out, log=print):
                 c = rec.get("c", m.pts[0] if len(m.pts) else (0.0, 0.0))
                 rr = float(rec.get("r", r))
                 per = 26 if tool == "sponge" else RELOAD_DABS
-                times.append(("press", prog.press(c, rr, float(rec.get("press", 1.0)), per, clean)))
+                # (...by the side it was pressed with, which the show holds it by - a face print patted flat, never tipped onto a corner)
+                side = "corner" if rec.get("corner") else "face"
+                times.append(("press", prog.press(c, rr, float(rec.get("press", 1.0)), per, clean, side)))
             else:
                 pts = np.asarray(rec["pts"], float)
                 hw = rec.get("half_w", r)
                 hw = np.broadcast_to(np.asarray(hw, float), (len(pts),)) if np.ndim(hw) == 0 or len(np.ravel(hw)) != len(pts) else np.asarray(hw)
                 speed = STROKES.get(m.kind, SWEEP_SPEED)
                 reload_mm = RELOAD_LINE if speed in (LINE_SPEED, CRACK_SPEED) else RELOAD_SWEEP
-                ts = prog.stroke(pts, speed, r, _press_of(hw, r), reload_mm, clean)
+                # (...as strong as the painter laid it: its paint's thickness, times what was on the brush - LOAD_HEAVIER)
+                th = rec.get("th")
+                strength = float(np.mean(th)) * float(rec.get("load", 1.0)) if th is not None and np.size(th) > 0 else None
+                ts = prog.stroke(pts, speed, r, _press_of(hw, r), reload_mm, clean, strength)
                 times.append(("stroke", ts, pts))
         program = prog.done()
         natural = program["natural"]
@@ -227,12 +379,15 @@ def export(p, starts, steps, out, log=print):
             pre[m.sl], alp[m.sl] = m.pre, m.alp
         pre1, alp1 = pre[box].copy(), alp[box].copy()
         pre[box], alp[box] = pre0, alp0
+        d, dal = pre1 - pre0, alp1 - alp0
+        dd = (d * d).sum(-1)
         st_t = np.full((y1 - y0, x1 - x0, SLOTS), NEVER, np.float32)
         st_c = np.zeros((y1 - y0, x1 - x0, SLOTS), np.float32)
         k = np.zeros((y1 - y0, x1 - x0), np.int32)
         for m, tm in zip(marks, times):
             sy, sx = slice(m.sl[0].start - y0, m.sl[0].stop - y0), slice(m.sl[1].start - x0, m.sl[1].stop - x0)
             ch = (np.abs(m.pre - pre[m.sl]).sum(-1) + np.abs(m.alp - alp[m.sl])) > 1e-3
+            pre[m.sl], alp[m.sl] = m.pre, m.alp
             if ch.any():
                 if tm[0] == "press":
                     tpx = np.full(ch.shape, tm[1] + DAB_MEETS)
@@ -240,15 +395,22 @@ def export(p, starts, steps, out, log=print):
                     tpx = _pixel_times(m, m.sl, tm[1], tm[2])
                 u = (tpx / natural).astype(np.float32)
                 kk = k[sy, sx]
-                nn = np.maximum(n[sy, sx], 1)
-                prog_ = (kk + 1) / nn
+                # (...EACH MARK'S SHARE OF THE ELEMENT'S CHANGE IS WHAT THE PAINTER'S CANVAS HOLDS AFTER IT, projected onto that change -
+                # feedback 0015, 2026-11-09: "one of the regions it paints over turns much LIGHTER, even though that region had purple
+                # paint on it already": shared out by how many marks touch a point, a pull's first pass over a point a second would
+                # cross showed half the element's color, a pale patch inside 732687's dark streak, where the painter had laid it all
+                # but whole. Where the color hardly changes, the coverage's share; where neither does, the count's.)
+                dj, ddj, dalj = d[sy, sx], dd[sy, sx], dal[sy, sx]
+                by_color = np.clip(((pre[m.sl] - pre0[sy, sx]) * dj).sum(-1) / np.maximum(ddj, 1e-6), 0, 1)
+                by_cover = np.clip((alp[m.sl] - alp0[sy, sx]) / np.maximum(dalj, 1e-6), 0, 1)
+                by_count = (kk + 1) / np.maximum(n[sy, sx], 1)
+                share = np.where(ddj > 1e-4, by_color, np.where(dalj > 1e-3, by_cover, by_count))
                 for j in range(SLOTS - 1):
                     sel = ch & (kk == j)
                     st_t[sy, sx, j][sel] = u[sel]
-                    st_c[sy, sx, j][sel] = prog_[sel]
+                    st_c[sy, sx, j][sel] = share[sel]
                 st_t[sy, sx, SLOTS - 1][ch] = u[ch]
                 k[sy, sx] += ch
-            pre[m.sl], alp[m.sl] = m.pre, m.alp
         # (...what it comes to, and its color: laid over what was under it, exactly the painter's canvas)
         dpre = np.abs(pre1 - pre0).max(-1)
         a_alpha = np.where(alp0 < 0.999, np.clip((alp1 - alp0) / np.maximum(1 - alp0, 1e-6), 0, 1), 0.0)

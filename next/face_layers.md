@@ -60,9 +60,29 @@ Open questions for the author:
 - **The sponge.** The lab's sponge is a disc with pores; the table's is a real shape with sides (`TablePaint._side_touch`).
 - **The time.** About 47 minutes for 327484, a third of it the crackle's 550 lines. The readers' passages are written to the work's length.
 - **The rust mask** (257002): its layers made and painted in the lab; judged by the author.
+- **The hand** (feedback 0020; the author: "a hand that generally tries to keep its whole brush inside of the edge; however hands can
+  make mistakes, and spill over the edge, dragging/blending color with it ... clean that up with more white (or other colors), or ...
+  wipe it away with a cotton swab ... we want naturally-looking behaviors here"). Built 2026-11-09, `hosts/paint/test_hand.py`: a fat
+  brush's pulls a whole touch inside their region, a smaller brush where it is narrower (`plan.py` `_feather_area`); a mark that changes
+  nothing never made (`solve.py`); a blend drags color along (`marks.soften`'s `drag`); a fat brush's every blending pull drawn as a hand
+  draws it - a steady wander, now and then a slip aside or a run past its end, seeded (`marks.slipped`; the optimizer's broad strokes are
+  laid as found, not yet slipped); and after each layer its spills cleaned - a small or
+  faint one blotted with a cotton swab (`marks.blot`, tool `bud`), a bigger one painted back over in the color under it
+  (`layers_paint.tidy`). The swab is a stick with a cotton tuft on the fixed table (the brief), a tuft kind of its own in the show.
+  Not yet judged: how often a hand slips (`SLIP_EVERY`, `OVER_EVERY`), how much a blend drags (`FEATHER_DRAG`, `SMUDGE_DRAG`).
 
 ## Status
 
 The made-pictures feed, the Pictures card on table notes and the layers steps: built and gated, not yet seen by the author in the app.
 The painter host and the show's playback: built; 327484 stood from the host's output in `paint_preview_probe` (the bruise, runs, closed
-eye and brow as the lab painted them). Not yet run from the app end to end, nor watched by the author.
+eye and brow as the lab painted them). Run from the app end to end on 732687 (2026-11-09) and watched: feedback 0010-0020 found and fixed
+the sponge's reloads going to no pot, its base patted by the corner, a puff left in the air, dead air after a silence, a pull's first pass
+shown half its color, the handle following each wiggle, the flat brush flipping, a brush never touching its paint or towel, hairs bent
+toward the face when lifted. The fixes in the host (each press's side, pulls turned and gathered by their way, staging by the canvas)
+reach an episode only when its painter runs again.
+
+Feedback 0001 (2026-11-09, the second numbering): the sponge dipped into the amber pot and laid a grey-green. The show took every element's
+paint from the cream nearest its color, never the pot the painter named (`plan.pot`) - 39 of 732687's 103 elements went to another pot,
+amber and black mixes to the clear gloss; now the named pot (`TablePaint._pot_of`), at once. The base had been a mix (olive and white)
+from one pot; now one pot's paint (`plan.py` `_base`, white for 732687), and its presses fall where a hand puts them, not on the sweep's
+lattice, whose holes had made a grid of the forehead (`PAT_WANDER`; `test_hand.py` 7-8). Those two reach 732687 when its painter runs again.

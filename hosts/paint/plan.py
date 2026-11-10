@@ -26,6 +26,20 @@ from color import dec, delta, hex_rgb, oklab
 from solve import Painter, _chunks
 from tools import TOOLS
 
+# A BASE IS GONE BACK OVER WHEREVER IT IS THINNER THAN THIS (its coverage, softened over 0.75 mm), at most this many times.
+BASE_EVEN = 0.93
+BASE_PASSES = 4
+
+# WHAT A CLEAN BRUSH DRAGS AS IT GOES (marks.soften's `drag`, feedback 0020): a blend's pulls a little, a fade's out into the white more.
+FEATHER_DRAG = 0.15
+SMUDGE_DRAG = 0.3
+
+# A HAND'S PATS, NEVER A LATTICE (feedback 0001, 2026-11-09: "the gaps are always in the exact same, uniform layout. It makes the forehead
+# look a bit like a grid of color, instead of organic"): each press of a base lands anywhere within this share of the sweep's step of where
+# the sweep would put it - laid on the sweep's lattice, 732687's base had left a hole between every three. (Pressed softer as well, the
+# holes had been no less even, and fifty more presses filled them.)
+PAT_WANDER = 0.4
+
 
 class PlanPainter(Painter):
     def __init__(self, *a, **k):
@@ -153,32 +167,44 @@ class PlanPainter(Painter):
             M = keep[comps]
         return M & self.ref.face
 
-    def paint_of(self, L, M):
+    def paint_of(self, L, M, pure=False):
+        """A layer's paint (sRGB, name): as named, else the paint or mix nearest its picture over `M`. `pure`: ONE POT'S PAINT, never a
+        mix - whatever is named, the paint nearest it."""
         p = L.get("paint", "auto")
+        names, cols = self.opt_names, self.opt_cols
+        if pure:
+            keep = [k for k, n in enumerate(names) if "+" not in n]
+            names, cols = [names[k] for k in keep], cols[keep]
+            if p != "auto" and p not in names:
+                want = oklab(dec(self._color(p)))
+                j = int(np.argmin(np.linalg.norm((oklab(dec(cols)) - want) * self.HUE, axis=1)))
+                return cols[j], names[j]
         if p == "auto" and L.get("colors") is not None and M.any():
             # (...nearest the colors its own step painted there, where a layer brings them)
             med = np.median(np.asarray(L["colors"])[M], axis=0)
-            opt_lab = oklab(dec(self.opt_cols))
+            opt_lab = oklab(dec(cols))
             j = int(np.argmin(np.linalg.norm((opt_lab - med) * self.HUE, axis=1)))
-            return self.opt_cols[j], self.opt_names[j]
+            return cols[j], names[j]
         if p != "auto":
             col = self._color(p)
             self.paints.setdefault(p, col) if "+" in p and p not in self.opt_names else None
             return col, p
         # (...the paint or mix nearest the picture where the layer goes)
         med = np.median(self.ref.lab[M], axis=0) if M.any() else self.ref.lab[self.ref.face].mean(0)
-        opt_lab = oklab(dec(self.opt_cols))
+        opt_lab = oklab(dec(cols))
         # (...hue weighed up, as the areas are cut: by lightness alone a warm cream had matched a grey)
         j = int(np.argmin(np.linalg.norm((opt_lab - med) * self.HUE, axis=1)))
-        return self.opt_cols[j], self.opt_names[j]
+        return cols[j], names[j]
 
     # --- what each layer is ------------------------------------------------------------------------------------------------------
 
     def _base(self, L):
-        """THE BASE: one paint patted over the whole face with the sponge until it is whole."""
+        """THE BASE: one paint patted over the whole face with the sponge until it is whole - ONE POT'S PAINT, never a mix (feedback
+        0001, 2026-11-09: "The color we're painting doesn't seem to actually match the foundation it was sourced from"): a sponge is loaded
+        from one pot, and the show takes it there - 732687's base, olive and white mixed, had been laid a grey-green from the white pot."""
         M = self.ref.face
         # (...its paint the picture's where it is plainest - `sample`, a box or polygon - or as named)
-        col, name = self.paint_of(L, self._within(L.get("sample", "all")))
+        col, name = self.paint_of(L, self._within(L.get("sample", "all")), pure=True)
         self.base_col = col
         self.paints.setdefault(name, col)
         self.ground = name
@@ -197,13 +223,17 @@ class PlanPainter(Painter):
             if row % 2:
                 xs = xs[::-1]
             for x in xs:
-                c = np.array([x, y]) + self.rng.normal(0, r * 0.08, 2)
+                # (...each press where a hand puts it near the sweep's next place, never on it - [constant PAT_WANDER])
+                ang, off = self.rng.uniform(0, 2 * np.pi), step * PAT_WANDER * np.sqrt(self.rng.uniform())
+                c = np.array([x + off * np.cos(ang), y + off * np.sin(ang)])
                 if self._near_face(c, r * 0.7):
                     self._force(mk.sponge_print(self.cv, c, r, col, name, self.hand.load, 1.0, False, int(self.rng.integers(1 << 30))), c)
         # (...pressed again with its face wherever it is still thin, a cell at a time - its corner, a press for every gap, had made the
-        # base ten minutes long)
-        for _ in range(2):
-            thin = face & (ndimage.gaussian_filter(self.cv.alp, PX * 0.75) < 0.8)
+        # base ten minutes long - UNTIL IT IS EVEN (2026-11-09, the user: "the sponge was put down too early. There are still patchy
+        # areas all over the mask, where faint color is still showing through": twice over what was under 0.8, 732687's white base left
+        # 3.8% of the face between six and nine tenths, the skin's tan showing through it)
+        for _ in range(BASE_PASSES):
+            thin = face & (ndimage.gaussian_filter(self.cv.alp, PX * 0.75) < BASE_EVEN)
             # (...EACH THIN PATCH WHOLE, wherever it lies - a press at its middle, or, larger than a press, presses spread over it a press
             # apart: cut by a grid of cells, a gap across a cell's border had been pressed twice, or not at all)
             comps, n = ndimage.label(thin)
@@ -514,13 +544,20 @@ class PlanPainter(Painter):
         """THE WHOLE OF `M` WORKED OVER WITH A CLEAN BRUSH WHILE IT IS WET: pulls along its contours, each moving the paint under it about
         `reach` mm each way - the colors laid side by side run into each other and make new ones between."""
         tool = tool or ("blender" if "blender" in self.tools else "round")
+        dt = ndimage.distance_transform_edt(M)
+        # A CAREFUL HAND (feedback 0020, 2026-11-09: "You would want a hand that generally tries to keep its whole brush inside of the edge"):
+        # every pull's touch inside `M` - its outermost a whole touch in from the edge, where it had been six tenths of one, the fat brush seen
+        # sweeping the white past it - and a brush that fits where `M` is narrower than the fat one's touch
+        for smaller in ("blender", "flat", "round"):
+            if TOOLS[tool]["mm"] * 0.3 * PX <= dt.max() or TOOLS[tool]["mm"] <= TOOLS[smaller]["mm"] or smaller not in self.tools:
+                continue
+            tool = smaller
         self.hand.take(tool)
         self.hand.need("")
         half = TOOLS[tool]["mm"] * 0.3
-        dt = ndimage.distance_transform_edt(M)
         for _ in range(passes):
-            d = half * 0.6
-            while d * PX < dt.max():
+            d = half
+            while d * PX <= dt.max():
                 S = dt >= d * PX
                 ring = S & ~ndimage.binary_erosion(S)
                 ls = lines_mod._follow(lines_mod._thin(ring), np.ones(M.shape), np.zeros(M.shape + (3,)), np.ones(M.shape), PX)
@@ -528,9 +565,15 @@ class PlanPainter(Painter):
                     path = smooth_path(l["pts"], 1.5, closed=_is_closed(l["pts"]))
                     for chunk in _chunks(path, 40.0):
                         if len(chunk) >= 2:
-                            m = mk.soften(self.cv, chunk, half, reach, 0.9, "wet_blend", tool)
+                            # (...drawn as a hand draws it, now and then slipping past where it meant to go, dragging what it moves)
+                            m = mk.soften(self.cv, mk.slipped(chunk, half, self._pull_seed(chunk)), half, reach, 0.9, "wet_blend", tool,
+                                          drag=FEATHER_DRAG)
                             self.try_lay(m, self.ref.lab, -1e9)
                 d += half * 1.4
+
+    def _pull_seed(self, pts):
+        """A pull's own seed: where it begins and how many marks came before it - the same painting slips the same way every time."""
+        return len(self.laid) * 7919 + int(abs(float(pts[0][0])) * 37 + abs(float(pts[0][1])) * 101)
 
     def _smudge(self, L):
         """A LARGE SMUDGE, AS STRONG AS ASKED: a fat brush, clean and damp, worked over a band either side of a shape's edge (`band` mm)
@@ -567,7 +610,9 @@ class PlanPainter(Painter):
                 path = smooth_path(l["pts"], 2.0, closed=_is_closed(l["pts"]))
                 for chunk in _chunks(path, 45.0):
                     if len(chunk) >= 2:
-                        self.try_lay(mk.soften(self.cv, chunk, half, reach, strength, "smudge", tool), self.ref.lab, least)
+                        # (...as a hand draws it, dragging the color out past the edge it fades - [method _feather_area])
+                        self.try_lay(mk.soften(self.cv, mk.slipped(chunk, half, self._pull_seed(chunk)), half, reach, strength, "smudge", tool,
+                                               drag=SMUDGE_DRAG), self.ref.lab, least)
             d += half * 1.2
 
     def _tour_lines(self, ls):

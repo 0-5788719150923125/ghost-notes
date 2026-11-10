@@ -229,6 +229,20 @@ def _enclitic_aux(word: str) -> bool:
     return word.endswith(("'ve", "'d", "'re", "'m"))
 
 
+def _clitic(word: str) -> tuple:
+    """`word` split where the treebank splits it: (head, clitic) - "let's" ("let", "'s"), "don't" ("do", "n't"), "can't" ("ca",
+    "n't"), "I've" ("I", "'ve") - or (word, "") for none. English's clitics, by suffix, as `_enclitic_aux`'s are - but `'d`, which
+    is HAD or WOULD and which the tagger, split, calls a modal: "I'd forgotten I read it" then made `read` the bare form after it.
+    Whole, `_enclitic_aux` reads it as the auxiliary it most often is, as it did."""
+    w = word.replace("\u2019", "'")
+    if len(w) > 3 and w.lower().endswith("n't"):
+        return w[:-3], w[-3:]
+    for c in ("'s", "'re", "'ve", "'ll", "'m"):
+        if len(w) > len(c) and w.lower().endswith(c):
+            return w[: -len(c)], w[-len(c):]
+    return word, ""
+
+
 def _tense_at(tags: list, lower: list, j: int) -> str:
     """ "past", "present" or "" for the verb at `j` - a participle's tense read off its AUXILIARY.
 
@@ -580,6 +594,33 @@ class Homographs:
         if penn in VERB_TAGS and all(tags[j] in PRE_IMPERATIVE for j in range(wi)):
             return "VB", "no subject before it, imperative"
 
+        # 3a. A VERB JOINED ON WITH NO SUBJECT OF ITS OWN TAKES ITS FIRST CONJUNCT'S FORM. Right after a coordinator
+        #     (adverbs between), nothing but the verb before it shares that verb's subject and its form: "let's take their
+        #     words, and turn each one over, and read the side" is a run of commands, `read` as bare as `turn` - the
+        #     tagger had called it VBD and the reading said ɹˈɛd (732687, 2026-11-09: "It should have sounded like
+        #     'reed'"). The nearest verb before the coordinator is that conjunct's: bare is bare, a participle or a past
+        #     is past, a present is present. An unmarked VBP is no evidence, and leaves it to the rules after. Never an
+        #     -ed form, which its spelling marks.
+        if penn in VERB_TAGS and not lower[wi].endswith("ed"):
+            j = wi - 1
+            while j >= 0 and tags[j] in ("RB", "RBR", "RBS"):
+                j -= 1
+            if j >= 0 and tags[j] == "CC":
+                for k in range(j - 1, -1, -1):
+                    if tags[k] in (".", ":", "``", "''"):
+                        break
+                    if tags[k] == "MD":
+                        return "VB", "joined to a verb under modal %r" % lower[k]
+                    if tags[k] not in VERB_TAGS:
+                        continue
+                    if tags[k] == "VB":
+                        return "VB", "joined to bare %r" % lower[k]
+                    if tags[k] in PAST_TAGS:
+                        return "VBD", "joined to %s %r" % (tags[k], lower[k])
+                    if _tense_at(tags, lower, k) == "present":
+                        return FAMILY["VBP"], "joined to present %r" % lower[k]
+                    break
+
         # 3b. COORDINATION AGREES IN TENSE, and that outranks a past tag on a verb whose past is
         #     spelled like its present. Rule 4 below believes a marked tag, which is right when
         #     the SPELLING marks it - but `read`, `cut`, `set` and `wound` are spelled the same
@@ -711,11 +752,21 @@ class Homographs:
             # audit, reading the text as written, had it right.
             text = str(tok.get("cased") or tok.get("text", "")).strip()
             if text:
-                words.append(text)
-                # An authored [R EH1 D] arrives with `arpa` and outranks this
-                # whole file; a hyphenated token is two words to eSpeak and so
-                # has no single slot in a carrier. Both stay as context.
-                owner.append(ti if (not tok.get("arpa") and text.isalpha()) else -1)
+                # AS THE TAGGER LEARNED IT: a contraction is two words in the treebank it was trained on ("Let 's", "do
+                # n't"), and whole it is a word it never saw - "Let's open that file, then, and read their words back to
+                # them" came back `Let's/NNP`, its verb a name, and nothing told `read` it was a command's (2026-11-09,
+                # the user: it "used the wrong tense of 'read'. It should have sounded like 'reed'"). Split for tagging
+                # only; a contraction is context either way (it is not all letters), so nothing it holds is rewritten.
+                head, clitic = _clitic(text)
+                if clitic:
+                    words.extend((head, clitic))
+                    owner.extend((-1, -1))
+                else:
+                    words.append(text)
+                    # An authored [R EH1 D] arrives with `arpa` and outranks this
+                    # whole file; a hyphenated token is two words to eSpeak and so
+                    # has no single slot in a carrier. Both stay as context.
+                    owner.append(ti if (not tok.get("arpa") and text.isalpha()) else -1)
             punct = str(tok.get("punct", "")).strip()
             if punct:
                 words.append(punct)

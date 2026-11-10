@@ -32,6 +32,10 @@ uniform vec3 bristle_axis = vec3(0.0, 1.0, 0.0);
 uniform float bristle_len = 0.0;
 uniform vec3 bristle_bend = vec3(0.0);
 uniform float bristle_splay = 0.0;
+// ...LAID ON A LEVEL SURFACE they are pressed down onto (Bristles.laid): the share of each lying along it and the angle its arc turns
+// through to meet it - bowed the way bristle_bend points; none (y 0), bent as bristle_bend says. (Bristles.LAID_MOST)
+uniform vec2 bristle_lay = vec2(0.0);
+const float BRISTLE_LAID_MOST = 0.6;
 // (Bristles.CORE_IN, CORE_DOWN, CORE_WET)
 const float BRISTLE_CORE_IN = 1.0;
 const float BRISTLE_CORE_DOWN = 1.0;
@@ -146,17 +150,27 @@ void vertex() {
 		vec3 aside = bristle_bend - bristle_axis * dot(bristle_bend, bristle_axis);
 		float side = length(aside);
 		float hl = max(bristle_len, 1e-4);
-		float q = min(side / hl, 0.7);
-		float th = 2.0 * q;
-		for (int i = 0; i < 4; i++) {
-			float f = (1.0 - cos(th)) / max(th, 1e-4) - q;
-			float df = (th * sin(th) - (1.0 - cos(th))) / max(th * th, 1e-8);
-			th -= f / max(df, 1e-4);
-		}
-		th = max(th, 0.0);
-		if (th > 1e-4) {
-			float rr = hl / th;
-			VERTEX += bristle_axis * (rr * sin(th * s) - hl * s) + (aside / side) * rr * (1.0 - cos(th * s));
+		if (bristle_lay.y > 1e-4 && side > 1e-7) {
+			// ...OR LAID ON A SURFACE (Bristles.laid_at, the same arithmetic): an arc over what does not lie on it, then straight on
+			float th = bristle_lay.y;
+			float arc = 1.0 - clamp(bristle_lay.x, 0.0, BRISTLE_LAID_MOST);
+			float rr = hl * arc / th;
+			float u = min(s, arc) / arc;
+			float past = max(s - arc, 0.0) * hl;
+			VERTEX += bristle_axis * (rr * sin(th * u) + past * cos(th) - hl * s) + (aside / side) * (rr * (1.0 - cos(th * u)) + past * sin(th));
+		} else {
+			float q = min(side / hl, 0.7);
+			float th = 2.0 * q;
+			for (int i = 0; i < 4; i++) {
+				float f = (1.0 - cos(th)) / max(th, 1e-4) - q;
+				float df = (th * sin(th) - (1.0 - cos(th))) / max(th * th, 1e-8);
+				th -= f / max(df, 1e-4);
+			}
+			th = max(th, 0.0);
+			if (th > 1e-4) {
+				float rr = hl / th;
+				VERTEX += bristle_axis * (rr * sin(th * s) - hl * s) + (aside / side) * rr * (1.0 - cos(th * s));
+			}
 		}
 		VERTEX += radial * out_by;
 	}

@@ -11,6 +11,12 @@ class_name DispatchScreens
 ## as it changes") - the radar's sweep and the scope's trace move every frame, the terminal only as a key is struck. The
 ## medium hands each a state ([method show_terminal], [method show_radar], ...) and the set's glass shows its texture
 ## through `shaders/dispatch_screen.gdshader`.
+##
+## REDACTED WORDS ON THE TERMINAL ([constant DispatchScript.REDACT]) are drawn as written and then covered, over each run
+## of them, by a mosaic of flat hexagons - each the average of the pixels under it, read back off the terminal's own
+## picture (`shaders/dispatch_redact.gdshader`) - and the cursor is drawn over that. The hexagons are about a line high
+## and two characters wide, too coarse for a letter to survive, and they sit on a lattice laid from the start of each run,
+## so a run typed a key at a time grows by hexagons and the ones already there never shift.
 
 const TERM_SIZE := Vector2i(1120, 840)
 const RADAR_SIZE := Vector2i(512, 512)
@@ -31,6 +37,14 @@ const TERM_LINE := 33.0
 const TERM_MARGIN := Vector2(78.0, 70.0)
 ## THE COLORS: the terminal's phosphor, its dark; the radar's green.
 const PHOSPHOR := Color(0.62, 1.0, 0.68)
+## THE MOSAIC over redacted words: a hexagon's circumradius (a row of them a line high), and how far past the words it
+## reaches - sideways (px), and its height (in lines, about the line's middle: one, so a run on the next line meets it
+## and never overlaps it). As many runs as the shader holds at once.
+const MOSAIC_CELL := TERM_LINE * 0.5
+const MOSAIC_PAD := 4.0
+const MOSAIC_HEIGHT := 1.0
+const MOSAIC_MOST := 32
+const MOSAIC_SHADER := "res://shaders/dispatch_redact.gdshader"
 const SCREEN_DARK := Color(0.008, 0.016, 0.01)
 const RADAR_GREEN := Color(0.32, 1.0, 0.42)
 
@@ -46,6 +60,8 @@ var dial: SubViewport
 var faces: Array = []             # the phone screens' viewports
 var _words := {}                  # a word on tape -> its viewport
 var _term: Face
+var _mosaic: Mosaic
+var _cursor: Face
 var _radar: Face
 var _scope: Face
 var _paper: Face
@@ -66,6 +82,10 @@ func build(labels: PackedStringArray) -> void:
 		terminal = _vp(TERM_SIZE, true)
 		_term = Face.new(self, "terminal")
 		terminal.add_child(_term)
+		_mosaic = Mosaic.new()
+		_term.add_child(_mosaic)
+		_cursor = Face.new(self, "cursor")
+		_term.add_child(_cursor)
 		radar = _vp(RADAR_SIZE, true)
 		_radar = Face.new(self, "radar")
 		radar.add_child(_radar)
@@ -139,9 +159,35 @@ func _vp(size: Vector2i, live: bool) -> SubViewport:
 # --- what the medium hands them ---------------------------------------------------------------------------------------
 
 ## THE TERMINAL as [param st] has it: `{lines: PackedStringArray, asleep, cursor (bool), t}` - drawn again only when it
-## changed.
+## changed: its words, the mosaic over what is redacted, the cursor.
 func show_terminal(st: Dictionary) -> void:
+	if st == _term.state:
+		return
+	_cursor.state = st
+	_cursor.queue_redraw()
+	_mosaic.cover([] if bool(st.get("asleep", true)) else redactions(st.get("lines", PackedStringArray())))
 	_show(terminal, _term, st)
+
+
+## WHERE THE MOSAIC LIES over the terminal's [param lines] (its lines from the top, as [method show_terminal] is handed
+## them): a Rect2 (px) over each run of redacted characters, a little wider than the words and [constant MOSAIC_HEIGHT]
+## lines high about the line's middle.
+func redactions(lines: PackedStringArray) -> Array:
+	var out: Array = []
+	for k in lines.size():
+		var drawn := DispatchScript.unredacted(String(lines[k]))
+		var text := String(drawn["text"])
+		var mid := TERM_MARGIN.y + TERM_LINE * float(k) - float(TERM_FONT) * 0.32
+		for sp in drawn["spans"]:
+			var run: Vector2i = sp
+			var x0 := TERM_MARGIN.x + _advance(text.substr(0, run.x)) - MOSAIC_PAD
+			var x1 := TERM_MARGIN.x + _advance(text.substr(0, run.y)) + MOSAIC_PAD
+			out.append(Rect2(x0, mid - TERM_LINE * MOSAIC_HEIGHT * 0.5, x1 - x0, TERM_LINE * MOSAIC_HEIGHT))
+	return out
+
+
+func _advance(text: String) -> float:
+	return _mono.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, TERM_FONT).x if not text.is_empty() else 0.0
 
 
 ## THE RADAR: `{t (the sweep's clock), blip: {at: Vector2, label, since}, trail: [{at, age}], ping (seconds into the last
@@ -176,6 +222,37 @@ func _show(vp: SubViewport, f: Face, st: Dictionary) -> void:
 
 # --- the faces --------------------------------------------------------------------------------------------------------
 
+## THE MOSAIC over the terminal's redacted words: it draws its rects, and its shader fills each with flat hexagons, each the
+## average of the terminal's pixels under it (`shaders/dispatch_redact.gdshader`).
+class Mosaic extends Node2D:
+	var rects: Array = []
+
+	func _init() -> void:
+		name = "Mosaic"
+		var m := ShaderMaterial.new()
+		m.shader = load(DispatchScreens.MOSAIC_SHADER)
+		m.set_shader_parameter("cell", DispatchScreens.MOSAIC_CELL)
+		material = m
+
+	## Cover [param r] (Rect2s, px) - the shader's array pushed whole, every slot written.
+	func cover(r: Array) -> void:
+		if r == rects:
+			return
+		rects = r
+		var packed := PackedVector4Array()
+		packed.resize(DispatchScreens.MOSAIC_MOST)
+		for i in mini(r.size(), DispatchScreens.MOSAIC_MOST):
+			var q: Rect2 = r[i]
+			packed[i] = Vector4(q.position.x, q.position.y, q.end.x, q.end.y)
+		(material as ShaderMaterial).set_shader_parameter("rects", packed)
+		(material as ShaderMaterial).set_shader_parameter("count", mini(r.size(), DispatchScreens.MOSAIC_MOST))
+		queue_redraw()
+
+	func _draw() -> void:
+		for q in rects:
+			draw_rect(q, Color.WHITE)
+
+
 ## ONE FACE, drawn by its kind.
 class Face extends Node2D:
 	var screens: DispatchScreens
@@ -189,6 +266,7 @@ class Face extends Node2D:
 	func _draw() -> void:
 		match kind:
 			"terminal": screens._draw_terminal(self, state)
+			"cursor": screens._draw_cursor(self, state)
 			"radar": screens._draw_radar(self, state)
 			"scope": screens._draw_scope(self, state)
 			"paper": screens._draw_paper(self, state)
@@ -201,8 +279,8 @@ class Face extends Node2D:
 			"keypad": screens._draw_keypad(self)
 
 
-## THE TERMINAL: its lines from the top, a block cursor after the last when it is on; asleep, dark (2026-11-06, the
-## author: the cover's star "was in the source image, but we do not need it in this one").
+## THE TERMINAL: its lines from the top, redacted words drawn as themselves for the mosaic to cover; asleep, dark
+## (2026-11-06, the author: the cover's star "was in the source image, but we do not need it in this one").
 func _draw_terminal(c: CanvasItem, st: Dictionary) -> void:
 	var size := Vector2(TERM_SIZE)
 	c.draw_rect(Rect2(Vector2.ZERO, size), SCREEN_DARK)
@@ -211,13 +289,21 @@ func _draw_terminal(c: CanvasItem, st: Dictionary) -> void:
 	var lines: PackedStringArray = st.get("lines", PackedStringArray())
 	var y := TERM_MARGIN.y
 	for line in lines:
-		c.draw_string(_mono, Vector2(TERM_MARGIN.x, y), String(line), HORIZONTAL_ALIGNMENT_LEFT, -1, TERM_FONT, PHOSPHOR)
+		var text := String(DispatchScript.unredacted(String(line))["text"])
+		c.draw_string(_mono, Vector2(TERM_MARGIN.x, y), text, HORIZONTAL_ALIGNMENT_LEFT, -1, TERM_FONT, PHOSPHOR)
 		y += TERM_LINE
-	if bool(st.get("cursor", false)):
-		var last := String(lines[lines.size() - 1]) if not lines.is_empty() else ""
-		var cw := _mono.get_string_size("M", HORIZONTAL_ALIGNMENT_LEFT, -1, TERM_FONT).x
-		var cy := TERM_MARGIN.y + TERM_LINE * float(maxi(lines.size() - 1, 0))
-		c.draw_rect(Rect2(TERM_MARGIN.x + cw * float(last.length()) + 2.0, cy - float(TERM_FONT) * 0.78, cw * 0.9, float(TERM_FONT) * 0.95), PHOSPHOR)
+
+
+## THE TERMINAL'S CURSOR, a block after the last line when it is on - over the mosaic, so typing a redacted word never
+## hides it.
+func _draw_cursor(c: CanvasItem, st: Dictionary) -> void:
+	if bool(st.get("asleep", true)) or not bool(st.get("cursor", false)):
+		return
+	var lines: PackedStringArray = st.get("lines", PackedStringArray())
+	var last := String(lines[lines.size() - 1]) if not lines.is_empty() else ""
+	var cw := _mono.get_string_size("M", HORIZONTAL_ALIGNMENT_LEFT, -1, TERM_FONT).x
+	var cy := TERM_MARGIN.y + TERM_LINE * float(maxi(lines.size() - 1, 0))
+	c.draw_rect(Rect2(TERM_MARGIN.x + cw * float(last.length()) + 2.0, cy - float(TERM_FONT) * 0.78, cw * 0.9, float(TERM_FONT) * 0.95), PHOSPHOR)
 
 
 ## THE RADAR: dark green glass, its range rings and cross, the sweep going round with its glow fading behind it, the desk

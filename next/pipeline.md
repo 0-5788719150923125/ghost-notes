@@ -34,8 +34,7 @@ every painting and reading. And ⟳ on a step whose inputs were not made did not
 **One card, last in the deck.** `PipelineCard` (`src/ui/`) is the last card on the panel, in the one scroll, and its title bar
 lies on the panel's bottom pile until it is scrolled to - so it is always in sight and one click away (`PanelDeck`,
 next/panel_deck.md). (Built pinned under the scroll first, the same day. The user: "It's weird that there are now two panels on the
-left ... They should all be scrollable".) It folds to its title bar like any card, and Generate, Stop and the tally work wherever
-that bar lies. No component, no "+": it appears when something on the note has something to make, and is gone when nothing does.
+left ... They should all be scrollable".) Generate, Stop and the tally are on its title bar, and work wherever that bar lies. No component, no "+": it appears when something on the note has something to make, and is gone when nothing does.
 
 **One way in.** A card answers `pipeline() -> PipelineSection` (`src/notes/`). `ReadingPanel._offer_pipeline` adds it. That
 is the whole contract: no card names another, none is told where it stands, and which card "hosts" what no longer

@@ -16,18 +16,24 @@ class_name Bristles
 
 ## THE KINDS of tuft, each how its hairs gather: `point` how far toward the middle the tips gather (1 all the way), `spread`
 ## how far out across they fan, `dome` how much shorter the outer hairs are, `bulge` how far out the middle of each hair
-## bows, `flat` how thin it is across its width when no `thick` is written, and its hairs.
+## bows, `flat` how thin it is across its width when no `thick` is written, and its hairs - and `bends`, the share of a brush's bend and
+## splay its hairs take ([method target]): a brush's all of it; a cotton tip's, wound tight on its stick, a little.
+## A COTTON SWAB'S TIP IS A TUFT TOO (feedback 0020, 2026-11-09: "hands can make mistakes, and spill over the edge ... we might be able to
+## wipe it away with a cotton swab (if the mistake was small, or the color was faint)"): short, dense and rounded, barely bending - a tool
+## that lays no paint of its own and lifts what is fresh ([method TableProducer._table_tool] gives it only the painter's swab).
 const KINDS := {
 	"round": {"label": "Round", "blurb": "gathered to a soft point - a round brush, for dots, details and filling small shapes",
-		"point": 0.8, "spread": 1.0, "dome": 0.12, "bulge": 0.12, "flat": 1.0, "hairs": 46},
+		"point": 0.8, "spread": 1.0, "dome": 0.12, "bulge": 0.12, "flat": 1.0, "hairs": 46, "bends": 1.0},
 	"liner": {"label": "Liner", "blurb": "long, thin and pointed - a liner or a script brush, for long fine lines in one stroke",
-		"point": 0.9, "spread": 1.0, "dome": 0.08, "bulge": 0.05, "flat": 1.0, "hairs": 22},
+		"point": 0.9, "spread": 1.0, "dome": 0.08, "bulge": 0.05, "flat": 1.0, "hairs": 22, "bends": 1.0},
 	"flat": {"label": "Flat", "blurb": "a flat chisel edge, wide one way and thin the other - a flat or a shader brush, for laying color in broad strokes",
-		"point": 0.0, "spread": 1.0, "dome": 0.02, "bulge": 0.04, "flat": 0.3, "hairs": 64},
+		"point": 0.0, "spread": 1.0, "dome": 0.02, "bulge": 0.04, "flat": 0.3, "hairs": 64, "bends": 1.0},
 	"fan": {"label": "Fan", "blurb": "thin hairs spread wide in a fan - for sweeping powder away and laying soft texture",
-		"point": 0.0, "spread": 2.6, "dome": 0.18, "bulge": 0.0, "flat": 0.2, "hairs": 48},
+		"point": 0.0, "spread": 2.6, "dome": 0.18, "bulge": 0.0, "flat": 0.2, "hairs": 48, "bends": 1.0},
 	"dome": {"label": "Dome", "blurb": "full and soft, its top rounded - a blending, powder or kabuki brush, for softening edges and dusting",
-		"point": -0.25, "spread": 1.0, "dome": 0.38, "bulge": 0.28, "flat": 1.0, "hairs": 90},
+		"point": -0.25, "spread": 1.0, "dome": 0.38, "bulge": 0.28, "flat": 1.0, "hairs": 90, "bends": 1.0},
+	"bud": {"label": "Bud", "blurb": "a cotton swab's tip - short, dense and rounded, barely bending - for lifting a small or faint spill of fresh paint",
+		"point": 0.55, "spread": 1.0, "dome": 0.3, "bulge": 0.6, "flat": 1.0, "hairs": 140, "bends": 0.15},
 }
 ## The most hairs a tuft has, and how many points round one hair's section and along it.
 const MOST_HAIRS := 140
@@ -76,6 +82,17 @@ const SPLAY_LEANED := 0.25
 ## A HAIR BENT ASIDE KEEPS ITS LENGTH: it is bent as an arc of a circle ([method bent_at]), its tip at most this share of its length
 ## aside - about as far as an arc can take it (the most is 0.72, half way round and more).
 const ASIDE_MOST := 0.7
+## A BRUSH PRESSED DOWN ONTO A LEVEL SURFACE LAYS ITS HAIRS ON IT, ON THEIR SIDE (feedback 0002, 2026-11-09: "It is not enough for the very
+## tip to touch: we need the bottom 30% to 50% of bristles touching, laying on their side"): each hair bows down from its root as an arc
+## of a circle until it runs along the surface, and the rest of it lies there straight ([method laid], [method laid_at]) - as
+## prop_common.gdshaderinc draws it (`bristle_lay`). Bent only until its tip touched, as an arc whose tip was still pointing into the
+## surface, a brush pushed onto its paint had a millimeter of its point on it. At most this share of a hair lies on the surface.
+const LAID_MOST := 0.6
+
+
+## How far a tuft of kind [param kind] bends, of a brush's ([constant KINDS]' `bends`).
+static func bends_of(kind: String) -> float:
+	return float((KINDS.get(kind, KINDS["round"]) as Dictionary)["bends"])
 
 
 ## Whatever an agent wrote for a tuft, made safe (sizes centimeters).
@@ -85,8 +102,8 @@ static func sanitize(p: Dictionary, out: Dictionary) -> void:
 		kind = "round"
 	var row: Dictionary = KINDS[kind]
 	out["kind"] = kind
-	out["length"] = Props._num(p.get("length"), 2.2 if kind != "liner" else 2.8, 0.3, 12.0)
-	out["width"] = Props._num(p.get("width"), 0.7 if kind != "dome" else 2.2, 0.05, 10.0)
+	out["length"] = Props._num(p.get("length"), {"liner": 2.8, "bud": 0.9}.get(kind, 2.2), 0.3, 12.0)
+	out["width"] = Props._num(p.get("width"), {"dome": 2.2, "bud": 0.35}.get(kind, 0.7), 0.05, 10.0)
 	out["thick"] = Props._num(p.get("thick"), float(out["width"]) * float(row["flat"]), 0.03, 10.0)
 	out["hairs"] = int(Props._num(p.get("hairs"), float(row["hairs"]), 6.0, float(MOST_HAIRS)))
 
@@ -200,7 +217,7 @@ static func _core(g: Props.Tris, hw: float, hd: float, L: float, row: Dictionary
 ## brush's tip, meters a second), and folded aside and splayed as hard as it is [param pressed] (0-1) - a brush [param length]
 ## meters long whose hairs run back to the handle along [param axis] (unit, the table's space), its tip going [param ahead] along
 ## the surface as it is pressed (the way from where the handle leans over it to the tip; none for a brush held upright, or off a
-## surface). Returns [bend, splay].
+## surface), its hairs taking [param bends] of a brush's bend and splay ([constant KINDS]' `bends`). Returns [bend, splay].
 ##
 ## Splayed as far as it is upright ([constant SPLAY_LEAN]): pressed straight down it mushrooms, leaned it bends.
 ##
@@ -209,7 +226,9 @@ static func _core(g: Props.Tris, hw: float, hd: float, L: float, row: Dictionary
 ## pressed brush drew its hairs up into it, 6 mm off the face it painted (feedback 0029: "that brush is not touching the mask"), and
 ## a brush lifted off pulled its hairs out after it to meet the face. Only what goes across the hairs drags them; pressed, they fold
 ## the way the tip goes along the surface, and bent either way they keep their length ([method bent_at]).
-static func target(velocity: Vector3, pressed: float, length: float, axis: Vector3, ahead := Vector3.ZERO) -> Array:
+static func target(velocity: Vector3, pressed: float, length: float, axis: Vector3, ahead := Vector3.ZERO, bends := 1.0) -> Array:
+	# (...as far as its kind's hairs bend at all - [constant KINDS]' `bends`: a cotton tip a little)
+	pressed *= bends
 	var a := axis.normalized()
 	var across := velocity - a * velocity.dot(a)
 	var speed := across.length()
@@ -241,6 +260,55 @@ static func bent_at(s: float, bend: float, length: float) -> Vector2:
 		return Vector2(0.0, length * s)
 	var r := length / th
 	return Vector2(r * (1.0 - cos(th * s)), r * sin(th * s))
+
+
+## HOW A HAIR [param length] meters long LIES ON A LEVEL SURFACE its root is [param over] meters over, pointing [param down] into it (the
+## cosine of its angle off straight down at it): `Vector2(the share of it lying along the surface, the angle (radians) its arc turns
+## through)`. Out of its reach, none. Reaching it, bent only as far as brings its tip onto it - the arc turning further the lower its
+## root, until its tip runs along the surface; pushed down further than that, more of it lies there ([constant LAID_MOST] at most).
+static func laid(over: float, down: float, length: float) -> Vector2:
+	var c := clampf(down, 0.0, 1.0)
+	if length <= 0.0 or over >= length * c:
+		return Vector2.ZERO
+	var a := acos(c)
+	var top := PI * 0.5 - a
+	if top < 1e-3:
+		return Vector2.ZERO
+	var sa := sin(a)
+	var o := maxf(over, 0.0)
+	# (an arc of angle th drops its tip length * (sin(a + th) - sin(a)) / th under its root, less the further it turns)
+	if o >= length * (1.0 - sa) / top:
+		var lo := 0.0
+		var hi := top
+		for _i in 24:
+			var mid := (lo + hi) * 0.5
+			if length * (sin(a + mid) - sa) / mid > o:
+				lo = mid
+			else:
+				hi = mid
+		return Vector2(0.0, (lo + hi) * 0.5)
+	return Vector2(minf(1.0 - o * top / (length * (1.0 - sa)), LAID_MOST), top)
+
+
+## How far over a level surface the root of a hair [param length] long, pointing [param down] into it ([method laid]), stands when
+## [param share] of it lies along the surface (meters).
+static func lay_over(down: float, length: float, share: float) -> float:
+	var a := acos(clampf(down, 0.0, 1.0))
+	return length * (1.0 - clampf(share, 0.0, LAID_MOST)) * (1.0 - sin(a)) / maxf(PI * 0.5 - a, 1e-3)
+
+
+## A POINT [param s] (0-1) up a hair [param length] long laid as [param lay] says ([method laid]): (how far aside, how far along it from
+## its root) - AS prop_common.gdshaderinc DRAWS IT (`bristle_lay`, the same arithmetic): an arc of a circle from the root over the share
+## that does not lie on the surface, turning through `lay.y`, and the rest straight on from its end.
+static func laid_at(s: float, lay: Vector2, length: float) -> Vector2:
+	var th := lay.y
+	if th < 1e-4:
+		return Vector2(0.0, length * s)
+	var arc := 1.0 - clampf(lay.x, 0.0, LAID_MOST)
+	var r := length * arc / th
+	var u := minf(s, arc) / arc
+	var past := maxf(s - arc, 0.0) * length
+	return Vector2(r * (1.0 - cos(th * u)) + past * sin(th), r * sin(th * u) + past * cos(th))
 
 
 ## The angle an arc turns through (radians) whose end is [param q] of its length aside of where it began: (1 - cos th) / th = q, by

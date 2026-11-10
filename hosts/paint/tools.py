@@ -48,6 +48,7 @@ BEHAVIORS = {
     "sponge_blend": {"speed": 0, "down": 0.12, "up": 0.12, "hold": 0.06, "for": "an edge softened in stipple"},
     "smudge":       {"speed": 10, "down": 0.3, "up": 0.25, "for": "a soft smear"},
     "lift":         {"speed": 10, "down": 0.25, "up": 0.2, "for": "paint taken off: a highlight, a correction"},
+    "blot":         {"speed": 0, "down": 0.2, "up": 0.2, "hold": 0.3, "for": "a small or faint spill blotted off with a cotton swab"},
 }
 
 TRAVEL = 60.0         # mm/s between marks, never quicker than TRAVEL_LEAST

@@ -56,6 +56,16 @@ class_name DispatchScript
 ##
 ## A typed block and a session are added under what the terminal shows; a shown one replaces it.
 ##
+## REDACTED WORDS, inside a shown block or a session: `NAME ........ <!-- redact: DOE, JANE -->`. The words are put up as
+## any others, and the terminal draws them under a mosaic of flat hexagons, each the average color of what lies under it
+## ([method DispatchScreens.redactions], `shaders/dispatch_redact.gdshader`) - as a video blurs a name, never a word put in
+## its place. (2026-11-09, the user: "I do not simply want to replace words with $REDACTED ... I would use that sort of
+## hexagonal approach, which segments a region into large hexagonal shapes, and makes those shapes use single-colors,
+## matching the pixels we just blurred.") A redacted character travels as itself moved into a private plane of Unicode
+## ([constant REDACT_BASE]), so typing, wrapping, scrolling and a strike count it as the one character it is; the screens
+## take it back out ([method unredacted]). A typed block is said, and the voice cannot say what is hidden: there the mark
+## is warned of and its words left out.
+##
 ## THE DESK IS SEEN FIRST (2026-11-06, the author: "Right when it starts, we've barely had a moment to look at the scene
 ## before we're zooming-in on the radar"): the voice opens on [constant OPENING] seconds of the desk at rest, the camera
 ## home, before any action or word - a breath, never a silence (the same evening: "a solid 30 seconds of silence at the
@@ -79,6 +89,10 @@ const MARK := "^\\s*<!--\\s*(call|/\\s*call|ring|text|reply|ping|moving|sound|st
 const IMAGE := "^\\s*<!--\\s*image\\s*(?:\\(\\s*([a-z]+)\\s*\\))?\\s*:\\s*([\\s\\S]*?)\\s*-->\\s*$"
 const FENCE_OPEN := "^\\s*```\\s*(type|screen|terminal)\\s*$"
 const FENCE_CLOSE := "^\\s*```\\s*$"
+## Words redacted inside a shown block or a session: group 1 the words.
+const REDACT := "<!--\\s*redact\\s*:\\s*([\\s\\S]*?)\\s*-->"
+## A redacted character is itself moved up by this much (Supplementary Private Use Area-A, U+F0000-U+FFFFD).
+const REDACT_BASE := 0xF0000
 ## Own-line marks the VOICE reads: a hesitation, a delivery.
 const VOICE_LINE := "^\\s*(?:<!--\\s*(?:hesitation|delivery)\\b[\\s\\S]*?-->\\s*)+$"
 const HESITATION := Manuscript.HESITATION
@@ -376,6 +390,42 @@ static func shown_of(text: String) -> String:
 	return "\n".join(lines)
 
 
+## [param text] WITH ITS REDACT MARKS AS THE TERMINAL HOLDS THEM: each mark's words in its place, every character of them
+## moved up into the private plane ([constant REDACT_BASE]) - the same length, so it is typed, wrapped and scrolled as
+## written (a redacted space is no place to wrap, so a short redacted span stays on one line).
+static func redacted(text: String) -> String:
+	var out := ""
+	var at := 0
+	for m in _rx(REDACT).search_all(text):
+		out += text.substr(at, m.get_start() - at)
+		var words := m.get_string(1)
+		for i in words.length():
+			var c := words.unicode_at(i)
+			out += char(REDACT_BASE + c) if c < 0xFFFE else words[i]
+		at = m.get_end()
+	return out + text.substr(at)
+
+
+## A LINE AS DRAWN: `{text, spans: [Vector2i(c0, c1)]}` - every redacted character back as itself, and the runs of them,
+## by column ([method redacted]).
+static func unredacted(line: String) -> Dictionary:
+	var out := ""
+	var spans: Array = []
+	var open := -1
+	for i in line.length():
+		var c := line.unicode_at(i)
+		var hidden := c >= REDACT_BASE and c < REDACT_BASE + 0xFFFE
+		if hidden and open < 0:
+			open = i
+		elif not hidden and open >= 0:
+			spans.append(Vector2i(open, i))
+			open = -1
+		out += char(c - REDACT_BASE) if hidden else line[i]
+	if open >= 0:
+		spans.append(Vector2i(open, line.length()))
+	return {"text": out, "spans": spans}
+
+
 ## WHAT THE VOICE SAYS OF A TYPED BLOCK [param shown]: its lines run together, and A BLOCK SET ALL IN CAPITALS said in
 ## sentence case - every word of two capitals or more lowered, a sentence's first raised again. The voice reads a short
 ## word in capitals as an initialism ([constant TextNorm.INITIALISMS]: "CONTAIN IT." was said "contain eye tee"), and a
@@ -561,7 +611,7 @@ static func parse(body: String) -> Dictionary:
 					_act(actions, gap, pending, spoken.size(), {"kind": "picture", "screen": where,
 						"key": Manuscript.image_key(prompt), "prompt": prompt}, PICTURE, PICTURE)
 			"terminal":
-				var steps := session_of(String(blk["text"]))
+				var steps := session_of(redacted(String(blk["text"])))
 				if steps.is_empty():
 					continue
 				var plan := session_plan(steps)
@@ -571,7 +621,9 @@ static func parse(body: String) -> Dictionary:
 			"type", "screen":
 				var kind := String(blk["kind"])
 				var raw := String(blk["text"])
-				var shown := shown_of(raw) if kind == "type" else raw
+				var shown := shown_of(raw) if kind == "type" else redacted(raw)
+				if kind == "type" and _rx(REDACT).search(raw) != null:
+					warnings.append("redact: a typed block is said, so its redacted words are left out (redact in a screen or terminal block)")
 				if kind == "screen":
 					var drawn := SCREEN_LINE * float(raw.split("\n").size())
 					_act(actions, gap, pending, spoken.size(), {"kind": "screen", "text": shown}, SCREEN_REST + drawn, SCREEN_REST + drawn)
@@ -852,7 +904,8 @@ static func session_plan(steps: Array) -> Dictionary:
 			t += wait
 			for c in typed.length():
 				var j := DispatchSounds.hash01(hash([typed, k]), c) * 2.0 - 1.0
-				t += KEY_EACH * (1.0 + KEY_JITTER * j) * (1.35 if typed[c] == " " else 1.0)
+				var space := typed[c] == " " or typed.unicode_at(c) == REDACT_BASE + 32
+				t += KEY_EACH * (1.0 + KEY_JITTER * j) * (1.35 if space else 1.0)
 				keys.append(t)
 			t += ENTER_AFTER
 			enter = t

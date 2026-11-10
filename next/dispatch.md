@@ -64,8 +64,8 @@ word; the desk is described in the note's own top-level `desk:` block (the autho
 
 As `MEDIUM.md` has them, with the changes above: `call:`, `/call`, `/call: X`, `ring:`, `text: X | words`, `ping:`,
 `sound:`, `static:`, `print`, `sleep`, `off:`, `look:`, `lift:`, `switch:`, `live:`, `image (feed|satellite|tv|full)`,
-`/image`, fenced ` ```type `, ` ```screen ` and ` ```terminal ` blocks, `strike` after a typed block, and the voice's own (`speaker`,
-`hesitation`, `delivery`). `act:` stays a note.
+`/image`, fenced ` ```type `, ` ```screen ` and ` ```terminal ` blocks, `strike` after a typed block, `<!-- redact: words -->`
+inside a shown block or a session, and the voice's own (`speaker`, `hesitation`, `delivery`). `act:` stays a note.
 
 ## Files (`src/dispatch/`, a folder after `letter`)
 
@@ -75,7 +75,7 @@ As `MEDIUM.md` has them, with the changes above: `call:`, `/call`, `/call: X`, `
 | `dispatch.gd` | `DispatchMedium`: the world, the schedule (a [ReadingFollower]), the state of every thing at a moment, the camera, the opening, the pictures, the captions |
 | `dispatch_set.gd` | `DispatchSet`: the desk and everything on it, built - terminal, keyboard, phones, radar, receiver and scope, printer and its heap, the three screens, the switch, the chart, the handbook, the things, the chair, the room |
 | `dispatch_roots.gd` | `DispatchRoots`: the roots grown and meshed |
-| `dispatch_screens.gd` | the 2D faces drawn into the screens: the terminal, the radar, the scope, a phone's two screens, the receiver's dial |
+| `dispatch_screens.gd` | the 2D faces drawn into the screens: the terminal (its redacted words under a hexagon mosaic, `shaders/dispatch_redact.gdshader`), the radar, the scope, a phone's two screens, the receiver's dial |
 | `dispatch_sounds.gd` | `DispatchSounds`: every sound of the desk, a function of show time |
 | `dispatch_format.gd`, `dispatch_walk.gd` | its own rows on the Medium card (the desk's number) and what they hand the reading; the pictures are the note's Pictures card's (next/pictures.md), `DispatchMedium.pictures_in` saying which marks they are |
 
@@ -88,7 +88,8 @@ the stream and the export, the band in [VoiceFX].
 text, the actions), `tests/dispatch/dispatch_check.gd` (the medium built headless and played through on rehearsed
 words: what is in hand, on the terminal and on the radar at moments, the camera's target), `tests/dispatch/
 dispatch_sounds_check.gd` (the jet's pitch falls, nothing is louder than the voice, the two storms differ, the same
-twice), `tests/voice/heard_check.gd` (the band, the plan, the join's marks); probe `tests/dispatch/
+twice), `tests/voice/heard_check.gd` (the band, the plan, the join's marks), `tests/dispatch/dispatch_redact_check.gd`
+(GPU: every hexagon of the mosaic one color, the average of the words under it); probe `tests/dispatch/
 dispatch_look_probe.gd` (frames to look at).
 
 ## Status
@@ -264,3 +265,27 @@ Open:
 - The paper heap on the floor reads only dimly; the printed lines on the paper are small.
 - Agents dressing the desk from the note's `desk:` block (phase two).
 - A live plan made again in about 20 ms a sentence could be made cheaper (the letter's indexing).
+
+### Redacted words, and places made generic (2026-11-09)
+
+The author, of the episode: "this episode gives too much information away, such as my real name and address, the
+Safeway, Chandler Ave, etc. ... it removes the story from the viewer, who might be able to otherwise imagine themselves
+in the target's shoes." And: "I do not simply want to replace words with $REDACTED ... I would create a new marker, to
+blur certain regions of text: akin to how a YouTube video might blur sensitive information ... I would use that sort of
+hexagonal approach, which segments a region into large hexagonal shapes, and makes those shapes use single-colors,
+matching the pixels we just blurred."
+
+- **`<!-- redact: words -->` inside a ` ```screen ` or ` ```terminal ` block**: the words are put up as written and the
+  terminal covers each run of them with flat pointy-top hexagons about a line high and two characters wide, each the
+  average of the pixels under it (the terminal's own picture read back by `shaders/dispatch_redact.gdshader`). The
+  lattice is laid from each run's left edge, so a redacted command typed at the prompt grows by hexagons and those
+  already there keep their color; the cursor is drawn over the mosaic. A redacted character travels in the terminal's
+  text as itself moved into Unicode's private plane (`DispatchScript.REDACT_BASE`), so typing, wrapping, scrolling and a
+  strike count it as one character and nothing downstream changed. A typed block is said aloud, so a redact there is
+  warned of and its words left out.
+- **The episode**: the search (`search` and its three names, and the first one's city), the record's name, address and
+  plate are redacted; "Mine's the one in Bend" became "Mine's the first one", "onto Chandler" "onto the avenue", the
+  Safeway "the grocery store" in what is said and "the store" on the radar (a shorter label than before).
+
+Looked at: the mosaic in the gate's render, and the record and the search on the desk's glass in the look probe.
+Open: the author's eye on the mosaic's size and how dim it reads through the CRT's glass.

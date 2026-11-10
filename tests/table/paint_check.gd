@@ -2,7 +2,7 @@ extends SceneTree
 
 ## The gate of THE PAINTED SURFACE ([FaceForm], [Bristles], [Skins], [TablePaint]; next/painted_surface.md), with no renderer.
 ##
-##   timeout 900 godot --headless --path . --script res://tests/table/paint_check.gd   (over 300 s: a puff, a sponge and a fill each held and looked at through a whole act, the sponge's every drawn point)
+##   timeout 1800 godot --headless --path . --script res://tests/table/paint_check.gd   (over 300 s - about 20 minutes since the nose's clearance checks (feedback 0003): a puff, a sponge and a fill each held and looked at through a whole act, the sponge's every drawn point)
 ##
 ## - A MASK IS A FACE SEEN FROM THE FRONT: its nose stands out its depth, its closed eyes lie in their sockets, a point outside its
 ##   outline has no height, and its landmarks are where its features are. The control: the rim's height is nothing.
@@ -22,7 +22,9 @@ extends SceneTree
 ## - A TOOL PAINTS ON THE SURFACE (the `paint` law, on a mask on its stand): fetched from its jar, the liner's tip is on the face, within
 ##   a millimeter, all the while it draws; lifted between strokes; back in its jar when the act is done - and the sponge stippling the
 ##   base is pressed onto the face too. Each element is laid while its act runs, the base before the line drawn over it. The control:
-##   the liner's tip at rest is far from the face. NOTHING IS LIFTED ALONG A STROKE IT PRESSES (feedback 0019, 0021: a liner 11 mm and a
+##   the liner's tip at rest is far from the face. AN ELEMENT IS TAKEN FROM THE POT ITS DESIGN NAMES (feedback 0001: a base went back
+##   for more to the amber pot, the cream nearest its color, from the white it named); the control, naming none, the nearest.
+##   NOTHING IS LIFTED ALONG A STROKE IT PRESSES (feedback 0019, 0021: a liner 11 mm and a
 ##   flat brush 17 mm over a mask's rim, painting in the air); the control, the lifts between strokes, are found.
 ##   ITS HAIRS ARE BENT ONTO THE FACE wherever it is pressed (a forehead's stars painted with nothing, a lower lip's outline drawn up on
 ##   the lip): the bent tip within a touch of it at nine places in ten over the whole face; the control, the bend counted along the
@@ -70,7 +72,9 @@ extends SceneTree
 ##   BEGUN, IT KEEPS ITS LENGTH when a later plan moves the word that cues the next act (each sentence had moved every stroke, and the
 ##   bake went back to the act's start - 75 of 120 s waited, live); the control, planned afresh, ends at the word heard. ONE HAND PAINTS
 ##   ONE THING AT A TIME: a paint act cued while another is still painting waits for it; the control, a change of the water cued at the
-##   same word, begins on it.
+##   same word, begins on it. A TOOL KEPT IN HAND from one act into the next is put back where it was taken from (feedback 0004: a brush
+##   left "floating near the eye" while another worked): back in its jar while the sponge works, and so by the copy of its entry the
+##   physics holds it by; the control, put back where its second act found it, it is left in the air.
 ##   A paint act on a surface with no design is refused, and why said; the same acts on the designed surface, kept, the control.
 ## - THE HAIRS FOLLOW THEIR PULL: dragged to the right they lean left; let go, they come back straight, past it by a twentieth of
 ##   their bend at most, within a tenth of a second (the user: "Bristles aren't floppy"); the control, the spring they had, a sixth and
@@ -87,7 +91,10 @@ extends SceneTree
 ##   and thins along the way it is dragged, revealed from its start (the control: a smear of nothing is left out); a MIST lays no color
 ##   and is sprayed from a hand's length off, to the surface's side, never between it and the lens; a brush that RINSES is rinsed and
 ##   dried on the towel before each new color and before it is put down, going cup to towel to pot with no stop at the face between
-##   (the control: one that does not rinse has none); the WATER CLOUDS toward each color rinsed out (the control: an act with no rinse
+##   (the control: one that does not rinse has none); A BRUSH IS LAID ON ITS PAINT, THE CUP'S FLOOR AND THE TOWEL (feedback 0002: "we need
+##   the bottom 30% to 50% of bristles touching, laying on their side"): mid-load, mid-rinse and mid-dry 30% to 50% of each hair lies
+##   along it (the control: held as feedback 0017 left it, a tenth or less), and it comes to the towel no faster than the solver carries it
+##   (the control: its way there in the trip's fixed share, faster); the WATER CLOUDS toward each color rinsed out (the control: an act with no rinse
 ##   leaves it as it was), by how much paint goes into how much water - a sponge's many times a liner's, one sponge's rinse a little,
 ##   ten a lot - and is drawn seen through, clouding as it goes (the controls: the old tenth a rinse whatever was rinsed; a brew kept
 ##   opaque); A SPONGE IS RINSED AS A HAND RINSES ONE, squeezed under the water, wrung out over the cup and blotted on the towel in
@@ -107,7 +114,7 @@ func _ok(cond: bool, msg: String) -> void:
 
 
 func _init() -> void:
-	for check in [_mask, _design, _paths, _reveal, _hairs, _paints, _held, _pad, _inside, _scheduled, _details, _coats, _picture]:
+	for check in [_mask, _design, _paths, _reveal, _hairs, _paints, _held, _brush_clear, _kept_clear, _pad, _inside, _scheduled, _details, _coats, _put_back, _picture]:
 		var done: Variant = (check as Callable).call()
 		_ok(done == true, "%s stopped part way (a script error - see above)" % (check as Callable).get_method())
 	print("paint_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
@@ -494,6 +501,54 @@ func _hairs() -> bool:
 		if pl[k].distance_to(want[k]) > 1e-4:
 			wrong.append("key %d %s, not %s" % [k, pl[k], want[k]])
 	_ok(wrong.is_empty(), "a brush is not drawn the way its strokes go: %s" % "; ".join(wrong))
+	# ...THE WAY OF A STRETCH, NEVER OF A STEP (feedback 0014: "This brush is jittering/jerking back and forth, at the top side, while the
+	# point remains perfectly still drawing lines"): a traced line, keys a quarter millimeter apart, wobbling 12 degrees either way every
+	# 2.5 mm, as 732687's was - its lean turns back no more than twice and stays within 6 degrees of the line; a stroke 15 degrees from
+	# the last is leaned as that one was, one 40 degrees from it turned to whole. THE CONTROL: each key's own two steps, as it was
+	var wav := [[0.0, 10.0, 50.0, 2.0, 0.0, 0]]
+	for i in 161:
+		var x := 10.0 + float(i) * 0.25
+		wav.append([0.1 + float(i) * 0.03, x, 50.0 + 0.084 * sin(TAU * (x - 10.0) / 2.5), 0.0, 1.0, 0])
+	wav.append([5.0, 50.0, 50.0, 2.0, 0.0, 0])
+	var wp := TablePaint._pulls_of(wav)
+	var turns_back := func(angs: PackedFloat32Array) -> int:
+		var n_back := 0
+		var last_sign := 0.0
+		for j in range(1, angs.size()):
+			var dd := angs[j] - angs[j - 1]
+			if absf(dd) > 0.2:
+				if last_sign != 0.0 and signf(dd) != last_sign:
+					n_back += 1
+				last_sign = signf(dd)
+		return n_back
+	var now_angs := PackedFloat32Array()
+	var was_angs := PackedFloat32Array()
+	var off_most := 0.0
+	for k in range(1, wav.size() - 1):
+		now_angs.append(rad_to_deg(wp[k].angle()))
+		off_most = maxf(off_most, absf(rad_to_deg(wp[k].angle())))
+		var came := (Vector2(wav[k][1], wav[k][2]) - Vector2(wav[k - 1][1], wav[k - 1][2])).normalized() if k > 1 else Vector2.ZERO
+		var goes := (Vector2(wav[k + 1][1], wav[k + 1][2]) - Vector2(wav[k][1], wav[k][2])).normalized() if k < wav.size() - 2 else Vector2.ZERO
+		was_angs.append(rad_to_deg((came + goes).angle()))
+	print("  along a wobbling line the brush's lean turns back %d times, %.1f degrees off it at most (each key's own steps: %d times)" % [
+		turns_back.call(now_angs), off_most, turns_back.call(was_angs)])
+	_ok(turns_back.call(now_angs) <= 2 and off_most <= 6.0, "along a wobbling line the lean turns back %d times, %.1f degrees off it" % [turns_back.call(now_angs), off_most])
+	_ok(turns_back.call(was_angs) >= 20, "THE CONTROL: by each key's own steps it turned back only %d times" % turns_back.call(was_angs))
+	var three := []
+	for st in [[0.0, Vector2(10, 100)], [15.0, Vector2(10, 110)], [55.0, Vector2(10, 120)]]:
+		var d := Vector2.from_angle(deg_to_rad(float(st[0])))
+		var at: Vector2 = st[1]
+		var t0 := float(three.size()) * 2.0
+		three.append([t0, at.x, at.y, 2.0, 0.0, 0])
+		for j in 21:
+			var q := at + d * float(j)
+			three.append([t0 + 0.1 + float(j) * 0.05, q.x, q.y, 0.0, 1.0, 0])
+		var e := at + d * 20.0
+		three.append([t0 + 1.5, e.x, e.y, 2.0, 0.0, 0])
+	var tp3 := TablePaint._pulls_of(three)
+	var kept := rad_to_deg(tp3[23 + 10].angle())
+	var turned := rad_to_deg(tp3[46 + 10].angle())
+	_ok(absf(kept) < 1.0 and absf(turned - 55.0) < 1.0, "a stroke 15 degrees from the last leans at %.1f (as that one, 0), one 40 degrees from it at %.1f (55)" % [kept, turned])
 	return true
 
 
@@ -616,6 +671,15 @@ func _paints() -> bool:
 		_ok(float((a as Dictionary).get("_natural", 0.0)) > 5.0, "%s has no length at a hand's pace" % (a as Dictionary)["name"])
 	var times: Dictionary = m._work.rehearse(10.0)
 	var tp: TablePaint = m._work.paint
+	# AN ELEMENT IS TAKEN FROM THE POT ITS DESIGN NAMES (feedback 0001: a base mixed grey-green, its plan naming the white pot, went back
+	# for more to the amber - the cream nearest its color): a dark grey whose plan names the white pot is laid in the white's paint. THE
+	# CONTROL: with no pot named, the cream nearest it - the black's.
+	var from_white := tp._pot_of({"from": "white pot"}, {"paint": "#303030", "kind": "fill"})
+	var from_black := tp._pot_of({"from": "black pot"}, {"paint": "#303030", "kind": "fill"})
+	var named := tp._pot_of({}, {"paint": "#303030", "kind": "fill", "plan": {"pot": "white pot"}})
+	_ok(named == from_white and named != from_black, "a dark grey whose design names the white pot is laid in %s, not the white's %s" % [named, from_white])
+	var unnamed := tp._pot_of({}, {"paint": "#303030", "kind": "fill"})
+	_ok(unnamed == from_black, "THE CONTROL: a dark grey naming no pot is laid in %s, not the black's %s" % [unnamed, from_black])
 	var si := 0
 	var face_mesh := TableWork._ray_mesh(_faces_of(tp.skins[si]))
 	var lw: int = m._work._work_of(m._work._thing_named("brush jar"), "liner")
@@ -970,7 +1034,10 @@ func _held() -> bool:
 	_ok(blended.z > 0.0015, "THE CONTROL: as it is held, never taking the face's shape, the sponge stands only %.1f mm in the face" % (blended.z * 1000.0))
 	var kept: Dictionary = tp.skins[0]["held"]
 	tp.skins[0]["held"] = {}
+	# (...and nothing keeping the drawn pose out of the face either, which would hold it clear on its own - [method TablePaint._kept_out])
+	tp.keep_out = false
 	var unheld: Vector3 = deepest.call("blend")
+	tp.keep_out = true
 	tp.skins[0]["held"] = kept
 	_ok(unheld.z > 0.008, "THE CONTROL: blended flat with nothing held clear, the sponge stands only %.1f mm in the face" % (unheld.z * 1000.0))
 	# WHAT A PRESS TOUCHES IS WHAT IT PAINTS (feedback 0032: "barely touching the mask with a corner - yet the entire area around it
@@ -1574,6 +1641,62 @@ func _inside() -> bool:
 	Skins.touch_map(tp._stroke_touches(0, was, track, tool, "sweep"), gem_rect, TablePaint.BRUSH_PX, TablePaint.BRUSH_SPOT, PackedByteArray(), 0.0, foot_was)
 	var past_was := _past_shape(tp, "gem", foot_was[0], gem_rect)
 	_ok(past_was.x > 30.0, "THE CONTROL: its rows as they were lay only %.1f mm2 past the diamond" % past_was.x)
+	# ...AND BACK AND FORTH ALONG ITS ROWS IT NEVER ROLLS OVER (feedback 0016: "This brush is flipping and twirling and twisting and
+	# repositioning ... They wouldn't just flip-flop back and forth"): rows drawn at 0, 170, 5 and 175 degrees, its broadside turned no more
+	# than a quarter from one row to the next. THE CONTROL: each row's own way, as it comes, rolls it over half a turn
+	var rows_keys := []
+	for ri in 4:
+		var ang := deg_to_rad([0.0, 170.0, 5.0, 175.0][ri])
+		var row_mid := Vector2(48.0, 88.0 + float(ri) * 4.0)
+		var a0 := row_mid - Vector2.from_angle(ang) * 8.0
+		var t0 := float(ri) * 3.0
+		rows_keys.append([t0, a0.x, a0.y, 2.0, 0.0, 0])
+		for j in 17:
+			var q := a0 + Vector2.from_angle(ang) * float(j)
+			rows_keys.append([t0 + 0.2 + float(j) * 0.08, q.x, q.y, 0.0, 1.0, 0])
+		var a1 := a0 + Vector2.from_angle(ang) * 16.0
+		rows_keys.append([t0 + 1.8, a1.x, a1.y, 2.0, 0.0, 0])
+	var rdirs := TablePaint._dirs_of(rows_keys)
+	var flat_contact := TablePaint._contact_for(tool, "sweep")
+	var across_at := func(ki: int, d: Vector2) -> Vector3:
+		var kk: Array = rows_keys[ki]
+		var hh: Array = tp._skin_hold(0, Vector2(float(kk[1]), float(kk[2])), 0.0, 1.0, 0.0, tool, flat_contact, Vector4.ZERO, Vector4.ZERO, 0.0, d)
+		return (tp._node_at(hh, tool, tool["x0"]).basis * (tool["across"] as Vector3)).normalized()
+	var rolled_most := 0.0
+	var rolled_was := 0.0
+	for ri in range(1, 4):
+		var k_prev := (ri - 1) * 19 + 9
+		var k_now := ri * 19 + 9
+		rolled_most = maxf(rolled_most, rad_to_deg(across_at.call(k_prev, rdirs[k_prev]).angle_to(across_at.call(k_now, rdirs[k_now]))))
+		var own := func(kx: int) -> Vector2:
+			return (Vector2(float(rows_keys[kx + 1][1]), float(rows_keys[kx + 1][2])) - Vector2(float(rows_keys[kx][1]), float(rows_keys[kx][2]))).normalized()
+		rolled_was = maxf(rolled_was, rad_to_deg(across_at.call(k_prev, own.call(k_prev)).angle_to(across_at.call(k_now, own.call(k_now)))))
+	print("  back and forth along its rows the flat brush rolls %.0f degrees at most from one to the next (each row's own way: %.0f)" % [rolled_most, rolled_was])
+	_ok(tool.has("across") and rolled_most <= 90.0, "back and forth along its rows the flat brush rolls %.0f degrees from one to the next" % rolled_most)
+	_ok(rolled_was >= 150.0, "THE CONTROL: by each row's own way it rolled only %.0f degrees" % rolled_was)
+	# ...AND TO ITS PAINT AND BACK IT STAYS ROLLED AS IT WAS ([method TablePaint._way_from]): from a stroke drawn each of eight ways, at the
+	# middle of its load its broadside is turned about its handle no more than 30 degrees from where it lay on the stroke, carried with the
+	# handle as the hand tilts it there (a half turn counts whole) - THE CONTROL: the stroke's way dropped at the pot, its untouched roll
+	# there, it turns further
+	# (...the pot's hold found from where it comes, as it is played: a brush laid on its paint is leaned across its broadside as it comes
+	# rolled - [method TablePaint._laid_hold])
+	var kept_most := 0.0
+	var dropped_most := 0.0
+	var node_of := func(h: Variant) -> Transform3D:
+		return h if h is Transform3D else tp._node_at(h as Array, tool, tool["x0"])
+	var twist := func(xa: Transform3D, xb: Transform3D) -> float:
+		var hand := (tool["grip"] as Vector3) - (tool["tip"] as Vector3)
+		var carried := Basis(Quaternion((xa.basis * hand).normalized(), (xb.basis * hand).normalized())) * (xa.basis * (tool["across"] as Vector3)).normalized()
+		return rad_to_deg(carried.angle_to((xb.basis * (tool["across"] as Vector3)).normalized()))
+	for wk in 8:
+		var near_h: Array = tp._skin_hold(0, Vector2(48.0, 95.0), 0.0, 1.0, 0.0, tool, flat_contact, Vector4.ZERO, Vector4.ZERO, 0.0, Vector2.from_angle(TAU * float(wk) / 8.0))
+		var on_stroke: Transform3D = node_of.call(near_h)
+		var dropped_h := near_h.slice(0, 8)
+		kept_most = maxf(kept_most, twist.call(on_stroke, node_of.call(tp._trip(near_h, tp._pot_hold("load", "black pot", "", 0.0, track, "", near_h), 0.6, 0, "load", tool))))
+		dropped_most = maxf(dropped_most, twist.call(on_stroke, node_of.call(tp._trip(dropped_h, tp._pot_hold("load", "black pot", "", 0.0, track, "", dropped_h), 0.6, 0, "load", tool))))
+	print("  at the middle of its load the flat brush's broadside is turned %.0f degrees at most from its stroke's (the way dropped: %.0f)" % [kept_most, dropped_most])
+	_ok(tool.has("across") and kept_most <= 30.0, "at the middle of its load the flat brush's broadside is turned %.0f degrees from its stroke's" % kept_most)
+	_ok(dropped_most > kept_most + 20.0, "THE CONTROL: the way dropped at the pot, it turned only %.0f degrees" % dropped_most)
 	m._root3.free()
 	# A FILL TOO FINE FOR ITS BRUSH IS DRAWN ALONG ITS MIDDLE (feedback 0055: "it touched the area once, and the entire brow just appeared"):
 	# a brow's crescent under a 6 mm brush followed along its length in pulls at a line's pace, pressed hardest where it is thickest -
@@ -1757,6 +1880,78 @@ func _coats() -> bool:
 	dry_t.erase("_damp")
 	var kd: Array = (tp.plan_of(dry_t, 120.0)["phases"] as Array).map(func(p: Dictionary) -> String: return String(p["kind"]))
 	_ok((before_el.call(kd) as Array).has("rinse"), "THE CONTROL: told nothing of being damp, its thinned paint was taken up on a sponge not wetted first: %s" % [kd])
+	m._root3.free()
+	return true
+
+
+## A TOOL KEPT IN HAND IS PUT BACK WHERE IT WAS TAKEN FROM (feedback 0004, 2026-11-09: "Why is there a brush floating near the eye, while we
+## are simultaneously using a second brush ...?"; TablePaint._home_of): a liner drawing a brow and, straight after in the same black, a lid
+## is kept in hand between them, and the second act puts it back in its jar - where it is while the sponge lays the base. THE CONTROL: put
+## back where that second act found it, it is left in the air off its jar.
+func _put_back() -> bool:
+	var m := _medium()
+	var spec := station()
+	var at := {"mask": Vector3(0, 0, -0.06), "brush jar": Vector3(0.18, 0, 0.04), "sponge": Vector3(-0.16, 0, 0.08), "white pot": Vector3(-0.09, 0, 0.12),
+		"black pot": Vector3(0.09, 0, 0.12), "water cup": Vector3(0.22, 0, -0.06), "towel": Vector3(-0.24, 0, -0.08)}
+	for nm in at:
+		_stand(m, spec, nm, Vector3(Tables.ORIGIN.x, 0.0, Tables.ORIGIN.y) + (at[nm] as Vector3))
+	var doc := design()
+	(((doc["designs"] as Array)[0] as Dictionary)["elements"] as Array).append({"id": "lid", "stage": "lines", "paint": "#121214",
+		"line": "M 84 72 C 94 64 108 64 116 70", "width": 1.4})
+	m._work.skin_doc = doc
+	var liner := func(nm: String) -> Dictionary:
+		return {"name": nm, "beat": 1, "length": "under", "tracks": [{"thing": "brush jar", "part": "liner", "law": "paint", "on": "mask", "paint": [nm],
+			"from": "black pot", "rinse": "water cup", "dry": "towel"}]}
+	m._work.build({"acts": [liner.call("brow"), liner.call("lid"), {"name": "base", "beat": 1, "length": "under", "tracks": [{"thing": "sponge",
+		"part": "wedge", "law": "paint", "on": "mask", "paint": ["base"], "from": "white pot"}]}]}, 1)
+	var tp: TablePaint = m._work.paint
+	_ok(tp != null and (m._work.acts as Array).size() == 3, "the put-back acts were not kept: %s" % "; ".join(m._work.notes))
+	if tp == null or (m._work.acts as Array).size() < 3:
+		m._root3.free()
+		return true
+	var brow_t := _track_of(m, "brow")
+	var lid_t := _track_of(m, "lid")
+	_ok(bool(brow_t.get("_keep", false)) and lid_t.has("_loaded"), "the liner's brow is not kept in hand for its lid in the same black: %s, %s" % [
+		brow_t.get("_keep", false), lid_t.get("_loaded", "")])
+	var action := {"kind": "work", "card": 1, "after": 0, "dur": 0.0}
+	var cues: Array = [{"name": "brow", "si": 0}, {"name": "lid", "si": 1}, {"name": "base", "si": 2}]
+	m._work.schedule([{"a": action, "t0": 2.0, "s": 1.0}], {"actions": [action], "spoken": PackedStringArray(["one", "two", "three"]), "cues": cues},
+		PackedFloat32Array([2.0, 3.0, 4.0]), PackedFloat32Array([2.5, 3.5, 4.5]), PackedFloat32Array(), 0.0)
+	var ch := String(brow_t.get("_ch", ""))
+	var x0: Transform3D = m._work._rest.get(ch, Transform3D.IDENTITY)
+	var ents := {}
+	for e in m._work._chan.get(ch, []):
+		ents[String((e as Dictionary)["act"])] = e
+	var base_e := {}
+	for e in m._work._chan.get(String(_track_of(m, "base").get("_ch", "")), []):
+		base_e = e
+	_ok(ents.has("brow") and ents.has("lid") and not base_e.is_empty(), "the liner's acts and the sponge's were not placed: %s" % [ents.keys()])
+	if not ents.has("brow") or not ents.has("lid") or base_e.is_empty():
+		m._root3.free()
+		return true
+	var brow_e: Dictionary = ents["brow"]
+	var lid_e: Dictionary = ents["lid"]
+	var off := func(x: Variant) -> float: return (x as Transform3D).origin.distance_to(x0.origin) if x is Transform3D else INF
+	_ok(float(off.call(brow_e["end"])) > 0.02 and float(off.call(lid_e["from"])) > 0.02,
+		"the liner was not kept in hand between its brow and its lid: the brow ends %.1f cm off its jar, the lid begins %.1f cm off" % [
+		float(off.call(brow_e["end"])) * 100.0, float(off.call(lid_e["from"])) * 100.0])
+	var mid := (float(base_e["t0"]) + float(base_e["t1"])) * 0.5
+	_ok(float(base_e["t0"]) >= float(lid_e["t1"]) - 0.01, "the base began before the lid was done: %.1f, %.1f" % [float(base_e["t0"]), float(lid_e["t1"])])
+	_ok(float(off.call(lid_e["end"])) < 0.002 and float(off.call(m._work.value(ch, mid))) < 0.002,
+		"the liner kept in hand was not put back in its jar: the lid ends %.1f cm off it, and it stands %.1f cm off it while the sponge lays the base" % [
+		float(off.call(lid_e["end"])) * 100.0, float(off.call(m._work.value(ch, mid))) * 100.0])
+	var d := float(lid_e["t1"]) - float(lid_e["t0"])
+	var found_at: Variant = tp._held_at(tp._plan_entry(lid_e, lid_t, d), lid_t, d, float(lid_e["t1"]), lid_e["from"], x0, lid_e["from"])
+	_ok(float(off.call(found_at)) > 0.02, "THE CONTROL: put back where the lid's act found it, the liner is not left off its jar: %.1f cm" % [
+		float(off.call(found_at)) * 100.0])
+	# ...AND BY THE COPY OF ITS ENTRY THE PHYSICS HOLDS IT BY (TablePhysics._held_pose: its `from` where the body was): matched by which copy it
+	# was, none was the entry before, and the body went back to where the lid's act found it - 732687's round brush set down over the eye, its
+	# plan's hand in the tray. THE CONTROL: that copy's own `from`, which a copy was given back, is off the jar.
+	var copy: Dictionary = lid_e.duplicate()
+	var home_of_copy: Transform3D = tp._home_of(copy, copy["from"])
+	_ok(float(off.call(home_of_copy)) < 0.002 and float(off.call(copy["from"])) > 0.02,
+		"a copy of the lid's entry, as the physics holds it, is not put back in the jar: %.1f cm off (its own `from` %.1f cm off)" % [
+		float(off.call(home_of_copy)) * 100.0, float(off.call(copy["from"])) * 100.0])
 	m._root3.free()
 	return true
 
@@ -2031,6 +2226,11 @@ func _details() -> bool:
 	m._work._planned = true
 	var towel_box: AABB = m._work._world_rest_thing(m._work._thing_named("towel")) * (m._work.things[m._work._thing_named("towel")]["box"] as AABB)
 	var cup_box: AABB = m._work._world_rest_thing(m._work._thing_named("water cup")) * (m._work.things[m._work._thing_named("water cup")]["box"] as AABB)
+	# (the hairs' tip as the frame draws them, bent or laid - [method TablePaint._tick_tool])
+	var hair_mat: ShaderMaterial = ((tool["tufts"] as Array)[0] as Dictionary)["mat"]
+	var drawn_tip := func() -> Vector3:
+		var xn := m._work._world_of((m._work.works[lw] as Dictionary)["node"])
+		return xn * TablePaint._bent_tip(tool, hair_mat.get_shader_parameter("bristle_bend") as Vector3, hair_mat.get_shader_parameter("bristle_lay") as Vector2)
 	var on_towel := false
 	var in_cup := false
 	for p in plan["phases"]:
@@ -2038,7 +2238,7 @@ func _details() -> bool:
 		if not String(pd["kind"]) in ["rinse", "dry"]:
 			continue
 		m._work.tick(float(lines_t[0]) + lerpf(float(pd["a"]), float(pd["b"]), 0.7))
-		var tip := m._work._world_of((m._work.works[lw] as Dictionary)["node"]) * (tool["tip"] as Vector3)
+		var tip: Vector3 = drawn_tip.call()
 		if String(pd["kind"]) == "dry":
 			on_towel = on_towel or towel_box.grow(0.006).has_point(tip)
 		else:
@@ -2071,6 +2271,126 @@ func _details() -> bool:
 	var through: float = lowest_over.call()
 	tp._tops = mapped
 	_ok(through < bottle_box.end.y, "THE CONTROL: with nothing mapped the way goes through the bottle (its tip at %.1f cm)" % (through * 100.0))
+	# A BRUSH IS LAID ON WHAT IT DIPS INTO AND IS DRIED ON, ITS HAIRS ON THEIR SIDE (feedback 0002, 2026-11-09: "It is not enough for the
+	# very tip to touch: we need the bottom 30% to 50% of bristles touching, laying on their side"; 0017: "That brush is not even touching
+	# the foundation it's dipping into ... at the grey block, where we dry the brush, it never touches either"), AND ITS HAIRS BEND ONLY
+	# AWAY FROM WHAT THEY MEET (0019: "why are the bristles curved, when the brush is lifted?"): as the frame draws them ([method
+	# TablePaint._tick_tool]), mid-load, mid-rinse and mid-dry, a third to two thirds of each hair's length lies along its paint, the cup's
+	# floor and the towel, its tip on it and its straight tip well past it - THE CONTROL, held as feedback 0017 left it (21 degrees off
+	# upright, pushed its give past its paint and the towel, bent until its tip met it; a rinse 1 mm over the floor): a tenth or less;
+	# lifted over the face, the hairs are
+	# straight - THE CONTROL: pressed, they bend, and away from it
+	var hair_len := float(tool["len"])
+	var hair_give := float(tp._contact(tool, "")["give"])
+	var node_now := func() -> Transform3D:
+		return m._work._world_of((m._work.works[lw] as Dictionary)["node"])
+	var hold_now := func(tt: float) -> Array:
+		return tp._hold_of(tp._held_at(plan, lines_tr, tt - float(lines_t[0]), tt, Transform3D.IDENTITY, m._work._rest.get("w%d:pose" % lw, Transform3D.IDENTITY),
+			Transform3D.IDENTITY), tool)
+	# (how much of a hair's length lies within a touch of the surface at [param level], the tuft posed [param xn], bent [param bend] (its
+	# node's space) and laid [param lay] - as prop_common.gdshaderinc draws it)
+	var lying := func(xn: Transform3D, bend: Vector3, lay: Vector2, level: float) -> float:
+		var root: Vector3 = tool["hair_root"]
+		var ax: Vector3 = tool["hair_axis"]
+		var aside := bend - ax * bend.dot(ax)
+		var dir := aside.normalized() if aside.length() > 1e-9 else Vector3.ZERO
+		var on := 0
+		for k in 41:
+			var sv := float(k) / 40.0
+			var v := Bristles.laid_at(sv, lay, hair_len) if lay.y > 1e-4 else Bristles.bent_at(sv, aside.length(), hair_len)
+			if absf((xn * (root + ax * v.y + dir * v.x)).y - level) <= TablePaint.TOUCH_BAND:
+				on += 1
+		return float(on) / 41.0
+	var lying_now := func(level: float) -> float:
+		return lying.call(node_now.call(), hair_mat.get_shader_parameter("bristle_bend") as Vector3, hair_mat.get_shader_parameter("bristle_lay") as Vector2, level)
+	# (...and held as feedback 0017 left it, at the same place over the same surface: dipped straight down its give into its paint,
+	# pressed its give along itself onto the towel, a rinse a millimeter over the cup's floor)
+	var old_axis := (Vector3.UP * 0.9 + Vector3.BACK * 0.35).normalized()
+	var lying_was := func(h: Array, kind: String) -> float:
+		var level := float(h[6])
+		var src := Vector3((h[0] as Vector3).x, level, (h[0] as Vector3).z)
+		var low := src - old_axis * hair_give
+		if kind == "load":
+			low = Vector3(src.x, level - maxf(hair_give, TablePaint.BRUSH_DIP) * maxf(old_axis.y, 0.5), src.z)
+		elif kind == "rinse":
+			low = src + Vector3.UP * 0.001
+		var was := [low, old_axis, 1.0, false, TablePaint.TRIP_LIFT, String(h[5]), level, Vector3.UP]
+		var got: Array = tp._lay_on_plane(tool, was, Vector3.ZERO)
+		var xw: Transform3D = tp._node_at(was, tool, tool["x0"])
+		return lying.call(xw, xw.basis.inverse() * (got[0] as Vector3), got[1] as Vector2, level)
+	var judged := {}
+	for kind in ["load", "rinse", "dry"]:
+		var ph: Dictionary = (plan["phases"] as Array).filter(func(p: Dictionary) -> bool: return String(p["kind"]) == kind)[0]
+		var tt := float(lines_t[0]) + lerpf(float(ph["a"]), float(ph["b"]), 0.65)
+		var hk: Array = hold_now.call(tt)
+		m._work.tick(tt)
+		var level := float(hk[6]) if hk.size() > 7 else NAN
+		var tip: Vector3 = drawn_tip.call()
+		var straight := (node_now.call() as Transform3D) * (tool["tip"] as Vector3)
+		judged[kind] = [lying_now.call(level) if not is_nan(level) else 0.0, (tip.y - level) * 1000.0, (level - straight.y) * 1000.0,
+			lying_was.call(hk, kind) if not is_nan(level) else 1.0]
+	for kind in judged:
+		var j: Array = judged[kind]
+		_ok(float(j[0]) >= 0.3 and float(j[0]) <= 0.5 and absf(float(j[1])) <= TablePaint.TOUCH_BAND * 1000.0 and float(j[2]) >= hair_give * 1000.0,
+			"mid-%s the brush lies %.0f%% of its hairs along what it is pressed onto, its tip %.2f mm off it, its straight tip %.1f mm past it" % [kind,
+				float(j[0]) * 100.0, float(j[1]), float(j[2])])
+		_ok(float(j[3]) <= 0.1, "THE CONTROL: held as feedback 0017 left it, mid-%s it lay %.0f%% of its hairs along it" % [kind, float(j[3]) * 100.0])
+	print("  laid mid-load, mid-rinse, mid-dry: %s of its hairs (held as it was: %s)" % [["load", "rinse", "dry"].map(func(k: String) -> String:
+		return "%.0f%%" % (float((judged[k] as Array)[0]) * 100.0)), ["load", "rinse", "dry"].map(func(k: String) -> String:
+		return "%.0f%%" % (float((judged[k] as Array)[3]) * 100.0))])
+	# ...AND COME TO WHAT IT IS LAID ON NO FASTER THAN THE BRUSH KEEPS UP WITH (feedback 0002: "It also applies to the grey pad"): a dry 40 cm
+	# from where the brush was, in a trip 2.6 s long, its hand never faster than the solver carries a held thing near others - THE CONTROL:
+	# its way there in the trip's fixed share, as it was, faster (732687's flat brush had been drawn 15 cm behind its hand on the way)
+	var pace_ph: Dictionary = (plan["phases"] as Array).filter(func(p: Dictionary) -> bool: return String(p["kind"]) == "dry")[0]
+	var pace_t := float(lines_t[0]) + float(pace_ph["a"])
+	var pace_from: Array = hold_now.call(pace_t - 0.02)
+	var pace_pot: Array = tp._trip_hold(pace_ph, pace_t, lines_tr, pace_from)
+	var pace_far := pace_from.duplicate()
+	pace_far[0] = (pace_pot[0] as Vector3) + Vector3(0.3, 0.12, 0.25)
+	var body_most := RigidParts.STEP_MOST * float(RigidParts.PIECES_MOST) * 60.0
+	var pace_fastest := func(secs_told: float) -> float:
+		var most := 0.0
+		var last := Vector3.INF
+		for k in 301:
+			var sk := float(k) / 300.0
+			var hv: Variant = tp._brush_laid(pace_far, pace_pot, sk, 7, "dry", tool, secs_told)
+			var xk: Transform3D = hv if hv is Transform3D else tp._node_at(TablePaint._hold_of(hv, tool), tool, tool["x0"])
+			var ck := xk * (tool["center"] as Vector3)
+			if last != Vector3.INF:
+				most = maxf(most, ck.distance_to(last) / (2.6 / 300.0))
+			last = ck
+		return most
+	var pace_most: float = pace_fastest.call(2.6)
+	var fixed_share: float = pace_fastest.call(0.0)
+	_ok(TablePaint._says_way(pace_pot) and pace_most <= body_most, "a brush comes to the towel 40 cm off at %.2f m/s at most, the solver carrying it %.2f" % [pace_most, body_most])
+	_ok(fixed_share > body_most, "THE CONTROL: its way there in the trip's fixed share, it went %.2f m/s" % fixed_share)
+	var lifted_most := 0.0
+	var toward_most := 0.0
+	var pressed_away := 0.0
+	var lifted_n := 0
+	var unpressed_for := 0.0
+	var lines_d := float(lines_t[1]) - float(lines_t[0])
+	for k in 600:
+		var tt := float(lines_t[0]) + lines_d * float(k) / 599.0
+		var hk: Array = tp._hold_of(tp._held_at(plan, lines_tr, tt - float(lines_t[0]), tt, Transform3D.IDENTITY, m._work._rest.get("w%d:pose" % lw, Transform3D.IDENTITY),
+			Transform3D.IDENTITY), tool)
+		if hk.size() < 8 or not bool(hk[3]) or (hk[7] as Vector3).length_squared() < 0.5:
+			unpressed_for = 0.0
+			continue
+		var n_k: Vector3 = (hk[7] as Vector3).normalized()
+		unpressed_for = unpressed_for + lines_d / 599.0 if float(hk[2]) <= 0.0 else 0.0
+		m._work.tick(tt)
+		var bw := m._work._world_of((m._work.works[lw] as Dictionary)["node"]).basis * (hair_mat.get_shader_parameter("bristle_bend") as Vector3)
+		# (...once the spring has let go of its last press: its weights are all but spent in 0.15 s - [method Bristles.weights])
+		if float(hk[2]) <= 0.0 and unpressed_for > 0.15:
+			lifted_n += 1
+			lifted_most = maxf(lifted_most, bw.length())
+			toward_most = maxf(toward_most, -bw.dot(n_k))
+		elif float(hk[2]) > 0.5:
+			pressed_away = maxf(pressed_away, bw.dot(n_k))
+	_ok(lifted_n >= 5 and lifted_most <= 0.0002 and toward_most <= 0.0001,
+		"lifted over the face, the brush's hairs are straight: bent %.2f mm at most, %.2f mm toward the face, over %d moments" % [lifted_most * 1000.0, toward_most * 1000.0, lifted_n])
+	_ok(pressed_away > 0.0005, "THE CONTROL: pressed, its hairs bend away from the face, %.1f mm at most" % (pressed_away * 1000.0))
 	# WHAT A PAINTING TOOL IS MEANT TO GO INTO is never said to be passed through: what it paints, its water, its towel and the
 	# paints - THE CONTROL: one that does not rinse is not excused the cup or the towel
 	var mv := {"nodes": [(m._work.works[lw] as Dictionary)["node"]]}
@@ -2280,4 +2600,203 @@ func _details() -> bool:
 	_ok(items.has("drag") and ((items["drag"] as Dictionary)["span"] as Vector2).x < INF, "the smear is laid")
 	_ok(not tp.dust("dust").is_empty() and not tp.dust("mist").is_empty() and m._work._paint_bursts.has("dust") and m._work._paint_bursts.has("mist"), "the powder's pats and the spray's pumps are placed as puffs")
 	m._work._planned = false
+	return true
+
+
+## A BRUSH'S HANDLE AND FERRULE STAND IN NOTHING (feedback 0003, 2026-11-09: "This brush is clipping straight through the nose here ...
+## Why don't we have proper collision on the props and on the mask"): a flat brush laid low on its belly at places all round a mask's
+## nose, drawn each of eight ways and pressed its hardest, held clear as the show holds it ([method TablePaint._cleared]) and posed as it
+## is drawn, its handle and ferrule - never its hairs, which bend - found every 2 mm over them no deeper in the face than BRUSH_IN_MOST.
+## THE CONTROLS: held as a hand holds it, nothing held clear, they stand 3 mm and more in it somewhere; held clear as the clearance
+## measured before - the ferrule forgiven the hairs' bend and give, the tool looked at no more than twelve times along it, as 732687's
+## round brush was - 1.5 mm and more.
+const BRUSH_IN_MOST := 0.0008
+
+
+func _brush_clear() -> bool:
+	var m := _medium()
+	var spec := station()
+	_stand(m, spec, "mask", Vector3(Tables.ORIGIN.x, 0.0, Tables.ORIGIN.y) + Vector3(0, 0, -0.06))
+	_stand(m, spec, "flat jar", Vector3(Tables.ORIGIN.x, 0.0, Tables.ORIGIN.y) + Vector3(0.18, 0, 0.06))
+	_stand(m, spec, "black pot", Vector3(Tables.ORIGIN.x, 0.0, Tables.ORIGIN.y) + Vector3(0.09, 0, 0.12))
+	m._work.skin_doc = {"designs": [{"thing": "mask", "part": "face", "name": "a dot", "elements": [
+		{"id": "dot", "stage": "fill", "paint": "#3a5164", "fill": "M 20 180 L 26 180 L 26 186 L 20 186 Z"}]}]}
+	m._work.build({"acts": [{"name": "fill", "beat": 1, "length": "under", "tracks": [{"thing": "flat jar", "part": "flat", "law": "paint", "on": "mask", "paint": ["dot"], "from": "black pot"}]}]}, 1)
+	var tp: TablePaint = m._work.paint
+	_ok(tp != null and (m._work.acts as Array).size() == 1, "the flat brush's act was not kept: %s" % "; ".join(m._work.notes))
+	if tp == null or (m._work.acts as Array).size() < 1:
+		return true
+	var track := _track_of(m, "fill")
+	var tool: Dictionary = tp.tool_of(String(track.get("_ch", "")), track)
+	var node: Node3D = tool["node"]
+	var x0: Transform3D = tool["x0"]
+	var hw := tp.holder_world(0, 0.0)
+	var face_mesh := TableWork._ray_mesh(_faces_of(tp.skins[0]))
+	var face_box := AABB()
+	for mi in (tp.skins[0] as Dictionary)["meshes"]:
+		face_box = face_box.merge(hw * (mi as MeshInstance3D).get_aabb()) if face_box.size != Vector3.ZERO else hw * (mi as MeshInstance3D).get_aabb()
+	face_box = face_box.grow(0.002)
+	# ...its handle and ferrule's own surface, every 2 mm over each of their faces (the node's space)
+	var inv := m._work._world_of(node).affine_inverse()
+	var stiff := PackedVector3Array()
+	var whole := PackedVector3Array()
+	for mi in node.find_children("*", "MeshInstance3D", true, false):
+		var mm := mi as MeshInstance3D
+		var own := (inv * m._work._world_of(mm)) * mm.mesh.get_faces()
+		whole.append_array(own)
+		var mat := mm.material_override as ShaderMaterial
+		if mat != null and mat.has_meta("tuft"):
+			continue
+		for k in range(0, own.size(), 3):
+			var a := own[k]
+			var e1 := own[k + 1] - a
+			var e2 := own[k + 2] - a
+			var n := maxi(ceili(maxf(e1.length(), e2.length()) / 0.002), 1)
+			for i in n + 1:
+				for j in n + 1 - i:
+					stiff.append(a + e1 * (float(i) / float(n)) + e2 * (float(j) / float(n)))
+	# ...the places: rings round the nose's bridge and its tip, as far out as a ferrule reaches over it from the hairs
+	var marks := FaceForm.landmarks(Vector3(15, 21, 8))
+	var places := PackedVector2Array()
+	for nm in ["the nose's bridge", "the nose's tip"]:
+		var c: Vector2 = (marks[nm] as Dictionary)["at"]
+		for r in [7.0, 13.0, 19.0]:
+			for k in 12:
+				places.append(c + Vector2.from_angle(TAU * float(k) / 12.0) * float(r))
+	# how deep its handle and ferrule stand in the face as drawn, the deepest over every place and way, held by [param held_of]
+	var deepest := func(t: Dictionary, held_of: Callable) -> Array:
+		var worst := 0.0
+		var where := ""
+		for xy in places:
+			for k in 8:
+				var pull := Vector2.from_angle(TAU * float(k) / 8.0)
+				var held: Vector4 = held_of.call(t, xy, pull)
+				var h := tp._skin_hold(0, xy, 0.0, 1.0, 0.0, tool, "belly", held, held, 0.0)
+				var x := tp._node_at(h, tool, x0)
+				for q in stiff:
+					var p := x * q
+					if not face_box.has_point(p):
+						continue
+					var off := _off_face(face_mesh, tp, 0, p)
+					if off < INF and -off > worst:
+						worst = -off
+						where = "at %s mm drawn %s" % [xy.snappedf(0.1), pull.snappedf(0.01)]
+		return [worst, where]
+	var clear := func(t: Dictionary, xy: Vector2, pull: Vector2) -> Vector4:
+		return tp._cleared(0, xy, t, "belly", pull)
+	var by_hand := func(t: Dictionary, xy: Vector2, pull: Vector2) -> Vector4:
+		var ax := tp._held_axis(0, xy, (tp.at_mm(0, xy)[1] as Vector3).normalized(), t, "belly", pull)
+		return Vector4(ax.x, ax.y, ax.z, 0.0)
+	var now: Array = deepest.call(tool, clear)
+	print("  a flat brush laid on its belly round a nose, %d places, eight ways: its handle and ferrule %.2f mm in the face at most (%s), %d of its %d clearance points stiff" % [
+		places.size(), float(now[0]) * 1000.0, now[1], int(tool.get("stiff", 0)), (tool["points"] as PackedVector3Array).size()])
+	_ok(float(now[0]) <= BRUSH_IN_MOST, "a brush laid on its belly by a nose stands %.2f mm in the face (%s)" % [float(now[0]) * 1000.0, now[1]])
+	var hand: Array = deepest.call(tool, by_hand)
+	_ok(float(hand[0]) > 0.003, "THE CONTROL: held as a hand holds it, nothing held clear, the brush stands only %.2f mm in the face" % (float(hand[0]) * 1000.0))
+	var was := tool.duplicate()
+	was.erase("stiff")
+	was["points"] = TablePaint._surface_points(TableWork._ray_mesh(whole), tool["box"], TablePaint.POINTS_EVERY, 12)
+	var before: Array = deepest.call(was, clear)
+	_ok(float(before[0]) > 0.0015, "THE CONTROL: held clear as it was, its ferrule forgiven and looked at twelve times along it, the brush stands only %.2f mm in the face" % (float(before[0]) * 1000.0))
+	return true
+
+
+## A TOOL IS NEVER DRAWN IN WHAT IT PAINTS, WHATEVER ITS PLAN ([method TablePaint._kept_out]; feedback 0003, 2026-11-09: "This brush is
+## clipping straight through the nose here ... Why don't we have proper collision on the props and on the mask, so that it would not even
+## be possible to clip through the nose like this?"): a flat brush by a mask's nose, every pose held as a hand holds it - nothing held clear
+## - round the bridge and the tip each of eight ways, and the middle of a straight way across the nose between two of them, drawn as
+## [method TablePaint.pose] draws it: its handle and ferrule, found every 2 mm over them, no deeper in the face than BRUSH_IN_MOST. THE
+## CONTROL: the same poses as planned stand 3 mm and more in it. A pose already clear is drawn as it is.
+func _kept_clear() -> bool:
+	var m := _medium()
+	var spec := station()
+	_stand(m, spec, "mask", Vector3(Tables.ORIGIN.x, 0.0, Tables.ORIGIN.y) + Vector3(0, 0, -0.06))
+	_stand(m, spec, "flat jar", Vector3(Tables.ORIGIN.x, 0.0, Tables.ORIGIN.y) + Vector3(0.18, 0, 0.06))
+	_stand(m, spec, "black pot", Vector3(Tables.ORIGIN.x, 0.0, Tables.ORIGIN.y) + Vector3(0.09, 0, 0.12))
+	m._work.skin_doc = {"designs": [{"thing": "mask", "part": "face", "name": "a dot", "elements": [
+		{"id": "dot", "stage": "fill", "paint": "#3a5164", "fill": "M 20 180 L 26 180 L 26 186 L 20 186 Z"}]}]}
+	m._work.build({"acts": [{"name": "fill", "beat": 1, "length": "under", "tracks": [{"thing": "flat jar", "part": "flat", "law": "paint", "on": "mask", "paint": ["dot"], "from": "black pot"}]}]}, 1)
+	var tp: TablePaint = m._work.paint
+	_ok(tp != null and (m._work.acts as Array).size() == 1, "the flat brush's act was not kept: %s" % "; ".join(m._work.notes))
+	if tp == null or (m._work.acts as Array).size() < 1:
+		return true
+	var track := _track_of(m, "fill")
+	var tool: Dictionary = tp.tool_of(String(track.get("_ch", "")), track)
+	var node: Node3D = tool["node"]
+	var x0: Transform3D = tool["x0"]
+	var hw := tp.holder_world(0, 0.0)
+	var face_mesh := TableWork._ray_mesh(_faces_of(tp.skins[0]))
+	var face_box := AABB()
+	for mi in (tp.skins[0] as Dictionary)["meshes"]:
+		face_box = face_box.merge(hw * (mi as MeshInstance3D).get_aabb()) if face_box.size != Vector3.ZERO else hw * (mi as MeshInstance3D).get_aabb()
+	face_box = face_box.grow(0.002)
+	# ...its handle and ferrule's own surface, every 2 mm over each of their faces (the node's space) - never its hairs, which bend
+	var inv := m._work._world_of(node).affine_inverse()
+	var stiff := PackedVector3Array()
+	for mi in node.find_children("*", "MeshInstance3D", true, false):
+		var mm := mi as MeshInstance3D
+		var mat := mm.material_override as ShaderMaterial
+		if mat != null and mat.has_meta("tuft"):
+			continue
+		var own := (inv * m._work._world_of(mm)) * mm.mesh.get_faces()
+		for k in range(0, own.size(), 3):
+			var a := own[k]
+			var e1 := own[k + 1] - a
+			var e2 := own[k + 2] - a
+			var n := maxi(ceili(maxf(e1.length(), e2.length()) / 0.002), 1)
+			for i in n + 1:
+				for j in n + 1 - i:
+					stiff.append(a + e1 * (float(i) / float(n)) + e2 * (float(j) / float(n)))
+	var stiff_in := func(x: Transform3D) -> float:
+		var worst := 0.0
+		for q in stiff:
+			var p := x * q
+			if face_box.has_point(p):
+				var off := _off_face(face_mesh, tp, 0, p)
+				if off < INF:
+					worst = maxf(worst, -off)
+		return worst
+	# ...the places: rings round the nose's bridge and its tip, each pose held as a hand holds it, nothing held clear
+	var marks := FaceForm.landmarks(Vector3(15, 21, 8))
+	var places := PackedVector2Array()
+	for nm in ["the nose's bridge", "the nose's tip"]:
+		var c: Vector2 = (marks[nm] as Dictionary)["at"]
+		for r in [7.0, 13.0, 19.0]:
+			for k in 12:
+				places.append(c + Vector2.from_angle(TAU * float(k) / 12.0) * float(r))
+	var poses: Array = []
+	for xy in places:
+		for k in 8:
+			var pull := Vector2.from_angle(TAU * float(k) / 8.0)
+			var ax := tp._held_axis(0, xy, (tp.at_mm(0, xy)[1] as Vector3).normalized(), tool, "belly", pull)
+			var hv := Vector4(ax.x, ax.y, ax.z, 0.0)
+			var h := tp._skin_hold(0, xy, 0.0, 1.0, 0.0, tool, "belly", hv, hv, 0.0)
+			poses.append([tp._node_at(h, tool, x0), h])
+	# ...and the middle of a straight way across the nose, from one side of a ring to the other
+	var ring := 12
+	for i in range(0, places.size(), 3):
+		var j := (i / ring) * ring + ((i % ring) + ring / 2) % ring
+		var a: Transform3D = (poses[i * 8] as Array)[0]
+		var b: Transform3D = (poses[j * 8 + 4] as Array)[0]
+		var mid := Transform3D(Basis(Quaternion(a.basis.orthonormalized()).slerp(Quaternion(b.basis.orthonormalized()), 0.5)), a.origin.lerp(b.origin, 0.5))
+		poses.append([mid, mid])
+	var planned := 0.0
+	var drawn := 0.0
+	var kept := 0
+	var clear_poses := 0
+	for pz in poses:
+		var x: Transform3D = (pz as Array)[0]
+		var was_in: float = stiff_in.call(x)
+		var got := tp._kept_out(0, tool, x, (pz as Array)[1], 0.0)
+		planned = maxf(planned, was_in)
+		drawn = maxf(drawn, float(stiff_in.call(got)))
+		if was_in <= 0.0:
+			clear_poses += 1
+			if got.is_equal_approx(x):
+				kept += 1
+	print("  %d poses held as a hand holds them, and ways across the nose: as planned %.2f mm in the face at most, as drawn %.2f mm; %d of %d clear ones drawn as they are" % [
+		poses.size(), planned * 1000.0, drawn * 1000.0, kept, clear_poses])
+	_ok(drawn <= BRUSH_IN_MOST, "a brush drawn wherever its plan puts it stands %.2f mm in the face" % (drawn * 1000.0))
+	_ok(planned > 0.003, "THE CONTROL: as planned, those poses stand only %.2f mm in the face" % (planned * 1000.0))
+	_ok(clear_poses > 0 and kept == clear_poses, "a pose already clear was moved (%d of %d kept)" % [kept, clear_poses])
 	return true

@@ -58,8 +58,8 @@ def as_reference(painted_path, bare_path, at, size, skin):
     b = np.asarray(b).astype(float) / 255.0
     lum = lambda c: 0.2126 * c[..., 0] + 0.7152 * c[..., 1] + 0.0722 * c[..., 2]
     bc = np.array([int(skin[i:i + 2], 16) / 255.0 for i in (1, 3, 5)])
-    x0, y0 = at
-    w, h = size
+    x0, y0 = (int(round(v)) for v in at)
+    w, h = (int(round(v)) for v in size)
     pc, bb = p[y0:y0 + h, x0:x0 + w], b[y0:y0 + h, x0:x0 + w]
     lit = np.clip(lum(bb) / max(lum(bc), 0.05), 0.62, 1.0)[..., None]
     rgb = np.minimum(pc / lit, 1.0)

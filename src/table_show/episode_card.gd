@@ -966,7 +966,7 @@ func _redo(step: String) -> void:
 		return
 	if _producer.running:
 		_producer.stop()
-	var gone := _episode.invalidate(step)
+	var gone := _episode.invalidate(step, false, _episode.unlocked(step))
 	print("ghost: table redo %s - removed %s" % [step, ", ".join(PackedStringArray(gone))])
 	_mark_stale()
 	_run([step] + (TOGETHER.get(step, []) as Array))
@@ -1009,6 +1009,10 @@ class Section extends PipelineSection:
 
 	func busy() -> bool:
 		return card._making()
+
+	# (...a row made again runs alone, what was made from it waiting for Generate: pressed meanwhile, the rest is made after it)
+	func widens() -> bool:
+		return card._producer != null and card._producer.running and not card._producer.only.is_empty() and missing()
 
 	func missing() -> bool:
 		return card._episode != null and not bool(card._facts()["complete"])
@@ -1161,6 +1165,16 @@ func _row_of(step: String, kind: String, group: String, busy: bool, f: Dictionar
 	if not ready:
 		r.again += " - once what it is made from is made"
 	r.asks = _asks_of(step, f)
+	# A LOCK BESIDE ITS ⟳ where something is made from it (TableEpisode.unlocked): unlocked, it is made again alone and throws nothing away
+	r.lockable = not ((f["lost"] as Dictionary).get(step, []) as Array).is_empty()
+	r.locked = not _episode.unlocked(step)
+	if not r.locked:
+		r.asks = ""
+	r.lock = func(on: bool) -> void:
+		var err := _episode.set_unlocked(step, not on)
+		if not err.is_empty():
+			_set_status("Could not keep the lock: " + err)
+		_mark_stale()
 	r.redo = _redo.bind(step)
 	return r
 

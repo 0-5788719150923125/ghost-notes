@@ -4,7 +4,7 @@ class_name TablePaint
 ## TablePaint - THE PAINTED SURFACE, played: a part of [TableWork] (next/painted_surface.md). Every part with a `skin` on the
 ## table, the design painted on it ([Skins], the episode's `skin.json`), and the `paint` law ([Motions]) that lays it on - a
 ## tool fetched from where it rests, loaded from its paint, pressed onto the surface and moved over each element as its
-## program has it ([method Skins.program]), back to the paint when it runs dry, and back where it was when the act is done.
+## program has it ([method Skins.program]), back to the paint when it runs dry, and back where it rests when the act is done.
 ##
 ## A PURE FUNCTION OF SHOW TIME, as all the work is: each element is shown where its tool has been by its reveal map and the
 ## moments the schedule gives its strokes ([method spans]); a tool's place, the bend of its hairs, the paint on its tip and the
@@ -181,6 +181,28 @@ const BRUSH_DIP := 0.003
 ## ...and WORKED INTO IT ([method _brush_load]): swirled round this many times, out this far from where it went in (meters).
 const LOAD_TURNS := 2.0
 const LOAD_SWIRL := 0.004
+## A BRUSH IS LAID ON WHAT IT IS PRESSED ONTO OFF THE FACE - ITS PAINT IN ITS POT, THE WATER CUP'S FLOOR, THE TOWEL (feedback 0002,
+## 2026-11-09: "These brushes are not actually touching the foundation in the container ... just a tiny little portion of the very tip of
+## the brush is touching. The same applies EVERYWHERE that brushes are dipped in containers. It also applies to the grey pad ... we need
+## the bottom 30% to 50% of bristles touching, laying on their side"): its handle leaning the first of [constant LAY_LEANS] (degrees off
+## upright) that keeps it inside the pot's wall, out toward the side of the table the pot is on and a little toward the camera
+## ([constant LAY_OUT]: never over the work), and pushed straight down until [constant LAY_SHARE] of its hairs' length lies along the
+## surface, the rest bowed down to it ([method _laid_hold], [method Bristles.laid]) - their middle line this far over it, about a hair's
+## thickness ([constant LAY_CLEAR]). A flat brush is leaned across its broadside as it comes rolled, so its flat lies down, never its
+## chisel edge (anything left of a turn turned in the hand on the way, [method _roll_toward]). Held 21 degrees off upright and pushed its
+## give past the surface, its hairs bent only until the tip met it (feedback 0017), 1 mm of its point had touched.
+## ...the last nearly upright, its hairs bent most of a right angle onto the floor of a cup too deep and narrow for any lean (feedback 0002:
+## "EVERYWHERE that brushes are dipped in containers" - a water cup 7 cm deep had taken no lean, and a rinse stood 1 mm over its floor).
+const LAY_LEANS := [55.0, 45.0, 35.0, 25.0, 15.0, 5.0]
+## ...COME TO IT AT A HAND'S PACE THE BRUSH KEEPS UP WITH ([method _brush_laid]): its way there taking at least as long as this many meters a
+## second, on average, brings it - the solver carries a held thing near others no faster than [constant RigidParts.STEP_MOST] x
+## [constant RigidParts.PIECES_MOST] a frame, about 58 cm a second, and a hand's way peaks near twice its average - and at most this
+## share of the trip, the rest its press.
+const TRIP_PACE := 0.25
+const TRIP_GO_MOST := 0.6
+const LAY_OUT := Vector2(0.8, 0.6)
+const LAY_SHARE := 0.3
+const LAY_CLEAR := 0.0003
 ## ...AND IS NEVER STOOD OFF WHAT IT PAINTS FURTHER THAN THIS (meters, [method _cleared]): its hairs bend against what it meets.
 const BRUSH_STAND_MOST := 0.0015
 const FLAT_BAND := 0.008
@@ -235,11 +257,25 @@ const ARC_LOOKS := 40
 const ARC_CLEAR := 0.003
 ## ...looked at only this far from either key (shares of the way): nearer, the key's own clearance is what holds it.
 const ARC_ENDS := 0.15
+## ...AND EVERY POSE IT IS DRAWN AT, whatever its plan ([method _kept_out]): standing in what it paints past what gives by no more than this
+## (meters), turned up about its tip at most this far (degrees, found to within its halvings), else lifted out in at most this many steps.
+const KEEP_OUT := 0.0005
+## ...its handle and ferrule read off the surface itself, not its cells, within this of them (meters, [method _sunk_exact]), found every
+## this far over their faces ([method tool_of]'s `stiff_dense`).
+const EXACT_BAND := 0.003
+const KEEP_EVERY := 0.002
+const KEEP_TURN_MOST := 40.0
+const KEEP_HALVINGS := 7
+const KEEP_LIFTS := 6
 ## ...a pot's wall kept this far from (meters, past the swirl of a rinse);
 const CLEAR_WALL := 0.0055
-## ...and the tool's surface found across each face of its box every this far (meters), at least two and at most twelve a side: a
-## centimeter apart, the nose's underside stood 7 mm in a sponge's flat face between them.
+## ...and the tool's surface found across each face of its box every this far (meters), at least two and at most POINTS_MOST a side: a
+## centimeter apart, the nose's underside stood 7 mm in a sponge's flat face between them; at most twelve a side, a round brush 15 cm
+## long was looked at every 14 mm along it, and its ferrule's lip, between two, stood 6 mm in a mask's nose (feedback 0003, 2026-11-09,
+## 732687's intro: "This brush is clipping straight through the nose here").
 const POINTS_EVERY := 0.005
+const POINTS_MOST := 40
+const POINTS_RIM := 0.0015
 ## WHAT A PRESSING TOOL TOUCHES IS WHAT IT PAINTS ([method _touched]): its surface found this finely (meters), and a bit of it touches
 ## the face within this of it, or in it (a sponge pushed in gives, and is drawn squashed onto it) - for the manners a tool presses on.
 const TOUCH_EVERY := 0.001
@@ -789,6 +825,11 @@ func tool_of(ch: String, tr: Dictionary) -> Dictionary:
 	var first := true
 	var inv := work._world_of(node).affine_inverse()
 	var faces := PackedVector3Array()
+	# (...its hairs' apart from the rest - [method _sunk_node] lets hairs alone bend and give)
+	var hair_faces := PackedVector3Array()
+	var hair_box := AABB()
+	var stiff_faces := PackedVector3Array()
+	var stiff_box := AABB()
 	for m in meshes:
 		var mi := m as MeshInstance3D
 		var mat := mi.material_override as ShaderMaterial
@@ -797,8 +838,14 @@ func tool_of(ch: String, tr: Dictionary) -> Dictionary:
 		box = b if first else box.merge(b)
 		first = false
 		if mi.mesh != null:
-			for v in mi.mesh.get_faces():
-				faces.append(to_node * v)
+			var own := to_node * mi.mesh.get_faces()
+			faces.append_array(own)
+			if mat != null and mat.has_meta("tuft"):
+				hair_box = b if hair_faces.is_empty() else hair_box.merge(b)
+				hair_faces.append_array(own)
+			else:
+				stiff_box = b if stiff_faces.is_empty() else stiff_box.merge(b)
+				stiff_faces.append_array(own)
 		if mat == null:
 			continue
 		if mat.has_meta("tuft"):
@@ -812,6 +859,8 @@ func tool_of(ch: String, tr: Dictionary) -> Dictionary:
 		out["kind"] = "brush"
 		out["mm"] = float(tf["mm"])
 		out["len"] = float(tf["len"])
+		# (...as far as its hairs bend at all: a cotton swab's bud, wound tight on its stick, a little - [constant Bristles.KINDS])
+		out["bends"] = Bristles.bends_of(String(tf["kind"]))
 		# its tip the tuft's, its grip back along the handle
 		var to_node := inv * work._world_of((tufts[0] as Dictionary)["mesh"])
 		var root: Vector3 = to_node * (tf["root"] as Vector3)
@@ -905,16 +954,37 @@ func tool_of(ch: String, tr: Dictionary) -> Dictionary:
 		var to_node_t := inv * work._world_of((tufts[0] as Dictionary)["mesh"])
 		out["across"] = (to_node_t.basis * (((tufts[0] as Dictionary)["tuft"] as Dictionary)["across"] as Vector3)).normalized()
 	out["center"] = c
-	out["points"] = _surface_points(tm, box)
+	# ...A BRUSH'S HANDLE AND FERRULE FOUND APART FROM ITS HAIRS, the first `stiff` of its points: only its hairs bend and give as it is
+	# pressed ([method _sunk_node]). Forgiven its hairs' bend and give, and looked at every 14 mm, the ferrule of 732687's round brush laid
+	# low on its belly stood 6 mm in the mask's nose where the clearance read it 3-5 mm clear of it (feedback 0003). AND ITS RIMS AS ITS
+	# MESH HAS THEM, a point every POINTS_RIM: rays across its box graze a ferrule's lip, its lowest edge laid low, and a flat brush's on a
+	# nose's ridge stood 3 mm in it with no point of the clearance's nearer than 4.5 mm
+	if String(out["kind"]) == "brush" and not stiff_faces.is_empty() and not hair_faces.is_empty():
+		var stiff := _surface_points(TableWork._ray_mesh(stiff_faces), stiff_box)
+		var seen := {}
+		for v in stiff_faces:
+			var cell := Vector3i((v / POINTS_RIM).round())
+			if not seen.has(cell):
+				seen[cell] = true
+				stiff.append(v)
+		out["stiff"] = stiff.size()
+		# ...and, for a pose as it is drawn ([method _kept_out]), its handle and ferrule found every KEEP_EVERY over each of their faces:
+		# between points 5 mm apart a ferrule's lip laid on a nose's ridge stood 1.4 mm in it (feedback 0003)
+		out["stiff_dense"] = _dense_points(stiff_faces, KEEP_EVERY)
+		stiff.append_array(_surface_points(TableWork._ray_mesh(hair_faces), hair_box))
+		out["points"] = stiff
+	else:
+		out["points"] = _surface_points(tm, box)
 	var kind := String(out["kind"])
-	var held := {"tip": out["tip"], "grip": out["grip"], "give": GIVE if kind == "sponge" else (float(out["len"]) * TIP_PUSH if kind == "brush" else (PAD_GIVE if bool(out.get("flat", false)) else 0.0)),
-		"bend": float(out["len"]) if kind == "brush" else 0.001}
+	var bends := float(out.get("bends", 1.0))
+	var held := {"tip": out["tip"], "grip": out["grip"], "give": GIVE if kind == "sponge" else (float(out["len"]) * TIP_PUSH * bends if kind == "brush" else (PAD_GIVE if bool(out.get("flat", false)) else 0.0)),
+		"bend": float(out["len"]) * bends if kind == "brush" else 0.001}
 	out["ch"] = ch
 	out["contact"] = "face" if kind == "sponge" or bool(out.get("flat", false)) else "tip"
 	out["contacts"] = {String(out["contact"]): held}
 	# A BRUSH LAYING A FILL PRESSED DEEPER, its belly brought down onto the face ([constant BELLY_PUSH]; held low, [constant HELD_LOW])
 	if kind == "brush":
-		(out["contacts"] as Dictionary)["belly"] = {"tip": out["tip"], "grip": out["grip"], "give": float(out["len"]) * BELLY_PUSH, "bend": float(out["len"])}
+		(out["contacts"] as Dictionary)["belly"] = {"tip": out["tip"], "grip": out["grip"], "give": float(out["len"]) * BELLY_PUSH * bends, "bend": float(out["len"]) * bends}
 	# A SPONGE'S CORNER: the point of its surface toward a corner of its box, held through its middle
 	if kind == "sponge":
 		var corner := box.position
@@ -959,7 +1029,32 @@ func tool_of(ch: String, tr: Dictionary) -> Dictionary:
 ## WHERE A TOOL'S OWN SURFACE IS (its node's space): rays straight in from across each face of its box [param box], every
 ## [constant POINTS_EVERY], where each meets [param tm] - a box's corners and its faces to their edges alike, which its corners alone are
 ## not (and rays aimed at its middle met a face's edges from the side). Given an Array [param normals], the way each faces is put in it.
-static func _surface_points(tm: TriangleMesh, box: AABB, every := POINTS_EVERY, most := 12, normals: Variant = null) -> PackedVector3Array:
+## Points over each of triangles [param faces] (three a face) no further than [param every] apart along each of its two edges, one kept
+## each [constant POINTS_RIM] - a long, thin face (a handle's side, end to end) looked at along its length, never only at its corners.
+static func _dense_points(faces: PackedVector3Array, every: float) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	var seen := {}
+	for k in range(0, faces.size() - 2, 3):
+		var a := faces[k]
+		var e1 := faces[k + 1] - a
+		var e2 := faces[k + 2] - a
+		var nu := maxi(ceili(e1.length() / every), 1)
+		var nv := maxi(ceili(e2.length() / every), 1)
+		for i in nu + 1:
+			for j in nv + 1:
+				var u := float(i) / float(nu)
+				var v := float(j) / float(nv)
+				if u + v > 1.0001:
+					continue
+				var p := a + e1 * u + e2 * v
+				var cell := Vector3i((p / POINTS_RIM).round())
+				if not seen.has(cell):
+					seen[cell] = true
+					out.append(p)
+	return out
+
+
+static func _surface_points(tm: TriangleMesh, box: AABB, every := POINTS_EVERY, most := POINTS_MOST, normals: Variant = null) -> PackedVector3Array:
 	var out := PackedVector3Array()
 	if tm == null:
 		return out
@@ -1256,6 +1351,7 @@ func _from_picture() -> void:
 		var prog: Dictionary = res["program"]
 		# (...by which its holds are kept - [method _held_keys]: a program laid again on another canvas is another program)
 		prog["id"] = "%s|picture|%d" % [String(od["id"]), hash(prog["keys"])]
+		prog["pot"] = String(lay.get("pot", ed["paint"]))
 		made["program"] = prog
 		made["planned"] = prog
 		made["laid"] = true
@@ -1342,6 +1438,10 @@ func _from_host(item: Dictionary, host_id: String, id: String, si: int) -> void:
 	cover.generate_mipmaps()
 	var p: Dictionary = el["program"]
 	var strokes: Array = []
+	# ...EACH PRESS HELD BY THE SIDE THE PAINTER PRESSED IT WITH (feedback 0012, 2026-11-09: "This sponge has, so far, never once used its
+	# flat side ... if we're covering the whole face here"): its `side`, by its place, as a program laid from the picture says it
+	# ([method _held_keys]' `way_at`) - every press of 732687's base, patted with the face, had been held by the corner, the manner's
+	var way_at := {}
 	for st in p.get("strokes", []):
 		var sd2: Dictionary = st
 		var pts := PackedVector2Array()
@@ -1349,13 +1449,19 @@ func _from_host(item: Dictionary, host_id: String, id: String, si: int) -> void:
 			pts.append(Vector2(float((q as Array)[0]), float((q as Array)[1])))
 		strokes.append({"pts": pts, "t": PackedFloat32Array(sd2["t"]), "r": float(sd2["r"]), "load": PackedFloat32Array(sd2["load"]),
 			"press": PackedFloat32Array(sd2["press"])})
+		var side := WAYS.find(String(sd2.get("side", "")))
+		if pts.size() == 1 and side > 0:
+			way_at[pts[0]] = side
 	var keys: Array = []
 	for k in p.get("keys", []):
 		var ka: Array = k
 		keys.append([float(ka[0]), float(ka[1]), float(ka[2]), float(ka[3]), float(ka[4]), int(ka[5])])
 	var prog := {"keys": keys, "strokes": strokes, "stones": [], "pats": [], "mists": [], "natural": maxf(float(p.get("natural", 0.1)), 0.1)}
-	prog["manner"] = String((_layers.get("%d|%s" % [si, id], {}) as Dictionary).get("manner", ""))
-	prog["way_at"] = {}
+	var lay: Dictionary = _layers.get("%d|%s" % [si, id], {})
+	prog["manner"] = String(lay.get("manner", ""))
+	# (...and the paint its trips back to the pot go to - [method _surface_hold])
+	prog["pot"] = String(lay.get("pot", el.get("color", "")))
+	prog["way_at"] = way_at
 	prog["id"] = "%s|host|%d" % [id, hash(keys)]
 	made["shape_natural"] = float(prog["natural"])
 	made["program"] = prog
@@ -1724,7 +1830,7 @@ func _dab_touch(si: int, tool: Dictionary, contact: String, xy: Vector2, press: 
 	var h := _skin_hold(si, xy, 0.0, press, 0.0, tool, contact, cl, cl, 0.0)
 	var axis: Vector3 = (h[1] as Vector3).normalized()
 	var n: Vector3 = h[7]
-	var tg := Bristles.target(Vector3.ZERO, press, float(tool["len"]), axis, -(axis - n * axis.dot(n)))
+	var tg := Bristles.target(Vector3.ZERO, press, float(tool["len"]), axis, -(axis - n * axis.dot(n)), float(tool.get("bends", 1.0)))
 	var bend: Vector3 = _node_at(h, tool, tool["x0"]).basis.inverse() * _bend_to_surface(si, tool, h, tg[0] as Vector3)
 	return _touched(si, tool, h, bend, float(tg[1]))
 
@@ -2207,9 +2313,13 @@ func _blend_touches() -> void:
 
 ## A BRUSH'S HAIRS BENT [param bend] (the table's space, [method Bristles.target]) HELD [param h] ON SKIN [param si], made to keep their tip ON
 ## THE FACE: what of the bend goes toward the face or away from it, across the hairs, is as much as brings the tip back to it from where
-## the hold put it - pushed in, they bow just so far (a liner pressed lightly hardly at all, a brush laying a fill well over); stood off a
-## little, they reach it - and what goes along the face, a drag aside, is kept (feedback 0029-0031: a fold of a fifth of their length,
-## tilted with the brush, had carried a liner's tip 2.5 mm up off the face it was meant to be touching, and it painted nothing). How far
+## the hold put it - pushed in, they bow just so far (a liner pressed lightly hardly at all, a brush laying a fill well over) - and what
+## goes along the face, a drag aside, is kept (feedback 0029-0031: a fold of a fifth of their length, tilted with the brush, had carried a
+## liner's tip 2.5 mm up off the face it was meant to be touching, and it painted nothing). NEVER TOWARD THE FACE (feedback 0019, 2026-11-09:
+## "why are the bristles curved, when the brush is lifted? ... a lot of the brushes will curve in the WRONG direction when applying paint:
+## they will curve downward, into the mask, rather than away, repulsed by the mask's collision"): what touches only pushes hairs away, so
+## a tip standing off the face stays straight - 732687's round brush, lifted 4.3 mm, had curled its hairs 4.8 mm down toward the mask in
+## every lifted frame, the search's answer jumping 2 to 8 mm between frames. How far
 ## over the face the tip is, is read off the face's heights as the skin's own part stands - along ITS depth - so the bend that takes it
 ## there is found with the tip where the arc puts it - the least bend either way that brings it onto the face, looked for in growing
 ## steps and then halved ([constant TIP_STEP]). Counted along the face's normal, a forehead sloping back from the mask's depth saw a tip
@@ -2227,7 +2337,8 @@ func _bend_to_surface(si: int, tool: Dictionary, h: Array, bend: Vector3) -> Vec
 	var g := _obstacles(skins[si])
 	var to_part: Transform3D = g["to_part"] * _node_at(h, tool, tool["x0"])
 	var to_node := _node_at(h, tool, tool["x0"]).basis.inverse()
-	var most := float(tool.get("len", 0.01)) * 0.6
+	# (...a stiff tip - a cotton swab's bud - as little as its hairs bend: [constant Bristles.KINDS]' `bends`)
+	var most := float(tool.get("len", 0.01)) * 0.6 * float(tool.get("bends", 1.0))
 	var kept := bend - m * bend.dot(m)
 	# how far over the face the tip is, bent toward m this far (meters; NAN off the face)
 	var over := func(t: float) -> float:
@@ -2237,15 +2348,18 @@ func _bend_to_surface(si: int, tool: Dictionary, h: Array, bend: Vector3) -> Vec
 	var o0: float = over.call(0.0)
 	if is_nan(o0):
 		return bend
+	# ...STANDING OFF IT, NOT BENT TOWARD IT: only the drag aside is kept
+	if o0 >= 0.0:
+		return kept
 	# ...no further than TIP_REACH times what would bring it there over a flat face (the part's depth it goes for each meter of bend): a
 	# brush held near upright, pressed into the crease between two lips, slid its tip 4 mm up the lower one to find the face - its hairs
 	# spread, and its tip stays
 	var mp := (g["to_part"] as Transform3D).basis * m
 	most = minf(most, TIP_REACH * absf(o0) / maxf(mp.z, 0.2 * mp.length()))
-	# ...away from the face where it is in it, toward it where it stands off: the first step past the face, then halved - and none past it
-	# within reach, the bend of those that came nearest (pressed into the crease between two lips, bent away it only climbed a lip's side,
-	# and bent as far as it bends it painted a lip and not the crease)
-	var way := 1.0 if o0 < 0.0 else -1.0
+	# ...away from the face where it is in it: the first step past the face, then halved - and none past it within reach, the bend of
+	# those that came nearest (pressed into the crease between two lips, bent away it only climbed a lip's side, and bent as far as it
+	# bends it painted a lip and not the crease)
+	var way := 1.0
 	var lo := 0.0
 	var hi := NAN
 	var nearest := 0.0
@@ -2278,14 +2392,47 @@ func _bend_to_surface(si: int, tool: Dictionary, h: Array, bend: Vector3) -> Vec
 	return kept + m * way * hi
 
 
+## A BRUSH'S HAIRS HELD [param h] ON A LEVEL SURFACE - its paint in a pot, the water cup's floor, the towel - whose height is the hold's
+## `h[6]` and whose normal its `h[7]` ([method _laid_hold], [method _trip]): LAID ON IT as far as their root is pushed down to it
+## ([method Bristles.laid]) - reaching it, bent away across the hairs until the tip is on it, never toward it; lower, a share of them
+## lying along it on their side (feedback 0002) - bowed away from the handle's lean. Out of its reach, bent [param bend] (the table's
+## space) as they were. Returns `[bend (the table's space), lay (prop_common's `bristle_lay`: the share lying along it, the arc's
+## angle)]`. Bent no further than brings the tip onto it, as an arc whose tip still pointed into the surface (feedback 0017), 1 mm of
+## a brush's point had touched its paint.
+func _lay_on_plane(tool: Dictionary, h: Array, bend: Vector3) -> Array:
+	if h.size() < 8 or (h[7] as Vector3).length_squared() < 0.5 or not tool.has("hair_root") or is_nan(float(h[6])):
+		return [bend, Vector2.ZERO]
+	var x := _node_at(h, tool, tool["x0"])
+	var n: Vector3 = (h[7] as Vector3).normalized()
+	var d := (x.basis * (tool["hair_axis"] as Vector3)).normalized()
+	var root := x * (tool["hair_root"] as Vector3)
+	var hl := float(tool["len"])
+	var lay := Bristles.laid((root - Vector3(root.x, float(h[6]), root.z)).dot(n) - LAY_CLEAR, -d.dot(n), hl)
+	# (...a cotton tip, wound tight on its stick, only bends, a little - [constant Bristles.KINDS]' `bends`)
+	var bends := float(tool.get("bends", 1.0))
+	if bends < 1.0:
+		lay = Vector2(0.0, minf(lay.y, Bristles.arc_angle(0.6 * bends)))
+	if lay.y <= 0.0:
+		return [bend, Vector2.ZERO]
+	# (away from the handle's lean along the surface - held straight down onto it, the way its node's own x goes)
+	var m := n - d * d.dot(n)
+	if m.length() < 0.05:
+		m = x.basis.x - d * d.dot(x.basis.x)
+	return [m.normalized() * Bristles.laid_at(1.0, lay, hl).x, lay]
+
+
 ## Where brush [param tool]'s tip is, its hairs bent [param bend] (its node's space) as [method _touched] bends them: an arc as long as
-## the hairs, from their root.
-static func _bent_tip(tool: Dictionary, bend: Vector3) -> Vector3:
+## the hairs, from their root - or, laid on a surface ([param lay], [method _lay_on_plane]), as [method Bristles.laid_at] lays them,
+## bowed the way [param bend] goes.
+static func _bent_tip(tool: Dictionary, bend: Vector3, lay := Vector2.ZERO) -> Vector3:
 	var root: Vector3 = tool["hair_root"]
 	var ax: Vector3 = tool["hair_axis"]
 	var hl := maxf(float(tool["len"]), 1e-4)
 	var aside := bend - ax * bend.dot(ax)
 	var side := aside.length()
+	if lay.y > 1e-4 and side > 1e-9:
+		var at := Bristles.laid_at(1.0, lay, hl)
+		return root + ax * at.y + aside / side * at.x
 	var th := Bristles.arc_angle(minf(side / hl, Bristles.ASIDE_MOST))
 	if th <= 1e-4:
 		return root + ax * hl
@@ -2373,7 +2520,8 @@ func _stroke_touches(si: int, prog: Dictionary, tr: Dictionary, tool: Dictionary
 				var axis: Vector3 = (h[1] as Vector3).normalized()
 				var n_h: Vector3 = h[7] if h.size() > 7 else Vector3.ZERO
 				var ahead := -(axis - n_h * axis.dot(n_h)) if n_h.length_squared() > 0.5 else Vector3.ZERO
-				var tg := Bristles.target(((h1[0] as Vector3) - (h0[0] as Vector3)) / maxf(dt, 1e-3), float(h[2]), float(tool["len"]), axis, ahead)
+				var tg := Bristles.target(((h1[0] as Vector3) - (h0[0] as Vector3)) / maxf(dt, 1e-3), float(h[2]), float(tool["len"]), axis, ahead,
+					float(tool.get("bends", 1.0)))
 				bend = _node_at(h, tool, tool["x0"]).basis.inverse() * _bend_to_surface(si, tool, h, tg[0] as Vector3)
 				splay = float(tg[1])
 			var got := _touched(si, tool, h, bend, splay)
@@ -2770,6 +2918,9 @@ func plan_of(tr: Dictionary, d: float) -> Dictionary:
 	var parts: Array = []
 	# (...still holding the paint its last act ended with, where this one begins in it - [method _one_after_another])
 	var loaded := String(tr.get("_loaded", ""))
+	# ...and the mix on it, once this act loaded one: a new mix from the same pot is rinsed off and taken up again (feedback 0006,
+	# 2026-11-09: a pale amber mix, then a dark one, "applied without ever returning to the container, to pickup a heavier load")
+	var loaded_as := ""
 	for id in tr.get("paint", []):
 		var ed := element(si, String(id))
 		if ed.is_empty():
@@ -2795,7 +2946,9 @@ func plan_of(tr: Dictionary, d: float) -> Dictionary:
 				if tr.has("dry"):
 					pre.append({"kind": "dry", "len": _trip_len("dry", tool)})
 			loaded = ""
-		elif role == "paint" and not String(ed["kind"]) in ["stones", "smear", "mist"] and pot != loaded:
+			loaded_as = ""
+		elif role == "paint" and not String(ed["kind"]) in ["stones", "smear", "mist"] \
+				and (pot != loaded or (not loaded_as.is_empty() and String(ed["paint"]) != loaded_as)):
 			# (...a thin one taken up on a brush wetted first - rinsed and not dried, or dipped clean - [constant THIN_WET]; never one still
 			# damp from the rinse that ended its last act)
 			var thin := float(ed["opacity"]) * float(lay.get("thick", 1.0)) < THIN_WET and not (loaded.is_empty() and bool(tr.get("_damp", false)))
@@ -2805,6 +2958,9 @@ func plan_of(tr: Dictionary, d: float) -> Dictionary:
 					pre.append({"kind": "dry", "len": _trip_len("dry", tool)})
 			pre.append({"kind": "load", "len": LOAD, "paint": pot, "from": String(tr.get("from", "")), "side": _side_after(prog, -1)})
 			loaded = pot
+			loaded_as = String(ed["paint"])
+			if not prog.has("pot"):
+				prog["pot"] = pot
 		parts.append({"el": String(ed["id"]).to_lower(), "pre": pre, "prog": prog, "role": role, "finish": String(ed["finish"])})
 		# ...AND A SOFT EDGE GONE OVER AGAIN as soon as it is laid, nothing more taken up ([constant SOFT_GONE_OVER])
 		if mine and bool(lay.get("soft_over", false)):
@@ -2910,14 +3066,100 @@ func _natural_of(act: Dictionary, tr: Dictionary) -> float:
 
 
 ## WHERE THE TOOL IS at [param tau] seconds into its act (of [param d]): its node in the table's space - fetched from
-## [param from], over its work, and back. [param x0]: its node at rest.
+## [param from], over its work, and back where it rests ([method _home_of]). [param x0]: its node at rest.
 func pose(e: Dictionary, tr: Dictionary, tau: float, d: float, T: float, from: Transform3D, x0: Transform3D) -> Transform3D:
 	var plan := _plan_entry(e, tr, d)
 	var tool := tool_of(String(tr["_ch"]), tr)
-	var held: Variant = _held_at(plan, tr, tau, T, from, x0)
-	if held is Transform3D:
-		return held
-	return _node_at(held as Array, tool, x0)
+	var held: Variant = _held_at(plan, tr, tau, T, from, x0, _home_of(e, from))
+	var x: Transform3D = held if held is Transform3D else _node_at(held as Array, tool, x0)
+	return _kept_out(int(plan.get("si", -1)), tool, x, held, T)
+
+
+## A GATE'S SWITCH: off, a drawn pose is left as its plan places it ([method _kept_out]) - what a control shows the guard keeps from
+## happening. Never set by the show.
+var keep_out := true
+
+
+## THE DRAWN TOOL STANDS IN NOTHING, WHATEVER ITS PLAN (feedback 0003, 2026-11-09, the user: "This brush is clipping straight through the
+## nose here. This has happened a half dozen times already ... Why don't we have proper collision on the props and on the mask, so that it
+## would not even be possible to clip through the nose like this?"): every pose a painting tool is drawn at - over its work, between two
+## elements, on a trip, fetched or put back - is looked at against what stands over the surface it paints ([method _obstacles], the
+## measure its clearance is found by), its handle and ferrule never in it, its hairs and a sponge no deeper than they give ([method
+## _sunk_node]). One that is, is turned up about its tip, as little as clears it (at most [constant KEEP_TURN_MOST]), else lifted out
+## along the surface's front. Each key had been held clear and the way between them looked at every few millimeters, and still the
+## round brush's ferrule stood up to 21 mm in 732687's nose between them, on a move from one element to the next. The physics, which
+## leaves a tool painting a surface where its law puts it ([method TablePhysics._painted_by]), draws this pose. [param held]: the hold it
+## was placed from (an Array), or the node itself (fetched, put back, turned in the hand).
+func _kept_out(si: int, tool: Dictionary, x: Transform3D, held: Variant, T: float) -> Transform3D:
+	if not keep_out or si < 0 or si >= skins.size() or tool.is_empty() or (tool.get("points", PackedVector3Array()) as PackedVector3Array).is_empty():
+		return x
+	var sd: Dictionary = skins[si]
+	if not sd.has("_rest"):
+		return x
+	var g := _obstacles(sd)
+	var contact := _contact_of(held as Array) if held is Array else ""
+	if contact.is_empty():
+		contact = String(tool.get("contact", ""))
+	var press := float((held as Array)[2]) if held is Array and (held as Array).size() > 2 else 0.0
+	# (...in the skin's frame as it rests, where its field was found - carried with its holder as it is now)
+	var rest: Transform3D = sd["_rest"]
+	var to_rest := rest * holder_world(si, T).affine_inverse()
+	var xr := to_rest * x
+	if _sunk_exact(sd, g, tool, contact, xr, press, KEEP_OUT) <= KEEP_OUT:
+		return x
+	var out := ((rest * (sd["xform"] as Transform3D)).basis * Vector3.BACK).normalized()
+	var c := _contact(tool, contact)
+	var tip := xr * (c["tip"] as Vector3)
+	var along := (xr.basis * ((c["grip"] as Vector3) - (c["tip"] as Vector3))).normalized()
+	var spin := along.cross(out)
+	# ...TURNED UP ABOUT ITS TIP toward the surface's front, as little as clears it
+	if spin.length() > 0.05:
+		spin = spin.normalized()
+		var most := minf(deg_to_rad(KEEP_TURN_MOST), along.angle_to(out))
+		var turned := func(a: float) -> Transform3D:
+			var r := Basis(spin, a)
+			return Transform3D(r * xr.basis, tip + r * (xr.origin - tip))
+		if _sunk_exact(sd, g, tool, contact, turned.call(most), press, KEEP_OUT) <= KEEP_OUT:
+			var lo := 0.0
+			var hi := most
+			for it in KEEP_HALVINGS:
+				var mid := (lo + hi) * 0.5
+				if _sunk_exact(sd, g, tool, contact, turned.call(mid), press, KEEP_OUT) <= KEEP_OUT:
+					hi = mid
+				else:
+					lo = mid
+			return to_rest.affine_inverse() * (turned.call(hi) as Transform3D)
+		xr = turned.call(most)
+	# ...ELSE LIFTED OUT along its front until it is clear (read across a slope, a depth is at most SLOPE_MOST times shallower)
+	for it in KEEP_LIFTS:
+		var dd := _sunk_exact(sd, g, tool, contact, xr, press, INF)
+		if dd <= KEEP_OUT:
+			break
+		xr = Transform3D(xr.basis, xr.origin + out * (dd * SLOPE_MOST + KEEP_OUT))
+	return to_rest.affine_inverse() * xr
+
+
+## WHERE ENTRY [param e]'s ACT PUTS ITS TOOL BACK: where it was as the act began ([param from]) - or, begun with it still in hand from the
+## act straight before (`_loaded`, [method _one_after_another]), where THAT act took it from (feedback 0004, 2026-11-09: "Why is there a
+## brush floating near the eye, while we are simultaneously using a second brush, dipping it in the yellow foundation?"). Put back where
+## the act found it, 732687's round brush, kept in hand from one act into the next, was set down in the air over the eye where the first
+## had left it, and every act of it after went back there while the other brushes worked.
+func _home_of(e: Dictionary, from: Transform3D) -> Transform3D:
+	var tr: Dictionary = e["track"]
+	if not tr.has("_loaded"):
+		return from
+	# (...the entry before it on its channel, by when it begins - never by which copy of the entry this is: the physics holds a tool by a
+	# copy, its `from` where the body was ([method TablePhysics._held_pose]), and a copy matched no entry, so the hand that moves the
+	# body still set 732687's round brush down over the eye - the plan's hand back in the tray, the brush itself 39 cm short of it while
+	# the liner worked. Laid down in order, the last before it is also the one while this one's own end is still being worked out.)
+	var before: Dictionary = {}
+	for o in work._chan.get(String(tr.get("_ch", "")), []):
+		if float((o as Dictionary)["t0"]) >= float(e["t0"]) - 1e-6:
+			break
+		before = o
+	if before.is_empty() or not bool((before["track"] as Dictionary).get("_keep", false)) or not (before.get("from") is Transform3D):
+		return from
+	return _home_of(before, before["from"])
 
 
 ## The plan of entry [param e], made once for its length.
@@ -2932,8 +3174,9 @@ func _plan_entry(e: Dictionary, tr: Dictionary, d: float) -> Dictionary:
 
 ## WHERE THE TIP IS AND WHICH WAY THE TOOL POINTS at [param tau] into [param plan] - a hold, `[tip, axis, pressed (0-1), on the
 ## surface, how far over a pot it comes in, the way it is held ([method _contact])]` (the table's space) - or, fetched, put back or
-## turned in the hand from one way of holding it to another, the node's own place (a Transform3D).
-func _held_at(plan: Dictionary, tr: Dictionary, tau: float, T: float, from: Transform3D, x0: Transform3D) -> Variant:
+## turned in the hand from one way of holding it to another, the node's own place (a Transform3D). [param home]: where it is put back
+## ([method _home_of]).
+func _held_at(plan: Dictionary, tr: Dictionary, tau: float, T: float, from: Transform3D, x0: Transform3D, home: Transform3D) -> Variant:
 	var phases: Array = plan["phases"]
 	if phases.is_empty():
 		return from
@@ -2956,9 +3199,9 @@ func _held_at(plan: Dictionary, tr: Dictionary, tau: float, T: float, from: Tran
 			if String(ph["kind"]) != "fetch":
 				if String(ph["kind"]) == "still":
 					# (held where it is, kept in hand for the act straight after - else back where it rests)
-					return _node_at(_end_of(plan, tr, T, i - 1), tool, x0) if bool(tr.get("_keep", false)) and i > 0 else from
+					return _node_at(_end_of(plan, tr, T, i - 1), tool, x0) if bool(tr.get("_keep", false)) and i > 0 else home
 				a = _node_at(_end_of(plan, tr, T, i - 1), tool, x0)
-				b = from
+				b = home
 			var tip_l: Vector3 = tool["tip"]
 			var pa := a * tip_l
 			var pb := b * tip_l
@@ -2969,8 +3212,9 @@ func _held_at(plan: Dictionary, tr: Dictionary, tau: float, T: float, from: Tran
 			return Transform3D(basis, p - basis * tip_l)
 		"load", "rinse", "dry":
 			# TO ITS PAINT, THE WATER OR THE TOWEL, from wherever it last was, and there - it leaves in what comes next
-			var pot := _trip_hold(ph, T, tr)
-			return _trip(_end_of(plan, tr, T, i - 1), pot, s, seed + i * 7919, String(ph["kind"]), tool)
+			# (...a flat brush leaned across its broadside as it comes rolled from there - [method _laid_hold])
+			var came := _end_of(plan, tr, T, i - 1)
+			return _trip(came, _trip_hold(ph, T, tr, came), s, seed + i * 7919, String(ph["kind"]), tool, float(ph["b"]) - float(ph["a"]))
 		"move":
 			return _between(_end_of(plan, tr, T, i - 1), _hold_of(_surface_hold(si, ph["prog"], 0.0, T, tr), tool), s, seed, tool)
 		"rest":
@@ -2999,7 +3243,9 @@ func _end_of(plan: Dictionary, tr: Dictionary, T: float, i: int) -> Array:
 		return [Vector3.ZERO, Vector3.UP, 0.0, false]
 	var ph: Dictionary = phases[mini(i, phases.size() - 1)]
 	if String(ph["kind"]) in TRIPS:
-		return _lifted(_trip_hold(ph, T, tr))
+		# (...rolled as the tool was where it came from, as the trip itself kept it - a flat brush never turned back at its end)
+		var came := _end_of(plan, tr, T, i - 1)
+		return _lifted(_trip_hold(ph, T, tr, came), came, tool)
 	if String(ph["kind"]) == "move":
 		return _hold_of(_surface_hold(int(plan["si"]), ph["prog"], 0.0, T, tr), tool)
 	if ph.has("prog"):
@@ -3016,8 +3262,10 @@ func _node_at(h: Array, tool: Dictionary, x0: Transform3D) -> Transform3D:
 	var A: Vector3 = (h[1] as Vector3).normalized()
 	var r := Basis(Quaternion(v0, A)) if v0.dot(A) > -0.999 else Basis(Vector3.RIGHT, PI)
 	# A FLAT BRUSH TURNED TO ITS STROKE (feedback 0031: "all of the ways a person can turn a brush, to the fat side for wide strokes, to the
-	# corner for fine strokes"): laying a fill, broadside across the way it goes; drawing a line, on its edge along it - whichever way round
-	# is nearer how it was held, so back and forth it never turns over
+	# corner for fine strokes"): laying a fill, broadside across the way it goes; drawing a line, on its edge along it - WHICHEVER WAY ROUND
+	# IT WAS AT THE KEY BEFORE, its way kept in sign along the program ([method _dirs_of]; feedback 0016: "They wouldn't just flip-flop back
+	# and forth"). Chosen against how it would be held with no turn - its rest turned onto the handle's lean - the choice had flipped as
+	# that lean swung from stroke to stroke, and rolled the flat over half a turn between two keys.
 	if tool.has("across") and h.size() > 8 and (h[8] as Vector3).length_squared() > 0.5:
 		var goes: Vector3 = h[8]
 		var n_s: Vector3 = h[7]
@@ -3027,8 +3275,6 @@ func _node_at(h: Array, tool: Dictionary, x0: Transform3D) -> Transform3D:
 			want = want.normalized()
 			var u0 := x0.basis * (tool["across"] as Vector3)
 			u0 = (u0 - v0 * u0.dot(v0)).normalized()
-			if (r * u0).dot(want) < 0.0:
-				want = -want
 			var from := Basis(v0, u0, v0.cross(u0))
 			var to := Basis(A, want, A.cross(want))
 			r = to * from.inverse()
@@ -3056,9 +3302,9 @@ static func _way(tool: Dictionary, h: Array) -> String:
 	return n if not n.is_empty() else String(tool.get("contact", ""))
 
 
-## The hold over trip [param ph]'s pot, cup or towel - a load on the side its element's first dab is pressed with.
-func _trip_hold(ph: Dictionary, T: float, tr: Dictionary) -> Array:
-	return _pot_hold(String(ph["kind"]), String(ph.get("from", "")), String(ph.get("paint", "")), T, tr, String(ph.get("side", "")))
+## The hold over trip [param ph]'s pot, cup or towel - a load on the side its element's first dab is pressed with - coming from [param near].
+func _trip_hold(ph: Dictionary, T: float, tr: Dictionary, near: Array = []) -> Array:
+	return _pot_hold(String(ph["kind"]), String(ph.get("from", "")), String(ph.get("paint", "")), T, tr, String(ph.get("side", "")), near)
 
 
 ## The side program [param prog]'s next dab after key [param k] is pressed with (`way_at`, by its place - a program laid from the picture,
@@ -3076,10 +3322,55 @@ static func _side_after(prog: Dictionary, k: int) -> String:
 	return ""
 
 
-## A hold [param h] lifted clear over where it is (a trip's place, left upward - over its rim).
-static func _lifted(h: Array) -> Array:
+## A hold [param h] lifted clear over where it is (a trip's place, left upward - over its rim) - rolled as it was there, else as tool
+## [param tool] was at [param near] ([method _way_from]).
+func _lifted(h: Array, near: Array = [], tool: Dictionary = {}) -> Array:
 	var rise := float(h[4]) if h.size() > 4 else TRIP_LIFT
-	return [(h[0] as Vector3) + Vector3.UP * rise, h[1], 0.0, false, rise, _contact_of(h)]
+	# (...a hold that says its own way keeps it, turned end for end to the way it came from - a brush laid broadside, [method _laid_hold])
+	if _says_way(h):
+		return _way_from([(h[0] as Vector3) + Vector3.UP * rise, h[1], 0.0, false, rise, _contact_of(h), NAN, Vector3.ZERO, h[8]],
+			near if near.size() > 8 else h, tool) as Array
+	return _way_from([(h[0] as Vector3) + Vector3.UP * rise, h[1], 0.0, false, rise, _contact_of(h)], h if h.size() > 8 else near, tool) as Array
+
+
+## HOLD [param h] ROLLED AS TOOL [param tool] WAS AT [param near] (`h[8]`, the table's space - [method _node_at]), so a flat brush on a trip
+## to its pot, the water or the towel and back stays rolled as it was: with no way there, its untouched roll, it turned up to half a turn
+## going and coming back. Its broadside as it lay at [param near], tilted with the handle as the hand turns it there - never twisted:
+## the stroke's own way given at the pot, its handle 60-70 degrees steeper than laid on its belly over 732687's mask, still left it 20 to
+## 66 degrees off. With no tool, or none with a broadside, [param near]'s own way. Made as long as [method _skin_hold] makes one where it
+## is shorter (6 none, 7 no normal); a Transform3D, or a hold [param near] gives no way to, as it was.
+func _way_from(h: Variant, near: Array, tool: Dictionary = {}) -> Variant:
+	if not (h is Array) or near.size() <= 8 or not (near[8] is Vector3) or (near[8] as Vector3).length_squared() < 0.5:
+		return h
+	var way: Vector3 = near[8]
+	if tool.has("across") and tool.has("x0") and (h as Array).size() > 1:
+		var across := (_node_at(near, tool, tool["x0"]).basis * (tool["across"] as Vector3)).normalized()
+		var an := (near[1] as Vector3).normalized()
+		var ah := ((h as Array)[1] as Vector3).normalized()
+		way = Basis(Quaternion(an, ah)) * across if an.dot(ah) > -0.999 else across
+	# (...laid on its belly there, broadside across the way it went, it stays broadside held by its tip: across that way - [method _node_at])
+	elif _contact_of(near) == "belly" and _contact_of(h as Array) != "belly" and near.size() > 7 and near[7] is Vector3 and (near[7] as Vector3).length_squared() > 0.5:
+		way = (near[7] as Vector3).cross(way)
+	var out: Array = (h as Array).duplicate()
+	while out.size() < 8:
+		match out.size():
+			4:
+				out.append(TRIP_LIFT)
+			5:
+				out.append("")
+			6:
+				out.append(NAN)
+			_:
+				out.append(Vector3.ZERO)
+	if out.size() == 8:
+		out.append(way)
+	elif _says_way(out):
+		# (...A HOLD THAT SAYS ITS OWN WAY KEEPS IT - a brush laid broadside on its paint, [method _laid_hold] - turned end for end to the
+		# nearer of the two, so a flat brush is never rolled more than a quarter turn to it)
+		out[8] = (out[8] as Vector3) * (-1.0 if (out[8] as Vector3).dot(way) < 0.0 else 1.0)
+	else:
+		out[8] = way
+	return out
 
 
 ## WHERE THE TOOL IS at [param tau] (seconds, a hand's own pace) into program [param prog] on skin [param si]: a hold (the table's
@@ -3124,12 +3415,19 @@ func _surface_hold(si: int, prog: Dictionary, tau: float, T: float, tr: Dictiona
 		return _spray_hold(si, xy3, float(a[3]) * 0.001, lerpf(float(a[4]), float(b[4]), s), T)
 	if at_a in [1, 2] and at_b in [1, 2]:
 		# A TRIP inside the element: to its paint (1) or its stones' dish (2), and back to where it goes on
-		var near := _skin_hold(si, Vector2(float(a[1]), float(a[2])), float(a[3]), 0.0, T, tool, ca, ha, ha, 0.0)
-		var next := _skin_hold(si, Vector2(float(b[1]), float(b[2])), float(b[3]), 0.0, T, tool, cb, hb, hb, 0.0)
-		var pot := _pot_hold("load" if at_a == 1 else "pick", String(tr.get("from", "")), "", T, tr, _side_after(prog, k))
+		# (...each end the way its stroke goes, so a flat brush leaves and comes back rolled as it was - [method _node_at])
+		var trip_dirs: PackedVector2Array = kept.get("dirs", PackedVector2Array())
+		var near := _skin_hold(si, Vector2(float(a[1]), float(a[2])), float(a[3]), 0.0, T, tool, ca, ha, ha, 0.0,
+			trip_dirs[k] if k < trip_dirs.size() else Vector2.ZERO)
+		var next := _skin_hold(si, Vector2(float(b[1]), float(b[2])), float(b[3]), 0.0, T, tool, cb, hb, hb, 0.0,
+			trip_dirs[kb] if kb < trip_dirs.size() else Vector2.ZERO)
+		# ...TO THE PAINT IT WAS LOADED FROM (feedback 0010, 2026-11-09: "Why does the sponge keep pressing into the corner of the brush box
+		# here, squishing itself?"): a track naming no `from` was sent with no paint, and went to the spot by the work kept for none - 12 cm
+		# right of a mask, the corner of 732687's brush tray - every time it ran dry, never to the white pot it began from
+		var pot := _pot_hold("load" if at_a == 1 else "pick", String(tr.get("from", "")), String(prog.get("pot", "")) if at_a == 1 else "", T, tr, _side_after(prog, k), near)
 		if s < 0.7:
 			return _trip(near, pot, s / 0.7, int(tr.get("_hand", 0)) + k * 7919, "load", tool)
-		return _between(_lifted(pot), next, (s - 0.7) / 0.3, int(tr.get("_hand", 0)), tool)
+		return _between(_lifted(pot, near, tool), next, (s - 0.7) / 0.3, int(tr.get("_hand", 0)), tool)
 	# down and up are eased as a hand eases them; along a stroke it goes steadily
 	var e := Hands.smooth(s) if float(a[4]) != float(b[4]) or float(a[3]) != float(b[3]) else s
 	var xy := Vector2(float(a[1]), float(a[2])).lerp(Vector2(float(b[1]), float(b[2])), e if float(a[4]) != float(b[4]) else s)
@@ -3139,7 +3437,8 @@ func _surface_hold(si: int, prog: Dictionary, tau: float, T: float, tr: Dictiona
 	var dirs: PackedVector2Array = kept.get("dirs", PackedVector2Array())
 	var dir := Vector2.ZERO
 	if k < dirs.size() and kb < dirs.size():
-		dir = dirs[k].lerp(dirs[kb], s) if dirs[k].dot(dirs[kb]) > -0.5 else (dirs[k] if s < 0.5 else dirs[kb])
+		# (...never snapped over halfway between two keys: the ways are kept in sign along the program, a quarter turn apart at most)
+		dir = dirs[k].lerp(dirs[kb], s)
 	if ca == cb:
 		return _skin_hold(si, xy, lift, press, T, tool, ca, ha, hb, e, dir)
 	# ...TURNED IN THE HAND between two keys held two ways (its face, then its corner): from the one to the other where it is, eased
@@ -3253,11 +3552,16 @@ func _obstacles(sd: Dictionary) -> Dictionary:
 	var z := PackedFloat32Array()
 	z.resize(n.x * n.y)
 	z.fill(-INF)
+	# (...and the surface itself, kept to read under a point where the cells are too coarse - [method _sunk_exact])
+	var ray_mesh: TriangleMesh = null
+	var ray_from := -INF
 	if not faces.is_empty():
 		var top := -INF
 		for v in faces:
 			top = maxf(top, v.z)
 		var tm := TableWork._ray_mesh(faces)
+		ray_mesh = tm
+		ray_from = top + 0.01
 		for j in n.y:
 			_breathe()
 			for i in n.x:
@@ -3277,7 +3581,7 @@ func _obstacles(sd: Dictionary) -> Dictionary:
 			for bj in range(maxi((j - 1) / CLEAR_BLOCK, 0), mini((j + 1) / CLEAR_BLOCK, bn.y - 1) + 1):
 				for bi in range(maxi((i - 1) / CLEAR_BLOCK, 0), mini((i + 1) / CLEAR_BLOCK, bn.x - 1) + 1):
 					top[bj * bn.x + bi] = maxf(top[bj * bn.x + bi], zk)
-	var out := {"at": at, "n": n, "z": z, "to_part": to_part, "top": top, "bn": bn}
+	var out := {"at": at, "n": n, "z": z, "to_part": to_part, "top": top, "bn": bn, "mesh": ray_mesh, "mesh_from": ray_from}
 	sd["clear"] = out
 	return out
 
@@ -3303,8 +3607,10 @@ func _sunk_node(sd: Dictionary, g: Dictionary, tool: Dictionary, contact: String
 	var grip_l: Vector3 = c["grip"]
 	var M := (g["to_part"] as Transform3D) * x
 	# ...AS DEEP AS IT GIVES BACK: each point as far as it is squashed from the tool's middle (the whole of a pressed face, a corner's
-	# tip most - [method _tick_tool]), and near its tip as far as its hairs bend and its surface is found no finer than its cells
+	# tip most - [method _tick_tool]), and near its tip as far as its hairs bend and its surface is found no finer than its cells - all
+	# but A BRUSH'S HANDLE AND FERRULE, its first `stiff` points ([method tool_of]), which neither bend nor give
 	var near := float(c["bend"]) + CLEAR_CELL
+	var stiff := int(tool.get("stiff", 0))
 	var give := float(c["give"]) * press
 	var mid: Vector3 = tool.get("center", tip_l)
 	var into := (tip_l - grip_l).normalized()
@@ -3347,7 +3653,45 @@ func _sunk_node(sd: Dictionary, g: Dictionary, tool: Dictionary, contact: String
 			var gx := lerpf(z10 - z00, z11 - z01, v) / CLEAR_CELL
 			var gy := lerpf(z01 - z00, z11 - z10, u) / CLEAR_CELL
 			d = (lerpf(lerpf(z00, z10, u), lerpf(z01, z11, u), v) - q.z) / minf(sqrt(1.0 + gx * gx + gy * gy), SLOPE_MOST)
-		d += margin - give * clampf((s - mid).dot(into) / reach, 0.0, 1.0) - maxf(near - s.distance_to(tip_l), 0.0)
+		d += margin
+		if idx >= stiff:
+			d -= give * clampf((s - mid).dot(into) / reach, 0.0, 1.0) + maxf(near - s.distance_to(tip_l), 0.0)
+		if d > worst:
+			worst = d
+			if worst > stop:
+				return worst
+	return worst
+
+
+## HOW DEEP TOOL [param tool]'s node at [param x] stands in what stands over skin [param sd], as [method _sunk_node] measures it - but
+## each of its handle's and ferrule's points within [constant EXACT_BAND] of its cell's surface read off the surface itself, straight down
+## under it: between two cells a nose's ridge reads low, and across its slope shallower still - a ferrule over 732687's nose, clear by the
+## cells, stood 1.5 to 2.7 mm in it (feedback 0003). What a drawn pose is held to ([method _kept_out]).
+func _sunk_exact(sd: Dictionary, g: Dictionary, tool: Dictionary, contact: String, x: Transform3D, press: float, stop := INF) -> float:
+	var worst := _sunk_node(sd, g, tool, contact, x, press, stop)
+	var tm: Variant = g.get("mesh")
+	if worst > stop or not (tm is TriangleMesh):
+		return worst
+	var pts: PackedVector3Array = tool.get("stiff_dense", tool["points"])
+	var stiff := pts.size() if tool.has("stiff_dense") else mini(int(tool.get("stiff", 0)), pts.size())
+	var M := (g["to_part"] as Transform3D) * x
+	var at: Vector2 = g["at"]
+	var n: Vector2i = g["n"]
+	var Z: PackedFloat32Array = g["z"]
+	var from := float(g["mesh_from"])
+	for idx in stiff:
+		var q := M * pts[idx]
+		var fx := (q.x - at.x) / CLEAR_CELL
+		var fy := (q.y - at.y) / CLEAR_CELL
+		if fx < 0.0 or fy < 0.0 or fx > float(n.x - 1) or fy > float(n.y - 1):
+			continue
+		var k := mini(int(fy), n.y - 2) * n.x + mini(int(fx), n.x - 2)
+		if q.z > maxf(maxf(Z[k], Z[k + 1]), maxf(Z[k + n.x], Z[k + n.x + 1])) + EXACT_BAND:
+			continue
+		var hit := TableWork._ray(tm, Vector3(q.x, q.y, from), Vector3(0.0, 0.0, -1.0))
+		if hit.is_empty():
+			continue
+		var d := (hit["position"] as Vector3).z - q.z
 		if d > worst:
 			worst = d
 			if worst > stop:
@@ -3475,6 +3819,13 @@ func _held_keys(si: int, prog: Dictionary, tool: Dictionary, contact: String) ->
 				var sk := "%d|%s|%s|%s" % [si, tool.get("ch", ""), String(WAYS[chosen]), xy]
 				last = _side_held[sk] if _side_held.has(sk) else _cleared(si, xy, tool, String(WAYS[chosen]))
 				last_way = chosen
+				# (...a face that would stand off a ridge - a nose - further than [constant FLAT_MOST] by its corner, where that costs less, as
+				# a face held the tool's own way is below)
+				if String(WAYS[chosen]) == "face" and last.w > FLAT_MOST and (tool.get("contacts", {}) as Dictionary).has("corner"):
+					var by_corner := _cleared(si, xy, tool, "corner")
+					if _held_cost(si, xy, tool, "corner", by_corner) < _held_cost(si, xy, tool, "face", last):
+						last = by_corner
+						last_way = 1
 				_clear_memo[mk] = [last, last_way]
 			else:
 				last = _cleared(si, xy, tool, contact, pull)
@@ -3564,16 +3915,15 @@ func _held_keys(si: int, prog: Dictionary, tool: Dictionary, contact: String) ->
 	return {"held": out, "ways": ways, "arcs": arcs, "dirs": _dirs_of(keys)}
 
 
-## THE WAY PROGRAM [param keys]' TOOL GOES AT EACH KEY across the skin (millimeters, unit; none where it never moves): from the key before
-## to the key after - a key it stands still at, the way of the nearest that moves ([method _node_at] turns a flat brush to it).
+## THE WAY PROGRAM [param keys]' TOOL GOES AT EACH KEY across the skin (millimeters, unit; none where it is never drawn along), which
+## [method _node_at] turns a flat brush to - only a brush with an edge across reads it: the way its handle leans ([method _pulls_of]: a
+## stretch's, held until the stroke needs another), lifted the way it was last pressed and then the way it is next pressed - never the
+## way it travels in the air - and KEPT IN SIGN ALONG THE PROGRAM, its two edges alike (feedback 0016, 2026-11-09: "This brush is
+## flipping and twirling and twisting and repositioning and it just looks chaotic ... They wouldn't just flip-flop back and forth"): a
+## stroke drawn back the way the last came had rolled it over, half a turn between two keys, and its way in the air turned it twice more
+## between strokes - 100 to 139 degrees a second, a stroke after a stroke, in 732687's intro, its body left up to 28.6 cm off its hand.
 static func _dirs_of(keys: Array) -> PackedVector2Array:
-	var out := PackedVector2Array()
-	out.resize(keys.size())
-	for k in keys.size():
-		var a: Array = keys[maxi(k - 1, 0)]
-		var b: Array = keys[mini(k + 1, keys.size() - 1)]
-		var d := Vector2(float(b[1]) - float(a[1]), float(b[2]) - float(a[2]))
-		out[k] = d.normalized() if d.length() > 0.05 else Vector2.ZERO
+	var out := _pulls_of(keys)
 	# ...where it stands still, the way it last went, else the way it goes next
 	for k in range(1, out.size()):
 		if out[k] == Vector2.ZERO:
@@ -3581,42 +3931,122 @@ static func _dirs_of(keys: Array) -> PackedVector2Array:
 	for k in range(out.size() - 2, -1, -1):
 		if out[k] == Vector2.ZERO:
 			out[k] = out[k + 1]
+	# ...and kept in sign along it: never more than a quarter turn from the key before
+	for k in range(1, out.size()):
+		if out[k].dot(out[k - 1]) < 0.0:
+			out[k] = -out[k]
 	return out
 
 
+## ...THE WAY OF A STRETCH OF A STROKE, NEVER OF ONE STEP OF IT (feedback 0014, 2026-11-09: "This brush is jittering/jerking back and
+## forth, at the top side, while the point remains perfectly still drawing lines ... a gentle hand painting lines would not be jerking
+## around constantly like that"): 732687's traced line, keys 0.25 mm apart, wobbled 12 degrees either way every 2.5 mm, and the way of
+## each key - its two steps - swung the 16 cm handle with it: its end 130 mm/s (to 930) where the point went 8.5, turning back 63 times
+## in 9.5 s. So a key's way is its stroke's chord from [constant PULL_SPAN] millimeters behind it to as far ahead, a corner sharper than
+## [constant PULL_CORNER] degrees still turned at; and the hand leans as it did until the way is [constant PULL_HOLD] degrees from it -
+## following it no nearer along a stroke, turned to it whole only where a stroke begins past it (feedback 0016: "A real artist would
+## prefer keep a neutral position, and only reposition when the stroke requires it").
+const PULL_SPAN := 5.0
+const PULL_CORNER := 60.0
+const PULL_HOLD := 20.0
+
+
 ## THE WAY A BRUSH IS DRAWN AT EACH KEY OF [param keys] across the skin (millimeters, unit), for its handle to lean ([constant HELD_PULL]):
-## pressed, the way it goes on from there and came to it (at a corner, between the two); lifted where it was last pressed, the way it went
-## there - else the way it next goes, so it comes down already turned to its stroke. None for a dab, which goes nowhere.
+## pressed, the way its stroke goes there ([constant PULL_SPAN]; at a corner, between the two), held until it is [constant PULL_HOLD] off;
+## lifted where it was last pressed, the way it went there - else the way it next goes, so it comes down already turned to its stroke.
+## None for a dab, which goes nowhere.
 static func _pulls_of(keys: Array) -> PackedVector2Array:
 	var n := keys.size()
-	var seg := PackedVector2Array()
-	seg.resize(n)
+	var xy := PackedVector2Array()
+	xy.resize(n)
 	var pressed := PackedByteArray()
 	pressed.resize(n)
 	for k in n:
 		var a: Array = keys[k]
 		pressed[k] = 1 if float(a[4]) > PRESSED and int(a[5]) == 0 else 0
-	for k in range(n - 1):
-		var a: Array = keys[k]
-		var b: Array = keys[k + 1]
-		var d := Vector2(float(b[1]) - float(a[1]), float(b[2]) - float(a[2]))
-		if pressed[k] == 1 and pressed[k + 1] == 1 and d.length() > 0.05:
-			seg[k] = d.normalized()
+		xy[k] = Vector2(float(a[1]), float(a[2]))
+	# THE LEGS: each pressed run, cut where one step turns from the last sharper than PULL_CORNER - that key the end of the one and the
+	# start of the next
+	var legs: Array = []
+	var corner := PackedByteArray()
+	corner.resize(n)
+	var cos_c := cos(deg_to_rad(PULL_CORNER))
+	var k0 := 0
+	while k0 < n:
+		if pressed[k0] == 0:
+			k0 += 1
+			continue
+		var leg := PackedInt32Array([k0])
+		var came := Vector2.ZERO
+		var k := k0 + 1
+		while k < n and pressed[k] == 1:
+			var d := xy[k] - xy[k - 1]
+			if d.length() > 0.05:
+				var u := d.normalized()
+				if came != Vector2.ZERO and came.dot(u) < cos_c:
+					corner[k - 1] = 1
+					legs.append(leg)
+					leg = PackedInt32Array([k - 1])
+				came = u
+			leg.append(k)
+			k += 1
+		legs.append(leg)
+		k0 = k
+	# ...EACH KEY'S WAY, ITS LEG'S CHORD over PULL_SPAN either side (at a corner, the way in and the way out together)
+	var raw := PackedVector2Array()
+	raw.resize(n)
+	var out_of := {}
+	for lg in legs:
+		var leg: PackedInt32Array = lg
+		var m := leg.size()
+		var s := PackedFloat32Array()
+		s.resize(m)
+		for j in range(1, m):
+			s[j] = s[j - 1] + xy[leg[j]].distance_to(xy[leg[j - 1]])
+		var jb := 0
+		var ja := 0
+		for j in m:
+			var tb := maxf(s[j] - PULL_SPAN, 0.0)
+			var ta := minf(s[j] + PULL_SPAN, s[m - 1])
+			while jb < m - 1 and s[jb + 1] < tb:
+				jb += 1
+			while ja < m - 1 and s[ja + 1] < ta:
+				ja += 1
+			var pb := xy[leg[jb]].lerp(xy[leg[jb + 1]], (tb - s[jb]) / (s[jb + 1] - s[jb])) if jb < m - 1 and s[jb + 1] > s[jb] else xy[leg[jb]]
+			var pa := xy[leg[ja]].lerp(xy[leg[ja + 1]], (ta - s[ja]) / (s[ja + 1] - s[ja])) if ja < m - 1 and s[ja + 1] > s[ja] else xy[leg[ja]]
+			var w := (pa - pb).normalized() if pa.distance_to(pb) > 0.05 else Vector2.ZERO
+			var kk := leg[j]
+			if corner[kk] == 1:
+				raw[kk] += w
+				if j == 0:
+					out_of[kk] = w
+			else:
+				raw[kk] = w
+	for kk in out_of:
+		raw[kk] = raw[kk].normalized() if raw[kk].length() > 0.1 else (out_of[kk] as Vector2)
+	# ...AND HELD: leaning as it did until the way is PULL_HOLD from it - along a stroke following it no nearer, where one begins (or a
+	# corner turns it) turned to it whole
 	var out := PackedVector2Array()
 	out.resize(n)
+	var hold := deg_to_rad(PULL_HOLD)
+	var held := Vector2.ZERO
 	for k in n:
-		if pressed[k] == 1:
-			var came := seg[k - 1] if k > 0 else Vector2.ZERO
-			var both := came + seg[k]
-			out[k] = both.normalized() if both.length() > 0.1 else (seg[k] if seg[k] != Vector2.ZERO else came)
+		if pressed[k] == 0 or raw[k] == Vector2.ZERO:
+			continue
+		var w := raw[k]
+		var ang := held.angle_to(w) if held != Vector2.ZERO else 0.0
+		if held == Vector2.ZERO or corner[k] == 1 or (k > 0 and corner[k - 1] == 1):
+			held = w
+		elif absf(ang) > hold:
+			held = w if k == 0 or pressed[k - 1] == 0 else w.rotated(-signf(ang) * hold)
+		out[k] = held
 	# ...and lifted: where it was last pressed, as it was there; elsewhere as it is when it is next pressed
 	var last_k := -1
 	for k in n:
 		if pressed[k] == 1:
 			last_k = k
 			continue
-		var xy := Vector2(float((keys[k] as Array)[1]), float((keys[k] as Array)[2]))
-		if last_k >= 0 and xy.distance_to(Vector2(float((keys[last_k] as Array)[1]), float((keys[last_k] as Array)[2]))) < 0.05:
+		if last_k >= 0 and xy[k].distance_to(xy[last_k]) < 0.05:
 			out[k] = out[last_k]
 			continue
 		var next_k := k + 1
@@ -3649,8 +4079,8 @@ func _spray_hold(si: int, xy: Vector2, off: float, press: float, T: float) -> Ar
 
 ## OVER ITS PAINT (a load: its pot; a rinse: the water; a pick: the stones' dish), pressed in: `[tip, axis, 1, false, how far over
 ## it the tool comes in and leaves, the way it is held]` - a sponge by its corner (onto a towel, flat), its own surface inside the pot's
-## mouth ([method _pot_clear]), lifted where it cannot be.
-func _pot_hold(kind: String, from: String, paint: String, T: float, tr: Dictionary, side := "") -> Array:
+## mouth ([method _pot_clear]), lifted where it cannot be - a brush laid on what is under it, coming from [param near] ([method _laid_hold]).
+func _pot_hold(kind: String, from: String, paint: String, T: float, tr: Dictionary, side := "", near: Array = []) -> Array:
 	var name := String(tr.get(kind, "")) if kind in ["rinse", "dry"] else from
 	var p := _source_of(kind, name, paint, T)
 	var tool := _tool_or_none(tr)
@@ -3673,6 +4103,11 @@ func _pot_hold(kind: String, from: String, paint: String, T: float, tr: Dictiona
 		mouth = work._mouth_of(name, T)
 		if not mouth.is_empty():
 			rise = maxf(rise, float((mouth["at"] as Vector3).y) + RIM_CLEAR - p.y)
+	# ...A BRUSH LAID ON ITS PAINT, THE CUP'S FLOOR OR THE TOWEL, a share of its hairs on their side along it ([method _laid_hold])
+	if kind in ["load", "rinse", "dry"]:
+		var laid := _laid_hold(kind, name, tool, contact, p, rise, {} if kind == "dry" else mouth, T, near)
+		if not laid.is_empty():
+			return laid
 	# ...AND ITS BODY INSIDE THE MOUTH as it is drawn, never through the wall - pressed flat on its paint, a load ([method _flat_lift])
 	var floor_y := p.y - 0.001 if kind == "load" and not tool.is_empty() and _pressed_into(tool, contact) > 0.0 \
 		and String(tool.get("kind", "")) != "brush" else NAN
@@ -3682,12 +4117,96 @@ func _pot_hold(kind: String, from: String, paint: String, T: float, tr: Dictiona
 		var at: Vector3 = mouth["at"]
 		return [Vector3(p.x, at.y + DRAPE_CLEAR, p.z), Vector3.UP, 1.0, false, TRIP_LIFT, contact, floor_y, Vector3.ZERO, Vector3.ZERO,
 			Vector4(p.x, at.y, p.z, float(mouth["r"]) - POT_WALL)]
+	var lifted := 0.0
 	if not tool.is_empty() and not mouth.is_empty() and kind != "dry":
 		var cl := _pot_clear(name, tool, contact, p, axis, mouth, floor_y)
 		axis = cl["axis"]
 		p += (cl["off"] as Vector3) + Vector3.UP * float(cl["lift"])
 		rise = maxf(rise - float(cl["lift"]), TRIP_LIFT)
+		lifted = float(cl["lift"])
+	# ...A BRUSH ON ITS PAINT OR THE TOWEL, PRESSED ONTO IT AND KEPT ON IT (feedback 0017, [method _lay_on_plane]): how high the surface is
+	# under it - the paint's own, under where it goes in, not its pot's box - and which way it faces; none where it had to be lifted
+	# clear of the pot's wall, which pressing it down would go through
+	if String(tool.get("kind", "")) == "brush" and kind in ["load", "dry"] and lifted <= 0.0:
+		var level := p.y if kind == "dry" else (work._surface_under(name, p, T) if not name.is_empty() and not name.contains(".") else NAN)
+		if not is_nan(level):
+			return [p, axis, 1.0, false, rise, contact, level, Vector3.UP]
 	return [p, axis, 1.0, false, rise, contact, floor_y]
+
+
+## BRUSH [param tool] LAID ON ITS PAINT, THE WATER CUP'S FLOOR OR THE TOWEL ([constant LAY_SHARE]): the hold for trip [param kind] to
+## [param name], its straight tip over [param p] (where its paint is taken, [method _source_of]), coming in [param rise] over that,
+## held [param contact] - pushed down until that share of its hairs would lie along the surface, `[tip, axis, 1, false, how far over it
+## the tool comes in and leaves, the way it is held, the surface's height, its normal, the way a flat brush lies broadside]`. Leaned
+## the first of [constant LAY_LEANS] that keeps it inside [param mouth] (none: anywhere); none where nothing lies under it, nothing of
+## that lean keeps inside, or its hairs hardly bend (a cotton tip's, [constant Bristles.KINDS]' `bends`). A FLAT BRUSH COMING FROM
+## [param near] keeps the roll it had there ([method _way_from]: never turned half over on a trip) and is leaned across its broadside as
+## that roll carries it, so its flat lies on the surface - leaned the one way, it had bent sideways along its chisel edge.
+func _laid_hold(kind: String, name: String, tool: Dictionary, contact: String, p: Vector3, rise: float, mouth: Dictionary, T: float, near: Array = []) -> Array:
+	if String(tool.get("kind", "")) != "brush" or not tool.has("hair_root") or float(tool.get("bends", 1.0)) < 0.5:
+		return []
+	var level := p.y if kind == "dry" else (work._surface_under(name, p, T) if not name.is_empty() and not name.contains(".") else NAN)
+	if is_nan(level):
+		return []
+	var rolled := tool.has("across") and near.size() > 8 and near[8] is Vector3 and (near[8] as Vector3).length_squared() > 0.5
+	# (found once for each pot and each way a flat brush comes rolled - it is asked every frame, many times over)
+	var key := "laid|%s|%s|%s|%s|%.5f|%.5f|%.5f|%.5f|%s" % [kind, name, tool.get("ch", ""), contact, p.x, p.y, p.z, level,
+		(str(near[1]) + str(near[8]) + _contact_of(near)) if rolled else ""]
+	if _pots.has(key):
+		return (_pots[key] as Array).duplicate()
+	# (out toward the side of the table it is on, a little toward the camera - and a flat brush broadside across that)
+	var side := 1.0 if p.x >= work.work_spot().x else -1.0
+	var out_h := Vector3(LAY_OUT.x * side, 0.0, LAY_OUT.y).normalized()
+	var across0 := Vector3.ZERO
+	var an := Vector3.UP
+	if rolled:
+		across0 = (_node_at(near, tool, tool["x0"]).basis * (tool["across"] as Vector3)).normalized()
+		an = (near[1] as Vector3).normalized()
+	var hl := float(tool["len"])
+	var found: Array = []
+	for lean in LAY_LEANS:
+		var a := deg_to_rad(float(lean))
+		var lean_h := out_h
+		var goes := Vector3.UP.cross(out_h).normalized()
+		if rolled:
+			# (...its broadside as the handle carries it there, [method _way_from] - leaned square across that, out of the work's way)
+			for _k in 3:
+				var ah := (Vector3.UP * cos(a) + lean_h * sin(a)).normalized()
+				goes = Basis(Quaternion(an, ah)) * across0 if an.dot(ah) > -0.999 else across0
+				var flat := Vector3(goes.x, 0.0, goes.z)
+				if flat.length() < 0.05:
+					break
+				var w := Vector3.UP.cross(flat).normalized()
+				lean_h = w if w.dot(out_h) + 1e-3 * w.x * side >= 0.0 else -w
+			var ah2 := (Vector3.UP * cos(a) + lean_h * sin(a)).normalized()
+			goes = Basis(Quaternion(an, ah2)) * across0 if an.dot(ah2) > -0.999 else across0
+		var h := [p, (Vector3.UP * cos(a) + lean_h * sin(a)).normalized(), 1.0, false, rise, contact, level, Vector3.UP, goes]
+		var x := _node_at(h, tool, tool["x0"])
+		var d := (x.basis * (tool["hair_axis"] as Vector3)).normalized()
+		var down_by := (x * (tool["hair_root"] as Vector3)).y - (level + LAY_CLEAR + Bristles.lay_over(-d.y, hl, LAY_SHARE))
+		h[0] = p - Vector3.UP * down_by
+		h[4] = rise + down_by
+		if mouth.is_empty() or _laid_inside(h, tool, mouth):
+			found = h
+			break
+	_pots[key] = found
+	return found.duplicate()
+
+
+## Whether brush [param tool] held laid as [param h] ([method _laid_hold]) keeps inside [param mouth]: its own surface under the rim, and
+## its hairs' tip laid out along its paint, inside the wall - with room to be worked round in it ([constant LOAD_SWIRL]) and drawn toward
+## its handle as it comes up, half as far again ([method _load_swirl]).
+func _laid_inside(h: Array, tool: Dictionary, mouth: Dictionary) -> bool:
+	var x := _node_at(h, tool, tool["x0"])
+	var at: Vector3 = mouth["at"]
+	var r := float(mouth["r"])
+	for s in tool.get("points", PackedVector3Array()):
+		var q := x * (s as Vector3)
+		if q.y < at.y and Vector2(q.x - at.x, q.z - at.z).length() > r - CLEAR_WALL - LOAD_SWIRL * 1.5:
+			return false
+	var on := _lay_on_plane(tool, h, Vector3.ZERO)
+	var tip := x * _bent_tip(tool, x.basis.inverse() * (on[0] as Vector3), on[1] as Vector2)
+	return Vector2(tip.x - at.x, tip.z - at.z).length() <= r - POT_WALL - LOAD_SWIRL
 
 
 ## The pots' ways tried across a mouth (shares of its room, [method _pot_clear]): its middle first - as far as a corner going in
@@ -3871,6 +4390,10 @@ func _source_of(kind: String, from: String, paint: String, T: float) -> Vector3:
 		if not mouth.is_empty():
 			var at: Vector3 = mouth["at"]
 			var y := work._surface_under(from.get_slice("/", 0), at, T)
+			# ...A DRY, OR A THING WITH NO INSIDE (its "mouth" its top), AT ITS SURFACE (feedback 0017: "at the grey block, where we dry the
+			# brush, it never touches either" - the millimeter over a vessel's floor had held every dry 1.0 mm over the towel)
+			if not is_nan(y) and (kind == "dry" or (float(mouth["r"]) <= 0.0101 and at.y - y < 0.002)):
+				return Vector3(at.x, y, at.z)
 			return Vector3(at.x, (y + 0.001) if not is_nan(y) and y < at.y else at.y - (0.02 if kind == "rinse" else 0.006), at.z)
 		var ti := work._thing_named(from.get_slice("/", 0))
 		if ti >= 0:
@@ -3898,16 +4421,19 @@ static func _trip_len(kind: String, tool: Dictionary) -> float:
 ## once, a rinse swishes round twice, a dry presses onto the cloth and wipes across it - a sponge or a puff PUSHED INTO ITS PAINT and
 ## held there as it turns ([method _pressed_into]); a sponge rinsed and dried as a hand does it ([method _sponge_trip]). It ends lifted
 ## over the place. A hold, or - turned in the hand on the way - its node's place.
-func _trip(near: Array, pot: Array, s: float, seed: int, kind: String, tool: Dictionary) -> Variant:
+func _trip(near: Array, pot: Array, s: float, seed: int, kind: String, tool: Dictionary, secs := 0.0) -> Variant:
 	if String(tool.get("kind", "")) == "sponge" and kind in ["rinse", "dry"]:
 		return _sponge_trip(near, pot, s, seed, kind, tool)
+	if String(tool.get("kind", "")) == "brush" and _says_way(pot) and not is_nan(float(pot[6])):
+		return _brush_laid(near, pot, s, seed, kind, tool, secs)
 	if String(tool.get("kind", "")) == "brush" and kind == "load":
 		return _brush_load(near, pot, s, seed, tool)
 	var go := 0.4
 	var rise := float(pot[4]) if pot.size() > 4 else TRIP_LIFT
 	var over: Vector3 = (pot[0] as Vector3) + Vector3.UP * rise
 	if s < go:
-		return _between(near, [over, pot[1], 0.0, false, rise, _contact_of(pot)], s / go, seed, tool)
+		# (...going the way its last stroke went, there and back - [method _way_from])
+		return _way_from(_between(near, _way_from([over, pot[1], 0.0, false, rise, _contact_of(pot)], near, tool), s / go, seed, tool), near, tool)
 	var w := (s - go) / (1.0 - go)
 	var deep := _pressed_into(tool, _contact_of(pot)) if kind == "load" else 0.0
 	# ...held down as it turns, where it takes up as much as it can
@@ -3932,18 +4458,27 @@ func _trip(near: Array, pot: Array, s: float, seed: int, kind: String, tool: Dic
 		into = (pot[1] as Vector3).normalized() * deep * press
 	elif String(tool.get("kind", "")) == "sponge" and not draped:
 		into = (pot[1] as Vector3).normalized() * float(_contact(tool, _contact_of(pot))["give"]) * dip
+	# ...A BRUSH DRIED PRESSED ONTO THE TOWEL, as far as its hairs give, as a sponge is - wiped across it, they trail and fold along it
+	# ([method _lay_on_plane]; feedback 0017: "at the grey block, where we dry the brush, it never touches either" - nothing had pushed it
+	# in, and its hairs had wiped 1.1-1.3 mm over the towel)
+	var on_towel := String(tool.get("kind", "")) == "brush" and kind == "dry" and pot.size() > 7 and not is_nan(float(pot[6]))
+	if on_towel:
+		into = (pot[1] as Vector3).normalized() * float(_contact(tool, _contact_of(pot))["give"]) * dip
 	# (and where its paint's surface is, which it is drawn pressed flat on - [method _tick_tool])
 	var out := [(pot[0] as Vector3) + Vector3.UP * (rise * (1.0 - dip)) + way - into, pot[1], press, false, rise, _contact_of(pot),
-		float(pot[6]) if pot.size() > 6 and pumped else NAN]
+		float(pot[6]) if pot.size() > 6 and (pumped or on_towel) else NAN]
+	if on_towel:
+		out.append(pot[7])
 	if draped:
 		# (...pressed only once it rests on the rim, never bent in the air on its way down)
 		out[2] = press * smoothstep(0.85, 1.0, dip)
 		out.append_array([Vector3.ZERO, Vector3.ZERO, pot[9]])
-	return out
+	return _way_from(out, near, tool)
 
 
 ## A BRUSH WORKED INTO ITS PAINT (2026-11-07, the user: "the brush doesn't really move at all when it's dipped into the container, to
-## pickup more makeup" - it had been turned once in 2.5 mm): down into it [constant BRUSH_DIP], swirled round [constant LOAD_TURNS] times
+## pickup more makeup" - it had been turned once in 2.5 mm): down onto it and pressed past its surface as far as its hairs give (at least
+## [constant BRUSH_DIP]), swirled round [constant LOAD_TURNS] times
 ## out to [constant LOAD_SWIRL] and back to its middle, its hairs dragged through the paint ([method Bristles.target]), then drawn once
 ## across it as it comes up - from [param near] to [param pot] over [param s] of the way. A hold, or its node's place on the way there.
 func _brush_load(near: Array, pot: Array, s: float, seed: int, tool: Dictionary) -> Variant:
@@ -3951,18 +4486,89 @@ func _brush_load(near: Array, pot: Array, s: float, seed: int, tool: Dictionary)
 	var rise := float(pot[4]) if pot.size() > 4 else TRIP_LIFT
 	var at: Vector3 = pot[0]
 	if s < go:
-		return _between(near, [at + Vector3.UP * rise, pot[1], 0.0, false, rise, _contact_of(pot)], s / go, seed, tool)
+		return _way_from(_between(near, _way_from([at + Vector3.UP * rise, pot[1], 0.0, false, rise, _contact_of(pot)], near, tool), s / go, seed, tool), near, tool)
 	var w := (s - go) / (1.0 - go)
 	var down := Hands.smooth(clampf(w / 0.12, 0.0, 1.0)) * (1.0 - Hands.smooth(clampf((w - 0.88) / 0.12, 0.0, 1.0)))
-	var way := Vector3.ZERO
+	var way := _load_swirl(w, seed, Vector3(1.0 if hash([seed, "turn"]) % 2 == 0 else -1.0, 0.0, 0.0))
+	# ...PRESSED ONTO ITS PAINT, NOT DIPPED THROUGH IT (feedback 0017, 2026-11-09: "That brush is not even touching the foundation it's
+	# dipping into. The brush should push so close to the container that the bristles might curve at certain angles"): from the paint's
+	# own surface under where it goes in ([method _pot_hold]'s `h[6]`), its tip pushed as far past it as its hairs give - as on a face - and
+	# its hairs kept on it, folded along it away from the handle's lean ([method _lay_on_plane]). Dipped [constant BRUSH_DIP] from a
+	# millimeter over its pot's box, a 2 mm point had gone into the cream straight and nothing bent.
+	var axis_n := (pot[1] as Vector3).normalized()
+	if pot.size() > 7 and not is_nan(float(pot[6])):
+		var give := maxf(float(_contact(tool, _contact_of(pot))["give"]), BRUSH_DIP)
+		# (...as deep as along the handle, but straight down, so it is still swirled round the middle it went in at)
+		var low := Vector3(at.x, float(pot[6]) - give * maxf(axis_n.y, 0.5), at.z)
+		return _way_from([low.lerp(at + Vector3.UP * rise, 1.0 - down) + way, pot[1], down, false, rise, _contact_of(pot), float(pot[6]), pot[7]], near, tool)
+	var into := axis_n * BRUSH_DIP * down
+	return _way_from([at + Vector3.UP * rise * (1.0 - down) + way - into, pot[1], down, false, rise, _contact_of(pot), NAN], near, tool)
+
+
+## THE WAY A BRUSH IS WORKED ROUND IN ITS PAINT [param w] (0-1) of its time there ([method _brush_load]): swirled round [constant LOAD_TURNS]
+## times out to [constant LOAD_SWIRL] and back to its middle, the way round [param seed]'s, then drawn once along [param across] as it
+## comes up (meters, the table's space).
+static func _load_swirl(w: float, seed: int, across: Vector3) -> Vector3:
 	var spun := (1.0 if hash([seed, "turn"]) % 2 == 0 else -1.0)
 	if w < 0.7:
 		var u := clampf((w - 0.1) / 0.6, 0.0, 1.0)
-		way = Vector3(cos(u * TAU * LOAD_TURNS * spun), 0.0, sin(u * TAU * LOAD_TURNS * spun)) * LOAD_SWIRL * sin(u * PI)
-	else:
-		way = Vector3(spun, 0.0, 0.0) * LOAD_SWIRL * 1.5 * Hands.smooth(clampf((w - 0.7) / 0.25, 0.0, 1.0))
-	var into := (pot[1] as Vector3).normalized() * BRUSH_DIP * down
-	return [at + Vector3.UP * rise * (1.0 - down) + way - into, pot[1], down, false, rise, _contact_of(pot), NAN]
+		return Vector3(cos(u * TAU * LOAD_TURNS * spun), 0.0, sin(u * TAU * LOAD_TURNS * spun)) * LOAD_SWIRL * sin(u * PI)
+	return across * LOAD_SWIRL * 1.5 * Hands.smooth(clampf((w - 0.7) / 0.25, 0.0, 1.0))
+
+
+## A BRUSH LAID ON ITS PAINT, THE WATER CUP'S FLOOR OR THE TOWEL ([method _laid_hold], feedback 0002): from [param near] - a flat brush
+## leaned across its broadside as it comes, what is left of a turn turned on the way ([method _roll_toward]) - down onto it and pushed straight down until [constant LAY_SHARE] of its
+## hairs lie along it on their side ([method _lay_on_plane]); held there, a load worked round in its paint ([method _load_swirl]) and
+## drawn once toward its handle as it comes up, a rinse swished round twice on the cup's floor, a dry pulled across the towel toward its
+## handle, its hairs trailing - over [param s] of the way. It ends lifted over the place. A hold, or its node's place on the way there.
+func _brush_laid(near: Array, pot: Array, s: float, seed: int, kind: String, tool: Dictionary, secs := 0.0) -> Variant:
+	var go := 0.35 if kind == "load" else 0.4
+	var rise := float(pot[4])
+	var at: Vector3 = pot[0]
+	var to: Array = _way_from([at + Vector3.UP * rise, pot[1], 0.0, false, rise, _contact_of(pot), NAN, Vector3.ZERO, pot[8]], near, tool)
+	# ...ITS WAY THERE AS LONG AS IT TAKES A HAND THAT THE BRUSH KEEPS UP WITH, the trip [param secs] long: going to the towel 40 cm off in a
+	# trip's fixed share, 732687's flat brush had been drawn 15 cm behind its hand on the way and 2.6 cm over the towel as its wipe
+	# began, its hairs on it only 0.4 s in (feedback 0002: "It also applies to the grey pad. The brushes barely touch at all")
+	if secs > 0.0:
+		go = clampf((near[0] as Vector3).distance_to(to[0] as Vector3) / (TRIP_PACE * secs), go, TRIP_GO_MOST)
+	if s < go:
+		return _roll_toward(_between(near, to, s / go, seed, tool), near, to, Hands.smooth(s / go), tool)
+	var w := (s - go) / (1.0 - go)
+	var down := Hands.smooth(clampf(w / 0.12, 0.0, 1.0)) * (1.0 - Hands.smooth(clampf((w - 0.88) / 0.12, 0.0, 1.0)))
+	# (toward its handle, along the surface)
+	var back := Vector3((pot[1] as Vector3).x, 0.0, (pot[1] as Vector3).z).normalized()
+	var way := Vector3.ZERO
+	match kind:
+		"dry":
+			way = back * lerpf(-WIPE, WIPE, Hands.smooth(w)) * down
+		"rinse":
+			way = Vector3(cos(w * TAU * 2.0), 0.0, sin(w * TAU * 2.0)) * 0.004 * down
+		_:
+			way = _load_swirl(w, seed, back)
+	return _way_from([at + Vector3.UP * rise * (1.0 - down) + way, pot[1], down, false, rise, _contact_of(pot), float(pot[6]), pot[7], pot[8]],
+		near, tool)
+
+
+## HOLD [param h] ON ITS WAY FROM [param near] TO [param to], A HOLD THAT SAYS ITS OWN WAY (a brush laid broadside on its paint, [method
+## _laid_hold]): a flat brush rolled from as [method _way_from] carries it toward that way, [param k] (0-1) of the turn - turned in the hand
+## as it goes, never all at once at the end. Anything else as [method _way_from] has it.
+func _roll_toward(h: Variant, near: Array, to: Array, k: float, tool: Dictionary) -> Variant:
+	var out: Variant = _way_from(h, near, tool)
+	if not (out is Array) or not tool.has("across") or not _says_way(to):
+		return out
+	var o: Array = (out as Array).duplicate()
+	var from_way := (_node_at(o, tool, tool["x0"]).basis * (tool["across"] as Vector3)).normalized()
+	var to_way := (to[8] as Vector3).normalized()
+	while o.size() < 9:
+		o.append([TRIP_LIFT, "", NAN, Vector3.ZERO, Vector3.ZERO][o.size() - 4])
+	o[8] = from_way.slerp(to_way, k) if from_way.dot(to_way) > -0.999 else to_way
+	return o
+
+
+## Whether hold [param h] says its own way (`h[8]`, the broadside of a brush laid on its paint - [method _laid_hold]), which [method
+## _way_from] keeps.
+static func _says_way(h: Array) -> bool:
+	return h.size() > 8 and h[8] is Vector3 and (h[8] as Vector3).length_squared() > 0.5
 
 
 ## A SPONGE RINSED AND DRIED AS A HAND DOES IT ([constant SPONGE_RINSE]), from [param near] to [param pot] over [param s] of the way.
@@ -3976,7 +4582,7 @@ func _sponge_trip(near: Array, pot: Array, s: float, seed: int, kind: String, to
 	var at: Vector3 = pot[0]
 	var into_n := (pot[1] as Vector3).normalized()
 	if s < SPONGE_GO:
-		return _between(near, [at + Vector3.UP * rise, pot[1], 0.0, false, rise, contact], s / SPONGE_GO, seed, tool)
+		return _way_from(_between(near, _way_from([at + Vector3.UP * rise, pot[1], 0.0, false, rise, contact], near, tool), s / SPONGE_GO, seed, tool), near, tool)
 	var w := (s - SPONGE_GO) / (1.0 - SPONGE_GO)
 	var press := 0.0
 	var p := at
@@ -4005,7 +4611,7 @@ func _sponge_trip(near: Array, pot: Array, s: float, seed: int, kind: String, to
 		var x := step - (1.0 - Hands.smooth(clampf(u / BLOT_OVER, 0.0, 1.0))) if k > 0 else step
 		p = at + Vector3.RIGHT * x * BLOT_STEP + Vector3.UP * lift * (1.0 - held) \
 			- into_n * float(_contact(tool, contact)["give"]) * held
-	return [p, pot[1], press, false, rise, contact, NAN]
+	return _way_from([p, pot[1], press, false, rise, contact, NAN], near, tool)
 
 
 ## HOW FAR TOOL [param tool], held [param contact], is pushed into its paint to take it up (meters): a sponge its [constant LOAD_PRESS],
@@ -4231,6 +4837,7 @@ func _tick_tool(ch: String, t: float, entries_of: Callable) -> void:
 		for tf in tool["tufts"]:
 			((tf as Dictionary)["mat"] as ShaderMaterial).set_shader_parameter("bristle_bend", Vector3.ZERO)
 			((tf as Dictionary)["mat"] as ShaderMaterial).set_shader_parameter("bristle_splay", 0.0)
+			((tf as Dictionary)["mat"] as ShaderMaterial).set_shader_parameter("bristle_lay", Vector2.ZERO)
 		for sp in tool["sponges"]:
 			((sp as Dictionary)["mat"] as ShaderMaterial).set_shader_parameter("squash", Vector4.ZERO)
 			((sp as Dictionary)["mat"] as ShaderMaterial).set_shader_parameter("squeeze", Vector4.ZERO)
@@ -4242,8 +4849,9 @@ func _tick_tool(ch: String, t: float, entries_of: Callable) -> void:
 	var t0 := float(e["t0"])
 	var d := maxf(float(e["t1"]) - t0, 1e-3)
 	var plan := _plan_entry(e, tr, d)
+	var home := _home_of(e, e["from"])
 	var hold_at := func(tt: float) -> Array:
-		var held: Variant = _held_at(plan, tr, clampf(tt - t0, 0.0, d), tt, e["from"], work._rest.get(ch, Transform3D.IDENTITY))
+		var held: Variant = _held_at(plan, tr, clampf(tt - t0, 0.0, d), tt, e["from"], work._rest.get(ch, Transform3D.IDENTITY), home)
 		return _hold_of(held, tool)
 	var node_w := work._world_of(tool["node"])
 	if not tool["tufts"].is_empty():
@@ -4257,17 +4865,25 @@ func _tick_tool(ch: String, t: float, entries_of: Callable) -> void:
 			# ...pressed, its tip goes along the surface away from where the handle leans over it ([method _skin_hold]'s normal)
 			var n: Vector3 = h1[7] if h1.size() > 7 else Vector3.ZERO
 			var ahead := -(axis - n * axis.dot(n)) if n.length_squared() > 0.5 else Vector3.ZERO
-			return Bristles.target(v, press, len, axis, ahead)
+			return Bristles.target(v, press, len, axis, ahead, float(tool.get("bends", 1.0)))
 		var bent: Array = Bristles.response(target, t)
-		# ...BENT NO FURTHER THAN KEEPS ITS TIP ON THE FACE it is pressed on ([method _bend_to_surface])
+		# ...BENT NO FURTHER THAN KEEPS ITS TIP ON THE FACE it is pressed on ([method _bend_to_surface]) - AND ONLY WHILE IT IS PRESSED
+		# (feedback 0019: a lifted brush's hold still says it is over the face, and its hairs had been bent to reach it from 4.3 mm up); on
+		# its paint, the cup's floor or the towel, laid on that ([method _lay_on_plane])
 		var h_now := hold_at.call(t) as Array
-		if bool(h_now[3]) and int(tr.get("_skin", -1)) >= 0:
+		var lay := Vector2.ZERO
+		if bool(h_now[3]) and float(h_now[2]) > 0.0 and int(tr.get("_skin", -1)) >= 0:
 			bent[0] = _bend_to_surface(int(tr["_skin"]), tool, h_now, bent[0] as Vector3)
+		elif not bool(h_now[3]) and float(h_now[2]) > 0.0 and h_now.size() > 7 and not is_nan(float(h_now[6])):
+			var on := _lay_on_plane(tool, h_now, bent[0] as Vector3)
+			bent[0] = on[0]
+			lay = on[1]
 		var inv := node_w.basis.inverse()
 		for tf in tool["tufts"]:
 			var mat: ShaderMaterial = (tf as Dictionary)["mat"]
 			mat.set_shader_parameter("bristle_bend", inv * (bent[0] as Vector3))
 			mat.set_shader_parameter("bristle_splay", float(bent[1]))
+			mat.set_shader_parameter("bristle_lay", lay)
 	# ...A SPONGE BEING RINSED IS SQUEEZED IN THE HAND, its broad faces together ([method _squeeze_of])
 	var rinsing := String(tool.get("kind", "")) == "sponge" and _phase_kind(plan, clampf(t - t0, 0.0, d)) == "rinse"
 	for sp in tool["sponges"]:
@@ -4435,15 +5051,21 @@ func _pots_laid(tr: Dictionary) -> PackedStringArray:
 	return out
 
 
-## THE PAINT ELEMENT [param el] IS LAID IN by paint track [param tr]: the paint in the pot its act takes from (`from`), a cream or a powder,
-## else the paint on the table nearest its color of its own kind (a powder's finish a powder, any other a cream; either where the table has
-## none of it) - as "#rrggbb" - or its own where it takes none (stones, a mist) or the table has none.
+## THE PAINT ELEMENT [param el] IS LAID IN by paint track [param tr]: the paint in the pot its act takes from (`from`), or the pot its
+## design names (`plan.pot`), a cream or a powder, else the paint on the table nearest its color of its own kind (a powder's finish a
+## powder, any other a cream; either where the table has none of it) - as "#rrggbb" - or its own where it takes none (stones, a mist) or
+## the table has none.
 func _pot_of(tr: Dictionary, el: Dictionary) -> String:
 	var own := String(el.get("paint", ""))
 	if String(el.get("kind", "")) in ["stones", "mist", "smear"] or _creams.is_empty() or own.is_empty():
 		return own
 	var powder := String(el.get("finish", "")) == "powder"
 	var from := String(tr.get("from", ""))
+	# ...THE POT THE PAINTER NAMED (feedback 0001, 2026-11-09: "how a sponge being dipped into yellow foundation is somehow applying white/
+	# light green makeup upon the mask"): 732687's base, laid from the white pot, went back for more to the amber - the cream nearest its
+	# color - and 39 of its 103 elements to a pot the painter never named, an amber and black to the clear gloss
+	if from.is_empty() and el.get("plan") is Dictionary:
+		from = String((el["plan"] as Dictionary).get("pot", ""))
 	if not from.is_empty():
 		var ti := work._thing_named(from.get_slice("/", 0).get_slice(".", 0))
 		var got := {}

@@ -20,7 +20,8 @@ extends SceneTree
 ## the second is not started), asked at its turn whether it has anything to make (words written by the section before it
 ## count), a section with nothing missing passed by; while it walks every ⟳ waits; Stop stops all of it. Generate is grayed
 ## with nothing missing, Stop with nothing being made. The ▶ on a heading makes that section alone (THE CONTROL: the
-## other is not started).
+## other is not started). WHILE A ROW MADE AGAIN RUNS ALONE, GENERATE IS OFFERED and widens it to the rest (THE CONTROL: a section
+## busy making all of it leaves Generate grayed).
 ## GROUPS: a group's rows fold under its name, which says how they stand. WHAT IS LISTED IS BUILT ONCE: a refresh with the
 ## same rows keeps the same controls - a list built again under a press loses it (THE CONTROL: a new row builds it again). A
 ## SECTION'S CARD FREED under it takes the section along.
@@ -45,6 +46,8 @@ func _run() -> void:
 	await _one_place()
 	_one_redo()
 	_one_generate()
+	_widened()
+	_locks()
 	_groups_and_rebuilds()
 	_gone_with_its_card()
 	print("pipeline_check: %s" % ("ALL OK" if _fails == 0 else "%d FAILED" % _fails))
@@ -238,6 +241,55 @@ func _one_generate() -> void:
 	(card._heads[second]["go"] as Button).pressed.emit()
 	_ok(second.made == 1 and first.made == 0, "the ▶ on a heading makes that section alone (the control: the other is not started)")
 	second.is_busy = false
+	card.free()
+
+
+## GENERATE WIDENS A ROW MADE AGAIN (the user, 2026-11-09: "make that "Generate" button available for clicking immediately after steps
+## become tainted ... I could click both buttons at the same time - and come back to the full pipeline finished later"): while a section
+## makes only some of what it is missing, Generate is offered, and pressed it starts the section again for all of it. THE CONTROL: a
+## section busy making all it is missing leaves Generate grayed.
+func _widened() -> void:
+	var card = _Card.new()
+	var s = Stub.new("Episode")
+	s.listed = [_row("a", "running"), _row("b", "missing")]
+	card.add(s)
+	s.is_busy = true
+	s.is_part = true
+	card.refresh()
+	_ok(not card._generate.disabled and not card._stop.disabled, "a row made again alone, the rest waiting: Generate is offered")
+	card.generate()
+	_ok(s.made == 1 and card.walking() and card._generate.disabled, "pressed, it starts the section for the rest, once")
+	card.stop()
+	s.is_busy = true
+	s.is_part = false
+	card.refresh()
+	_ok(card._generate.disabled, "the control: busy making all it is missing, Generate is grayed")
+	s.is_busy = false
+	card.free()
+
+
+## A LOCK BESIDE A ⟳ (the user, 2026-11-09: "a 'lock' button next to the regenerate buttons, for every step"): a row something is made
+## from carries one, locked until pressed, its tooltip saying what its ⟳ throws away either way; pressed, it is unlocked and says so.
+## THE CONTROL: a row nothing is made from carries none.
+func _locks() -> void:
+	var card = _Card.new()
+	var s = Stub.new("Episode")
+	var calls: Array = []
+	var held := _row("painted", "made", "Paint it again")
+	held.lockable = true
+	held.lock = func(on: bool) -> void:
+		calls.append(on)
+		held.locked = on
+	var last := _row("tags", "made", "Write them again")
+	s.listed = [held, last]
+	card.add(s)
+	card.refresh()
+	var lock_b: Variant = card.row("painted").get("lock")
+	_ok(lock_b is Button and (lock_b as Button).tooltip_text.begins_with("Locked"), "a row something is made from carries a lock, locked")
+	(lock_b as Button).pressed.emit()
+	_ok(calls == [false] and (card.row("painted")["lock"] as Button).tooltip_text.begins_with("Unlocked"),
+		"pressed, it is unlocked and says so: %s" % str(calls))
+	_ok(card.row("tags").get("lock") == null, "the control: a row nothing is made from carries none")
 	card.free()
 
 

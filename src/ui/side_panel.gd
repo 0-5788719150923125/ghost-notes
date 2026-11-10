@@ -32,8 +32,8 @@ class_name SidePanel
 ## scrolling to the top, to click those buttons"), and goes with the panel when it is hidden. A note's
 ## panel names no mode there ([method pin_title_row]).
 ##
-## ITS CARDS ARE A DECK ([PanelDeck]; next/panel_deck.md): one scroll, folded cards overlapping, and the title bars of the
-## cards out of view lying in piles at the scroll's top and bottom, so every card is always one click away.
+## ITS CARDS ARE A DECK ([PanelDeck]; next/panel_deck.md): one scroll, and the title bars of the cards out of view lying in
+## piles at the scroll's top and bottom, so every card is always one click away.
 ##
 ## A FOOTER CAN BE PINNED under the scrolling body ([method add_footer_card]): a card that stays in
 ## view however far the body is scrolled, taken off the room the body has. Masking's marker list
@@ -64,8 +64,7 @@ var body: VBoxContainer
 var card_row: CardRow
 ## The "+" before the chips ([method add_component_row]); null on a panel without one.
 var plus: MenuButton
-## The panel's own name in its cards' fold keys ("<prefix>.<card>", see [Card]). One per mode,
-## so the Generative panel's Voice and the Cards panel's Voice fold separately.
+## The panel's own name in its cards' keys ("<prefix>.<card>", see [Card]).
 var card_prefix := ""
 ## The panel's own name in the log ([method _check_width]) - never shown.
 var title := ""
@@ -196,7 +195,7 @@ func add_component_row(attached: Callable, attach: Callable) -> CardRow:
 
 
 ## A new card at the end of [member body], with a chip in [member card_row]; returns the card's
-## body, which is where its rows go. [param key] names it in the stored fold. A card that is a
+## body, which is where its rows go. [param key] names it on the panel. A card that is a
 ## COMPONENT's ([param component], its key in [constant Components.REGISTRY]) can be taken off the
 ## note from its title bar, where the panel says how ([member detach]).
 func add_card(key: String, card_title: String, family: StringName, component := "") -> VBoxContainer:

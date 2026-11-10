@@ -240,8 +240,8 @@ so the panel derives it.
 
 ### The component row
 
-On the note, under its title: one chip per attached component in its color, then "+". A click opens
-or closes that card; Ctrl-click opens it alone and folds the rest, as on Blender's panel headers.
+On the note, under its title: one chip per attached component in its color, then "+". A click brings
+that card into view (2026-11-09: cards no longer fold; they had opened or closed, Ctrl-click one alone).
 "+" lists what can be attached, grayed with a reason when something cannot be: no agent installed
 (the home screen's gating, moved here), or not on this device
 ([Platforms](#platforms-desktop-and-android)).
@@ -254,7 +254,7 @@ not attached: attaching can start a model download or an agent.
 **Three booleans, kept apart.** Blender saves all three per modifier.
 
 - **Open** - a view state. Folding never changes the output. The viewer's, kept in ghost.cfg, so the
-  user's files do not churn with it.
+  user's files do not churn with it. (Dropped 2026-11-09: in the deck a card never folds - next/panel_deck.md.)
 - **On** - evaluated or not. Off keeps every setting, so switching back restores it (Notion and
   Anytype keep a converted block's fields dormant the same way). The note's, in its frontmatter.
 - **Ghosted** - evaluated but not heard or seen: Blender's Outliner splits "hide" (still evaluated)

@@ -592,6 +592,14 @@ const REGISTRY := {
 		"modes": ["generative"],
 		"pattern": "(?m)^[ \\t]*```[ \\t]*terminal[ \\t]*\\n[\\s\\S]*?\\n[ \\t]*```[ \\t]*$",
 	},
+	"redact": {
+		"label": "Redacted",
+		"group": "dispatch",
+		"blurb": "Dispatch desk: inside a shown or session block, these words are on the terminal as written but covered by a mosaic of flat hexagons, each the average color of what lies under it, as a video hides a name. Typed in a session, the mosaic grows a key at a time. Not in a typed block, which is said aloud.",
+		"before": "<!-- redact: ", "fill": "DOE, JANE", "after": " -->", "line": "",
+		"modes": ["generative"],
+		"pattern": "<!--\\s*redact\\s*:[^>]*-->",
+	},
 	"note": {
 		"label": "Note to self",
 		"group": "notes",
