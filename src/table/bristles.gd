@@ -267,10 +267,16 @@ static func bent_at(s: float, bend: float, length: float) -> Vector2:
 ## through)`. Out of its reach, none. Reaching it, bent only as far as brings its tip onto it - the arc turning further the lower its
 ## root, until its tip runs along the surface; pushed down further than that, more of it lies there ([constant LAID_MOST] at most).
 static func laid(over: float, down: float, length: float) -> Vector2:
-	var c := clampf(down, 0.0, 1.0)
+	return laid_leaning(over, acos(clampf(down, 0.0, 1.0)), length)
+
+
+## ...ITS ROOT LEANING [param lean] radians off straight down toward the way it is bent - against it, less than none: a hair trailed behind
+## a brush swirled round a pot leans against the way it is laid half the time, and its arc turns through that much more.
+static func laid_leaning(over: float, lean: float, length: float) -> Vector2:
+	var a := clampf(lean, -PI * 0.5 + 1e-3, PI * 0.5)
+	var c := cos(a)
 	if length <= 0.0 or over >= length * c:
 		return Vector2.ZERO
-	var a := acos(c)
 	var top := PI * 0.5 - a
 	if top < 1e-3:
 		return Vector2.ZERO

@@ -114,7 +114,7 @@ func _ok(cond: bool, msg: String) -> void:
 
 
 func _init() -> void:
-	for check in [_mask, _design, _paths, _reveal, _hairs, _paints, _held, _brush_clear, _kept_clear, _pad, _inside, _scheduled, _details, _coats, _put_back, _picture]:
+	for check in [_mask, _design, _paths, _reveal, _hairs, _paints, _held, _brush_clear, _kept_clear, _pad, _inside, _scheduled, _details, _coats, _put_back, _paced_ways, _paced_keys, _laid_as_drawn, _trailed, _picture]:
 		var done: Variant = (check as Callable).call()
 		_ok(done == true, "%s stopped part way (a script error - see above)" % (check as Callable).get_method())
 	print("paint_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
@@ -1888,6 +1888,311 @@ func _coats() -> bool:
 ## are simultaneously using a second brush ...?"; TablePaint._home_of): a liner drawing a brow and, straight after in the same black, a lid
 ## is kept in hand between them, and the second act puts it back in its jar - where it is while the sponge lays the base. THE CONTROL: put
 ## back where that second act found it, it is left in the air off its jar.
+## EACH WAY AS LONG AS ITS LENGTH NEEDS ([method TablePaint._paced]; 2026-11-10, the user: "the brush is leaving paint streaks in places
+## that are far away from where it's actually touching now"): a liner laying a brow, then a chin across the nose, then rinsed and dried -
+## its body, as its plan carries it frame by frame, never moved faster in a move between elements or a trip than RigidParts carries a held
+## thing (about 0.58 m/s; WAY_FRAME_MOST a frame at 30 frames a second). THE CONTROL: each move and trip its hand's fixed time, as it was -
+## the move over the nose and the rinse faster than that.
+const WAY_FRAME_MOST := 0.022
+
+
+func _paced_ways_once(paced: bool) -> float:
+	var m := _medium()
+	var spec := station()
+	var at := {"mask": Vector3(0, 0, -0.06), "brush jar": Vector3(0.18, 0, 0.04), "sponge": Vector3(-0.16, 0, 0.08), "white pot": Vector3(-0.09, 0, 0.12),
+		"black pot": Vector3(0.09, 0, 0.12), "water cup": Vector3(0.22, 0, -0.06), "towel": Vector3(-0.24, 0, -0.08)}
+	for nm in at:
+		_stand(m, spec, nm, Vector3(Tables.ORIGIN.x, 0.0, Tables.ORIGIN.y) + (at[nm] as Vector3))
+	# (...paced or not before anything is planned: an act's plan is made as it is prepared)
+	if m._work.paint != null:
+		m._work.paint.paced = paced
+	var doc := design()
+	(((doc["designs"] as Array)[0] as Dictionary)["elements"] as Array).append({"id": "chin", "stage": "lines", "paint": "#121214",
+		"line": "M 60 190 C 70 196 84 196 92 190", "width": 1.4})
+	m._work.skin_doc = doc
+	m._work.build({"acts": [{"name": "both", "beat": 1, "length": "under", "tracks": [{"thing": "brush jar", "part": "liner", "law": "paint",
+		"on": "mask", "paint": ["brow", "chin"], "from": "black pot", "rinse": "water cup", "dry": "towel"}]}]}, 1)
+	var action := {"kind": "work", "card": 1, "after": 0, "dur": 0.0}
+	m._work.schedule([{"a": action, "t0": 2.0, "s": 1.0}], {"actions": [action], "spoken": PackedStringArray(["one", "two"]), "cues": [{"name": "both", "si": 0}]},
+		PackedFloat32Array([2.0, 60.0]), PackedFloat32Array([2.5, 60.5]), PackedFloat32Array(), 0.0)
+	var node: Node3D = null
+	for wk in m._work.works:
+		if String((wk as Dictionary)["name"]) == "liner":
+			node = (wk as Dictionary)["node"]
+	var run: Dictionary = (m._work.runs as Array)[0]
+	var tp: TablePaint = m._work.paint
+	var trk := _track_of(m, "both")
+	var pl: Dictionary = tp.plan_of(trk, float(run["t1"]) - float(run["t0"]))
+	var windows: Array = []
+	for ph in pl["phases"]:
+		var pd: Dictionary = ph
+		windows.append([String(pd["kind"]), String(pd.get("el", "")), float(run["t0"]) + float(pd["a"]), float(run["t0"]) + float(pd["b"]), 0.0])
+	m._work._planned = true
+	var last := Vector3.INF
+	var worst := 0.0
+	var at_t := 0.0
+	var jumps := 0
+	var t := float(run["t0"])
+	while t < float(run["t1"]):
+		m._work.tick(t)
+		var p := m._work._world_of(node).origin
+		if last != Vector3.INF:
+			var j := p.distance_to(last)
+			if j > 0.02:
+				jumps += 1
+			for wnd in windows:
+				if t >= float(wnd[2]) and t < float(wnd[3]):
+					wnd[4] = maxf(float(wnd[4]), j)
+			if j > worst:
+				worst = j
+				at_t = t
+		last = p
+		t += 1.0 / 30.0
+	var ways := 0.0
+	var said := PackedStringArray()
+	for wnd in windows:
+		if String(wnd[0]) in ["move", "rinse", "dry", "load"]:
+			ways = maxf(ways, float(wnd[4]))
+			said.append("%s %.1f" % [wnd[0], float(wnd[4]) * 100.0])
+	m._root3.free()
+	return ways
+
+
+## EACH WAY INSIDE AN ELEMENT AS LONG AS ITS BODY NEEDS ([method TablePaint._pace_keys]; feedback 0010, 2026-11-10: "black mark on the chin
+## ... brush not even touching"): the same liner's chin, drawn out from its middle, ends one stroke leaning left and begins the next leaning
+## right; baked by the solver, through every element its body keeps within KEY_OFF_MOST of where its hand has it. THE CONTROL: each way at
+## its program's own time, its handle swung 100 degrees in 0.41 s - its body falls centimeters behind, and its paint is laid where it is not.
+const KEY_OFF_MOST := 0.003
+
+
+func _paced_keys_once(paced: bool) -> float:
+	var m := _medium()
+	var spec := station()
+	var at := {"mask": Vector3(0, 0, -0.06), "brush jar": Vector3(0.18, 0, 0.04), "sponge": Vector3(-0.16, 0, 0.08), "white pot": Vector3(-0.09, 0, 0.12),
+		"black pot": Vector3(0.09, 0, 0.12), "water cup": Vector3(0.22, 0, -0.06), "towel": Vector3(-0.24, 0, -0.08)}
+	for nm in at:
+		_stand(m, spec, nm, Vector3(Tables.ORIGIN.x, 0.0, Tables.ORIGIN.y) + (at[nm] as Vector3))
+	if m._work.paint != null:
+		m._work.paint.paced = paced
+	var doc := design()
+	(((doc["designs"] as Array)[0] as Dictionary)["elements"] as Array).append({"id": "chin", "stage": "lines", "paint": "#121214",
+		"line": "M 60 190 C 70 196 84 196 92 190", "width": 1.4})
+	m._work.skin_doc = doc
+	m._work.build({"acts": [{"name": "both", "beat": 1, "length": "under", "tracks": [{"thing": "brush jar", "part": "liner", "law": "paint",
+		"on": "mask", "paint": ["brow", "chin"], "from": "black pot", "rinse": "water cup", "dry": "towel"}]}]}, 1)
+	# (...in as long as the act takes at a hand's pace, never slowed to fill more: slowed, the control's swing had time enough)
+	var nat := 0.0
+	for a in m._work.acts:
+		if String((a as Dictionary)["name"]) == "both":
+			nat = float((a as Dictionary).get("_natural", 0.0))
+	var action := {"kind": "work", "card": 1, "after": 0, "dur": 0.0}
+	m._work.schedule([{"a": action, "t0": 2.0, "s": 1.0}], {"actions": [action], "spoken": PackedStringArray(["one", "two"]), "cues": [{"name": "both", "si": 0}]},
+		PackedFloat32Array([2.0, 1.5 + nat]), PackedFloat32Array([2.5, 2.0 + nat]), PackedFloat32Array(), 0.0)
+	var wi := -1
+	for k in (m._work.works as Array).size():
+		if String((m._work.works[k] as Dictionary)["name"]) == "liner":
+			wi = k
+	var run: Dictionary = (m._work.runs as Array)[0]
+	var tp: TablePaint = m._work.paint
+	var pl: Dictionary = tp.plan_of(_track_of(m, "both"), float(run["t1"]) - float(run["t0"]))
+	var phys: TablePhysics = m._work.physics
+	_ok(phys != null and phys._rigid_of.has(wi), "the liner is no body the solver carries")
+	if phys == null or not phys._rigid_of.has(wi):
+		m._root3.free()
+		return INF
+	var bi := int(phys._rigid_of[wi])
+	var worst := 0.0
+	var els := 0
+	for ph in pl["phases"]:
+		var pd: Dictionary = ph
+		if String(pd["kind"]) != "el":
+			continue
+		els += 1
+		var a := float(run["t0"]) + float(pd["a"])
+		var b := float(run["t0"]) + float(pd["b"])
+		phys.bake_until(b)
+		var t := a
+		while t < b:
+			var fr: Variant = phys.frame_at(t)
+			if fr != null:
+				worst = maxf(worst, phys.held_off(fr, bi))
+			t += 1.0 / 30.0
+	_ok(els == 2, "the liner's act laid %d elements, not the brow and the chin" % els)
+	_ok(absf(float(run["t1"]) - float(run["t0"]) - nat) < 0.6, "the liner's act ran %.1f s, not its own %.1f" % [float(run["t1"]) - float(run["t0"]), nat])
+	m._root3.free()
+	return worst
+
+
+func _paced_keys() -> bool:
+	var paced: float = _paced_keys_once(true)
+	var fixed: float = _paced_keys_once(false)
+	_ok(paced <= KEY_OFF_MOST, "a liner's ways inside its elements, each as long as its body needs, leave it %.1f mm off its hand (%.1f the most)" % [paced * 1000.0, KEY_OFF_MOST * 1000.0])
+	_ok(fixed > KEY_OFF_MOST * 5.0, "THE CONTROL: each way at its program's own time, its body is only %.1f mm off its hand" % (fixed * 1000.0))
+	return true
+
+
+## PICK A LANE (2026-11-10, the user: "when the brushes go into the water, the bristles bend - even though the brush isn't touching the
+## bottom of the glass ... either touch the actual bottom, so that the curves make sense, or don't touch it, and don't curve the bristles
+## in the water"; TablePaint._lay_on_plane): a liner squeezed on the water cup's floor is stopped by the table under the cup's floor short
+## of its hand; through the squeeze, as the solver carries it, its hairs as drawn either reach the floor or stand straight - never bent
+## more than HAIR_CURL_MOST with their tip HAIR_OFF_MOST over it. THE CONTROL: laid as its hand has it, their tip stands well up in the water.
+const HAIR_CURL_MOST := 0.001
+const HAIR_OFF_MOST := 0.0015
+
+
+func _laid_as_drawn() -> bool:
+	var m := _medium()
+	var spec := station()
+	var at := {"mask": Vector3(0, 0, -0.06), "brush jar": Vector3(0.18, 0, 0.04), "sponge": Vector3(-0.16, 0, 0.08), "white pot": Vector3(-0.09, 0, 0.12),
+		"black pot": Vector3(0.09, 0, 0.12), "water cup": Vector3(0.22, 0, -0.06), "towel": Vector3(-0.24, 0, -0.08)}
+	for nm in at:
+		_stand(m, spec, nm, Vector3(Tables.ORIGIN.x, 0.0, Tables.ORIGIN.y) + (at[nm] as Vector3))
+	m._work.skin_doc = design()
+	m._work.build({"acts": [{"name": "brow", "beat": 1, "length": "under", "tracks": [{"thing": "brush jar", "part": "liner", "law": "paint",
+		"on": "mask", "paint": ["brow"], "from": "black pot", "rinse": "water cup", "dry": "towel"}]}]}, 1)
+	var nat := 0.0
+	for a in m._work.acts:
+		nat = float((a as Dictionary).get("_natural", 0.0))
+	var action := {"kind": "work", "card": 1, "after": 0, "dur": 0.0}
+	m._work.schedule([{"a": action, "t0": 2.0, "s": 1.0}], {"actions": [action], "spoken": PackedStringArray(["one", "two"]), "cues": [{"name": "brow", "si": 0}]},
+		PackedFloat32Array([2.0, 1.5 + nat]), PackedFloat32Array([2.5, 2.0 + nat]), PackedFloat32Array(), 0.0)
+	var wi := -1
+	for k in (m._work.works as Array).size():
+		if String((m._work.works[k] as Dictionary)["name"]) == "liner":
+			wi = k
+	var node: Node3D = (m._work.works[wi] as Dictionary)["node"]
+	var run: Dictionary = (m._work.runs as Array)[0]
+	var t0 := float(run["t0"])
+	var tp: TablePaint = m._work.paint
+	var trk := _track_of(m, "brow")
+	var plan: Dictionary = tp.plan_of(trk, float(run["t1"]) - t0)
+	var tool := tp._tool_or_none(trk)
+	var mat: ShaderMaterial = ((tool["tufts"] as Array)[0] as Dictionary)["mat"]
+	var rinse: Array = (plan["phases"] as Array).filter(func(p: Dictionary) -> bool: return String(p["kind"]) == "rinse")
+	_ok(rinse.size() == 1 and m._work.physics != null, "the liner was not rinsed with a solver to carry it")
+	if rinse.size() != 1 or m._work.physics == null:
+		m._root3.free()
+		return true
+	var a := t0 + float((rinse[0] as Dictionary)["a"])
+	var b := t0 + float((rinse[0] as Dictionary)["b"])
+	m._work.physics.bake_until(b)
+	var pressed := 0
+	var curled := 0
+	var worst := 0.0
+	var control := 0.0
+	var t := a
+	while t < b:
+		m._work.tick(t)
+		var h: Array = tp._hold_of(tp._held_at(plan, trk, t - t0, t, Transform3D.IDENTITY, m._work._rest.get("w%d:pose" % wi, Transform3D.IDENTITY),
+			Transform3D.IDENTITY), tool)
+		if not bool(h[3]) and float(h[2]) > 0.0 and h.size() > 7 and not is_nan(float(h[6])):
+			pressed += 1
+			var xn := m._work._world_of(node)
+			var bend: Vector3 = mat.get_shader_parameter("bristle_bend")
+			var off := (xn * tp._bent_tip(tool, bend, mat.get_shader_parameter("bristle_lay") as Vector2)).y - float(h[6])
+			if bend.length() > HAIR_CURL_MOST and off > HAIR_OFF_MOST:
+				curled += 1
+				worst = maxf(worst, off)
+			var by_hand: Array = tp._lay_on_plane(tool, h, Vector3.ZERO)
+			control = maxf(control, (xn * tp._bent_tip(tool, xn.basis.inverse() * (by_hand[0] as Vector3), by_hand[1] as Vector2)).y - float(h[6]))
+		t += 1.0 / 30.0
+	_ok(pressed > 10, "the liner was pressed on the cup's floor in %d frames of its rinse" % pressed)
+	_ok(curled == 0, "the liner's hairs curl in the water in %d of %d frames pressed, their tip up to %.1f mm over the cup's floor" % [curled, pressed, worst * 1000.0])
+	_ok(control > HAIR_OFF_MOST * 4.0, "THE CONTROL: laid as its hand has it, the hairs' tip stands only %.1f mm over the floor" % (control * 1000.0))
+	m._root3.free()
+	return true
+
+
+## A BRUSH'S HAIRS TRAIL BEHIND THE WAY IT GOES (TablePaint._lay_on_plane's `goes`; 2026-11-10, the user: "the brush moves in small circles
+## in those containers... yet the bristles only bend in a single direction ... On the grey pad, the bending looks great: because we only
+## ever pull in one direction"): a liner swirled round the water cup's floor has its hairs, laid on it, pointing behind it (TRAIL_BEHIND_LEAST
+## on average) and turning all the way round with it (TRAIL_BINS_LEAST of twelve ways); dried on the towel, they lie as they did. THE
+## CONTROL: laid by the handle's lean alone, as they were, they point one way the whole swirl.
+const TRAIL_BEHIND_LEAST := 0.7
+const TRAIL_BINS_LEAST := 10
+
+
+func _trailed() -> bool:
+	var m := _medium()
+	var spec := station()
+	var at := {"mask": Vector3(0, 0, -0.06), "brush jar": Vector3(0.18, 0, 0.04), "sponge": Vector3(-0.16, 0, 0.08), "white pot": Vector3(-0.09, 0, 0.12),
+		"black pot": Vector3(0.09, 0, 0.12), "water cup": Vector3(0.22, 0, -0.06), "towel": Vector3(-0.24, 0, -0.08)}
+	for nm in at:
+		_stand(m, spec, nm, Vector3(Tables.ORIGIN.x, 0.0, Tables.ORIGIN.y) + (at[nm] as Vector3))
+	m._work.skin_doc = design()
+	m._work.build({"acts": [{"name": "brow", "beat": 1, "length": "under", "tracks": [{"thing": "brush jar", "part": "liner", "law": "paint",
+		"on": "mask", "paint": ["brow"], "from": "black pot", "rinse": "water cup", "dry": "towel"}]}]}, 1)
+	var nat := 0.0
+	for a in m._work.acts:
+		nat = float((a as Dictionary).get("_natural", 0.0))
+	var action := {"kind": "work", "card": 1, "after": 0, "dur": 0.0}
+	m._work.schedule([{"a": action, "t0": 2.0, "s": 1.0}], {"actions": [action], "spoken": PackedStringArray(["one", "two"]), "cues": [{"name": "brow", "si": 0}]},
+		PackedFloat32Array([2.0, 1.5 + nat]), PackedFloat32Array([2.5, 2.0 + nat]), PackedFloat32Array(), 0.0)
+	var wi := -1
+	for k in (m._work.works as Array).size():
+		if String((m._work.works[k] as Dictionary)["name"]) == "liner":
+			wi = k
+	var node: Node3D = (m._work.works[wi] as Dictionary)["node"]
+	var run: Dictionary = (m._work.runs as Array)[0]
+	var t0 := float(run["t0"])
+	var tp: TablePaint = m._work.paint
+	var trk := _track_of(m, "brow")
+	var plan: Dictionary = tp.plan_of(trk, float(run["t1"]) - t0)
+	var tool := tp._tool_or_none(trk)
+	var mat: ShaderMaterial = ((tool["tufts"] as Array)[0] as Dictionary)["mat"]
+	m._work._planned = true
+	var hold := func(tt: float) -> Array:
+		return tp._hold_of(tp._held_at(plan, trk, tt - t0, tt, Transform3D.IDENTITY, m._work._rest.get("w%d:pose" % wi, Transform3D.IDENTITY),
+			Transform3D.IDENTITY), tool)
+	var flat := func(v: Vector3) -> Vector2: return Vector2(v.x, v.z).normalized() if Vector2(v.x, v.z).length() > 1e-9 else Vector2.ZERO
+	var judged := {}
+	for kind in ["rinse", "dry"]:
+		var ph: Array = (plan["phases"] as Array).filter(func(p: Dictionary) -> bool: return String(p["kind"]) == kind)
+		if ph.size() != 1:
+			_ok(false, "the liner has no %s" % kind)
+			continue
+		var behind := 0.0
+		var kept := 0.0
+		var n := 0
+		var bins := {}
+		var bins_was := {}
+		var t := t0 + float((ph[0] as Dictionary)["a"])
+		while t < t0 + float((ph[0] as Dictionary)["b"]):
+			var h: Array = hold.call(t)
+			if not bool(h[3]) and float(h[2]) > 0.0 and h.size() > 7 and not is_nan(float(h[6])):
+				var v := ((h[0] as Vector3) - ((hold.call(t - TablePaint.TRAIL_LAG) as Array)[0] as Vector3)) / TablePaint.TRAIL_LAG
+				m._work.tick(t)
+				var xn := m._work._world_of(node)
+				var lay: Vector2 = mat.get_shader_parameter("bristle_lay")
+				if lay.y > 0.0 and Vector2(v.x, v.z).length() > TablePaint.TRAIL_SPEED:
+					var dir: Vector2 = flat.call(xn.basis * (mat.get_shader_parameter("bristle_bend") as Vector3))
+					var was: Vector2 = flat.call(tp._lay_on_plane(tool, h, Vector3.ZERO, xn)[0] as Vector3)
+					behind += dir.dot(-(flat.call(v) as Vector2))
+					kept += dir.dot(was)
+					n += 1
+					bins[int(floor((dir.angle() + PI) / (TAU / 12.0))) % 12] = true
+					bins_was[int(floor((was.angle() + PI) / (TAU / 12.0))) % 12] = true
+			t += 1.0 / 30.0
+		judged[kind] = [behind / maxf(n, 1), kept / maxf(n, 1), bins.size(), bins_was.size(), n]
+	if judged.has("rinse") and judged.has("dry"):
+		var r: Array = judged["rinse"]
+		var d: Array = judged["dry"]
+		_ok(int(r[4]) > 20 and float(r[0]) >= TRAIL_BEHIND_LEAST and int(r[2]) >= TRAIL_BINS_LEAST,
+			"swirled round the cup's floor, the hairs point behind the brush %.2f on average and turn through %d of 12 ways (%d frames)" % [float(r[0]), int(r[2]), int(r[4])])
+		_ok(int(d[4]) > 10 and float(d[1]) > 0.98, "dried on the towel, they lie as they did (%.3f the same way, %d frames)" % [float(d[1]), int(d[4])])
+		_ok(int(r[3]) <= 2, "THE CONTROL: laid by the handle's lean alone, the swirl's hairs point %d of 12 ways" % int(r[3]))
+	m._root3.free()
+	return true
+
+
+func _paced_ways() -> bool:
+	var paced: float = _paced_ways_once(true)
+	var fixed: float = _paced_ways_once(false)
+	_ok(paced <= WAY_FRAME_MOST, "a liner's moves and trips, each as long as its way needs, move it at most %.1f cm a frame (%.1f the most)" % [paced * 100.0, WAY_FRAME_MOST * 100.0])
+	_ok(fixed > WAY_FRAME_MOST * 1.3, "THE CONTROL: each its hand's fixed time, as it was, they move it %.1f cm a frame" % (fixed * 100.0))
+	return true
+
+
 func _put_back() -> bool:
 	var m := _medium()
 	var spec := station()

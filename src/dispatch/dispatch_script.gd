@@ -57,13 +57,12 @@ class_name DispatchScript
 ## A typed block and a session are added under what the terminal shows; a shown one replaces it.
 ##
 ## REDACTED WORDS, inside a shown block or a session: `NAME ........ <!-- redact: DOE, JANE -->`. The words are put up as
-## any others, and the terminal draws them under a mosaic of flat hexagons, each the average color of what lies under it
-## ([method DispatchScreens.redactions], `shaders/dispatch_redact.gdshader`) - as a video blurs a name, never a word put in
-## its place. (2026-11-09, the user: "I do not simply want to replace words with $REDACTED ... I would use that sort of
-## hexagonal approach, which segments a region into large hexagonal shapes, and makes those shapes use single-colors,
-## matching the pixels we just blurred.") A redacted character travels as itself moved into a private plane of Unicode
-## ([constant REDACT_BASE]), so typing, wrapping, scrolling and a strike count it as the one character it is; the screens
-## take it back out ([method unredacted]). A typed block is said, and the voice cannot say what is hidden: there the mark
+## any others, and hidden over the camera's finished picture, as a video hides a name after it was shot - a box cracked
+## into large flat shards, each the average color of what lies under it ([DispatchCensor]) - never a word put in their
+## place. (2026-11-09, the user: "I do not simply want to replace words with $REDACTED"; 2026-11-10: "This is a
+## post-processing effect, applied to the raw video AFTER: like when police blur faces in a video.") A redacted character
+## travels as itself moved into a private plane of Unicode ([constant REDACT_BASE]), so typing, wrapping, scrolling and a
+## strike count it as the one character it is; the screens take it back out ([method unredacted]). A typed block is said, and the voice cannot say what is hidden: there the mark
 ## is warned of and its words left out.
 ##
 ## THE DESK IS SEEN FIRST (2026-11-06, the author: "Right when it starts, we've barely had a moment to look at the scene
@@ -406,6 +405,11 @@ static func redacted(text: String) -> String:
 	return out + text.substr(at)
 
 
+## Is character [param c] a redacted one ([method redacted])?
+static func is_redacted(c: int) -> bool:
+	return c >= REDACT_BASE and c < REDACT_BASE + 0xFFFE
+
+
 ## A LINE AS DRAWN: `{text, spans: [Vector2i(c0, c1)]}` - every redacted character back as itself, and the runs of them,
 ## by column ([method redacted]).
 static func unredacted(line: String) -> Dictionary:
@@ -414,7 +418,7 @@ static func unredacted(line: String) -> Dictionary:
 	var open := -1
 	for i in line.length():
 		var c := line.unicode_at(i)
-		var hidden := c >= REDACT_BASE and c < REDACT_BASE + 0xFFFE
+		var hidden := is_redacted(c)
 		if hidden and open < 0:
 			open = i
 		elif not hidden and open >= 0:

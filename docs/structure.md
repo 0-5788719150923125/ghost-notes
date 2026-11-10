@@ -5,7 +5,7 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 613 references inside a folder, 1079 down the stack, 0 up it.
+Between scripts today: 616 references inside a folder, 1080 down the stack, 0 up it.
 
 ## The stack, top first
 
@@ -14,7 +14,7 @@ Between scripts today: 613 references inside a folder, 1079 down the stack, 0 up
 | `app/` | The shell | 13 | `masking`, `letter`, `table_show`, `table`, `reading`, `export`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `render`, `audio`, `platform`, `data` |
 | `masking/` | Masking | 15 | `timeline`, `voice`, `ui`, `notes`, `platform`, `data` |
 | `likeness/` | Likeness | 15 | `table`, `reading`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `scene_kit`, `platform`, `data` |
-| `dispatch/` | Dispatch desk | 8 | `desk`, `table`, `reading`, `media`, `scene_kit`, `render`, `data` |
+| `dispatch/` | Dispatch desk | 9 | `desk`, `table`, `reading`, `media`, `scene_kit`, `render`, `data` |
 | `letter/` | Letter | 3 | `desk`, `reading`, `show`, `media`, `ui`, `notes`, `agents`, `platform`, `data` |
 | `proof/` | Proof | 6 | `desk`, `reading`, `export`, `show`, `ui`, `notes`, `agents`, `platform`, `data` |
 | `desk/` | The desk | 9 | `table`, `media`, `scene_kit`, `render`, `data` |
@@ -181,7 +181,7 @@ A note read as a letter written by hand at a desk, one of the Medium card's form
 
 A note played at a desk late at night in a hollow under the ground, seen from the chair: the script's marks read into the desk's actions and the voice's rests (calls, rings, texts, pings, the terminal's typed and shown blocks, the printer, the static), the desk and everything on it built by code (a beige terminal, a dozen labeled flip phones, a radar, a shortwave receiver, a printer, small screens), the roots grown over and across it, every sound synthesized, the medium that turns its camera to whatever is active - one of the Medium card's formats - and its own rows there. Design: next/dispatch.md.
 
-[`dispatch`](../src/dispatch/dispatch.gd), [`dispatch_format`](../src/dispatch/dispatch_format.gd), [`dispatch_roots`](../src/dispatch/dispatch_roots.gd), [`dispatch_screens`](../src/dispatch/dispatch_screens.gd), [`dispatch_script`](../src/dispatch/dispatch_script.gd), [`dispatch_set`](../src/dispatch/dispatch_set.gd), [`dispatch_sounds`](../src/dispatch/dispatch_sounds.gd), [`dispatch_walk`](../src/dispatch/dispatch_walk.gd)
+[`dispatch`](../src/dispatch/dispatch.gd), [`dispatch_censor`](../src/dispatch/dispatch_censor.gd), [`dispatch_format`](../src/dispatch/dispatch_format.gd), [`dispatch_roots`](../src/dispatch/dispatch_roots.gd), [`dispatch_screens`](../src/dispatch/dispatch_screens.gd), [`dispatch_script`](../src/dispatch/dispatch_script.gd), [`dispatch_set`](../src/dispatch/dispatch_set.gd), [`dispatch_sounds`](../src/dispatch/dispatch_sounds.gd), [`dispatch_walk`](../src/dispatch/dispatch_walk.gd)
 
 ### `likeness/` - Likeness
 

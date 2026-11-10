@@ -149,6 +149,8 @@ A PHONE IN HAND IS HELD TO THE EAR: it rises out of its row, flips open and floa
 
 THE SUBTITLES CAPTION WHAT CANNOT BE READ ON THE DESK, the letter's rule: speech, never the words typed on the terminal as they are said (`_captioned`); a text is read on its phone and nowhere else.
 
+REDACTED WORDS ON THE TERMINAL ARE HIDDEN OVER THE FRAME, as an editor would hide them after the shoot (`DispatchCensor`, `_censor_at`): drawn after the 3D and before a picture over the whole screen, so a picture covers it.
+
 Source: [src/dispatch/dispatch.gd](../src/dispatch/dispatch.gd)
 
 ## `table` - Card table

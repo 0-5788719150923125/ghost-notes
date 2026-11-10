@@ -49,6 +49,21 @@ def changed(prev_lab, cur_lab, face, shift=1):
 
 # A soft step's change counted only past this many times the face's median change (layer_alpha).
 SOFT_DRIFT = 2.0
+# How far past where a layer changes anything its edge's fade may reach (mm).
+FADE_PAST = 0.7
+# NO LAYER CHANGES THE FACE'S OWN EDGE, this far in from it (mm; [layer_alpha]; feedback 0012, 2026-11-10: "There are weird black smudges
+# being painted along the chin, not even touching the brush that is supposedly painting them"): the image model draws a mask's silhouette
+# a pixel or two aside in every picture, blended into the black past it, and the shift read as a thin dark change round the whole face -
+# 732687's right eye socket took 105 mm2 there, and its liner traced the jaw in near-black dashes on the mask's steep rim, 134 s of work.
+# Allowing every edge two pixels' shift instead lost half the glitter's specks and a fifth of the amber mending.
+RIM_OFF = 1.5
+# A PART PAINTED BY NUMBERS HAS ITS OWN BORDERS WORKED WET, never its edge ([by_numbers]; feedback 0011, 2026-11-10: "The heavy smearing
+# still created large white bands around the outer part of the eye-diamond ... I believe that comes from the outer white smearing into the
+# inner part"): only where two of its own colors meet, and a feather's reach inside its edge - every pull moves the paint under it that far
+# each way, and is laid whatever it does. 732687's soot, its part the diamond's whole inside, had its edge against the white worked as a
+# border, and the clean brush carried the white from past the diamond's line into its plum corners. Its edge is its fade's, which keeps
+# to where the layer changes anything ([FADE_PAST]). Off, as it was: a gate's control.
+OWN_BORDERS = True
 
 
 def layer_alpha(d, face, floor=3.0, span=10.0, soft=False):
@@ -58,14 +73,15 @@ def layer_alpha(d, face, floor=3.0, span=10.0, soft=False):
     darker, the typical change on a step that shades much of the face) had been thrown away as drift. NOR UNDER TWICE THE FACE'S MEDIAN
     CHANGE: a step whose picture was redrawn a shade lighter all over (732687's "the shine", its median change 1.7) had a quarter of the face
     for its own, 478 pale strokes blotched over it in its last 25 minutes - and the socket's shading, a fifth of the face, keeps all of
-    it."""
+    it. NEVER THE FACE'S OWN EDGE ([RIM_OFF])."""
+    rim = face & ~ndimage.binary_erosion(face, iterations=int(round(RIM_OFF * PX))) if RIM_OFF > 0 else np.zeros(face.shape, bool)
     if soft:
         jitter = float(np.median(np.abs(d - ndimage.gaussian_filter(d, PX * 2.0))[face]))
         lo = max(1.5, 3.0 * jitter, SOFT_DRIFT * float(np.median(d[face])))
-        return np.clip((d - lo) / (span * 0.6), 0.0, 1.0)
+        return np.clip((d - lo) / (span * 0.6), 0.0, 1.0) * ~rim
     drift = float(np.median(d[face])) + 2.0 * float(np.median(np.abs(d[face] - np.median(d[face]))))
     lo = max(floor, drift)
-    return np.clip((d - lo) / span, 0.0, 1.0)
+    return np.clip((d - lo) / span, 0.0, 1.0) * ~rim
 
 
 def parts(alpha, cur_lab, most=3, hue=np.array([1.0, 3.0, 3.0]), thresh=0.5):
@@ -304,11 +320,17 @@ def by_numbers(p, ext, alpha, lab, st, soft_edge):
             p._solid(full, col, nm, 1.0, tool, passes=2)
         out.append("%s %d" % (nm.split("+")[0].split(" ")[0] + ("+" if "+" in nm else ""), len(p.laid) - n0))
     # (...the borders between its colors worked wet, as far as its own colors run soft)
-    border = np.zeros(ext.shape, bool)
-    border[:, 1:] |= near[:, 1:] != near[:, :-1]
-    border[1:, :] |= near[1:, :] != near[:-1, :]
     reach = float(st.get("reach", 2.5 if soft_edge else 1.2))
-    band = ndimage.binary_dilation(border & ext, iterations=int(reach * PX)) & ext
+    border = np.zeros(ext.shape, bool)
+    if OWN_BORDERS:
+        own = near >= 0
+        border[:, 1:] |= (near[:, 1:] != near[:, :-1]) & own[:, 1:] & own[:, :-1]
+        border[1:, :] |= (near[1:, :] != near[:-1, :]) & own[1:, :] & own[:-1, :]
+        band = ndimage.binary_dilation(border & ext, iterations=int(reach * PX)) & ndimage.binary_erosion(ext, iterations=int(reach * PX))
+    else:
+        border[:, 1:] |= near[:, 1:] != near[:, :-1]
+        border[1:, :] |= near[1:, :] != near[:-1, :]
+        band = ndimage.binary_dilation(border & ext, iterations=int(reach * PX)) & ext
     if band.any():
         n0 = len(p.laid)
         p._feather_area(band, reach, None, 1)
@@ -393,10 +415,12 @@ def _tidy_patches(p, before, was, worse, comps, target, face):
     return blotted, painted
 
 
-def paint_layers(ref, steps, pics, log=print):
+def paint_layers(ref, steps, pics, log=print, first=0, last=None, canvas=None):
     """EVERY LAYER PAINTED, IN ORDER: `ref` the surface (its frame, paints, bare color, face), `steps` the layers (`{name, soft, ...}`),
     `pics` each layer's picture at the canvas's resolution (sRGB floats). -> (the painter, where each layer's marks begin in its
-    `laid`, the measures' reference)."""
+    `laid`, the measures' reference). OR SOME OF THEM AGAIN (2026-11-10, the user: "I don't want to spend another 40 minutes on that
+    step"): layers `first` to `last` alone, over `canvas` ((pre, alp): the painting as the layers before them left it, laid back from
+    their elements' maps) - `starts` then the painted layers' alone."""
     labs = [oklab(dec(p)) for p in pics]
     face = ref.face
     tools = [k for k, v in TOOLS.items()]
@@ -404,9 +428,14 @@ def paint_layers(ref, steps, pics, log=print):
     final.srgb, final.lab = pics[-1], labs[-1]
     sheet_alpha = []
     p = PlanPainter(final, tools, 1)
+    if canvas is not None:
+        p.cv.pre[...] = canvas[0]
+        p.cv.alp[...] = canvas[1]
     bare_lab = oklab(np.broadcast_to(dec(ref.bare), pics[0].shape).copy())
     starts = []
     for i, st in enumerate(steps):
+        if i < first or (last is not None and i > last):
+            continue
         name = st["name"]
         starts.append(len(p.laid))
         before = p.cv.copy()
@@ -556,8 +585,20 @@ def paint_layers(ref, steps, pics, log=print):
             hows.append("%s %d" % (how, len(p.laid) - n0))
         # (...and its soft edge, where the step's own was soft - faded out into what is round it)
         if st.get("fade") or fade:
-            p._smudge({"name": name, "how": "smudge", "mask": alpha > 0.5, "band": float(st.get("fade", 5.0)), "size": 5.0,
-                       "strength": 0.55, "inside": 0.25, "smooth": 1.0})
+            # (...THE FAT BRUSH NEVER PAST WHERE THE LAYER CHANGES ANYTHING (feedback 0007, 2026-11-10: "This eye got completely ruined by
+            # smearing ... the diamond was ruined, and no logic ever corrects the mistake" - "The smearing was caused by the fat brush"):
+            # worked 5 mm out past the edge and dragging, 732687's soot was pulled across the diamond's crisp border where its own picture
+            # stops dead at it; a soft edge the picture fades out over is still faded, as far as it fades)
+            p.keep_out = face & ~ndimage.binary_dilation(alpha > 0.05, iterations=max(int(FADE_PAST * PX), 1))
+            # (...AND TAKING UP ONLY WHAT ITS LAYER IS LAID ON (plan.TAKE_INSIDE; feedback 0011): its band crossed the diamond's line, and the
+            # white past it was carried into the plum's corners)
+            p.untaken = face & ~(alpha > 0.05)
+            try:
+                p._smudge({"name": name, "how": "smudge", "mask": alpha > 0.5, "band": float(st.get("fade", 5.0)), "size": 5.0,
+                           "strength": 0.55, "inside": 0.25, "smooth": 1.0})
+            finally:
+                p.keep_out = None
+                p.untaken = None
             hows.append("fade")
         # (...and what it spilled where it was not to go, cleaned up before the next is begun)
         p.layer_name = name

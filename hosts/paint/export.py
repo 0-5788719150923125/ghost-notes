@@ -322,13 +322,14 @@ def _pixel_times(m, sl, ts_pts, pts):
     return td[i]
 
 
-def export(p, starts, steps, out, log=print):
-    """THE ELEMENTS, written to `out`: `elements.json` and each one's maps (`maps/`), replaying the painter's marks on a fresh canvas."""
+def export(p, starts, steps, out, log=print, canvas=None):
+    """THE ELEMENTS, written to `out`: `elements.json` and each one's maps (`maps/`), replaying the painter's marks on a fresh canvas -
+    or on `canvas` ((pre, alp)), where only some of the layers were painted again over the ones before them (layers_paint.paint_layers)."""
     out = Path(out)
     (out / "maps").mkdir(parents=True, exist_ok=True)
     H, W = p.cv.h, p.cv.w
-    pre = np.zeros((H, W, 3))
-    alp = np.zeros((H, W))
+    pre = np.zeros((H, W, 3)) if canvas is None else np.array(canvas[0], float)
+    alp = np.zeros((H, W)) if canvas is None else np.array(canvas[1], float)
     els = []
     for gi, g in enumerate(groups(p, starts)):
         marks = [p.laid[i][0] for i in g["marks"]]

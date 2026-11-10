@@ -43,6 +43,8 @@ extends Node
 ##   jump between frames; a hand's thing not held far off its hand; nothing let go hanging in the air; a loose thing inside its vessel's walls; a surface moving smoothly;
 ##   a painting tool's own surface in nothing but what gives, to a millimeter (a pot's wall is three).
 ##   Each said once, with when and how much - what a viewer would report, found before they must.
+## - `--no-keep-out`: the drawn tools left as their plans place them (TablePaint.keep_out off) - what the guard against standing in the
+##   work changes.
 ## - `--plan-only` (with `--heard`): the live plans alone, nothing baked - each act's time and every stretch over 8 s the painting hand
 ##   stands idle. Minutes for a whole episode where a bake takes many.
 ## - `--heard[=LEAD]`: THE SHOW AS A LIVE PLAN COMES TO KNOW IT, on this thread: the words a sentence at a time, `--ahead` seconds before
@@ -209,6 +211,24 @@ func _run() -> void:
 	medium._work.schedule(medium._sched, medium._plan.parse, medium._follow.said0, medium._follow.said1, medium._est, 0.0)
 	var w: TableWork = medium._work
 	var ph: TablePhysics = w.physics
+	# (`--phases=ACT`: that act's plan as the painter lays it - each phase's kind, element and seconds into the act - against its run)
+	if _arg(args, "phases", "") != "" and w.paint != null:
+		var want := _arg(args, "phases", "")
+		for r in w.runs:
+			var a: Dictionary = w.acts[int((r as Dictionary)["i"])]
+			if String(a["name"]) != want:
+				continue
+			for tr in a["tracks"]:
+				if String((tr as Dictionary).get("law", "")) != "paint":
+					continue
+				var pl: Dictionary = w.paint.plan_of(tr, float(r["t1"]) - float(r["t0"]))
+				print("  phases of %s (%.2f - %.2f):" % [want, float(r["t0"]), float(r["t1"])])
+				for phz in pl["phases"]:
+					var pd: Dictionary = phz
+					print("    %-6s %-8s %8.2f - %8.2f  (show %8.2f - %8.2f)" % [String(pd["kind"]), String(pd.get("el", "")), float(pd["a"]), float(pd["b"]), float(r["t0"]) + float(pd["a"]), float(r["t0"]) + float(pd["b"])])
+	# (`--no-keep-out`: a drawn painting tool left as its plan places it, [method TablePaint._kept_out] off - what the guard changes)
+	if _arg(args, "no-keep-out", "") != "" and w.paint != null:
+		w.paint.keep_out = false
 	print("episode_bake_probe: %s - %d things, %d works, %d acts, stood in %d ms" % [copy, w.things.size(), w.works.size(), w.acts.size(), Time.get_ticks_msec() - clock])
 	# ...HOW FAR EACH PAINTING TOOL IS HELD OFF ITS SURFACE (`--held`): each program's held keys' stand-off, where the surface is under it
 	if _arg(args, "held", "") != "" and w.paint != null:

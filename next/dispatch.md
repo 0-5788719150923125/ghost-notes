@@ -75,7 +75,8 @@ inside a shown block or a session, and the voice's own (`speaker`, `hesitation`,
 | `dispatch.gd` | `DispatchMedium`: the world, the schedule (a [ReadingFollower]), the state of every thing at a moment, the camera, the opening, the pictures, the captions |
 | `dispatch_set.gd` | `DispatchSet`: the desk and everything on it, built - terminal, keyboard, phones, radar, receiver and scope, printer and its heap, the three screens, the switch, the chart, the handbook, the things, the chair, the room |
 | `dispatch_roots.gd` | `DispatchRoots`: the roots grown and meshed |
-| `dispatch_screens.gd` | the 2D faces drawn into the screens: the terminal (its redacted words under a hexagon mosaic, `shaders/dispatch_redact.gdshader`), the radar, the scope, a phone's two screens, the receiver's dial |
+| `dispatch_screens.gd` | the 2D faces drawn into the screens: the terminal (its redacted words as written, and where they lie), the radar, the scope, a phone's two screens, the receiver's dial |
+| `dispatch_censor.gd` | `DispatchCensor`: redacted words hidden over the finished frame - a tracked box cracked into flat shards (`shaders/dispatch_redact.gdshader`) |
 | `dispatch_sounds.gd` | `DispatchSounds`: every sound of the desk, a function of show time |
 | `dispatch_format.gd`, `dispatch_walk.gd` | its own rows on the Medium card (the desk's number) and what they hand the reading; the pictures are the note's Pictures card's (next/pictures.md), `DispatchMedium.pictures_in` saying which marks they are |
 
@@ -89,8 +90,9 @@ text, the actions), `tests/dispatch/dispatch_check.gd` (the medium built headles
 words: what is in hand, on the terminal and on the radar at moments, the camera's target), `tests/dispatch/
 dispatch_sounds_check.gd` (the jet's pitch falls, nothing is louder than the voice, the two storms differ, the same
 twice), `tests/voice/heard_check.gd` (the band, the plan, the join's marks), `tests/dispatch/dispatch_redact_check.gd`
-(GPU: every hexagon of the mosaic one color, the average of the words under it); probe `tests/dispatch/
-dispatch_look_probe.gd` (frames to look at).
+(GPU: the terminal on a bulged quad through a camera, the censor over it - no letter of the hidden words outside a box,
+every shard one color and the average of the frame under it, the tracker never short of the words); probe
+`tests/dispatch/dispatch_look_probe.gd` (frames to look at).
 
 ## Status
 
@@ -275,11 +277,8 @@ blur certain regions of text: akin to how a YouTube video might blur sensitive i
 hexagonal approach, which segments a region into large hexagonal shapes, and makes those shapes use single-colors,
 matching the pixels we just blurred."
 
-- **`<!-- redact: words -->` inside a ` ```screen ` or ` ```terminal ` block**: the words are put up as written and the
-  terminal covers each run of them with flat pointy-top hexagons about a line high and two characters wide, each the
-  average of the pixels under it (the terminal's own picture read back by `shaders/dispatch_redact.gdshader`). The
-  lattice is laid from each run's left edge, so a redacted command typed at the prompt grows by hexagons and those
-  already there keep their color; the cursor is drawn over the mosaic. A redacted character travels in the terminal's
+- **`<!-- redact: words -->` inside a ` ```screen ` or ` ```terminal ` block**: the words are put up as written, and
+  hidden over the finished frame (2026-11-10, below). A redacted character travels in the terminal's
   text as itself moved into Unicode's private plane (`DispatchScript.REDACT_BASE`), so typing, wrapping, scrolling and a
   strike count it as one character and nothing downstream changed. A typed block is said aloud, so a redact there is
   warned of and its words left out.
@@ -287,5 +286,18 @@ matching the pixels we just blurred."
   plate are redacted; "Mine's the one in Bend" became "Mine's the first one", "onto Chandler" "onto the avenue", the
   Safeway "the grocery store" in what is said and "the store" on the radar (a shorter label than before).
 
-Looked at: the mosaic in the gate's render, and the record and the search on the desk's glass in the look probe.
-Open: the author's eye on the mosaic's size and how dim it reads through the CRT's glass.
+**2026-11-10, hidden over the frame, not on the glass.** The first cut drew hexagons into the terminal's own lines. The
+author: "I didn't mean ACTUAL hexagons ... This is a post-processing effect, applied to the raw video AFTER: like when
+police blur faces in a video. You would not expect it to be bound exactly to the terminal screen: it would be sort of
+unstable, detached, blocking the text region from the camera's view ... it's usually a big rectangle region with large
+straight cracks in it." Now `DispatchCensor` is drawn over the desk's frame after the 3D (and under a picture over the
+whole screen): each run's rect on the terminal, padded (runs on lines next to each other made one box), is carried
+through the glass's bulge and the camera, and the box is the upright rect round it, eased a beat behind
+(`LAG` 0.09 s) and wavering outward a little, never short of the words. Its cracks are a tree of straight lines laid
+once per run (each across the shard it splits, shards about three letters long), and each shard is flat, the average of
+the frame under it, read off a jittered grid of taps over that shard alone (Godot's screen mipmaps are blurred: averaged
+off them, every shard came out near the box's mean). A name typed at the prompt is covered whole from its first key.
+The terminal draws its cursor again as before; it is under the box while a name is typed.
+
+Looked at: the censor in the gate's render (`tests/run_quiet.sh -- tests/dispatch/dispatch_redact_check.gd --png`).
+Open: the author's eye on it in the episode - the box's size and waver, the shards' size, how dark they read.

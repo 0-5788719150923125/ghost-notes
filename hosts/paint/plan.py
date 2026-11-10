@@ -33,6 +33,13 @@ BASE_PASSES = 4
 # WHAT A CLEAN BRUSH DRAGS AS IT GOES (marks.soften's `drag`, feedback 0020): a blend's pulls a little, a fade's out into the white more.
 FEATHER_DRAG = 0.15
 SMUDGE_DRAG = 0.3
+# A HAND KEEPING OUT OF A PLACE TAKES NOTHING UP FROM IT ([PlanPainter._seen]; feedback 0011, 2026-11-10: "The heavy smearing still created
+# large white bands around the outer part of the eye-diamond ... I believe that comes from the outer white smearing into the inner part"):
+# 732687's soot faded by the fat brush, its band 5 mm out past the soot crossing the diamond's line at its corners, laid nothing past
+# where the soot changes anything - but each pull took up the white past the line under its touch and carried it into the plum. A fade
+# may lay a little past its layer (layers_paint.FADE_PAST) but takes up only what its layer is laid on (`untaken`). Off, as it was: a
+# gate's control.
+TAKE_INSIDE = True
 
 # A HAND'S PATS, NEVER A LATTICE (feedback 0001, 2026-11-09: "the gaps are always in the exact same, uniform layout. It makes the forehead
 # look a bit like a grid of color, instead of organic"): each press of a base lands anywhere within this share of the sweep's step of where
@@ -566,10 +573,29 @@ class PlanPainter(Painter):
                     for chunk in _chunks(path, 40.0):
                         if len(chunk) >= 2:
                             # (...drawn as a hand draws it, now and then slipping past where it meant to go, dragging what it moves)
-                            m = mk.soften(self.cv, mk.slipped(chunk, half, self._pull_seed(chunk)), half, reach, 0.9, "wet_blend", tool,
+                            m = mk.soften(self._seen(), mk.slipped(chunk, half, self._pull_seed(chunk)), half, reach, 0.9, "wet_blend", tool,
                                           drag=FEATHER_DRAG)
                             self.try_lay(m, self.ref.lab, -1e9)
                 d += half * 1.4
+
+    def _seen(self):
+        """THE CANVAS AS A CLEAN BRUSH TAKES PAINT UP FROM IT ([TAKE_INSIDE]): where it takes nothing up (`untaken`, while set - else where
+        the hand keeps out, `keep_out`), the paint nearest it there that it may take - so a pull carries nothing out of there; the canvas
+        itself where nothing is."""
+        keep = getattr(self, "untaken", None)
+        if keep is None:
+            keep = getattr(self, "keep_out", None)
+        if not TAKE_INSIDE or keep is None or not keep.any() or keep.all():
+            return self.cv
+        if getattr(self, "_seen_for", None) is not keep:
+            self._seen_at = ndimage.distance_transform_edt(keep, return_distances=False, return_indices=True)
+            self._seen_for = keep
+        iy, ix = self._seen_at
+        cv = self.cv.copy()
+        cv.pre[...] = self.cv.pre[iy, ix]
+        cv.alp[...] = self.cv.alp[iy, ix]
+        cv.laid_t[...] = self.cv.laid_t[iy, ix]
+        return cv
 
     def _pull_seed(self, pts):
         """A pull's own seed: where it begins and how many marks came before it - the same painting slips the same way every time."""
@@ -611,7 +637,7 @@ class PlanPainter(Painter):
                 for chunk in _chunks(path, 45.0):
                     if len(chunk) >= 2:
                         # (...as a hand draws it, dragging the color out past the edge it fades - [method _feather_area])
-                        self.try_lay(mk.soften(self.cv, mk.slipped(chunk, half, self._pull_seed(chunk)), half, reach, strength, "smudge", tool,
+                        self.try_lay(mk.soften(self._seen(), mk.slipped(chunk, half, self._pull_seed(chunk)), half, reach, strength, "smudge", tool,
                                                drag=SMUDGE_DRAG), self.ref.lab, least)
             d += half * 1.2
 

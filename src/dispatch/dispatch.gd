@@ -37,6 +37,9 @@ class_name DispatchMedium
 ##
 ## THE SUBTITLES CAPTION WHAT CANNOT BE READ ON THE DESK, the letter's rule: speech, never the words typed on the terminal
 ## as they are said ([method _captioned]); a text is read on its phone and nowhere else.
+##
+## REDACTED WORDS ON THE TERMINAL ARE HIDDEN OVER THE FRAME, as an editor would hide them after the shoot ([DispatchCensor],
+## [method _censor_at]): drawn after the 3D and before a picture over the whole screen, so a picture covers it.
 
 ## THE SPOTS the camera turns to, and `look:` names ([method DispatchSet._spots] says where each is).
 const SPOTS := {
@@ -134,6 +137,8 @@ static var away_in_tests := false
 const IMAGE_FADE := DispatchScript.IMAGE_FADE
 ## The least lead an action has after the word before it (seconds).
 const LEAD := 0.12
+## THE TERMINAL'S GLASS (`shaders/dispatch_screen.gdshader`): its bulge, scanlines and bloom - the censor follows its bulge.
+const TERMINAL_GLASS := {"curve": 0.12, "lines": 0.32, "line_count": 300.0, "bloom": 0.7}
 ## THE ENVIRONMENT: the hollow's fog and its ambient light.
 const FOG := Color(0.11, 0.12, 0.135)
 const AMBIENT := Color(0.18, 0.2, 0.24)
@@ -185,6 +190,8 @@ var _roots_node: Node3D
 var _screens: DispatchScreens
 var _sounds: DispatchSounds
 var _blur: IntroBlur
+var _censor: DispatchCensor
+var _after_censor: BackBufferCopy       # what reads the frame after the censor (the intro's blur) reads it censored
 var _title: TitleCard
 var _plate: LetterMedium.Plate
 var _live_vp: SubViewport
@@ -216,10 +223,16 @@ func mount(st: SubViewport) -> void:
 	_screens = DispatchScreens.new()
 	add_child(_screens)
 	_build_world()
+	_censor = DispatchCensor.new()
+	add_child(_censor)
 	_plate = LetterMedium.Plate.new()
 	_plate.material = ShaderMaterial.new()
 	(_plate.material as ShaderMaterial).shader = LetterMedium._plate_shader()
 	add_child(_plate)
+	_after_censor = BackBufferCopy.new()
+	_after_censor.copy_mode = BackBufferCopy.COPY_MODE_VIEWPORT
+	_after_censor.visible = false
+	add_child(_after_censor)
 	_blur = IntroBlur.new(ShowOpening.INTRO_SHADER)
 	add_child(_blur)
 	_title = TitleCard.new()
@@ -335,7 +348,7 @@ func _land_set() -> void:
 	_root3.add_child(_roots_node)
 	_mats = {}
 	_set.terminal_screen.material_override = _screen_mat("terminal", _screens.terminal.get_texture(), DispatchScreens.PHOSPHOR.lerp(Color.WHITE, 0.2),
-		{"curve": 0.12, "lines": 0.32, "line_count": 300.0, "bloom": 0.7})
+		TERMINAL_GLASS)
 	_set.radar_screen.material_override = _screen_mat("radar", _screens.radar.get_texture(), Color(0.85, 1.0, 0.85),
 		{"curve": 0.05, "lines": 0.12, "bloom": 0.9, "round_mask": 1.0, "brightness": 1.5})
 	_set.scope_screen.material_override = _screen_mat("scope", _screens.scope.get_texture(), Color(0.9, 1.0, 0.9),
@@ -491,6 +504,7 @@ func advance(_features, delta: float, _bookend: float) -> void:
 		# the camera first: a phone at the ear and the mug lifted are held where it is this frame, never the last
 		_tick_camera(delta)
 		_pose(_now)
+		_censor_at(_now)
 	_show_pictures()
 	_sounds.tick(_now, self)
 
@@ -1338,7 +1352,9 @@ static func _jerkless(u: float) -> float:
 ## THE TERMINAL AT [param t]: `{lines, asleep, cursor, t}` - asleep (dark) until a block wakes it; a shown block replaces
 ## what it showed, drawn a line at a time; a typed one is added under it a key at a time (a fresh screen after sleep), as is
 ## a session ([method session_text]); a strike backspaces it, sleep darkens it again. Its lines wrapped to its columns, the last [constant DispatchScript.ROWS].
-func terminal_at(t: float) -> Dictionary:
+##
+## [param whole]: a redacted run being typed is there whole from its first key ([method session_text]).
+func terminal_at(t: float, whole := false) -> Dictionary:
 	var screen := ""
 	var asleep := true
 	var cursor_until := -INF
@@ -1361,7 +1377,7 @@ func terminal_at(t: float) -> Dictionary:
 				if asleep:
 					screen = ""
 				asleep = false
-				var said := session_text(a, r)
+				var said := session_text(a, r, whole)
 				if not said.is_empty():
 					# the bare prompt the session before left is where this one types
 					var bare := DispatchScript.PROMPT.strip_edges()
@@ -1403,8 +1419,9 @@ func terminal_at(t: float) -> Dictionary:
 
 
 ## A SESSION'S TRANSCRIPT [param r] seconds into it (at its own pace): each command's prompt as it comes up, what of it is
-## typed, each line of the answer as it is printed, and the bare prompt after the last.
-func session_text(a: Dictionary, r: float) -> String:
+## typed, each line of the answer as it is printed, and the bare prompt after the last. [param whole]: a redacted run being
+## typed is there to its end from its first key - where the censor's box goes up ([method _censor_at]).
+func session_text(a: Dictionary, r: float, whole := false) -> String:
 	var plan: Dictionary = a["plan"]
 	var steps: Array = a["steps"]
 	var out := PackedStringArray()
@@ -1415,10 +1432,13 @@ func session_text(a: Dictionary, r: float) -> String:
 			if r < float(sp["prompt"]):
 				return "\n".join(out)
 			var keys: PackedFloat32Array = sp["keys"]
+			var typed := String(st["typed"])
 			var n := 0
 			while n < keys.size() and keys[n] <= r:
 				n += 1
-			out.append(DispatchScript.PROMPT + String(st["typed"]).substr(0, n))
+			while whole and n > 0 and n < typed.length() and DispatchScript.is_redacted(typed.unicode_at(n - 1)) and DispatchScript.is_redacted(typed.unicode_at(n)):
+				n += 1
+			out.append(DispatchScript.PROMPT + typed.substr(0, n))
 		var lines: PackedFloat32Array = sp["lines"]
 		var said: PackedStringArray = st["out"]
 		for li in lines.size():
@@ -1801,6 +1821,23 @@ func _pose_mug(t: float) -> void:
 			k = 1.0 - _jerkless((u - DispatchScript.LIFT_UP - DispatchScript.LIFT_HOLD) / DispatchScript.LIFT_DOWN)
 		xf = _arc(_set.mug_home, held, k, MUG_CLEAR)
 	_set.mug.global_transform = xf
+
+
+## THE REDACTED WORDS ON THE TERMINAL AT [param t], hidden over this frame where the camera sees them ([DispatchCensor]) -
+## a run being typed covered to its end from its first key, as an editor's box goes up when a name begins to appear
+## (unless finishing it would wrap or scroll the screen: then as it stands).
+func _censor_at(t: float) -> void:
+	var shown := terminal_at(t)
+	var runs: Array = []
+	if not bool(shown["asleep"]):
+		var lines: PackedStringArray = shown["lines"]
+		runs = _screens.redactions(lines)
+		if not runs.is_empty():
+			var whole: PackedStringArray = terminal_at(t, true)["lines"]
+			if whole.size() == lines.size() and whole[0] == lines[0]:
+				runs = _screens.redactions(whole)
+	_censor.cover(runs, _set.terminal_screen, float(TERMINAL_GLASS["curve"]), _cam, t)
+	_after_censor.visible = _censor.visible and _blur.visible
 
 
 # --- the camera --------------------------------------------------------------------------------------------------------

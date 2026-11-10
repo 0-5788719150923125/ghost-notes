@@ -136,7 +136,7 @@ STATUS ...... CONTAINED
 1 MATCH
 > open 1
 ```` | Generative | Dispatch desk: a session at the terminal, silent, the voice waiting - each line opening > is a command, typed at the prompt a key at a time and entered, and the lines after it are what the terminal answers, printed a line at a time. Asleep, the terminal wakes to a bare prompt first; the prompt comes back after the last answer. A shown block straight after is what the last command opened. |
-| Redacted | `<!-- redact: DOE, JANE -->` | Generative | Dispatch desk: inside a shown or session block, these words are on the terminal as written but covered by a mosaic of flat hexagons, each the average color of what lies under it, as a video hides a name. Typed in a session, the mosaic grows a key at a time. Not in a typed block, which is said aloud. |
+| Redacted | `<!-- redact: DOE, JANE -->` | Generative | Dispatch desk: inside a shown or session block, these words are on the terminal as written but hidden over the picture, as an editor hides a name in a video: a box that follows them, cracked into large flat shards, each the average color of what lies under it. Typed in a session, the box goes up whole at the first key. Not in a typed block, which is said aloud. |
 
 ## Notes
 

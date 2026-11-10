@@ -1,25 +1,31 @@
-// REDACTED WORDS ON THE DISPATCH DESK'S TERMINAL (src/dispatch/dispatch_screens.gd, `Mosaic`): each rect drawn
-// is filled with flat hexagons, each the average color of the terminal's pixels under it, as a video hides a name
-// (2026-11-09, the user: "that sort of hexagonal approach, which segments a region into large hexagonal shapes, and
-// makes those shapes use single-colors, matching the pixels we just blurred"). The terminal is drawn first, so the
-// screen texture holds the words as written; nothing else of them reaches the glass.
+// REDACTED WORDS HIDDEN OVER THE PICTURE (src/dispatch/dispatch_censor.gd): each box drawn is cracked along straight
+// lines into large shards, each one flat, the average color of the frame under it - as an editor hides a name in a video
+// after it was shot (2026-11-10, the user: "a big rectangle region with large straight cracks in it"). Drawn after the
+// desk's 3D, it reads the finished frame back.
 //
-// THE LATTICE is pointy-top hexagons laid from each rect's left edge, about its middle: a run typed a key at a time
-// grows by hexagons, and the ones already there keep their place and their color. A hexagon at a rect's edge is cut by
-// it, and averages only what lies inside - the dots before a name never bleed into it.
+// THE CRACKS are a tree of lines per box (DispatchCensor.cracks), in box heights from its top left: a point's shard is the
+// leaf its sides of them lead to (DispatchCensor.shard, line for line). A SHARD'S COLOR is read off a grid of taps over
+// that shard's own bounds, each jittered in its cell so the grid never falls in step with the letters, averaged over the
+// taps inside it - every shard as many taps whatever its size or the frame's, and never off the screen texture's mipmaps,
+// which Godot blurs (every shard came out near the box's mean). Every point of a shard reads the same taps, so a shard is
+// one color exactly.
 shader_type canvas_item;
-render_mode unshaded, blend_disabled;
+render_mode unshaded;
 
 uniform sampler2D screen : hint_screen_texture, filter_linear, repeat_disable;
-// each rect, in the terminal's pixels: x0, y0, x1, y1 (DispatchScreens.MOSAIC_MOST of them)
-uniform vec4 rects[32];
+// each box (px): x0, y0, x1, y1; the aspect its cracks were laid on; its cracks and its shards' bounds
+// (DispatchCensor.MOST, NODES and LEAVES)
+uniform vec4 boxes[6];
+uniform float aspects[6];
+uniform vec3 cracks[378];
+uniform vec4 leaves[384];
 uniform int count = 0;
-// a hexagon's circumradius (px)
-uniform float cell = 16.5;
 
-// a hexagon's average is read off this many taps on a side, over its bounds
-const int TAPS = 12;
-const float HALF_W = 0.8660254;
+const int DEPTH = 6;
+const int NODES = 63;
+const int LEAVES = 64;
+// taps across a shard's bounds, each way
+const int TAPS = 16;
 
 varying vec2 pos;
 
@@ -27,58 +33,54 @@ void vertex() {
 	pos = VERTEX;
 }
 
-// The center of the hexagon that holds [p] (relative to the lattice's origin): axial coordinates, rounded in cube space.
-vec2 hex_center(vec2 p, float s) {
-	float q = (0.57735027 * p.x - p.y / 3.0) / s;
-	float r = (0.66666667 * p.y) / s;
-	vec3 cube = vec3(q, -q - r, r);
-	vec3 rc = round(cube);
-	vec3 d = abs(rc - cube);
-	if (d.x > d.y && d.x > d.z) {
-		rc.x = -rc.y - rc.z;
-	} else if (d.y > d.z) {
-		rc.y = -rc.x - rc.z;
-	} else {
-		rc.z = -rc.x - rc.y;
+int shard(int b, vec2 p) {
+	int n = 0;
+	for (int d = 0; d < DEPTH; d++) {
+		vec3 k = cracks[b * NODES + n];
+		n = 2 * n + (k.x * p.x + k.y * p.y + k.z < 0.0 ? 1 : 2);
 	}
-	return vec2(s * (1.7320508 * rc.x + HALF_W * rc.z), s * 1.5 * rc.z);
+	return n;
 }
 
-// Is [d] (from a hexagon's center) inside it?
-bool in_hex(vec2 d, float s) {
-	vec2 a = abs(d);
-	return a.x <= HALF_W * s && a.y <= s - a.x * 0.57735027;
+// where in its cell tap (i, j) lies: -0.4 to 0.4 of the cell each way
+vec2 jitter(int i, int j, int leaf) {
+	uint h = uint(i) * 73856093u ^ uint(j) * 19349663u ^ uint(leaf) * 83492791u;
+	h = (h ^ (h >> 13u)) * 1274126177u;
+	h = h ^ (h >> 16u);
+	return vec2(float(h & 1023u), float((h >> 10u) & 1023u)) / 1023.0 * 0.8 - 0.4;
 }
 
 void fragment() {
-	// the rect this fragment is in (one past the array: the hexagon alone bounds it)
-	vec4 box = vec4(-1e6, -1e6, 1e6, 1e6);
-	vec2 origin = vec2(0.0);
-	for (int i = 0; i < 32; i++) {
+	int b = -1;
+	for (int i = 0; i < 6; i++) {
 		if (i >= count) {
 			break;
 		}
-		vec4 q = rects[i];
+		vec4 q = boxes[i];
 		if (pos.x >= q.x && pos.y >= q.y && pos.x <= q.z && pos.y <= q.w) {
-			box = q;
-			origin = vec2(q.x + HALF_W * cell, 0.5 * (q.y + q.w));
+			b = i;
 			break;
 		}
 	}
-	vec2 c = origin + hex_center(pos - origin, cell);
+	if (b < 0) {
+		discard;
+	}
+	vec4 q = boxes[b];
+	vec2 size = max(q.zw - q.xy, vec2(1.0));
+	vec2 scale = vec2(aspects[b], 1.0) / size;
+	int me = shard(b, (pos - q.xy) * scale);
+	vec4 bb = leaves[b * LEAVES + me - NODES];
+	vec2 cell = (bb.zw - bb.xy) / float(TAPS);
 	vec3 sum = vec3(0.0);
 	float n = 0.0;
 	for (int j = 0; j < TAPS; j++) {
 		for (int i = 0; i < TAPS; i++) {
-			vec2 d = (vec2(float(i), float(j)) + 0.5) / float(TAPS) * 2.0 - 1.0;
-			d *= vec2(HALF_W * cell, cell);
-			vec2 p = c + d;
-			if (!in_hex(d, cell) || p.x < box.x || p.y < box.y || p.x > box.z || p.y > box.w) {
-				continue;
+			vec2 u = bb.xy + (vec2(float(i), float(j)) + 0.5 + jitter(i, j, me)) * cell;
+			if (shard(b, u) == me) {
+				sum += texture(screen, (q.xy + u / scale) * SCREEN_PIXEL_SIZE).rgb;
+				n += 1.0;
 			}
-			sum += texture(screen, p * SCREEN_PIXEL_SIZE).rgb;
-			n += 1.0;
 		}
 	}
-	COLOR = vec4(n > 0.0 ? sum / n : texture(screen, SCREEN_UV).rgb, 1.0);
+	COLOR = vec4(n > 0.0 ? sum / n : texture(screen, (q.xy + (bb.xy + bb.zw) * 0.5 / scale) * SCREEN_PIXEL_SIZE).rgb, 1.0);
 }

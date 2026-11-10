@@ -25,6 +25,16 @@ On a made surface - a white ground, a plum disc on it - held to:
      picture there, which the cleanup had used, is the white.
   9. A BASE IS EVEN BEFORE THE SPONGE IS PUT DOWN (2026-11-09: "the sponge was put down too early. There are still patchy areas"): next
      to nothing of the face under nine tenths covered. CONTROL: gone back over twice where under 0.8, as it was, more of it is.
+  10. A PART PAINTED BY NUMBERS HAS ITS OWN BORDERS WORKED WET, NEVER ITS EDGE (feedback 0011, 2026-11-10: "large white bands around the
+     outer part of the eye-diamond ... the outer white smearing into the inner part" - layers_paint `OWN_BORDERS`): a soft layer laid by
+     numbers over a plum disc's whole inside, a dark middle and plum round it, leaves the plum just inside the disc's edge plum. CONTROL:
+     its edge against the white worked as a border too, as it was, the white is carried into it.
+  11. NO LAYER CHANGES THE FACE'S OWN EDGE (feedback 0012, 2026-11-10: "weird black smudges being painted along the chin" - layers_paint
+     `RIM_OFF`): of two pictures of a face, the second's silhouette drawn two pixels aside into the black past it and a dark spot added,
+     the step is the spot. CONTROL: the edge not kept, a ring round the whole face is the step's too.
+  12. A HAND KEEPING OUT OF A PLACE TAKES NOTHING UP FROM IT (feedback 0011 - plan.py `TAKE_INSIDE`): a fat brush's fade round a small core
+     in a plum disc, its band crossing the disc's edge, the hand kept out past the disc and taking up only the disc, as a layer's fade
+     does: the plum by the edge stays plum. CONTROL: its pulls taking up the white past the edge, the white is carried in.
   6. A SOFT LAYER IS NOT ITS PICTURE'S REDRAW (layers_paint.layer_alpha): a soft step whose picture is redrawn a shade lighter all over,
      with a real shading in one place, has the shading for its own and next to nothing of the rest. CONTROL: the floor it had, all of it.
   7. A BASE IS ONE POT'S PAINT (feedback 0001, 2026-11-09: "The color we're painting doesn't seem to actually match the foundation it was
@@ -44,6 +54,8 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 FAILS = []
+# How much lighter (OKLab x100) the plum just inside a part painted by numbers may come out (check 10).
+NUMBERED_LIGHTER = 2.0
 
 
 def check(ok, what):
@@ -310,6 +322,85 @@ def main():
     check(even < 0.005, "a base is even before the sponge is put down: %.2f%% of the face under nine tenths, in %d presses" % (100 * even, presses))
     check(patchy > even * 2 and patchy > 0.005,
           "CONTROL: gone back over twice where under 0.8, as it was, %.2f%% is (%d presses)" % (100 * patchy, len(p1.laid)))
+
+    # 10. a part painted by numbers has its own borders worked wet, never its edge
+    import layers_paint as lp
+
+    def numbered(own):
+        q, disc, white, plum = surface({"black paint": "#121214"})
+        h, w = disc.shape
+        Y, X = (np.mgrid[0:h, 0:w] + 0.5) / PX
+        r = np.sqrt((X - 30) ** 2 + (Y - 30) ** 2)
+        pic = np.broadcast_to(white, (h, w, 3)).copy()
+        pic[disc] = plum
+        pic[disc & (r < 3.5)] = [0.07, 0.07, 0.08]
+        saved = lp.OWN_BORDERS
+        lp.OWN_BORDERS = own
+        try:
+            words = lp.by_numbers(q, disc, disc * 1.0, oklab(dec(pic)), {"colors": 2}, True)
+        finally:
+            lp.OWN_BORDERS = saved
+        rim = disc & (r > 5.8) & (r < 6.8)
+        col = q.cv.pre[rim] / np.maximum(q.cv.alp[rim][:, None], 1e-6)
+        return float(np.mean(oklab(dec(col))[:, 0]) - oklab(dec(plum[None]))[0, 0]), words
+    kept, words = numbered(True)
+    worked, words_was = numbered(False)
+    check(kept < NUMBERED_LIGHTER, "a part painted by numbers keeps its edge: the plum just inside a disc's edge %.1f lighter (OKLab x100) after %s"
+          % (kept, ", ".join(words)))
+    check(worked > NUMBERED_LIGHTER * 2, "CONTROL: its edge against the white worked as a border, as it was, it is %.1f lighter (%s)"
+          % (worked, ", ".join(words_was)))
+
+    # 11. no layer changes the face's own edge
+    p, disc, white, plum = surface()
+    face = p.ref.face
+    h, w = face.shape
+    Y, X = (np.mgrid[0:h, 0:w] + 0.5) / PX
+    r = np.sqrt((X - 30) ** 2 + (Y - 30) ** 2)
+    # (...two pictures of the same white face on black, the second's silhouette drawn two pixels inside the first's and blended into the
+    # black past it, as the image model redraws it - and a real step in it, a dark spot on the cheek)
+    before_pic = np.where((r < 28.0)[..., None], white, 0.0)
+    edge = np.clip((27.5 - r) * PX * 0.5 + 0.5, 0.0, 1.0)[..., None]
+    after_pic = white * edge
+    spot = (X - 20) ** 2 + (Y - 30) ** 2 < 3 ** 2
+    after_pic[spot] = plum
+    d = LP.changed(oklab(dec(before_pic)), oklab(dec(after_pic)), face)
+    rim = face & (r > 26.0)
+    a = LP.layer_alpha(d, face, soft=True)
+    check(float((a[spot] > 0.3).mean()) > 0.9 and float((a[rim] > 0.15).sum()) / PX ** 2 < 0.5,
+          "no layer changes the face's own edge: its silhouette redrawn aside is %.1f mm2 of the step, its spot %.0f%% of it"
+          % (float((a[rim] > 0.15).sum()) / PX ** 2, 100 * float((a[spot] > 0.3).mean())))
+    saved = LP.RIM_OFF
+    LP.RIM_OFF = 0.0
+    a0 = LP.layer_alpha(d, face, soft=True)
+    LP.RIM_OFF = saved
+    check(float((a0[rim] > 0.15).sum()) / PX ** 2 > 5.0, "CONTROL: with the edge not kept, the silhouette is %.1f mm2 of it"
+          % (float((a0[rim] > 0.15).sum()) / PX ** 2))
+
+    # 12. a hand keeping out of a place takes nothing up from it
+    import plan as plan_mod2
+
+    def faded(take_inside):
+        q, disc, white, plum = surface()
+        h, w = disc.shape
+        Y, X = (np.mgrid[0:h, 0:w] + 0.5) / PX
+        r = np.sqrt((X - 30) ** 2 + (Y - 30) ** 2)
+        saved = plan_mod2.TAKE_INSIDE
+        plan_mod2.TAKE_INSIDE = take_inside
+        q.keep_out = q.ref.face & ~ndimage.binary_dilation(disc, iterations=int(LP.FADE_PAST * PX))
+        q.untaken = q.ref.face & ~disc
+        try:
+            q._smudge({"name": "test", "how": "smudge", "mask": disc & (r < 4.0), "band": 5.0, "size": 5.0, "strength": 0.55, "inside": 0.25})
+        finally:
+            q.keep_out = None
+            q.untaken = None
+            plan_mod2.TAKE_INSIDE = saved
+        rim = disc & (r > 5.5) & (r < 6.6)
+        col = q.cv.pre[rim] / np.maximum(q.cv.alp[rim][:, None], 1e-6)
+        return float(np.mean(oklab(dec(col))[:, 0]) - oklab(dec(plum[None]))[0, 0])
+    inside_only = faded(True)
+    took_white = faded(False)
+    check(inside_only < NUMBERED_LIGHTER, "a fade kept inside a disc takes nothing from past it: the plum by its edge %.1f lighter" % inside_only)
+    check(took_white > NUMBERED_LIGHTER * 2, "CONTROL: taking up the white past the edge, as it did, it is %.1f lighter" % took_white)
 
     print("FAILED: %d" % len(FAILS) if FAILS else "all passed")
     sys.exit(1 if FAILS else 0)

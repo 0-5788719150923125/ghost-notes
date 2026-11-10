@@ -10,8 +10,10 @@ extends SceneTree
 ## - THE DESK IS SEEN FIRST: nothing happens and the camera stays home through the opening rest;
 ## - THE TERMINAL: asleep (dark) until a block wakes it; A SESSION wakes it to a bare prompt, each command typed a key at a
 ##   time and its answer printed after it, the prompt back at the end; a shown block drawn down a line at a time (the
-##   control: just begun, its last line is not there yet), its redacted words under a mosaic's rect and nowhere as written
-##   (the control: its plain lines have none); a typed block SAID BEHIND ITS KEYS - its first words typed before
+##   control: just begun, its last line is not there yet); its REDACTED WORDS a run on their own line and nowhere as
+##   written (the control: plain lines have none), HIDDEN OVER THE FRAME - the camera on the terminal, one box round them
+##   as it sees them, a small part of the glass (the control: asleep, no box) - and a redacted run being typed covered
+##   whole from its first key (the control: the key before, as typed); a typed block SAID BEHIND ITS KEYS - its first words typed before
 ##   the voice begins (the control: the rest not yet), every word's keys done before the voice says it; struck, it is gone;
 ## - THE CAMERA turns to what is active (the terminal while it types, the receiver in a storm, a ringing phone) and a look
 ##   holds it while nothing else is; THE RADAR: the target sets off at a moving mark and arrives at a ping, under the voice,
@@ -123,10 +125,35 @@ func _run() -> void:
 	var covers: Array = md._screens.redactions(shown_lines)
 	var plates := shown_lines.slice(shown_lines.size() - 1)
 	_ok(covers.size() == 1 and not "\n".join(shown_lines).contains("XKC") and String(DispatchScript.unredacted(plates[0])["text"]).ends_with("XKC 4417")
-		and (covers[0] as Rect2).get_center().y > DispatchScreens.TERM_MARGIN.y + DispatchScreens.TERM_LINE * float(shown_lines.size() - 2),
-		"a shown block's redacted words lie under a mosaic on their own line, and nowhere as written (%d rects)" % covers.size())
+		and (covers[0]["rect"] as Rect2).get_center().y > DispatchScreens.TERM_MARGIN.y + DispatchScreens.TERM_LINE * float(shown_lines.size() - 2),
+		"a shown block's redacted words are a run on their own line, and nowhere as written (%d runs)" % covers.size())
 	_ok(md._screens.redactions(PackedStringArray(["NAME ........ SUBJECT", "STATUS ...... CONTAINED"])).is_empty(),
-		"the control: plain lines have no mosaic")
+		"the control: plain lines have no runs")
+	# HIDDEN OVER THE FRAME: the camera on the terminal, one box round the plate as it sees it, a small part of the glass
+	var shown_t := t0[screen_i] + 1.0
+	md._now = shown_t
+	md._snap = true
+	md._tick_camera(0.016)
+	md._censor_at(shown_t)
+	var curve := float(DispatchMedium.TERMINAL_GLASS["curve"])
+	var plate_seen := DispatchCensor.seen(covers[0]["rect"], md._set.terminal_screen, curve, md._cam)
+	var glass_seen := DispatchCensor.seen(Rect2(Vector2.ZERO, Vector2(DispatchScreens.TERM_SIZE)), md._set.terminal_screen, curve, md._cam)
+	var boxes: Array = md._censor.boxes
+	var box: Rect2 = boxes[0]["rect"] if boxes.size() == 1 else Rect2()
+	_ok(md.looking_at(shown_t) == "terminal" and boxes.size() == 1 and md._censor.visible and plate_seen.size.x > 0.0 and box.encloses(plate_seen)
+		and glass_seen.encloses(box) and box.get_area() < glass_seen.get_area() * 0.1,
+		"the plate is hidden over the frame: one box round it as the camera sees it, a small part of the glass (%s round %s, glass %s)" % [box, plate_seen, glass_seen])
+	md._censor_at(0.5)
+	_ok(md._censor.boxes.is_empty() and not md._censor.visible, "the control: the terminal asleep, no box")
+	# A REDACTED RUN BEING TYPED IS COVERED WHOLE FROM ITS FIRST KEY (the control: the key before it, as typed)
+	var hid := DispatchScript.parse("```terminal\n> search <!-- redact: jane doe -->\n```\n\nThere.\n")
+	var ha: Dictionary = hid["actions"][0]
+	var hkeys: PackedFloat32Array = ha["plan"]["steps"][0]["keys"]
+	var typed_j := String(DispatchScript.unredacted(md.session_text(ha, hkeys[7] + 0.001))["text"])
+	var whole_j := String(DispatchScript.unredacted(md.session_text(ha, hkeys[7] + 0.001, true))["text"])
+	var whole_before := String(DispatchScript.unredacted(md.session_text(ha, hkeys[6] + 0.001, true))["text"])
+	_ok(typed_j.ends_with("> search j") and whole_j.ends_with("> search jane doe") and whole_before.ends_with("> search "),
+		"a redacted run being typed is covered whole from its first key (%s / %s / %s)" % [typed_j, whole_j, whole_before])
 	var type_i := _first(actions, "type")
 	var ty: Dictionary = actions[type_i]
 	var mid := int(ty["from"]) + 2

@@ -86,3 +86,27 @@ paint from the cream nearest its color, never the pot the painter named (`plan.p
 amber and black mixes to the clear gloss; now the named pot (`TablePaint._pot_of`), at once. The base had been a mix (olive and white)
 from one pot; now one pot's paint (`plan.py` `_base`, white for 732687), and its presses fall where a hand puts them, not on the sweep's
 lattice, whose holes had made a grid of the forehead (`PAT_WANDER`; `test_hand.py` 7-8). Those two reach 732687 when its painter runs again.
+
+Feedback 0009-0010 (2026-11-10): paint showed away from the brush. A move between elements took 1.4 s however far it went (a brow to a
+chin, up over the nose, its handle swung), its hand at up to a metre a second where the solver carries a held tool about 0.58; the body
+fell behind and the element was laid where it was not. Now each move and trip takes as long as its way needs (`TablePaint._paced`,
+`MOVE_PACE`; `paint_check` `_paced_ways`): on a made scene, frames that moved the tool over 2 cm went from 81 to 21. And inside an
+element: a liner's chin, drawn out from its middle, swung its handle 100 degrees in the 0.41 s between two strokes, its body 63.5 mm
+behind its hand - the black mark of 0010. Each way between keys is now given the time its body needs and the program's reveal maps are
+carried to the new times (`TablePaint._pace_keys`, `KEY_PACE`; `paint_check` `_paced_keys`): 0.1 mm, the chin 1.1 s longer. Show-side,
+so 732687 has both at the next launch. Open: acts paced longer could run past their words; a liner put back in its jar is held 39 mm
+off its place by the jar for a moment (as before). A brush rinsed or dried, stopped short of its hand (the table under a cup's floor),
+had its hairs laid as its hand had them, curled in the water; now as it is drawn, straight where it does not reach (`TablePaint._lay_on_plane`,
+`paint_check` `_laid_as_drawn`).
+
+Feedback 0011 (2026-11-10): white bands inside the diamond's corners - the soot layer's fade (`el_208`, the clean blender): its band 5 mm
+past the soot crossed the diamond's line at its corners, and every pull, laid whatever it does, took up the white past the line and
+carried it into the plum. Now a fade lays a little past its layer but takes up only what its layer is laid on (`plan.TAKE_INSIDE`,
+`untaken`; `test_hand.py` 12); and a part painted by numbers works only its own borders wet, a feather's reach inside its edge
+(`layers_paint.OWN_BORDERS`; 10).
+
+Feedback 0012 (2026-11-10): "weird black smudges being painted along the chin, not even touching the brush" - not the brush's lag (0010)
+but the painting itself: the image model draws the mask's silhouette a pixel or two aside in every picture, blended into the black past
+it, and layer 6 (the right eye socket) read the shift as a thin dark change round the whole face; its near-black liner (`el_224`, 134 s)
+traced the jaw in dashes on the steep rim. Now no layer changes the face's own edge (`layers_paint.RIM_OFF`, 1.5 mm; `test_hand.py` 11).
+These three reach 732687 when layers 4-6 are painted again (done 2026-11-10, below).

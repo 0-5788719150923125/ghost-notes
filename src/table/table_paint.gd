@@ -199,6 +199,20 @@ const LAY_LEANS := [55.0, 45.0, 35.0, 25.0, 15.0, 5.0]
 ## [constant RigidParts.PIECES_MOST] a frame, about 58 cm a second, and a hand's way peaks near twice its average - and at most this
 ## share of the trip, the rest its press.
 const TRIP_PACE := 0.25
+## ...and from one element to the next, on average (m/s), over its whole way - up over what stands between, down, its handle swung -
+## eased in and out, near twice as fast at its fastest.
+const MOVE_PACE := 0.25
+## ...and from one key of an element's program to the next (m/s, over the way its body goes - [method _pace_keys]): a stroke goes far
+## slower than this, but between two strokes drawn opposite ways a brush's handle swings from leaning one way to the other.
+const KEY_PACE := 0.35
+## A BRUSH'S HAIRS LAID BEHIND THE WAY IT GOES along what it is laid on ([method _lay_on_plane]): wholly at this speed (m/s), the way taken
+## over this long before the moment (s) - a hand's swirl round a pot, 1.6 to 4 cm a second, trailed round after it.
+const TRAIL_SPEED := 0.01
+const TRAIL_LAG := 0.1
+## ...wholly upright, less as it leans, none this far over (degrees).
+const TRAIL_LEAN_MOST := 70.0
+## ...its reveal maps carried to its new times through a table of this many steps of its length ([method _warp_maps]).
+const WARP_LUT := 4096
 const TRIP_GO_MOST := 0.6
 const LAY_OUT := Vector2(0.8, 0.6)
 const LAY_SHARE := 0.3
@@ -564,6 +578,10 @@ func prepare() -> void:
 	_from_picture()
 	# ...A HAND GOING BACK OVER WHAT IT MISSED, before any act's length is known ([method _cover_gaps])
 	_cover_gaps()
+	# ...AND HOW EACH TOOL IS HELD at every place its programs keep, clear of what it works on ([method _cleared]): found here, on
+	# this thread, before the bake reads them - and so each way inside an element is given the time its body needs ([method _pace_keys])
+	_hold_all()
+	_pace_keys()
 	# ...and each act's length at a hand's pace (every program it asks made now, before the bake reads them)
 	for a in work.acts:
 		var natural := 0.0
@@ -579,9 +597,6 @@ func prepare() -> void:
 				(a as Dictionary)["length"] = maxf(float((a as Dictionary)["length"]), natural * LEAST)
 			else:
 				(a as Dictionary)["length"] = natural
-	# ...AND HOW EACH TOOL IS HELD at every place its programs keep, clear of what it works on ([method _cleared]): found here, on
-	# this thread, before the bake reads them
-	_hold_all()
 	# ...and what a pressing tool touches, held so, is what it paints ([method _touch_all])
 	_touch_all()
 	# ...and where a blending brush goes over what was laid, softened there alone ([method _blend_touches])
@@ -1362,6 +1377,7 @@ func _from_picture() -> void:
 		# (...and BUILT UP AS IT WAS LAID: each point at what the marks so far have laid there - shown at what they all came to from the first
 		# that touched it, every dab had looked "extremely heavy with paint", "no opacity at all" - [method PaintLayers.render])
 		made["built_tex"] = [ImageTexture.create_from_image((res["built"] as Array)[0]), ImageTexture.create_from_image((res["built"] as Array)[1])]
+		made["built_when"] = res["built_when"]
 		made["built_when_tex"] = [ImageTexture.create_from_image((res["built_when"] as Array)[0]), ImageTexture.create_from_image((res["built_when"] as Array)[1])]
 		# (...IN THE COLORS ITS MARKS CARRY, where they carry their own - mixed on the palette, or taken up from the surface by a clean brush)
 		made["tint_tex"] = ImageTexture.create_from_image(res["tint"]) if res.get("tint") is Image else null
@@ -1472,6 +1488,7 @@ func _from_host(item: Dictionary, host_id: String, id: String, si: int) -> void:
 	made["when"] = when
 	made["when_tex"] = ImageTexture.create_from_image(when)
 	made["built_tex"] = [ImageTexture.create_from_image(built[0]), ImageTexture.create_from_image(built[1])]
+	made["built_when"] = built_when
 	made["built_when_tex"] = [ImageTexture.create_from_image(built_when[0]), ImageTexture.create_from_image(built_when[1])]
 	made["tint_tex"] = ImageTexture.create_from_image(tint)
 	for m in item["mats"]:
@@ -2398,27 +2415,50 @@ func _bend_to_surface(si: int, tool: Dictionary, h: Array, bend: Vector3) -> Vec
 ## lying along it on their side (feedback 0002) - bowed away from the handle's lean. Out of its reach, bent [param bend] (the table's
 ## space) as they were. Returns `[bend (the table's space), lay (prop_common's `bristle_lay`: the share lying along it, the arc's
 ## angle)]`. Bent no further than brings the tip onto it, as an arc whose tip still pointed into the surface (feedback 0017), 1 mm of
-## a brush's point had touched its paint.
-func _lay_on_plane(tool: Dictionary, h: Array, bend: Vector3) -> Array:
+## a brush's point had touched its paint. LAID AS IT IS DRAWN, where [param drawn] says (its node in the table's space, as the solver
+## carries it), else as the hold has it: a liner squeezed on a water cup's floor was stopped by the table under the cup's 4 mm floor
+## 9.6 mm short of its hand, and its hairs, laid as its hand had it, curled in the water over the floor (2026-11-10, the user: "the
+## bristles bend - even though the brush isn't touching the bottom of the glass").
+func _lay_on_plane(tool: Dictionary, h: Array, bend: Vector3, drawn: Variant = null, goes := Vector3.ZERO) -> Array:
 	if h.size() < 8 or (h[7] as Vector3).length_squared() < 0.5 or not tool.has("hair_root") or is_nan(float(h[6])):
 		return [bend, Vector2.ZERO]
-	var x := _node_at(h, tool, tool["x0"])
+	var x: Transform3D = drawn if drawn is Transform3D else _node_at(h, tool, tool["x0"])
 	var n: Vector3 = (h[7] as Vector3).normalized()
 	var d := (x.basis * (tool["hair_axis"] as Vector3)).normalized()
 	var root := x * (tool["hair_root"] as Vector3)
 	var hl := float(tool["len"])
-	var lay := Bristles.laid((root - Vector3(root.x, float(h[6]), root.z)).dot(n) - LAY_CLEAR, -d.dot(n), hl)
+	# (away from the handle's lean along the surface, the way its hairs lean - held straight down onto it, the way its node's own x goes)
+	var m := d - n * d.dot(n)
+	if m.length() < 0.05:
+		m = x.basis.x - n * x.basis.x.dot(n)
+	m = m.normalized()
+	# ...AND BEHIND THE WAY IT GOES along it, [param goes] (m/s; the user, 2026-11-10: "the brush moves in small circles in those
+	# containers... yet the bristles only bend in a single direction ... the bristles should be adjusting to point in the opposite direction
+	# we're pulling the brush"): swirled round a pot or the cup's floor they trail round after it, leaning against the way they lie half the
+	# time ([method Bristles.laid_leaning]); pulled across the towel, behind the pull - away from the lean, as they were. As far as it stands
+	# upright: leaning far over, landed on the towel still going sideways, its hairs had folded back 145 degrees under its handle
+	var along := goes - n * goes.dot(n)
+	var lean_most := cos(deg_to_rad(TRAIL_LEAN_MOST))
+	var upright := clampf((-d.dot(n) - lean_most) / (1.0 - lean_most), 0.0, 1.0)
+	var w := clampf(along.length() / TRAIL_SPEED, 0.0, 1.0) * upright if along.length_squared() > 1e-10 else 0.0
+	if w > 0.0:
+		var blend := m * (1.0 - w) - along.normalized() * w
+		m = blend.normalized() if blend.length() > 0.05 else -along.normalized()
+	# (...each hair an arc in the plane of its root's way and the way it is laid, the surface as low as "down" reaches in that plane - turned
+	# aside, a swirl's hairs had stopped 0.8 mm short of the paint)
+	var aside := m - d * m.dot(d)
+	aside = aside.normalized() if aside.length() > 1e-6 else m
+	var into := -d.dot(n)
+	var across := -aside.dot(n)
+	var reach := maxf(sqrt(into * into + across * across), 0.1)
+	var lay := Bristles.laid_leaning(((root - Vector3(root.x, float(h[6]), root.z)).dot(n) - LAY_CLEAR) / reach, atan2(-across, into), hl)
 	# (...a cotton tip, wound tight on its stick, only bends, a little - [constant Bristles.KINDS]' `bends`)
 	var bends := float(tool.get("bends", 1.0))
 	if bends < 1.0:
 		lay = Vector2(0.0, minf(lay.y, Bristles.arc_angle(0.6 * bends)))
 	if lay.y <= 0.0:
 		return [bend, Vector2.ZERO]
-	# (away from the handle's lean along the surface - held straight down onto it, the way its node's own x goes)
-	var m := n - d * d.dot(n)
-	if m.length() < 0.05:
-		m = x.basis.x - d * d.dot(x.basis.x)
-	return [m.normalized() * Bristles.laid_at(1.0, lay, hl).x, lay]
+	return [m * Bristles.laid_at(1.0, lay, hl).x, lay]
 
 
 ## Where brush [param tool]'s tip is, its hairs bent [param bend] (its node's space) as [method _touched] bends them: an arc as long as
@@ -2976,6 +3016,13 @@ func plan_of(tr: Dictionary, d: float) -> Dictionary:
 	# ...NOTHING TO LAY OR GO OVER, nothing taken up: the tool stays where it rests ([method _one_coat] - an act whose coat is the one before's)
 	if parts.is_empty() and clean.is_empty():
 		return {"phases": [], "natural": 0.1, "d": d, "si": si}
+	# ...EACH WAY AS LONG AS ITS LENGTH NEEDS (2026-11-10, the user: "the brush is leaving paint streaks in places that are far away from where
+	# it's actually touching now" - "I have a feeling these marks are being drawn out of view"): a move from one element to the next had
+	# taken 1.4 s however far it went, and a trip its own time from wherever the tool was - a brow to a chin, 20 cm, at a metre a second at
+	# its fastest, where a held tool's body is carried at about 0.58 m/s; the body fell 12 cm behind its hand and the next element was
+	# painted where it was not. Never less than a hand's time ([constant MOVE], a trip's own), at most MOVE_PACE (m/s) between elements and
+	# TRIP_PACE out to a trip's place in the share its flight has ([constant TRIP_GO_MOST])
+	_paced(si, tr, parts, clean)
 	var natural := FETCH + RETURN
 	for q in clean:
 		natural += float((q as Dictionary)["len"])
@@ -2983,7 +3030,7 @@ func plan_of(tr: Dictionary, d: float) -> Dictionary:
 	for p in parts:
 		for q in (p as Dictionary)["pre"]:
 			natural += float((q as Dictionary)["len"])
-		natural += MOVE + float(((p as Dictionary)["prog"] as Dictionary)["natural"])
+		natural += float((p as Dictionary).get("move", MOVE)) + float(((p as Dictionary)["prog"] as Dictionary)["natural"])
 		work_len += float(((p as Dictionary)["prog"] as Dictionary)["natural"])
 	var fixed := natural - work_len
 	# SLOWED, THEN RESTED, as long as the act is; HURRIED, if it must be
@@ -3012,7 +3059,7 @@ func plan_of(tr: Dictionary, d: float) -> Dictionary:
 		var p: Dictionary = parts[i]
 		for q in p["pre"]:
 			add.call(String((q as Dictionary)["kind"]), float((q as Dictionary)["len"]), q as Dictionary)
-		add.call("move", MOVE, {"el": p["el"], "prog": p["prog"]})
+		add.call("move", float(p.get("move", MOVE)), {"el": p["el"], "prog": p["prog"]})
 		add.call("el", float((p["prog"] as Dictionary)["natural"]) * k, {"el": p["el"], "prog": p["prog"], "role": p["role"], "finish": p["finish"]})
 		add.call("rest", rest, {"el": p["el"], "prog": p["prog"]})
 	for q in clean:
@@ -3024,6 +3071,296 @@ func plan_of(tr: Dictionary, d: float) -> Dictionary:
 	if after > 0.0:
 		add.call("still", after, {})
 	return {"phases": phases, "natural": natural, "d": d, "si": si}
+
+
+## EACH MOVE AND TRIP OF AN ACT AS LONG AS ITS WAY NEEDS ([method plan_of]): [param parts]' `move` (seconds, from where the tool was to its
+## element's first key) and each trip's `len` in their `pre` and in [param clean] (from where the tool was to the trip's place), measured on
+## the table as it stands - never shorter than they were.
+func _paced(si: int, tr: Dictionary, parts: Array, clean: Array) -> void:
+	if not paced or si < 0 or si >= skins.size():
+		return
+	var hw := holder_world(si, 0.0)
+	var on := func(xy: Vector2) -> Vector3: return hw * (at_mm(si, xy)[0] as Vector3)
+	var place := func(q: Dictionary) -> Vector3:
+		var kind := String(q.get("kind", ""))
+		return _source_of(kind, String(tr.get(kind, "")) if kind in ["rinse", "dry"] else String(q.get("from", tr.get("from", ""))),
+			String(q.get("paint", "")), 0.0)
+	var tool := tool_of(String(tr.get("_ch", "")), tr)
+	var trip := func(q: Dictionary, here: Vector3, here_lean: Vector3) -> Vector3:
+		var to: Vector3 = place.call(q)
+		if here != Vector3.INF and to != Vector3.INF:
+			# (...its handle stood up into the pot from however it leaned - [method _way_length])
+			q["len"] = maxf(float(q["len"]), _way_length(here, to, here_lean, Vector3.UP, tool) / (TRIP_PACE * TRIP_GO_MOST))
+		return to
+	# (...and how a hand holds it there: its handle swung from one lean to the next sweeps further than its tip goes - [method _held_axis])
+	var lean := func(xy: Vector2, prog: Dictionary) -> Vector3:
+		if tool.is_empty():
+			return Vector3.UP
+		return _held_axis(si, xy, (at_mm(si, xy)[1] as Vector3).normalized(), tool, _contact_for(tool, String(prog.get("manner", ""))))
+	var here := Vector3.INF
+	var here_lean := Vector3.ZERO
+	for p in parts:
+		var pd: Dictionary = p
+		for q in pd["pre"]:
+			here = trip.call(q as Dictionary, here, here_lean)
+			here_lean = Vector3.UP
+		var keys: Array = (pd["prog"] as Dictionary).get("keys", [])
+		if keys.is_empty():
+			continue
+		var xy0 := Vector2(float((keys[0] as Array)[1]), float((keys[0] as Array)[2]))
+		var start: Vector3 = on.call(xy0)
+		var start_lean: Vector3 = lean.call(xy0, pd["prog"])
+		if here != Vector3.INF:
+			pd["move"] = maxf(MOVE, _way_length(here, start, here_lean, start_lean, tool) / MOVE_PACE)
+		var last: Array = keys[keys.size() - 1]
+		var xy1 := Vector2(float(last[1]), float(last[2]))
+		here = on.call(xy1)
+		here_lean = lean.call(xy1, pd["prog"])
+	for q in clean:
+		here = trip.call(q as Dictionary, here, here_lean)
+		here_lean = Vector3.UP
+
+
+## EACH WAY INSIDE AN ELEMENT AS LONG AS ITS LENGTH NEEDS (feedback 0010, 2026-11-10: "black mark on the chin ... brush not even
+## touching"): a liner's chin, drawn out from its middle, ended one stroke leaning left and began the next leaning right - its handle swung
+## 100 degrees in the 0.41 s its program gave the lift between, its body (carried near what it paints no faster than about 0.58 m/s) fell
+## 6 cm behind its hand, and its paint was laid where the brush was not. Where a program gives a way less time than [constant KEY_PACE]
+## needs over it ([method _key_ways]), its times are stretched there and every reveal map of it with them ([method _warp_program],
+## [method _warp_maps]), before any act's length is known. Never twice: a way given its time needs no more.
+func _pace_keys() -> void:
+	if not paced:
+		return
+	# (each program once, at the most time any track's tool needs over each of its ways)
+	var needs := {}
+	for a in work.acts:
+		for tr in (a as Dictionary)["tracks"]:
+			var t: Dictionary = tr
+			if String(t["law"]) != "paint" or not t.has("_ch") or int(t.get("_skin", -1)) < 0:
+				continue
+			var si := int(t["_skin"])
+			var tool := tool_of(String(t["_ch"]), t)
+			if tool.is_empty():
+				continue
+			var held_of: Dictionary = (skins[si] as Dictionary).get("held", {})
+			for ph in plan_of(t, 0.0)["phases"]:
+				var pd: Dictionary = ph
+				if String(pd["kind"]) != "el":
+					continue
+				var prog: Dictionary = pd["prog"]
+				var contact := _contact_for(tool, String(prog.get("manner", "")))
+				var least := _key_ways(si, prog, tool, contact, held_of.get(_held_key(prog, String(t["_ch"]), contact), {}))
+				var id := String(prog.get("id", ""))
+				if needs.has(id):
+					var most: PackedFloat32Array = (needs[id] as Array)[1]
+					for k in mini(most.size(), least.size()):
+						most[k] = maxf(most[k], least[k])
+					(needs[id] as Array)[1] = most
+				else:
+					needs[id] = [prog, least]
+	for id in needs:
+		var prog: Dictionary = (needs[id] as Array)[0]
+		var times := _warp_program(prog, (needs[id] as Array)[1])
+		if times.is_empty():
+			continue
+		# ...AND WHAT SHOWS ITS PAINT, by its new times: every made thing laying it, and the materials of each element shown by one
+		var warped: Array = []
+		for made in _made.values():
+			if made is Dictionary and is_same((made as Dictionary).get("program"), prog):
+				_warp_maps(made, times)
+				warped.append(made)
+		for si in skins.size():
+			var items: Dictionary = (skins[si] as Dictionary)["items"]
+			for item_id in items:
+				var item: Dictionary = items[item_id]
+				var made: Dictionary = item.get("made", {})
+				if not is_same(made.get("program"), prog):
+					continue
+				if not warped.any(func(m: Variant) -> bool: return is_same(m, made)):
+					_warp_maps(made, times)
+					warped.append(made)
+				for m in item["mats"]:
+					var mat := m as ShaderMaterial
+					if made.has("when_tex"):
+						mat.set_shader_parameter("when_map", made["when_tex"])
+					if made.has("built_when_tex"):
+						mat.set_shader_parameter("laid_when", (made["built_when_tex"] as Array)[0])
+						mat.set_shader_parameter("laid_when2", (made["built_when_tex"] as Array)[1])
+
+
+## THE LEAST TIME EACH WAY OF PROGRAM [param prog] NEEDS, from each key to the next (seconds; none where its time is a trip's, a spray's
+## or no time at all): its tip's way over skin [param si], up and down and over its arc, and its handle swung from how it is held at the
+## one to how at the other ([param kept], [method _held_keys]; none found, as a hand holds it - [method _skin_hold]), at [constant KEY_PACE].
+func _key_ways(si: int, prog: Dictionary, tool: Dictionary, contact: String, kept: Dictionary) -> PackedFloat32Array:
+	var keys: Array = prog["keys"]
+	var out := PackedFloat32Array()
+	out.resize(maxi(keys.size() - 1, 0))
+	if keys.size() < 2:
+		return out
+	var held: PackedVector4Array = kept.get("held", PackedVector4Array())
+	var arcs: PackedFloat32Array = kept.get("arcs", PackedFloat32Array())
+	var arm := _arm_of(tool)
+	var hw := holder_world(si, 0.0)
+	var places: Array = []
+	for k in keys.size():
+		var kk: Array = keys[k]
+		if int(kk[5]) == 3:
+			places.append(null)
+			continue
+		var xy := Vector2(float(kk[1]), float(kk[2]))
+		var on := at_mm(si, xy)
+		var n: Vector3 = (on[1] as Vector3).normalized()
+		var hk := held[k] if k < held.size() else Vector4.ZERO
+		var ax := Vector3(hk.x, hk.y, hk.z)
+		if ax.length_squared() < 0.5:
+			ax = _held_axis(si, xy, on[1], tool, contact)
+		places.append([hw * ((on[0] as Vector3) + n * float(kk[3]) * 0.001 + ax * hk.w), (hw.basis * ax).normalized()])
+		if k % 64 == 63:
+			_breathe()
+	for k in keys.size() - 1:
+		var a: Array = keys[k]
+		var b: Array = keys[k + 1]
+		if int(a[5]) != 0 or int(b[5]) != 0 or float(b[0]) - float(a[0]) < 1e-5 or places[k] == null or places[k + 1] == null:
+			continue
+		var pa: Array = places[k]
+		var pb: Array = places[k + 1]
+		var arc := arcs[k] if k < arcs.size() else 0.0
+		out[k] = ((pa[0] as Vector3).distance_to(pb[0] as Vector3) + 2.0 * arc + (pa[1] as Vector3).angle_to(pb[1] as Vector3) * arm) / KEY_PACE
+	return out
+
+
+## PROGRAM [param prog]'s TIMES STRETCHED wherever a way from one key to the next has less than [param least] (seconds) - its keys, its
+## strokes' points, its pats, mists and stones, and its length, each new (a program laid again may share the old) - and
+## `[old moments, new moments, old length, new length]` (the start's, each key's and the end's), or none where every way had its time.
+static func _warp_program(prog: Dictionary, least: PackedFloat32Array) -> Array:
+	var keys: Array = prog["keys"]
+	var old_t := PackedFloat32Array([0.0])
+	var new_t := PackedFloat32Array([0.0])
+	var shift := 0.0
+	for k in keys.size():
+		var t := float((keys[k] as Array)[0])
+		if k > 0:
+			var span := t - float((keys[k - 1] as Array)[0])
+			var want := least[k - 1] if k - 1 < least.size() else 0.0
+			# (...more than a millisecond short: a way given its time is never stretched again)
+			if span > 1e-5 and want > span + 0.001:
+				shift += want - span
+		old_t.append(maxf(t, old_t[old_t.size() - 1]))
+		new_t.append(maxf(t + shift, new_t[new_t.size() - 1]))
+	if shift <= 0.0:
+		return []
+	var was := maxf(float(prog["natural"]), old_t[old_t.size() - 1])
+	old_t.append(was)
+	new_t.append(was + shift)
+	var at := func(t: float) -> float: return _warp_t(t, old_t, new_t)
+	var new_keys: Array = []
+	for k in keys.size():
+		var kk: Array = (keys[k] as Array).duplicate()
+		kk[0] = new_t[k + 1]
+		new_keys.append(kk)
+	prog["keys"] = new_keys
+	var strokes: Array = []
+	for st in prog.get("strokes", []):
+		var sd: Dictionary = (st as Dictionary).duplicate()
+		var ts := PackedFloat32Array(sd["t"])
+		for i in ts.size():
+			ts[i] = at.call(ts[i])
+		sd["t"] = ts
+		strokes.append(sd)
+	prog["strokes"] = strokes
+	if prog.has("pats"):
+		var pats := PackedFloat32Array()
+		for pt in prog["pats"]:
+			pats.append(at.call(float(pt)))
+		prog["pats"] = pats
+	for field in ["mists", "stones"]:
+		var rows: Array = []
+		for row in prog.get(field, []):
+			var r: Array = (row as Array).duplicate()
+			# (a mist's moment first; a stone's picked and laid)
+			for i in ([0] if field == "mists" else [0, 1]):
+				r[i] = at.call(float(r[i]))
+			rows.append(r)
+		if prog.has(field):
+			prog[field] = rows
+	prog["natural"] = was + shift
+	return [old_t, new_t, was, was + shift]
+
+
+## Moment [param t] of a program, by the times it was stretched from ([param old_t]) to ([param new_t]): straight between two of them,
+## and past either end as far past its new one.
+static func _warp_t(t: float, old_t: PackedFloat32Array, new_t: PackedFloat32Array) -> float:
+	var n := old_t.size()
+	if t <= old_t[0]:
+		return t - old_t[0] + new_t[0]
+	if t >= old_t[n - 1]:
+		return t - old_t[n - 1] + new_t[n - 1]
+	var i := clampi(old_t.bsearch(t, false) - 1, 0, n - 2)
+	var seg := old_t[i + 1] - old_t[i]
+	return new_t[i] + ((t - old_t[i]) * (new_t[i + 1] - new_t[i]) / seg if seg > 1e-9 else 0.0)
+
+
+## WHAT SHOWED A PROGRAM'S PAINT BY ITS OLD TIMES, BY ITS NEW ([method _warp_program]'s [param times]): each moment in made thing
+## [param made]'s reveal maps (shares of the program's length - Skins.NEVER, and a touch map's "never again", left as they are) and its
+## touches. Each map a new image: a host's or a picture's may be another build's too.
+func _warp_maps(made: Dictionary, times: Array) -> void:
+	var old_t: PackedFloat32Array = times[0]
+	var new_t: PackedFloat32Array = times[1]
+	var was := float(times[2])
+	var now := float(times[3])
+	var share := func(u: float) -> float: return _warp_t(u * was, old_t, new_t) / now
+	# (...the shares through a table of them: a picture's map is a few hundred thousand points)
+	var lut := PackedFloat32Array()
+	lut.resize(WARP_LUT + 1)
+	for i in WARP_LUT + 1:
+		lut[i] = share.call(float(i) / float(WARP_LUT))
+	if made.get("when") is Image:
+		made["when"] = _warped_map(made["when"], lut, [0, 2], share)
+		made["when_tex"] = ImageTexture.create_from_image(made["when"])
+	if made.get("built_when") is Array and (made["built_when"] as Array).size() == 2:
+		var bw: Array = []
+		for img in made["built_when"]:
+			bw.append(_warped_map(img, lut, [0, 1, 2, 3], share))
+		made["built_when"] = bw
+		made["built_when_tex"] = [ImageTexture.create_from_image(bw[0]), ImageTexture.create_from_image(bw[1])]
+	if made.get("touches") is Array:
+		var touches: Array = []
+		for tc in made["touches"]:
+			var d: Dictionary = (tc as Dictionary).duplicate()
+			d["u"] = share.call(float(d["u"]))
+			touches.append(d)
+		made["touches"] = touches
+
+
+## Map [param img] with each moment in its channels [param chans] mapped through [param lut] (shares 0-1; just past 1, by [param share]
+## itself; anything else - never - left), as a new image in floats.
+func _warped_map(img: Image, lut: PackedFloat32Array, chans: Array, share: Callable) -> Image:
+	var fmt := img.get_format()
+	var to: int = {Image.FORMAT_RH: Image.FORMAT_RF, Image.FORMAT_RGH: Image.FORMAT_RGF, Image.FORMAT_RGBH: Image.FORMAT_RGBF,
+		Image.FORMAT_RGBAH: Image.FORMAT_RGBAF}.get(fmt, fmt)
+	var per: int = {Image.FORMAT_RF: 1, Image.FORMAT_RGF: 2, Image.FORMAT_RGBF: 3, Image.FORMAT_RGBAF: 4}.get(to, 0)
+	if per == 0:
+		return img
+	var im := img.duplicate() as Image
+	if to != fmt:
+		im.convert(to)
+	var v := im.get_data().to_float32_array()
+	var last := lut.size() - 1
+	for c in chans:
+		if int(c) >= per:
+			continue
+		var i := int(c)
+		var row := 0
+		while i < v.size():
+			var u := v[i]
+			if u >= 0.0 and u <= 1.0:
+				v[i] = lut[int(u * float(last) + 0.5)]
+			elif u > 1.0 and u < 2.0:
+				v[i] = share.call(u)
+			i += per
+			row += 1
+			if row % 65536 == 0:
+				_breathe()
+	return Image.create_from_data(im.get_width(), im.get_height(), im.has_mipmaps(), to, v.to_byte_array())
 
 
 ## THE WATER A TOOL IS RINSED IN, at [param tau] into paint track [param tr]'s act of [param d] seconds, from [param from] (as it was
@@ -3073,6 +3410,10 @@ func pose(e: Dictionary, tr: Dictionary, tau: float, d: float, T: float, from: T
 	var held: Variant = _held_at(plan, tr, tau, T, from, x0, _home_of(e, from))
 	var x: Transform3D = held if held is Transform3D else _node_at(held as Array, tool, x0)
 	return _kept_out(int(plan.get("si", -1)), tool, x, held, T)
+
+
+## A GATE'S SWITCH: off, an act's moves and trips take a hand's fixed times, however far they go ([method _paced]). Never set by the show.
+var paced := true
 
 
 ## A GATE'S SWITCH: off, a drawn pose is left as its plan places it ([method _kept_out]) - what a control shows the guard keeps from
@@ -3425,9 +3766,14 @@ func _surface_hold(si: int, prog: Dictionary, tau: float, T: float, tr: Dictiona
 		# here, squishing itself?"): a track naming no `from` was sent with no paint, and went to the spot by the work kept for none - 12 cm
 		# right of a mask, the corner of 732687's brush tray - every time it ran dry, never to the white pot it began from
 		var pot := _pot_hold("load" if at_a == 1 else "pick", String(tr.get("from", "")), String(prog.get("pot", "")) if at_a == 1 else "", T, tr, _side_after(prog, k), near)
-		if s < 0.7:
-			return _trip(near, pot, s / 0.7, int(tr.get("_hand", 0)) + k * 7919, "load", tool)
-		return _between(_lifted(pot, near, tool), next, (s - 0.7) / 0.3, int(tr.get("_hand", 0)), tool)
+		# (...its way back to the work as large a share of the trip as its length needs - its program's trip is the painter's, three and a
+		# half seconds wherever the pot stands - and its way out told how long it has, [method _trip])
+		var trip_s := maxf(float(b[0]) - float(a[0]), 0.1)
+		var back := clampf((pot[0] as Vector3).distance_to(next[0] as Vector3) / (TRIP_PACE * trip_s), 0.3, 0.5)
+		var there := 1.0 - back
+		if s < there:
+			return _trip(near, pot, s / there, int(tr.get("_hand", 0)) + k * 7919, "load", tool, trip_s * there)
+		return _between(_lifted(pot, near, tool), next, (s - there) / back, int(tr.get("_hand", 0)), tool)
 	# down and up are eased as a hand eases them; along a stroke it goes steadily
 	var e := Hands.smooth(s) if float(a[4]) != float(b[4]) or float(a[3]) != float(b[3]) else s
 	var xy := Vector2(float(a[1]), float(a[2])).lerp(Vector2(float(b[1]), float(b[2])), e if float(a[4]) != float(b[4]) else s)
@@ -4530,7 +4876,7 @@ func _brush_laid(near: Array, pot: Array, s: float, seed: int, kind: String, too
 	# trip's fixed share, 732687's flat brush had been drawn 15 cm behind its hand on the way and 2.6 cm over the towel as its wipe
 	# began, its hairs on it only 0.4 s in (feedback 0002: "It also applies to the grey pad. The brushes barely touch at all")
 	if secs > 0.0:
-		go = clampf((near[0] as Vector3).distance_to(to[0] as Vector3) / (TRIP_PACE * secs), go, TRIP_GO_MOST)
+		go = clampf(_way_length(near[0], to[0], near[1], to[1], tool) / (TRIP_PACE * secs), go, TRIP_GO_MOST)
 	if s < go:
 		return _roll_toward(_between(near, to, s / go, seed, tool), near, to, Hands.smooth(s / go), tool)
 	var w := (s - go) / (1.0 - go)
@@ -4624,6 +4970,27 @@ static func _pressed_into(tool: Dictionary, contact: String) -> float:
 	if bool(tool.get("flat", false)) and _contact(tool, contact).get("tip") != null:
 		return LOAD_PRESS_PAD
 	return 0.0
+
+
+## HOW FAR TOOL [param tool]'s BODY GOES between a tip at [param pa] leaning [param la] and one at [param pb] leaning [param lb] (meters), as
+## [method _between] takes it: the tip's way, up over what stands between and down again, and its handle swung from the one lean to the
+## other - a brow's upright to a chin's low lean swept a liner's end 80 cm while its tip went 20 (2026-11-10). What a way is paced by.
+func _way_length(pa: Vector3, pb: Vector3, la: Vector3, lb: Vector3, tool: Dictionary) -> float:
+	var reach := _reach_of(tool) if not tool.is_empty() else TOPS_BESIDE
+	var dist := pa.distance_to(pb)
+	var lift := maxf(clampf(dist * 0.25, 0.0, 0.06), _lift_over(pa, pb, 0, reach))
+	var arm := _arm_of(tool)
+	var swing := la.normalized().angle_to(lb.normalized()) * arm if la.length_squared() > 0.5 and lb.length_squared() > 0.5 else 0.0
+	return dist + 2.0 * lift + swing
+
+
+## HOW FAR TOOL [param tool]'s BODY GOES a radian it is turned about its tip (meters): twice its grip's way from its tip - a liner's 0.26 m,
+## where the solver's own measure ([method RigidParts._span]: its middle's way and its turn times its radius) is 0.21. None without a tool.
+func _arm_of(tool: Dictionary) -> float:
+	if tool.is_empty():
+		return 0.0
+	var c0 := _contact(tool, "")
+	return ((c0["grip"] as Vector3) - (c0["tip"] as Vector3)).length() * 2.0
 
 
 ## From hold [param a] to hold [param b], as a hand goes - lifted on its way between places apart, and over what stands between. From
@@ -4869,15 +5236,18 @@ func _tick_tool(ch: String, t: float, entries_of: Callable) -> void:
 		var bent: Array = Bristles.response(target, t)
 		# ...BENT NO FURTHER THAN KEEPS ITS TIP ON THE FACE it is pressed on ([method _bend_to_surface]) - AND ONLY WHILE IT IS PRESSED
 		# (feedback 0019: a lifted brush's hold still says it is over the face, and its hairs had been bent to reach it from 4.3 mm up); on
-		# its paint, the cup's floor or the towel, laid on that ([method _lay_on_plane])
+		# its paint, the cup's floor or the towel, laid on that as far as the brush AS DRAWN reaches it, and straight where it does not
+		# ([method _lay_on_plane]: pick a lane - "either touch the actual bottom, so that the curves make sense, or don't touch it, and don't
+		# curve the bristles in the water")
 		var h_now := hold_at.call(t) as Array
 		var lay := Vector2.ZERO
 		if bool(h_now[3]) and float(h_now[2]) > 0.0 and int(tr.get("_skin", -1)) >= 0:
 			bent[0] = _bend_to_surface(int(tr["_skin"]), tool, h_now, bent[0] as Vector3)
 		elif not bool(h_now[3]) and float(h_now[2]) > 0.0 and h_now.size() > 7 and not is_nan(float(h_now[6])):
-			var on := _lay_on_plane(tool, h_now, bent[0] as Vector3)
-			bent[0] = on[0]
+			var on := _lay_on_plane(tool, h_now, bent[0] as Vector3, node_w,
+				((h_now[0] as Vector3) - ((hold_at.call(t - TRAIL_LAG) as Array)[0] as Vector3)) / TRAIL_LAG)
 			lay = on[1]
+			bent[0] = on[0] if lay.y > 0.0 else Vector3.ZERO
 		var inv := node_w.basis.inverse()
 		for tf in tool["tufts"]:
 			var mat: ShaderMaterial = (tf as Dictionary)["mat"]
