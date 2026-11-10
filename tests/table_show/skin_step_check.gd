@@ -295,14 +295,17 @@ func _swab() -> void:
 		"...and one a quarter white, from the olive's: %s" % TableProducer._pot_of_paint("amber cream+olive cream+white paint 0.75 0.25", pots))
 	_ok(TableProducer._pot_of_paint("amber cream+black paint 0.25", pots) == "amber pot" and TableProducer._pot_of_paint("white paint", pots) == "white pot",
 		"control: a mix of two, and a paint alone, as before")
-	# THE WORDS KEPT WHEN THE WORK IS MADE AGAIN ([method TableProducer.recue_map]): a passage's cues, its beat's acts recounted, each
-	# pointed at the act at its place - fewer acts, the first and last cues kept and the rest spread; the same, nothing
+	# THE WORDS KEPT WHEN THE WORK IS MADE AGAIN ([method TableProducer.recue_map]): a passage's cues, its beat's acts made again - its
+	# first cue the first act, at its place, and the rest taken out, the acts after it following on by what each takes (2026-11-10: acts
+	# cued where longer ones had been put their tools down and waited); the same acts, nothing
 	var olds := ["s-1-a", "s-1-b", "s-1-c", "s-1-d", "s-1-e", "s-1-f", "s-1-g"]
 	var m4 := TableProducer.recue_map(olds, ["s-1-p", "s-1-q", "s-1-r", "s-1-s"])
-	_ok(m4.get("s-1-a") == "s-1-p" and m4.get("s-1-g") == "s-1-s" and m4.values().filter(func(v: String) -> bool: return not v.is_empty()).size() == 4
-		and m4.values().count("") == 3, "seven cues over four acts: the first and last kept, two between, three taken out: %s" % str(m4))
+	_ok(m4.get("s-1-a") == "s-1-p" and m4.size() == 7 and m4.values().count("") == 6,
+		"seven cues over four acts made again: the first names the first, six taken out: %s" % str(m4))
 	var m3 := TableProducer.recue_map(["s-3-a", "s-3-b", "s-3-c"], ["s-3-x", "s-3-y", "s-3-z"])
-	_ok(m3 == {"s-3-a": "s-3-x", "s-3-b": "s-3-y", "s-3-c": "s-3-z"}, "as many acts as cues, each at its place: %s" % str(m3))
+	_ok(m3 == {"s-3-a": "s-3-x", "s-3-b": "", "s-3-c": ""}, "as many acts as cues, made again: the first kept, never each at a place another had: %s" % str(m3))
+	var m1 := TableProducer.recue_map(["i-1-sponge"], ["i-1-sponge", "i-2-liner", "i-3-flat"])
+	_ok(m1 == {"i-1-sponge": "i-1-sponge"}, "one cue over three acts: it names the first, the others following on: %s" % str(m1))
 	_ok(TableProducer.recue_map(["i-1", "i-2"], ["i-1", "i-2"]).is_empty(), "control: cues that are their acts already are left")
 
 

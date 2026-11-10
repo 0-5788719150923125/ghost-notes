@@ -816,22 +816,72 @@ func _land_skin_host(h: Dictionary) -> String:
 	return wrote
 
 
-## EACH ELEMENT'S BEAT, by id: where it begins in the painting's time, spread over the intro and the beats - the ground in the intro, the
-## close left to its words. A layer to a beat, 327484's crackle (a third of the time) had taken one beat and left three empty, and the
-## close was given three layers.
+## EACH ELEMENT'S BEAT, by id: where its middle falls in the painting's time, each counted with the trips its run takes ([constant
+## RUN_TRIPS]), spread over the intro and the beats - the ground in the intro, the close left to its words. A layer to a beat, 327484's
+## crackle (a third of the time) had taken one beat and left three empty, and the close was given three layers. EACH BEAT ITS SHARE BY
+## HOW LONG ITS WORDS TAKE, where they are written ([method _beat_seconds]), else evenly - the reader then writes them to the work
+## (2026-11-10, the user: "Starting around 5:30, and continuing for at least 90 seconds... there is no animation at all"): 732687's
+## painting, made again under its kept words and shorter, had a ground more than an even sixth of it, so the intro was given the ground
+## alone - one sponge over seven minutes of words, put down long before the intro's last.
 func _element_beats(els: Array) -> Dictionary:
 	var keys: Array = ["intro"]
 	for k in range(1, episode.beat_count() + 1):
 		keys.append(str(k))
+	var said := _beat_seconds()
+	var ends: Array = []
+	var sum := 0.0
+	for key in keys:
+		# (...every beat's words, or none: a beat not written yet would be given nothing)
+		if float(said.get(key, 0.0)) <= 0.0:
+			sum = 0.0
+			break
+		sum += float(said.get(key, 0.0))
+	var at_end := 0.0
+	for key in keys:
+		at_end += float(said.get(key, 0.0)) / sum if sum > 0.0 else 1.0 / float(keys.size())
+		ends.append(at_end)
 	var total := 0.0
 	for e in els:
-		total += float((e as Dictionary)["seconds"])
+		total += float((e as Dictionary)["seconds"]) + RUN_TRIPS
 	var out := {}
 	var at := 0.0
 	for e in els:
 		var ed: Dictionary = e
-		out[String(ed["id"])] = "intro" if int(ed["layer"]) == 0 else String(keys[mini(int(at / maxf(total, 1e-3) * keys.size()), keys.size() - 1)])
-		at += float(ed["seconds"])
+		var took := float(ed["seconds"]) + RUN_TRIPS
+		var mid := (at + took * 0.5) / maxf(total, 1e-3)
+		var k := keys.size() - 1
+		for b in keys.size():
+			if mid < float(ends[b]):
+				k = b
+				break
+		out[String(ed["id"])] = "intro" if int(ed["layer"]) == 0 else String(keys[k])
+		at += took
+	return out
+
+
+## What a run of one tool in one paint takes in the show beyond its strokes (seconds): fetched, loaded, rinsed, dried, moved and put back -
+## 732687's 37 runs, 678 s of it.
+const RUN_TRIPS := 18.0
+
+
+## HOW LONG EACH BEAT'S WORDS TAKE, by beat ("intro", "1"...): its passage's words at the reader's pace ([method _said_word]) and its
+## silences - empty where no passage is written yet.
+func _beat_seconds() -> Dictionary:
+	var bare := episode.cardless()
+	var out := {}
+	for st in episode.steps():
+		var step := String(st)
+		if not step.begins_with("say:") or not episode.has(step):
+			continue
+		var beat := _beat_of(step, bare)
+		if beat.is_empty() or beat == "close":
+			continue
+		var text := episode.read_text(step)
+		var words := Manuscript._rx(Manuscript.COMMENT).sub(text, "", true).replace("\n", " ").split(" ", false).size()
+		var quiet := 0.0
+		for m in Manuscript._rx(CardReading.QUIET_MARK).search_all(text):
+			quiet += float(m.get_string(1))
+		out[beat] = float(out.get(beat, 0.0)) + float(words) * _said_word() + quiet
 	return out
 
 
@@ -1464,25 +1514,19 @@ func _recue_words() -> void:
 
 
 ## WHICH ACT EACH OF A PASSAGE'S CUES NOW NAMES: [param olds] its cues in order, [param news] its beat's acts in order (names as a cue
-## writes them). Each cue the act at its place, the first to the first; with fewer acts than cues, the first and the last kept and the
-## rest spread evenly through the words between, the others named "" (taken out); with more, the cues as many as there are, the rest
-## following on. Nothing for a passage whose cues are its acts already. -> {old: new or ""}.
+## writes them). The first cue its beat's first act, at its place; the others taken out (named ""), the rest of the beat's acts following
+## on, each given its share of the passage by what it takes ([method TableWork.schedule]). Nothing for a passage whose cues are its acts
+## already. -> {old: new or ""}. EACH CUE HAD KEPT ITS PLACE, naming the act now there (2026-11-10, the user: "Starting around 5:30, and
+## continuing for at least 90 seconds... there is no animation at all"): an act made again is not the one the reader cued there, and
+## 732687's, cued where acts two and three times as long had been, put their tools down and waited out the words to the next cue.
 static func recue_map(olds: Array, news: Array) -> Dictionary:
 	var out := {}
 	if olds.is_empty() or olds == news:
 		return out
-	var keep: Array = range(olds.size())
-	if news.size() < olds.size():
-		keep = [0] if news.size() == 1 else []
-		if news.size() > 1:
-			for i in news.size():
-				var k := roundi(float(i) * float(olds.size() - 1) / float(news.size() - 1))
-				if not keep.has(k):
-					keep.append(k)
 	for o in olds:
 		out[String(o)] = ""
-	for j in mini(keep.size(), news.size()):
-		out[String(olds[int(keep[j])])] = String(news[j])
+	if not news.is_empty():
+		out[String(olds[0])] = String(news[0])
 	return out
 
 

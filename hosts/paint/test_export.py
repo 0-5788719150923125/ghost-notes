@@ -27,6 +27,8 @@ to three things:
      yellow strokes ... to an extremely dark yellow stroke ... without ever returning to the container"): a flat's pulls in one paint,
      faint and strong by turns, as the optimizer finds them - exported, none lays more than the one before by LOAD_HEAVIER without a
      trip to the pot between them, and the maps still come to the canvas. CONTROL: the program as it was, with no such trip, does.
+  7. A PLACE AT A TIME (export._places, PLACE_MM; 2026-11-10: "They tend to jump around the entire face, to random places"): a run's
+     pulls in two places 110 mm apart, listed turn about, are gathered into the two places. CONTROL: one place as wide as the face.
 """
 
 import json
@@ -346,6 +348,16 @@ def main():
               % (np.percentile(off_count, 99) if len(off_count) else -1))
     hand_order()
     loads()
+    # 7. a place at a time
+    import export as ex7
+    left = [np.array([10.0 + k, 20.0]) for k in range(4)]
+    right = [np.array([120.0 + k, 30.0]) for k in range(4)]
+    mids = [left[0], right[0], left[1], right[1], left[2], right[2], left[3], right[3]]
+    places = ex7._places(mids, ex7.PLACE_MM)
+    check(len(places) == 2 and sorted(places[0]) == [0, 2, 4, 6] and sorted(places[1]) == [1, 3, 5, 7],
+          "a run's pulls in two places, listed turn about, are swept a place at a time: %s" % places)
+    check(len(ex7._places(mids, 1e9)) == 1, "CONTROL: one place as wide as the face, they are one")
+
     print("FAILED: %d" % len(FAILS) if FAILS else "all passed")
     sys.exit(1 if FAILS else 0)
 

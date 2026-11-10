@@ -71,6 +71,64 @@ Open questions for the author:
   (`layers_paint.tidy`). The swab is a stick with a cotton tuft on the fixed table (the brief), a tuft kind of its own in the show.
   Not yet judged: how often a hand slips (`SLIP_EVERY`, `OVER_EVERY`), how much a blend drags (`FEATHER_DRAG`, `SMUDGE_DRAG`).
 
+## A layer worked as a hand works it (built 2026-11-10, overnight, at the author's ask)
+
+The author, after watching 732687 to 33 minutes: "They tend to jump around the entire face ... They spend a stupid amount of time
+dipping in water, dabbing off the water, and changing paint colors ... the model will pick yellow, make two marks with yellow, then go
+through the whole process of grabbing green" - "the tears dripping from the eye ... took a solid 12+ minutes" - "An intelligent model
+should know: it can draw a single line, pull it all the way through, as a base color. And then it can correct itself, painting other
+colors on top of that ... There are liberties it can and probably should take, for the sake of speeding-up certain tasks, while
+minimizing the color churn". Measured on 732687 before: 97 runs of one brush in one paint (every one a rinse, a blot and a dip, about
+14 s in the show), 2,434 s of painting, a fifth of it (527 s) paint that hardly changed the face; the tears 17 runs, five of them under
+3.5 s each; the cracks 43 pulls of 5 mm. Each change measured on the tears and the cracks repainted alone (`~/scratch_ghost/v2/`).
+
+- **A long thin part's base first** (`optimize.BASE_LONG`, `_pulls`): a part far longer than it is wide is pulled down its middle in the
+  paint most of it is, in pulls up to 45 mm; in two paints at most, its base and the next most of it, every other color of it the nearer
+  of those two's; no dab where error remains in it. Any long thin piece of any paint is pulled the same way, never drawn round as a ring.
+- **One order, laid and judged** (`LayerOpt.key_of`, `_ordered`): broad brush to fine; in each brush the paint its layer's base is laid
+  in first, then the rest lightest first; each run toured, the next pull nearest where the hand is. The optimizer renders its strokes in
+  the order the layer lays them.
+- **Every run worth its trip** (`optimize.consolidate`, `GROUP_LEAST` 12 s): a smaller run laid by its paint's own run in another brush,
+  else by a run worth its trip in a near shade (`MERGE_COLOR_MOST` 12) - else it stays, a color of the design (merged as far as 25, the
+  diamond had lost its olive to its plum). A base never merged. A crisp part's stroke laid at least a quarter strong (`TH_SHOWS`).
+- **Corrections are pulls** (`refine`): along the miss's own length, inside its part only, one round of twelve.
+- **Makeup, never the skin redrawn** (`layers_paint.SKIN_CHROMA`, `SKIN_LIGHT`): a broad part leaves out where the picture is still the
+  base's skin; a soft layer works one place (`SOFT_NEAR`, `SOFT_PIECE` - "the shine" had drawn near-black down the forehead).
+- **A line whole** (`layers_paint.LINES_WHOLE`, `LINE_PAINTS` 2, `LINE_APART` 20; `plan.LINE_LEAST` 1 mm, `LINE_JOIN` 2 mm, `LINE_RUN`
+  100 mm; `Hand.top_up`): found over all its layer's lines, each whole line in the paint most of it is - the right brow had been cut into
+  pieces at every change between two blacks, and begun on a third of a load it ran dry after 33 mm; a line inside its layer's broad
+  part is that part's texture, never traced (plum squiggles down the tears).
+- **A place at a time** (`export._places`, `PLACE_MM` 12): a run's pulls gathered into places and the places toured, each swept by the
+  way its pulls go before the next - swept by heading over the whole run, gold seams from the brow to the jaw had crossed the face once
+  for each way.
+- **The show draws a hairline whole** (`shaders/prop.gdshader` `SKIN_TAPS`): the painted canvas read at four places across each pixel.
+- Gates: `hosts/paint/test_optimize.py` (base first, runs worth their trip, one run a brush and paint, a brow whole, a line that shows),
+  `test_hand.py` 10-12, `test_export.py`.
+- **732687 painted again with it** (layers 2-16 over its base, landed 2026-11-10 04:15; backup `~/scratch_ghost/ep_732687_0415_v2`;
+  every passage's words unchanged): 37 runs where there were 97, 1,133 s of painting over the base's 244 where there were 2,189, 28
+  acts where there were 36; the diamond's olive and plum and the socket's yellow ring kept, the tears two runs, the cracks bold gold
+  seams, both brows whole, no pale cream over the face. As the show plans it (`episode_bake_probe --script --pace=1 --heard
+  --plan-only`): 33 loads, 33 rinses and 32 blots, 466 s of a 40-minute show, its painting slowed to 1,733 s to keep with the words;
+  the hand's way between pulls 5.4 m, where it had been 19.2 m (the base apart). "No idle stretch over 8 s" was wrong: the probe looked
+  only between acts, never at a tool put down inside one (below).
+- **The work shorter than its words, and the hand put down** (the author, 2026-11-10: "Starting around 5:30, and continuing for at least
+  90 seconds... there is no animation at all. There is only the spoken voice"): an act longer than its work slows its strokes at most
+  1.6 times (`TablePaint.SLOW_MOST`), rests at most 4 s an element, then puts its tool back and stands `still` to its end. Three causes,
+  each fixed for any episode: (1) the schedule shared a beat's spare time by each act's whole length, trips and moves too, which are
+  never slowed - an act of few strokes and many trips was given more than its strokes could fill; now the spare goes to the work alone,
+  each act's slowed alike (`TableWork.schedule`, `_fixed`; `table_work_check` `_spare_to_work`). (2) The landing gave each beat an even
+  share of the work, and the shorter painting's sponge ground was more than an intro's share, so the intro was the ground alone, one act
+  over seven minutes of words; now each beat's share is by how long its words take where they are written, each run counted with its
+  trips (`TableProducer._element_beats`, `_beat_seconds`, `RUN_TRIPS`). (3) Words kept over remade work kept each cue at its place,
+  naming the act now there - acts cued where ones two and three times as long had been; now a passage keeps its first cue and the rest of
+  its beat's acts follow on, sharing it by what each takes (`TableProducer.recue_map`; `skin_step_check`). And `episode_bake_probe
+  --plan-only` now says a tool put down inside its act as idle. (4) Watched again in the app: "between 6:30 and 8:30 - there is no
+  animation at all". The live voice says the intro in about 510 s where the plan guesses 442 (its hesitations and slower deliveries
+  are not in the guess), and a beat's acts are sized as each begins: the last take up what the first were not given. Strokes may now
+  be slowed 2.5 times and an element rested 6 s (`SLOW_MOST`, `REST_MOST`; they were 1.6 and 4). Landed on 732687 at 11:12 (backup
+  `~/scratch_ghost/ep_732687_1112_idle`, every word the same): 29 acts, the intro the base, the diamond's outline and its fill; planned
+  with the voice 15% slower than guessed, the intro's acts run on into stage 1 with no tool put down.
+
 ## Status
 
 The made-pictures feed, the Pictures card on table notes and the layers steps: built and gated, not yet seen by the author in the app.
@@ -109,4 +167,13 @@ Feedback 0012 (2026-11-10): "weird black smudges being painted along the chin, n
 but the painting itself: the image model draws the mask's silhouette a pixel or two aside in every picture, blended into the black past
 it, and layer 6 (the right eye socket) read the shift as a thin dark change round the whole face; its near-black liner (`el_224`, 134 s)
 traced the jaw in dashes on the steep rim. Now no layer changes the face's own edge (`layers_paint.RIM_OFF`, 1.5 mm; `test_hand.py` 11).
-These three reach 732687 when layers 4-6 are painted again (done 2026-11-10, below).
+All three landed on 732687 (2026-11-10): layers 4-6 painted again and spliced as el_200..el_224, the rim's dashes gone and the diamond's
+corners plum; every passage's words unchanged (backup `~/scratch_ghost/ep_732687_0221_fb0011`).
+
+Feedback 0013 (2026-11-10): "These black cracks are barely visible ... The brush is constantly touching places that leave no mark at all."
+Measured, not yet fixed: the maps are not it (every line's coverage, load and build-up whole; each stroke point shown within 0.02 s of
+the brush, its stretched times too). A fifth of the painting's time (527 s of 2,619) lays paint that hardly changes the face, mostly pale
+cream on white - the image model's warm skin, redrawn a little differently in every picture, copied as makeup; the brows and cracks are
+hairlines as thin as the picture's, in short strokes visited out of order (the cracks 43, median 5 mm), the right brow mostly missing in
+the painter's own painting; and the show samples the painted canvas without mipmaps, so a hairline on the forehead, lying back from the
+camera, breaks into specks.

@@ -57,6 +57,27 @@ FADE_PAST = 0.7
 # 732687's right eye socket took 105 mm2 there, and its liner traced the jaw in near-black dashes on the mask's steep rim, 134 s of work.
 # Allowing every edge two pixels' shift instead lost half the glitter's specks and a fifth of the amber mending.
 RIM_OFF = 1.5
+# A LAYER'S BROAD PARTS ARE ITS MAKEUP, NEVER THE SKIN REDRAWN ([skin_like]; feedback 0013, 2026-11-10: "The brush is constantly touching
+# places that leave no mark at all"): where a layer's picture is still the base's own skin - its color within SKIN_CHROMA (OKLab x100,
+# across a and b) and SKIN_LIGHT (lightness) of the base layer's picture there - no broad part is painted. The image model draws the mask's
+# warm skin a little differently in every picture, and a fifth of 732687's painting (527 s of 2,619) went to pale cream laid on white
+# where it had: a soft socket's halo, a patch on the temple, streaks over the face. The layer's whole change still says where it changes
+# anything, for its fade and its cleanup.
+SKIN_CHROMA = 5.0
+SKIN_LIGHT = 12.0
+# A SOFT LAYER WORKS ONE PLACE: a piece of its makeup under SOFT_PIECE of its largest and further than SOFT_NEAR mm from it is its picture
+# redrawn, not its work - 732687's "the shine", a gloss on the lips, had laid near-black liner down the right of the forehead where its
+# picture drew a dark edge a little aside.
+SOFT_NEAR = 15.0
+SOFT_PIECE = 0.1
+# A BROAD PART IS PAINTED IN AT MOST THIS MANY PAINTS (paints_for), and a layer's lines in at most LINE_PAINTS: every paint is a trip.
+BROAD_PAINTS = 3
+LINE_PAINTS = 2
+# ...each at least this far from the others (OKLab x100, hue weighed up): 732687's cracks were two runs, in black and a black plum.
+LINE_APART = 20.0
+# ...each line found whole over all the layer's lines, then given the paint most of it is - off, found inside each paint's own points, as it
+# was (a gate's control).
+LINES_WHOLE = True
 # A PART PAINTED BY NUMBERS HAS ITS OWN BORDERS WORKED WET, never its edge ([by_numbers]; feedback 0011, 2026-11-10: "The heavy smearing
 # still created large white bands around the outer part of the eye-diamond ... I believe that comes from the outer white smearing into the
 # inner part"): only where two of its own colors meet, and a feather's reach inside its edge - every pull moves the paint under it that far
@@ -64,6 +85,11 @@ RIM_OFF = 1.5
 # border, and the clean brush carried the white from past the diamond's line into its plum corners. Its edge is its fade's, which keeps
 # to where the layer changes anything ([FADE_PAST]). Off, as it was: a gate's control.
 OWN_BORDERS = True
+
+
+def skin_like(lab, skin):
+    """Where picture `lab` (OKLab x100) is still skin `skin` (the base layer's picture, softened) - [SKIN_CHROMA], [SKIN_LIGHT]."""
+    return (np.hypot(lab[..., 1] - skin[..., 1], lab[..., 2] - skin[..., 2]) < SKIN_CHROMA) & (np.abs(lab[..., 0] - skin[..., 0]) < SKIN_LIGHT)
 
 
 def layer_alpha(d, face, floor=3.0, span=10.0, soft=False):
@@ -432,6 +458,7 @@ def paint_layers(ref, steps, pics, log=print, first=0, last=None, canvas=None):
         p.cv.pre[...] = canvas[0]
         p.cv.alp[...] = canvas[1]
     bare_lab = oklab(np.broadcast_to(dec(ref.bare), pics[0].shape).copy())
+    skin = np.stack([ndimage.gaussian_filter(labs[0][..., c], PX * 1.0) for c in range(3)], -1)
     starts = []
     for i, st in enumerate(steps):
         if i < first or (last is not None and i > last):
@@ -452,11 +479,31 @@ def paint_layers(ref, steps, pics, log=print, first=0, last=None, canvas=None):
         d = changed(prev, labs[i], face)
         alpha = layer_alpha(d, face, float(st.get("floor", 3.0)), soft=bool(st.get("soft")))
         sheet_alpha.append((name, np.stack([alpha] * 3, -1)))
+        # (...its parts what is makeup in it, never the skin redrawn - [SKIN_CHROMA])
+        makeup = alpha * ~skin_like(labs[i], skin) if SKIN_CHROMA > 0 else alpha
+        # (...A SOFT LAYER WORKS ONE PLACE [SOFT_NEAR]: a piece of its change small and far from its largest is its picture redrawn)
+        if st.get("soft") and SOFT_NEAR > 0:
+            comps, nc = ndimage.label(makeup > 0.15)
+            if nc > 1:
+                sizes = ndimage.sum(np.ones(face.shape), comps, range(1, nc + 1))
+                main = int(np.argmax(sizes)) + 1
+                near_main = ndimage.distance_transform_edt(comps != main) / PX <= SOFT_NEAR
+                gone = np.zeros(face.shape, bool)
+                for q in range(nc):
+                    piece = comps == q + 1
+                    if sizes[q] < SOFT_PIECE * sizes.max() and not near_main[piece].any():
+                        gone |= piece
+                if gone.any():
+                    makeup = makeup * ~ndimage.binary_dilation(gone, iterations=int(2 * PX))
         hows = []
         if st.get("how"):
             groups = [(alpha > 0.15, st["how"], False, None)]
         else:
             groups = layer_plan(alpha, labs[i], face, bool(st.get("soft")))
+        # (...a broad part cut to what is makeup in it; its lines as its picture has them, whose faint stretches are as skin as their halo)
+        groups = [(g[0] & (makeup > 0.15) if g[1] != "trace" else g[0],) + tuple(g[1:]) for g in groups]
+        groups = [g for g in groups if g[0].sum() >= 6]
+        groups_all = list(groups)
         fade = False
         # (...BROAD COLOR, OPTIMIZED: each broad part's strokes found by gradient descent toward the step's own picture over the canvas as
         # it stands - a soft part out to where its step's alpha fades - and the layer's strokes laid together, each brush taken up once
@@ -467,15 +514,22 @@ def paint_layers(ref, steps, pics, log=print, first=0, last=None, canvas=None):
                 if how not in ("numbers", "shade_to", "strokes", "fill"):
                     continue
                 fade = fade or soft_edge
-                reg = m if st.get("soft") else ((ndimage.binary_dilation(m, iterations=int(3 * PX)) & (alpha > 0.05)) if soft_edge else m)
-                names = paints_for(p, labs[i][reg & (alpha > 0.3)] if (reg & (alpha > 0.3)).any() else labs[i][reg],
-                                   int(st.get("colors", 5)))
+                reg = m if st.get("soft") else ((ndimage.binary_dilation(m, iterations=int(3 * PX)) & (makeup > 0.05)) if soft_edge else m)
+                names = paints_for(p, labs[i][reg & (makeup > 0.3)] if (reg & (makeup > 0.3)).any() else labs[i][reg],
+                                   int(st.get("colors", BROAD_PAINTS)))
                 specs.append((reg, names, soft_edge))
             groups = [g for g in groups if g[1] not in ("numbers", "shade_to", "strokes", "fill")]
             if specs:
                 from optimize import optimize_layer
                 p.layer_name = name
                 hows.append(optimize_layer(p, specs, pics[i], log=log, iters=int(st.get("iters", 260))))
+        # (...A LINE INSIDE ONE OF ITS LAYER'S BROAD PARTS IS THAT PART'S TEXTURE, NEVER LINE WORK: a tear's dry streaks had been traced
+        # over its pulls as plum squiggles, a paint and a run of their own)
+        broad = np.zeros(face.shape, bool)
+        for m_, how_, _se, _c in groups_all:
+            if how_ in ("numbers", "shade_to", "strokes", "fill", "fill_shade", "shade"):
+                broad |= m_
+        broad = ndimage.binary_dilation(broad, iterations=int(PX))
         for m, how, soft_edge, core in groups:
             fade = fade or soft_edge
             L = {"name": name, "how": how, "mask": m, "colors": labs[i], "smooth": float(st.get("smooth", 0.3)), "min_area": 0.3,
@@ -488,7 +542,7 @@ def paint_layers(ref, steps, pics, log=print, first=0, last=None, canvas=None):
             if how == "trace":
                 # (...THE STEP'S OWN LINES inside where its part is, traced on its own picture - each paint they were laid in on its own,
                 # a line kept for the paint most of its new points were laid in: a line already drawn, redrawn aside, is no one's)
-                names, label = laid_paints(p, m, pics[i - 1], pics[i], alpha)
+                names, label = laid_paints(p, m, pics[i - 1], pics[i], alpha, most=LINE_PAINTS, apart=LINE_APART)
                 near = ndimage.grey_dilation(label, size=3)
                 for g, nm in enumerate(names):
                     mine = ndimage.binary_dilation(label == g, iterations=3) & face
@@ -497,9 +551,12 @@ def paint_layers(ref, steps, pics, log=print, first=0, last=None, canvas=None):
                         ij = np.clip(np.round(np.asarray(l["pts"]) * PX).astype(int), 0, [near.shape[1] - 1, near.shape[0] - 1])
                         at = near[ij[:, 1], ij[:, 0]]
                         counts = np.bincount(at[at >= 0], minlength=k)
-                        return int(np.argmax(counts)) == g and counts.sum() >= 0.3 * len(at)
+                        return int(np.argmax(counts)) == g and counts.sum() >= 0.3 * len(at) and broad[ij[:, 1], ij[:, 0]].mean() < 0.5
 
-                    Lg = dict(L, how="lines", paint=nm, lines_from=pics[i], mask=mine, all=True, keep=keep,
+                    # (...found over all the layer's lines, each whole line its paint's - found inside each paint's own points, 732687's
+                    # right brow, black here and black-red there, was cut into pieces at every change between them)
+                    Lg = dict(L, how="lines", paint=nm, lines_from=pics[i], mask=(ndimage.binary_dilation(m, iterations=3) & face) if LINES_WHOLE else mine,
+                              all=True, keep=keep,
                               tool=st.get("tool", "liner"), line_smooth=float(st.get("line_smooth", 0.4)), quick=True)
                     p.layer_name = name
                     n0 = len(p.laid)

@@ -191,8 +191,40 @@ def _press_of(hw, r):
 # what it was. A pull whose ends differ (a tail, a load running out: ENDS_ALIKE) keeps its own way and place.
 HEADING_SAME = 0.5
 HEADING_BIN = 45.0
+# ...each place swept so before the next (pulls whose middles lie within PLACE_MM of one another, one to the next, are a place), the
+# places in the order the hand comes to them from the first.
+PLACE_MM = 12.0
 ENDS_ALIKE = 0.85
 RECOVER_MOST = 0.01
+
+
+def _places(mids, near):
+    """Points `mids` (mm) gathered into places - each point within `near` of another of its place, one to the next - the places toured
+    from the first point's, the next always the one nearest the last's middle: `[[indices]]`."""
+    n = len(mids)
+    if n == 0:
+        return []
+    P = np.asarray(mids, float)
+    left = set(range(n))
+    groups = []
+    while left:
+        seed = min(left)
+        grp, edge = [seed], [seed]
+        left.discard(seed)
+        while edge:
+            k = edge.pop()
+            close = [t for t in left if float(np.linalg.norm(P[t] - P[k])) <= near]
+            for t in close:
+                left.discard(t)
+                grp.append(t)
+                edge.append(t)
+        groups.append(sorted(grp))
+    out = [groups.pop(0)]
+    while groups:
+        at = P[out[-1]].mean(axis=0)
+        k = int(np.argmin([float(np.linalg.norm(P[g].mean(axis=0) - at)) for g in groups]))
+        out.append(groups.pop(k))
+    return out
 
 
 def _hand_order(marks, pre, alp, col, width_mm):
@@ -259,14 +291,19 @@ def _hand_order(marks, pre, alp, col, width_mm):
         while j < len(marks) and free[j]:
             j += 1
         run = list(range(i, j))
-        bins = {}
-        for q in run:
-            bins.setdefault(int(((heads[q] + HEADING_BIN * 0.5) % 180.0) // HEADING_BIN), []).append(q)
-        for b, qs in bins.items():
-            ang = np.radians(b * HEADING_BIN)
-            across = np.array([-np.sin(ang), np.cos(ang)])
-            mids = [np.asarray(marks[q].rec["pts"], float).mean(axis=0) for q in qs]
-            order.extend(q for _, q in sorted(zip([float(np.dot(c, across)) for c in mids], qs)))
+        # (...A PLACE AT A TIME, the places toured ([PLACE_MM]; 2026-11-10, the user: "They tend to jump around the entire face, to random
+        # places"): gathered by the way they go over a whole run, a run of gold seams from the brow to the jaw had been swept across the
+        # face once for each way)
+        for place in _places([np.asarray(marks[q].rec["pts"], float).mean(axis=0) for q in run], PLACE_MM):
+            bins = {}
+            for t in place:
+                q = run[t]
+                bins.setdefault(int(((heads[q] + HEADING_BIN * 0.5) % 180.0) // HEADING_BIN), []).append(q)
+            for b, qs in bins.items():
+                ang = np.radians(b * HEADING_BIN)
+                across = np.array([-np.sin(ang), np.cos(ang)])
+                mids = [np.asarray(marks[q].rec["pts"], float).mean(axis=0) for q in qs]
+                order.extend(q for _, q in sorted(zip([float(np.dot(c, across)) for c in mids], qs)))
         i = j
     # THE WAY EACH IS DRAWN: about parallel to the last, as it went; else up the face and out to its side
     out = []
@@ -322,7 +359,7 @@ def _pixel_times(m, sl, ts_pts, pts):
     return td[i]
 
 
-def export(p, starts, steps, out, log=print, canvas=None):
+def export(p, starts, steps, out, log=print, canvas=None, base_layer=0):
     """THE ELEMENTS, written to `out`: `elements.json` and each one's maps (`maps/`), replaying the painter's marks on a fresh canvas -
     or on `canvas` ((pre, alp)), where only some of the layers were painted again over the ones before them (layers_paint.paint_layers)."""
     out = Path(out)
@@ -452,7 +489,9 @@ def export(p, starts, steps, out, log=print, canvas=None):
             if kd in HOW:
                 how = HOW[kd]
                 break
-        if g["layer"] == 0:
+        # (...the base pressed on with a sponge - `base_layer`, which of `steps` it is: none where only later layers are painted again, whose
+        # first had been called the base, a liner's outline played as a sponge's stipple)
+        if g["layer"] == base_layer:
             how = "sponge"
         color = p._color(g["paint"]) if g["paint"] else np.array([1.0, 1.0, 1.0])
         els.append({"id": name, "layer": int(g["layer"]), "layer_name": steps[g["layer"]].get("name", ""), "tool": tool,

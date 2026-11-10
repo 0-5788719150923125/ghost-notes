@@ -26,6 +26,28 @@ OPT_SIDE = 240        # the optimized crop's longest side (pixels): finer than t
 POINTS = 6            # control points a stroke
 EDGE = 0.25           # mm, a stroke's outer edge (marks.brush_stroke's)
 TOOL_HALF = (("liner", 1.0), ("round", 3.0), ("flat", 5.0), ("blender", 8.0))
+# A LONG THIN PART'S BASE FIRST (the user, 2026-11-10: "An intelligent model should know: it can draw a single line, pull it all the way
+# through, as a base color. And then it can correct itself, painting other colors on top of that"): a part no wider than BASE_HALF_MOST
+# (mm, half) and BASE_LONG times longer than it is wide - a tear, a streak - is drawn along its middle in the paint most of it is, in pulls
+# up to BASE_PULL mm, and its other colors only correct it. Painted by numbers, 732687's three tears had been 17 runs of one brush in one
+# paint, five of them under 3.5 s each, every one a rinse, a blot and a dip.
+BASE_HALF_MOST = 4.0
+BASE_LONG = 4.0
+BASE_PULL = 45.0
+# A BRUSH IN A PAINT IS TAKEN UP ONLY FOR WORK WORTH THE TRIP (the user: "the model will pick yellow, make two marks with yellow, then go
+# through the whole process of grabbing green ... half the video is just watching the brushes change their color"): a run of one brush
+# in one paint worth under GROUP_LEAST seconds of painting (each pull a second and its length at PULL_SPEED mm/s - a change of paint costs
+# the show about 14 s, rinsed, blotted and dipped) is laid by another run: its paint's run with the most work, in whichever brush, else a
+# run worth its trip in a shade no further than MERGE_COLOR_MOST (OKLab x100) - else it stays, a color of its own: merged as far as 25,
+# 732687's diamond had lost its olive to its plum and its socket its yellow ring. Then the layer's strokes found again.
+GROUP_LEAST = 12.0
+PULL_SPEED = 14.0
+MERGE_COLOR_MOST = 12.0
+# ...and a correction found where error remains is a pull along the place's own length, up to this long (mm).
+REFINE_PULL = 30.0
+# A MARK THAT SHOWS: a crisp part's stroke laid at least this strong (a soft part's glazes at 0.06) - the optimizer's faint dabs at a tenth
+# of a coat had been the brush touching the face and leaving nothing anyone could see (feedback 0013).
+TH_SHOWS = 0.25
 
 _M1 = torch.tensor([[0.4122214708, 0.5363325363, 0.0514459929], [0.2119034982, 0.6806995451, 0.1073969566],
                     [0.0883024619, 0.2817188376, 0.6299787005]], device=DEV)
@@ -114,11 +136,41 @@ class LayerOpt:
         near = _majority(np.where(reg, near, -1), 7, reg)
         strokes = []
         order = sorted(range(len(self.names)), key=lambda j: -oklab(dec(self.cols[j]))[0])
+        # ...A LONG THIN PART'S BASE FIRST ([BASE_LONG]): along its middle in the paint most of it is, as wide as it is
+        base = []
+        based = np.zeros(reg.shape, bool)
+        long_parts = np.zeros(reg.shape, bool)
+        comps, _ = ndimage.label(reg)
+        for q, bx in enumerate(ndimage.find_objects(comps)):
+            part = comps[bx] == q + 1
+            if part.sum() < (0.7 * PX) ** 2:
+                continue
+            dt = ndimage.distance_transform_edt(np.pad(part, 1))[1:-1, 1:-1]
+            thick = dt.max() / PX
+            sk = lines_mod._thin(part)
+            if thick > BASE_HALF_MOST or sk.sum() / PX < BASE_LONG * 2.0 * thick:
+                continue
+            votes = np.bincount(near[bx][part & (near[bx] >= 0)], minlength=len(self.names))
+            j0 = int(np.argmax(votes))
+            # (...IN TWO PAINTS AT MOST, its base and the next most of it: every other color of it the nearer of those two's - a tear's dry
+            # streaks had cut its length into olive and plum pieces each too short to pull, and dabbed at between)
+            two = [j0] + [j for j in np.argsort(-votes) if j != j0 and votes[j] > 0][:1]
+            if len(two) == 2:
+                sub = near[bx]
+                d0 = np.linalg.norm(lab[bx] * p.HUE - opt[two[0]], axis=-1)
+                d1 = np.linalg.norm(lab[bx] * p.HUE - opt[two[1]], axis=-1)
+                other = part & (sub >= 0) & (sub != two[0]) & (sub != two[1])
+                sub[other] = np.where(d0[other] <= d1[other], two[0], two[1])
+                near[bx] = sub
+            tool, hw = tool_for(max(min(thick, 5.0), 0.6))
+            base.extend(self._pulls(sk, dt, bx, thick, j0, tool, hw, base=True))
+            based[bx] |= part & (near[bx] == j0)
+            long_parts[bx] |= part
         spacing = 0.9
         for attempt in range(4):
-            strokes = []
+            strokes = list(base)
             for j in order:
-                sub = smooth_shape(reg & (near == j), int(PX * 0.5)) & reg
+                sub = smooth_shape(reg & (near == j) & ~based, int(PX * 0.5)) & reg
                 comps, n = ndimage.label(sub)
                 for q, bx in enumerate(ndimage.find_objects(comps)):
                     part = comps[bx] == q + 1
@@ -127,6 +179,12 @@ class LayerOpt:
                     dt = ndimage.distance_transform_edt(np.pad(part, 1))[1:-1, 1:-1]
                     thick = dt.max() / PX
                     tool, hw = tool_for(max(min(thick, 5.0), 0.6))
+                    # (...A LONG THIN PIECE OF ANY PAINT PULLED DOWN ITS MIDDLE, as its part's base is - a tear's olive edge one pull,
+                    # where its outline had been drawn round as a ring)
+                    sk = lines_mod._thin(part)
+                    if thick <= BASE_HALF_MOST and sk.sum() / PX >= BASE_LONG * 2.0 * thick:
+                        strokes.extend(self._pulls(sk, dt, bx, thick, j, tool, hw, base=False))
+                        continue
                     d = min(hw * 0.8, thick * 0.5)
                     while d * PX <= dt.max() + 0.5:
                         S = dt >= d * PX
@@ -148,12 +206,85 @@ class LayerOpt:
             if len(strokes) <= most:
                 break
             spacing *= 1.4
-        # (...THE BROADEST BRUSH FIRST, through its paints lightest first, then the next brush - as a painter works a layer broad to fine,
-        # and as they are judged; a paint at a time with the brushes taken up in turn had made a layer forty acts)
-        rank = {j: r for r, j in enumerate(order)}
-        strokes.sort(key=lambda s: (-s["hw"], rank[s["paint"]]))
-        self.strokes = strokes
+        self.strokes = self._ordered(strokes)
+        # (...and a long thin part left to its pulls - never dabbed at where error remains, [refine])
+        self.long_parts = long_parts
         return len(strokes)
+
+    def _pulls(self, sk, dt, bx, thick, j, tool, hw, base):
+        """A long thin piece's pulls (its skeleton `sk`, its distance inside `dt`, in the crop at `bx`): down its middle in paint `j`, as wide
+        as it is, BASE_PULL mm at most each ([BASE_LONG])."""
+        from plan import smooth_path, _is_closed
+        from solve import _chunks
+        out = []
+        for l in lines_mod._follow(sk, dt, np.zeros(sk.shape + (3,)), np.ones(sk.shape), PX):
+            if len(l["pts"]) < 2:
+                continue
+            path = smooth_path(l["pts"], 1.0, closed=_is_closed(l["pts"]))
+            half = float(np.clip(np.median(l["half"]) if len(l["half"]) else thick, 0.3, hw))
+            for ch in _chunks(path, BASE_PULL):
+                if len(ch) < 2 or np.linalg.norm(np.diff(ch, axis=0), axis=1).sum() < 1.0:
+                    continue
+                idx = np.linspace(0, len(ch) - 1, POINTS).round().astype(int)
+                pts = ch[idx] + np.array([bx[1].start, bx[0].start]) / PX + self.origin
+                out.append({"pts": pts, "w": np.full(POINTS, half), "th": 0.9, "soft": 0.4 if not self.soft else 1.2,
+                            "paint": j, "hw": hw, "tool": tool, "base": base})
+        return out
+
+    # --- the order they are laid in, and judged in --------------------------------------------------------------------------------
+
+    def key_of(self, s):
+        """WHERE STROKE `s` IS LAID IN ITS LAYER ([optimize_layer] lays every part's in this order, and each part is judged in it): THE
+        BROADEST BRUSH FIRST, then the next - as a painter works a layer broad to fine (a paint at a time with the brushes taken up in turn
+        had made a layer forty acts); in each brush the paint its layer's base is laid in first ([BASE_LONG]), then the rest lightest
+        first; a base before what corrects it. Its place in its run is its tour's ([_ordered])."""
+        nm = self.names[s["paint"]]
+        return (-s["hw"], 0 if self.base_of_tool.get(s["tool"]) == nm else 1, -float(oklab(dec(self.cols[s["paint"]]))[0]),
+                0 if s.get("base") else 1)
+
+    def _ordered(self, strokes):
+        """Strokes `strokes` in their layer's order ([key_of]), each run of one brush in one paint toured - the next pull always the one
+        nearest where the hand is, by either end - so the hand works a place, then the next, never back and forth across the face."""
+        if not hasattr(self, "base_of_tool"):
+            self.base_of_tool = base_paints([(strokes, self.names)])
+        keyed = sorted(range(len(strokes)), key=lambda n: self.key_of(strokes[n]))
+        out, at = [], None
+        i = 0
+        while i < len(keyed):
+            k0 = self.key_of(strokes[keyed[i]])[:3]
+            j = i
+            while j < len(keyed) and self.key_of(strokes[keyed[j]])[:3] == k0:
+                j += 1
+            run = [strokes[n] for n in keyed[i:j]]
+            # (...its bases first, toured among themselves, then what corrects them)
+            for want_base in (True, False):
+                left = [s for s in run if bool(s.get("base")) == want_base]
+                while left:
+                    if at is None:
+                        nxt = 0
+                    else:
+                        nxt = int(np.argmin([min(np.linalg.norm(np.asarray(s["pts"])[0] - at), np.linalg.norm(np.asarray(s["pts"])[-1] - at))
+                                             for s in left]))
+                    s = left.pop(nxt)
+                    pts = np.asarray(s["pts"])
+                    if at is not None and np.linalg.norm(pts[-1] - at) < np.linalg.norm(pts[0] - at):
+                        s["pts"] = pts[::-1].copy()
+                        s["w"] = np.asarray(s["w"])[::-1].copy()
+                    at = np.asarray(s["pts"])[-1]
+                    out.append(s)
+            i = j
+        return out
+
+    def sync(self):
+        """Each stroke's own fields from what the optimizer found."""
+        P = self.P.detach().cpu().numpy()
+        Wd = self.widths().detach().cpu().numpy()
+        TH = torch.sigmoid(self.th_logit).detach().cpu().numpy()
+        SOFT = torch.exp(self.soft_log).detach().cpu().numpy()
+        for n, s in enumerate(self.strokes):
+            s.update({"pts": P[n], "w": Wd[n], "th": float(TH[n]), "soft": float(SOFT[n])})
+        if hasattr(self, "_found"):
+            del self._found
 
     # --- the soft model -------------------------------------------------------------------------------------------------------------
 
@@ -220,19 +351,18 @@ class LayerOpt:
         paint = torch.sigmoid(self.th_logit).mean()
         return fine + 0.5 * coarse + 2.0 * smooth + 3.0 * paint, fine
 
-    def refine(self, add=24, iters=160):
+    def refine(self, add=12, iters=160):
         """WHERE ERROR REMAINS, MORE STROKES (e-David's loop, inside one layer): the places still furthest from the step's picture, each a
         short stroke in the paint nearest the picture there, as wide as the place - then all of them optimized again."""
         with torch.no_grad():
             shown = self.render()
             e = (((t_oklab(shown) - self.T_lab) ** 2).sum(-1) * self.Wt).cpu().numpy()
         e = ndimage.gaussian_filter(e, max(1.0, 1.0 * self.opx))
-        P = self.P.detach().cpu().numpy()
-        Wd = self.widths().detach().cpu().numpy()
-        TH = torch.sigmoid(self.th_logit).detach().cpu().numpy()
-        SOFT = torch.exp(self.soft_log).detach().cpu().numpy()
-        for n, s in enumerate(self.strokes):
-            s.update({"pts": P[n], "w": Wd[n], "th": float(TH[n]), "soft": float(SOFT[n])})
+        # (...inside its part alone: past it, where the target is the canvas, a paint can only spill more)
+        e = e * (self._down(ndimage.binary_dilation(self.region[self.box], iterations=int(0.5 * PX)).astype(np.float32))[:e.shape[0], :e.shape[1]] > 0.5)
+        if getattr(self, "long_parts", None) is not None and self.long_parts.any():
+            e = e * (self._down(ndimage.binary_dilation(self.long_parts, iterations=int(PX)).astype(np.float32))[:e.shape[0], :e.shape[1]] < 0.5)
+        self.sync()
         tlab = self.T_lab.cpu().numpy()
         opt = oklab(dec(self.cols)) * self.p.HUE
         new = []
@@ -248,13 +378,20 @@ class LayerOpt:
             blob = e > e[k] * 0.5
             lbl, _ = ndimage.label(blob)
             part = lbl == lbl[k]
-            r = max(float(np.sqrt(part.sum() / np.pi)) / self.opx, 0.5)
+            # (...ALONG THE PLACE'S OWN LENGTH, as wide as it is across (the user, 2026-11-10: "it doesn't need to approach every task one
+            # dot of paint at a time"): a long miss beside a tear one pull down it, where a dab across its middle had left the rest to the
+            # next round - 732687's tears had 46 such dabs in olive)
+            py, px_ = np.nonzero(part)
+            c = (np.array([px_.mean(), py.mean()]) + 0.5) / self.opx + self.origin
+            if len(py) >= 3:
+                ev, evec = np.linalg.eigh(np.cov(np.stack([px_, py]).astype(float)) + np.eye(2) * 0.25)
+                d = evec[:, 1]
+                long_r = 2.0 * float(np.sqrt(max(ev[1], 0.0))) / self.opx
+                r = max(2.0 * float(np.sqrt(max(ev[0], 0.0))) / self.opx, 0.5)
+            else:
+                d, long_r, r = np.array([1.0, 0.0]), 0.5, 0.5
             tool, hw = tool_for(min(max(r, 0.6), 5.0))
-            c = (np.array([x, y]) + 0.5) / self.opx + self.origin
-            gy, gx = np.gradient(ndimage.gaussian_filter(tlab[..., 0], 2.0))
-            d = np.array([-gy[y, x], gx[y, x]])
-            d = d / np.linalg.norm(d) if np.linalg.norm(d) > 1e-6 else np.array([1.0, 0.0])
-            half = max(r * 1.2, hw)
+            half = float(np.clip(long_r, hw, REFINE_PULL * 0.5))
             pts = np.array([c + d * half * t for t in np.linspace(-1, 1, POINTS)])
             new.append({"pts": pts, "w": np.full(POINTS, min(r, hw) * 0.9), "th": 0.6, "soft": 0.6 if self.soft else 0.3,
                         "paint": j, "hw": hw, "tool": tool})
@@ -263,9 +400,7 @@ class LayerOpt:
             e[yy0:yy1, xx0:xx1] = 0
         if not new:
             return 0
-        order = sorted(range(len(self.names)), key=lambda j: -oklab(dec(self.cols[j]))[0])
-        rank = {j: r for r, j in enumerate(order)}
-        self.strokes = sorted(self.strokes + new, key=lambda s: (-s["hw"], rank[s["paint"]]))
+        self.strokes = self._ordered(self.strokes + new)
         self.optimize(iters)
         return len(new)
 
@@ -291,7 +426,11 @@ class LayerOpt:
     def lay_order(self):
         """Its strokes as they are laid, the faint ones dropped: `[(n, its brush's half width, its paint's name)]`."""
         TH = torch.sigmoid(self.th_logit).detach().cpu().numpy()
-        return [(n, s["hw"], self.names[s["paint"]]) for n, s in enumerate(self.strokes) if TH[n] >= 0.06]
+        return [(n, s["hw"], self.names[s["paint"]]) for n, s in enumerate(self.strokes) if TH[n] >= self.shows()]
+
+    def shows(self):
+        """How strong a stroke of this part is laid at the least ([TH_SHOWS])."""
+        return 0.06 if self.soft else TH_SHOWS
 
     def lay_one(self, n):
         """Stroke `n` laid on the painter's canvas, as the soft model found it. -> whether it was kept."""
@@ -317,10 +456,109 @@ class LayerOpt:
         return bool(p.try_lay(m, p.ref.lab, -1e9, pts[0]))
 
 
-def optimize_layer(p, specs, target_srgb, log=print, iters=260, rounds=2):
+def base_paints(parts):
+    """EACH BRUSH'S BASE PAINT over a layer's parts (`[(strokes, paint names)]`): the paint its long thin parts' bases are laid in most
+    with it ([BASE_LONG]), by their length - none for a brush that lays no base."""
+    by = {}
+    for strokes, names in parts:
+        for s in strokes:
+            if s.get("base"):
+                k = (s["tool"], names[s["paint"]])
+                by[k] = by.get(k, 0.0) + float(np.linalg.norm(np.diff(np.asarray(s["pts"]), axis=0), axis=1).sum())
+    out = {}
+    for (tool, nm), _ in sorted(by.items(), key=lambda kv: -kv[1]):
+        out.setdefault(tool, nm)
+    return out
+
+
+def _pull_time(pts):
+    """A pull's time at the hand's pace ([GROUP_LEAST]): a second, and its length at PULL_SPEED."""
+    return 1.0 + float(np.linalg.norm(np.diff(np.asarray(pts), axis=0), axis=1).sum()) / PULL_SPEED
+
+
+def consolidate(p, los, iters):
+    """EVERY RUN OF ONE BRUSH IN ONE PAINT WORTH ITS TRIP ([GROUP_LEAST]) over a layer's parts `los`: a run worth less laid by a run already
+    taken up - the same paint in the brush nearest its width, else the nearest paint in the same brush (or in any, where the brush lays no
+    other) within MERGE_COLOR_MOST - else left a color of its own; the parts changed found again. -> (strokes moved, strokes dropped: none)."""
+    halves = dict(TOOL_HALF)
+    moved = dropped = 0
+    for _ in range(4):
+        work = {}
+        based = {}
+        for lo in los:
+            if lo.strokes:
+                lo.sync()
+            for s in lo.strokes:
+                if s["th"] >= lo.shows():
+                    k = (s["tool"], lo.names[s["paint"]])
+                    work[k] = work.get(k, 0.0) + _pull_time(s["pts"])
+                    based[k] = based.get(k, 0.0) + (_pull_time(s["pts"]) if s.get("base") else 0.0)
+        # (...a base never: it is what its part is)
+        small = {k for k, v in work.items() if v < GROUP_LEAST and based.get(k, 0.0) <= 0.0}
+        if not small:
+            break
+        big = {k: v for k, v in work.items() if k not in small}
+        if not big:
+            # (...a layer of small runs alone: the one its bases are most of kept - a base is what the part is - else its largest, the
+            # rest laid by it; a tear's olive corrections, outweighing its black base, had turned the base olive)
+            top = max(work, key=lambda k: (based.get(k, 0.0), work[k]))
+            big = {top: work[top]}
+            small.discard(top)
+            if not small:
+                break
+        # (...each paint's own run: the one of its runs a base is most of, else with the most work - every other run of it laid by that one)
+        home = {}
+        for b in work:
+            if b[0] in halves and (b[1] not in home or (based.get(b, 0.0), b in big, work[b]) > (based.get(home[b[1]], 0.0), home[b[1]] in big, work[home[b[1]]])):
+                home[b[1]] = b
+        changed = []
+        for lo in los:
+            keep = []
+            for s in lo.strokes:
+                k = (s["tool"], lo.names[s["paint"]])
+                if k not in small or s["th"] < lo.shows():
+                    keep.append(s)
+                    continue
+                to = home.get(k[1]) if home.get(k[1]) not in (None, k) else None
+                if to is None:
+                    # (...its paint's own run, small: into a shade near it, worth its trip - else it stays, a color of its own)
+                    mine = oklab(dec(lo.cols[s["paint"]]))
+                    pool = [b for b in big if b[0] == k[0]] or [b for b in big if b[0] in halves]
+                    if pool:
+                        dist = {b: float(np.linalg.norm(oklab(dec(p._color(b[1]))) - mine)) for b in pool}
+                        best = min(dist, key=dist.get)
+                        to = best if dist[best] <= MERGE_COLOR_MOST else None
+                if to is None:
+                    keep.append(s)
+                    continue
+                if lo not in changed:
+                    changed.append(lo)
+                if to[1] not in lo.names:
+                    lo.names.append(to[1])
+                    lo.cols = np.vstack([lo.cols, np.asarray(p._color(to[1]), float)[None]])
+                s["paint"] = lo.names.index(to[1])
+                if to[0] != s["tool"]:
+                    s["tool"], s["hw"] = to[0], halves[to[0]]
+                    s["w"] = np.clip(np.asarray(s["w"], float), s["hw"] * mk.TIP_LEAST, s["hw"])
+                moved += 1
+                keep.append(s)
+            lo.strokes = keep
+        if not changed:
+            break
+        base_of = base_paints([(lo.strokes, lo.names) for lo in los])
+        for lo in changed:
+            lo.base_of_tool = base_of
+            lo.strokes = lo._ordered(lo.strokes)
+            if lo.strokes:
+                lo.optimize(max(iters // 2, 40))
+    return moved, dropped
+
+
+def optimize_layer(p, specs, target_srgb, log=print, iters=260, rounds=1):
     """A LAYER'S BROAD PARTS (`specs`: `[(region, paint names, soft)]`) painted toward `target_srgb`: each part's strokes optimized on
-    its own, against the canvas as the layer finds it, then all of them laid together - the broadest brush first, through its paints
-    lightest first, then the next brush - and each soft part worked over wet after. Words."""
+    its own, against the canvas as the layer finds it, in the order the layer lays them ([LayerOpt.key_of]: broad to fine, each brush's
+    base paint first, then lightest first, each run toured) - every run worth its trip ([consolidate]) - then all of them laid together in
+    that order, and each soft part worked over wet after. Words."""
     los = []
     added = 0
     for region, names, soft in specs:
@@ -330,24 +568,32 @@ def optimize_layer(p, specs, target_srgb, log=print, iters=260, rounds=2):
         lo.setup()
         if lo.init_strokes() == 0:
             continue
-        lo.optimize()
-        for _ in range(rounds):
-            added += lo.refine()
         los.append(lo)
     if not los:
         return "opt 0"
-    light = {}
+    # (...each brush's base paint the layer's, over all its parts - so each run is one, whichever part it is in)
+    base_of = base_paints([(lo.strokes, lo.names) for lo in los])
+    for lo in los:
+        lo.base_of_tool = base_of
+        lo.strokes = lo._ordered(lo.strokes)
+        lo.optimize()
+        for _ in range(rounds):
+            added += lo.refine()
+    moved, dropped_small = consolidate(p, los, iters)
+    los = [lo for lo in los if lo.strokes]
+    if not los:
+        return "opt 0"
+    base_of = base_paints([(lo.strokes, lo.names) for lo in los])
     order = []
     for k, lo in enumerate(los):
-        for n, hw, nm in lo.lay_order():
-            if nm not in light:
-                light[nm] = float(oklab(dec(p._color(nm)))[0])
-            order.append((-hw, -light[nm], k, n))
-    order.sort()
-    laid = sum(1 for _, _, k, n in order if los[k].lay_one(n))
+        lo.base_of_tool = base_of
+        for pos, (n, hw, nm) in enumerate(lo.lay_order()):
+            order.append((lo.key_of(lo.strokes[n]), k, pos, n))
+    order.sort(key=lambda t: (t[0], t[1], t[2]))
+    laid = sum(1 for _, k, _, n in order if los[k].lay_one(n))
     dropped = sum(len(lo.strokes) for lo in los) - len(order)
     # (...and a soft part worked over wet with a clean brush, as a painter blends a haze - the strokes' own edges gone into it)
     for lo in los:
         if lo.soft:
             p._feather_area(lo.region & (ndimage.distance_transform_edt(lo.region) > PX * 1.0), 1.5, None, 1)
-    return "opt %d parts, %d laid (%d added), %d dropped" % (len(los), laid, added, dropped)
+    return "opt %d parts, %d laid (%d added), %d dropped, %d moved to a run already taken up" % (len(los), laid, added, dropped, moved)

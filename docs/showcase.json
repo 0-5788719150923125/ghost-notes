@@ -1,5 +1,5 @@
 {
-	"digest": "966c93ca2373af2338b98b6689f10472ff6d5bc46abbfac6e8170b6655bbe221",
+	"digest": "706fb01a44dde4e0185c7e80a35c8473656fe9be08dac9a62c001329595f6ed6",
 	"files": [
 		"res://project.godot",
 		"res://scenes/main.tscn",
@@ -233,7 +233,7 @@
 		"res://src/show/bookends_card.gd",
 		"res://src/show/director.gd",
 		"res://src/show/filters.gd",
-		"res://src/show/picture_card.gd",
+		"res://src/show/medium_card.gd",
 		"res://src/show/song_card.gd",
 		"res://src/show/subtitle_sea.gd",
 		"res://src/show/subtitles.gd",
@@ -267,6 +267,7 @@
 		"res://src/table/lights.gd",
 		"res://src/table/mesh_cut.gd",
 		"res://src/table/motions.gd",
+		"res://src/table/paint_layers.gd",
 		"res://src/table/particles.gd",
 		"res://src/table/props.gd",
 		"res://src/table/rides.gd",

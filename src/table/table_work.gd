@@ -1615,6 +1615,7 @@ func schedule(sched: Array, parse: Dictionary, said0: PackedFloat32Array, said1:
 				var until := span.y
 				var after := 0.0
 				var shared := float(a.get("_natural", 0.0))    # what builds, and what builds after it before anything cued: each its share
+				var fixed_all := float(a.get("_fixed", 0.0))
 				for k in range(j + 1, mine.size()):
 					var b: Dictionary = acts[mine[k]]
 					if cued.has(String(b["name"])) and float(cued[String(b["name"])]) < INF:
@@ -1629,6 +1630,7 @@ func schedule(sched: Array, parse: Dictionary, said0: PackedFloat32Array, said1:
 						until = minf(until, float(guess.call(int(cue_si[String(b["name"])]) - 1)) + float(cue_into.get(String(b["name"]), 0.0)))
 						break
 					shared += float(b.get("_natural", 0.0))
+					fixed_all += float(b.get("_fixed", 0.0))
 					after += maxf(1.5, float(b.get("_min_length", 0.0))) if bool(b["under"]) else maxf(float(b["length"]) * quick, float(b.get("_min_length", 0.0)))
 					# ...its rest too, where the one before laid down what it takes up
 					for ch in _laid_by(mine[k - 1]):
@@ -1638,6 +1640,15 @@ func schedule(sched: Array, parse: Dictionary, said0: PackedFloat32Array, said1:
 				t1 = maxf(t0 + 1.0, until - after)
 				if a.has("_natural") and shared > 0.0 and until < INF:
 					t1 = t0 + (until - t0) * float(a["_natural"]) / shared
+					# ...AND THE TIME TO SPARE GIVEN TO THE WORK, NEVER TO ITS TRIPS (2026-11-10, the user: "Starting around 5:30, and
+					# continuing for at least 90 seconds... there is no animation at all. There is only the spoken voice"): what an act's
+					# trips and moves take (`_fixed`, [method TablePaint.plan_of]) is never slowed, so a share of the spare by the whole
+					# length gave an act of few strokes and many trips more than its strokes could be slowed to fill - 732687's painting made
+					# again shorter than its words, such an act put its tool down and the hand waited out the rest. Each act's work slowed alike.
+					var work_all := shared - fixed_all
+					if work_all > 0.0 and until - t0 > shared:
+						var own := float(a.get("_fixed", 0.0))
+						t1 = t0 + own + (until - t0 - fixed_all) * (float(a["_natural"]) - own) / work_all
 				t1 = maxf(t1, t0 + float(a.get("_min_length", 0.0)))
 				if t1 == INF:
 					t1 = t0 + Motions.UNDER_GUESS

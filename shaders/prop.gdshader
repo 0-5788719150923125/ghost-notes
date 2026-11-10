@@ -29,6 +29,8 @@ uniform vec4 tip_paint : source_color = vec4(0.0);
 // glittering) - each premultiplied by how much paint there is
 uniform sampler2D skin_color : filter_linear, repeat_disable;
 uniform sampler2D skin_finish : filter_linear, repeat_disable;
+// ...each read over the pixel's footprint at these four places (a rotated grid, shares of the pixel's step along screen x and y)
+const vec2 SKIN_TAPS[4] = vec2[4](vec2(0.375, 0.125), vec2(-0.375, -0.125), vec2(-0.125, 0.375), vec2(0.125, -0.375));
 #include "res://shaders/prop_common.gdshaderinc"
 
 void fragment() {
@@ -319,8 +321,19 @@ void fragment() {
 	float glit = 0.0;
 	if (skinned) {
 		vec2 suv = skin_at.xy;
-		vec4 sc = texture(skin_color, suv);
-		vec4 sf = texture(skin_finish, suv);
+		// (...AS MUCH OF IT AS THE PIXEL COVERS: four taps across the pixel's own footprint on the paint, its colors kept pre-multiplied -
+		// sampled once, a line under a pixel wide on a forehead lying back from the camera came and went along its length, specks where
+		// cracks were painted whole; feedback 0013, 2026-11-10)
+		vec2 fx = dFdx(suv);
+		vec2 fy = dFdy(suv);
+		vec4 sc = vec4(0.0);
+		vec4 sf = vec4(0.0);
+		for (int k = 0; k < 4; k++) {
+			vec2 o = SKIN_TAPS[k];
+			vec2 at = suv + fx * o.x + fy * o.y;
+			sc += texture(skin_color, at) * 0.25;
+			sf += texture(skin_finish, at) * 0.25;
+		}
 		float on = sc.a * smoothstep(0.02, 0.25, skin_at.z) * step(0.0, suv.x) * step(suv.x, 1.0) * step(0.0, suv.y) * step(suv.y, 1.0);
 		vec3 pc = sc.a > 1e-4 ? sc.rgb / sc.a : vec3(0.0);
 		pc = pow(clamp(pc, 0.0, 1.0), vec3(2.2));

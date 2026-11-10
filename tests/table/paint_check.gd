@@ -2,7 +2,7 @@ extends SceneTree
 
 ## The gate of THE PAINTED SURFACE ([FaceForm], [Bristles], [Skins], [TablePaint]; next/painted_surface.md), with no renderer.
 ##
-##   timeout 1800 godot --headless --path . --script res://tests/table/paint_check.gd   (over 300 s - about 20 minutes since the nose's clearance checks (feedback 0003): a puff, a sponge and a fill each held and looked at through a whole act, the sponge's every drawn point)
+##   timeout 2400 godot --headless --path . --script res://tests/table/paint_check.gd   (over 300 s - about 30 minutes since the solver's own bakes of a liner's ways (2026-11-10), 20 before them since the nose's clearance checks (feedback 0003): a puff, a sponge and a fill each held and looked at through a whole act, the sponge's every drawn point)
 ##
 ## - A MASK IS A FACE SEEN FROM THE FRONT: its nose stands out its depth, its closed eyes lie in their sockets, a point outside its
 ##   outline has no height, and its landmarks are where its features are. The control: the rim's height is nothing.

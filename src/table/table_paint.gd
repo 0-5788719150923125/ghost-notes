@@ -28,9 +28,12 @@ const RINSE := 4.0
 const MOVE := 1.4
 const RETURN := 2.0
 ## HOW FAR AN ACT'S STROKES MAY BE SLOWED (a share of a hand's pace) before what is left is rests between its elements, the
-## longest one rest is (seconds), and how far they may be hurried.
-const SLOW_MOST := 1.6
-const REST_MOST := 4.0
+## longest one rest is (seconds), and how far they may be hurried. SLOWED RATHER THAN PUT DOWN (2026-11-10, the author: "between 6:30
+## and 8:30 - there is no animation at all"): a live voice says its words slower than the plan's guess (732687's intro, 442 s guessed,
+## about 510 s said), and the last acts of a beat, sized once the voice's pace is known, take up all of what the first were not given -
+## at 1.6 and 4 s they put their tools down and the hand waited out the words.
+const SLOW_MOST := 2.5
+const REST_MOST := 6.0
 const QUICK_MOST := 0.4
 ## The least an act that paints is hurried to, of its natural length: hardly at all - a face is never rushed (at 0.6, 856886's was
 ## done in 9:22 under ten minutes of words).
@@ -582,16 +585,22 @@ func prepare() -> void:
 	# this thread, before the bake reads them - and so each way inside an element is given the time its body needs ([method _pace_keys])
 	_hold_all()
 	_pace_keys()
-	# ...and each act's length at a hand's pace (every program it asks made now, before the bake reads them)
+	# ...and each act's length at a hand's pace (every program it asks made now, before the bake reads them) - and how much of it is
+	# its trips and moves, which an act given more time than it takes never slows ([method TableWork.schedule]'s `_fixed`)
 	for a in work.acts:
 		var natural := 0.0
+		var fixed := 0.0
 		var paints := false
 		for tr in (a as Dictionary)["tracks"]:
 			if String((tr as Dictionary)["law"]) == "paint":
 				paints = true
-				natural = maxf(natural, float(_natural_of(a as Dictionary, tr as Dictionary)))
+				var pl := _unhurried(a as Dictionary, tr as Dictionary)
+				if float(pl["natural"]) > natural:
+					natural = float(pl["natural"])
+					fixed = maxf(natural - float(pl.get("work", 0.0)), 0.0)
 		if paints:
 			(a as Dictionary)["_natural"] = natural
+			(a as Dictionary)["_fixed"] = fixed
 			(a as Dictionary)["_min_length"] = natural * LEAST
 			if not bool((a as Dictionary).get("under", false)):
 				(a as Dictionary)["length"] = maxf(float((a as Dictionary)["length"]), natural * LEAST)
@@ -2949,8 +2958,8 @@ func _skin_material(sd: Dictionary, color: Texture2D, finish: Texture2D) -> void
 # --- an act that paints -------------------------------------------------------------------------------
 
 ## THE PLAN OF PAINT TRACK [param tr], [param d] seconds long: its phases in seconds from its start - `{phases: [{kind (fetch,
-## load, rinse, move, el, rest, back), a, b, ...}], natural}`. An element's phase carries its program and how much it is
-## slowed (`k`); a load the paint it takes up and from where.
+## load, rinse, move, el, rest, back, still), a, b, ...}], natural, work}` - `work` the part of `natural` its elements take, the rest
+## its trips and moves. An element's phase carries its program and how much it is slowed (`k`); a load the paint it takes up and from where.
 func plan_of(tr: Dictionary, d: float) -> Dictionary:
 	var si := int(tr.get("_skin", -1))
 	var ch := String(tr.get("_ch", ""))
@@ -3015,7 +3024,7 @@ func plan_of(tr: Dictionary, d: float) -> Dictionary:
 			clean.append({"kind": "dry", "len": _trip_len("dry", tool)})
 	# ...NOTHING TO LAY OR GO OVER, nothing taken up: the tool stays where it rests ([method _one_coat] - an act whose coat is the one before's)
 	if parts.is_empty() and clean.is_empty():
-		return {"phases": [], "natural": 0.1, "d": d, "si": si}
+		return {"phases": [], "natural": 0.1, "work": 0.0, "d": d, "si": si}
 	# ...EACH WAY AS LONG AS ITS LENGTH NEEDS (2026-11-10, the user: "the brush is leaving paint streaks in places that are far away from where
 	# it's actually touching now" - "I have a feeling these marks are being drawn out of view"): a move from one element to the next had
 	# taken 1.4 s however far it went, and a trip its own time from wherever the tool was - a brow to a chin, 20 cm, at a metre a second at
@@ -3070,7 +3079,7 @@ func plan_of(tr: Dictionary, d: float) -> Dictionary:
 		add.call("back", RETURN, {})
 	if after > 0.0:
 		add.call("still", after, {})
-	return {"phases": phases, "natural": natural, "d": d, "si": si}
+	return {"phases": phases, "natural": natural, "work": work_len, "d": d, "si": si}
 
 
 ## EACH MOVE AND TRIP OF AN ACT AS LONG AS ITS WAY NEEDS ([method plan_of]): [param parts]' `move` (seconds, from where the tool was to its
@@ -3396,10 +3405,10 @@ static func rinsed_ml(tool: Dictionary) -> float:
 	return w * w * RINSED_FILM * 1e6
 
 
-## The paint act [param act]'s length at a hand's pace: its longest paint track's.
-func _natural_of(act: Dictionary, tr: Dictionary) -> float:
+## Act [param act]'s track [param tr] at a hand's pace: [method plan_of]'s plan, its `natural` and the `work` of it its elements take.
+func _unhurried(act: Dictionary, tr: Dictionary) -> Dictionary:
 	tr["_act"] = String(act["name"])
-	return float(plan_of(tr, 0.0)["natural"])
+	return plan_of(tr, 0.0)
 
 
 ## WHERE THE TOOL IS at [param tau] seconds into its act (of [param d]): its node in the table's space - fetched from

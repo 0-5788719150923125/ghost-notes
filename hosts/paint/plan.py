@@ -40,6 +40,16 @@ SMUDGE_DRAG = 0.3
 # may lay a little past its layer (layers_paint.FADE_PAST) but takes up only what its layer is laid on (`untaken`). Off, as it was: a
 # gate's control.
 TAKE_INSIDE = True
+# A LINE AS A HAND DRAWS ONE ([PlanPainter._lines]; feedback 0013, 2026-11-10: "These black cracks are barely visible in most places. The
+# eyebrows are barely visible" - "the painter has a very hard time just drawing lines at all - the brush bounces around everywhere, makes
+# one tiny mark, moves on to somewhere else"): at least LINE_LEAST mm wide, however fine its picture's - 732687's cracks were laid 0.3 mm
+# wide, under a pixel on a forehead lying back from the camera - and drawn on without lifting into the next where it begins within
+# LINE_JOIN mm, up to LINE_RUN mm a pull (a liner's load lasts 110 - marks.line), the brush filled first where what is on it will not last
+# the pull (Hand.top_up): a crackle's cracks had been 43 pulls of 5 mm.
+LINE_LEAST = 1.0
+LINE_LOAD_MM = 110.0
+LINE_JOIN = 2.0
+LINE_RUN = 100.0
 
 # A HAND'S PATS, NEVER A LATTICE (feedback 0001, 2026-11-09: "the gaps are always in the exact same, uniform layout. It makes the forehead
 # look a bit like a grid of color, instead of organic"): each press of a base lands anywhere within this share of the sweep's step of where
@@ -845,7 +855,7 @@ class PlanPainter(Painter):
         target = oklab(np.stack([ndimage.gaussian_filter(lin[..., c], self.LINE_SOFT * PX) for c in range(3)], -1))
         scale = float(L.get("width_scale", 1.0))
         if L.get("quick"):
-            found = _chained(found, self._tour([l["pts"][0] for l in found]), float(L.get("join", 0.8)))
+            found = _chained(found, self._tour([l["pts"][0] for l in found]), float(L.get("join", LINE_JOIN)), LINE_RUN)
             order = range(len(found))
         else:
             order = self._tour([l["pts"][0] for l in found])
@@ -862,7 +872,8 @@ class PlanPainter(Painter):
             else:
                 l["half"] = np.interp(np.linspace(0, 1, len(pts)), np.linspace(0, 1, len(l["half"])), l["half"])
             l["pts"] = pts
-            hw = np.clip(l["half"] * scale, hw_most * mk.TIP_LEAST, hw_most)
+            hw = np.clip(l["half"] * scale, max(hw_most * mk.TIP_LEAST, min(LINE_LEAST * 0.5, hw_most)), hw_most)
+            self.hand.top_up(float(np.linalg.norm(np.diff(l["pts"], axis=0), axis=1).sum()) / LINE_LOAD_MM + 0.05)
             if not straight and len(l["pts"]) >= 3 and l["half"][0] > l["half"][-1] * 1.8:
                 m = mk.flick(self.cv, l["pts"], hw, col, name, 1.0, self.hand.load, tool, int(self.rng.integers(1 << 30)))
             else:

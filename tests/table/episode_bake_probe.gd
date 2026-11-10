@@ -46,7 +46,7 @@ extends Node
 ## - `--no-keep-out`: the drawn tools left as their plans place them (TablePaint.keep_out off) - what the guard against standing in the
 ##   work changes.
 ## - `--plan-only` (with `--heard`): the live plans alone, nothing baked - each act's time and every stretch over 8 s the painting hand
-##   stands idle. Minutes for a whole episode where a bake takes many.
+##   stands idle, between acts or put down inside one. Minutes for a whole episode where a bake takes many; `--to` stops it there.
 ## - `--heard[=LEAD]`: THE SHOW AS A LIVE PLAN COMES TO KNOW IT, on this thread: the words a sentence at a time, `--ahead` seconds before
 ##   they are said, the bake LEAD seconds (12) past the clock, each new plan taken as the app takes it, to the end - and whatever follows
 ##   (`--audit`, `--series`) reads that bake. No wall clock, so as quick as the bake.
@@ -306,7 +306,9 @@ func _run() -> void:
 		var plans := 0
 		var said_at := 0.0
 		clock = Time.get_ticks_msec()
-		while s_at < last_word + 1.0:
+		# (...with `--plan-only`, as far as `--to` alone: the plans to there in a minute or two)
+		var heard_to := minf(last_word + 1.0, _arg(args, "to", "1e9").to_float()) if plan_only else last_word + 1.0
+		while s_at < heard_to:
 			var was_n: int = subs.words.size()
 			subs.words = _arrived(all_words, ahead, s_at)
 			plans += 1 if subs.words.size() != was_n else 0
@@ -338,8 +340,19 @@ func _run() -> void:
 				if hand_end > -INF and float(r["t0"]) - hand_end > 8.0:
 					print("    IDLE %.1f s (%.1f - %.1f)" % [float(r["t0"]) - hand_end, hand_end, float(r["t0"])])
 					gaps += 1
-				print("  act %-26s %7.2f - %7.2f" % [a["name"], float(r["t0"]), float(r["t1"])])
-				hand_end = maxf(hand_end, float(r["t1"]))
+				# ...AND THE HAND PUT DOWN INSIDE ITS ACT (2026-11-10, the user: "Starting around 5:30, and continuing for at least 90
+				# seconds... there is no animation at all"): an act longer than its work, slowed as far as it may be, puts its tool back and
+				# stands still to its end ([method TablePaint.plan_of]'s `still`) - between acts this had said nothing was idle
+				var done := float(r["t1"])
+				for tr in a["tracks"]:
+					if String((tr as Dictionary)["law"]) != "paint":
+						continue
+					for phz in (w.paint.plan_of(tr, float(r["t1"]) - float(r["t0"])) as Dictionary).get("phases", []):
+						if String((phz as Dictionary)["kind"]) == "still":
+							done = minf(done, float(r["t0"]) + float((phz as Dictionary)["a"]))
+				print("  act %-26s %7.2f - %7.2f%s" % [a["name"], float(r["t0"]), float(r["t1"]),
+					"  (put down at %.2f)" % done if done < float(r["t1"]) - 0.01 else ""])
+				hand_end = maxf(hand_end, done)
 			print("episode_bake_probe: plan only, %d acts, %d idle stretches over 8 s" % [rs.size(), gaps])
 			get_tree().quit(0)
 			return

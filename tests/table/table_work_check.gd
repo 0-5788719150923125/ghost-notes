@@ -43,6 +43,9 @@ extends SceneTree
 ##   silence comes before begins as the silence does, the hand free by then. The control: with no silence it waits for its word.
 ## - AN ACT FILLS UP TO THE NEXT ONE'S WORD (2026-11-09: "30 seconds of speaking but no actions"): the next act's cue word, unheard, is
 ##   guessed for the act before it to end by. The control: with no cue, it fills to the beat's end less the next act.
+## - THE TIME TO SPARE GOES TO THE WORK (2026-11-10: "at least 90 seconds... there is no animation at all"): acts sharing a beat longer
+##   than they take have their work slowed alike, their trips (`_fixed`) never. The control: shared by whole lengths, an act of trips
+##   has its few strokes slowed past what a hand allows.
 ## - A PART'S COPIES ARE ONE PART (2026-10-26: a stack of slips' bottom slip lifted alone, into the four
 ##   above it, and the puppeteer probed for a quarter of an hour): the stack named alone lifts as one and
 ##   passes through nothing, every copy risen alike; its top copy by its number lifts alone; a glow on the
@@ -85,7 +88,7 @@ func _ok(cond: bool, what: String) -> void:
 func _run() -> void:
 	await process_frame
 	for check in [_formula, _clock, _clock_law, _grind, _at_the_spot, _seated, _set_down, _carry, _through_keys, _copies, _cued,
-			_live_words, _cue_order, _after_quiet, _until_its_word, _safe, _write, _held_up, _loose_size, _put_back, _aloft]:
+			_live_words, _cue_order, _after_quiet, _until_its_word, _spare_to_work, _safe, _write, _held_up, _loose_size, _put_back, _aloft]:
 		var done: Variant = (check as Callable).call()
 		_ok(done == true, "%s stopped part way (a script error - see above)" % (check as Callable).get_method())
 	print("table_work_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
@@ -858,6 +861,53 @@ func _until_its_word() -> bool:
 	var plain: Dictionary = placed.call([{"name": "grind", "si": 0}])
 	_ok(plain.has("grind") and float(plain["grind"]["t1"]) > 6.0,
 		"THE CONTROL: with no word cueing the next, it fills to the beat's end less that act's time (%s)" % str(plain.get("grind", {}).get("t1", "-")))
+	m._root3.free()
+	return true
+
+
+## THE TIME TO SPARE GOES TO THE WORK, NEVER TO ITS TRIPS (2026-11-10, the user: "Starting around 5:30, and continuing for at least 90
+## seconds... there is no animation at all"): two acts sharing a beat longer than they take, one mostly trips (`_fixed`) and one all work,
+## each have their work slowed alike - the first ends at its trips and its share of the spare by its work. THE CONTROL: with no `_fixed`,
+## the spare is shared by each whole length, and the act of trips has its little work slowed over seven times, the other under three.
+func _spare_to_work() -> bool:
+	var m := _medium()
+	_stand(m, _mortar_spec(), "mortar", Vector3(Tables.ORIGIN.x, 0.0, Tables.ORIGIN.y))
+	m._work.build({"acts": [
+		{"name": "trips", "beat": 1, "length": "under", "tracks": [{"thing": "mortar", "part": "herbs", "state": "grow", "law": "to", "value": 0.3}]},
+		{"name": "strokes", "beat": 1, "length": "under", "tracks": [{"thing": "mortar", "part": "herbs", "state": "glow", "law": "to", "value": 0.5}]}]}, 1)
+	var action := {"kind": "work", "card": 1, "after": 0, "dur": 0.0}
+	var spoken := PackedStringArray(["one", "two", "three", "four", "five", "six", "seven", "eight"])
+	var none := ReadingFollower.NO_TIME
+	var said0 := PackedFloat32Array([0.0, none, none, none, none, none, none, none])
+	var said1 := PackedFloat32Array([0.5, none, none, none, none, none, none, none])
+	var est := PackedFloat32Array([0.5, 3.0, 6.0, 9.0, 12.0, 15.0, 18.0, 21.0])
+	var placed := func(fixed: bool) -> Dictionary:
+		for a in m._work.acts:
+			var ad: Dictionary = a
+			ad["_natural"] = 4.0
+			ad["_min_length"] = 0.0
+			ad.erase("_fixed")
+			if fixed:
+				ad["_fixed"] = 3.0 if String(ad["name"]) == "trips" else 0.0
+		m._work._begun = {}
+		m._work._last_now = -INF
+		m._work._plan_key = ""
+		m._work.schedule([{"a": action, "t0": 0.0, "s": 1.0}], {"actions": [action], "spoken": spoken, "cues": [{"name": "trips", "si": 0}],
+			"quiets": []}, said0, said1, est, 0.0)
+		var by := {}
+		for r in m._work.runs:
+			by[String((m._work.acts[int((r as Dictionary)["i"])] as Dictionary)["name"])] = r
+		return by
+	var slowed := func(by: Dictionary, nm: String, fixed: float, work: float) -> float:
+		return (float(by[nm]["t1"]) - float(by[nm]["t0"]) - fixed) / work if by.has(nm) else -1.0
+	var alike: Dictionary = placed.call(true)
+	var a1: float = slowed.call(alike, "trips", 3.0, 1.0)
+	var a2: float = slowed.call(alike, "strokes", 0.0, 4.0)
+	_ok(a1 > 1.0 and absf(a1 - a2) < 0.05, "each act's work is slowed alike, its trips never: %.2f and %.2f times" % [a1, a2])
+	var whole: Dictionary = placed.call(false)
+	var w1: float = slowed.call(whole, "trips", 3.0, 1.0)
+	var w2: float = slowed.call(whole, "strokes", 0.0, 4.0)
+	_ok(w1 > 7.0 and w2 < 3.0, "THE CONTROL: shared by each whole length, the act of trips has its work slowed %.2f times, the other %.2f" % [w1, w2])
 	m._root3.free()
 	return true
 
