@@ -3,8 +3,8 @@ class_name DispatchSounds
 
 ## DispatchSounds - THE DESK, HEARD (next/dispatch.md): a phone flipped open and snapped shut, its keys dialing and the ring
 ## in its earpiece, a phone buzzing and rattling against its neighbors in the row, the terminal's keys, the printer's
-## screech, the radar's ping, the toggle's click, the mug set down, the receiver's hiss and the storms it opens up on, and
-## the one jet that passes over while the man sleeps.
+## screech, the radar's ping, the toggle's click, the mug set down, the receiver's hiss and the storms it opens up on, the
+## gain knob's clicks, the terminal's bell, the lamp's switch, and the one jet that passes over while the man sleeps.
 ##
 ## FROM THE DESK'S OWN SCHEDULE ([method DispatchMedium.sound_plan]): a list of what sounds when - a one-shot at a moment, or
 ## something that goes on from one moment to another - remade when the plan is. Played by the medium as its picture is
@@ -81,6 +81,11 @@ const PING_HZ := 1180.0
 const PING_RING := 0.75
 const PING_ECHO := 0.36
 const PING := 0.03
+## THE TERMINAL'S BELL ([method _bell]): one short beep from its little speaker, as an old terminal gives for an alert or a
+## refused entry - its pitch, a near-square tone (its odd overtones), how long, and how loud.
+const BELL_HZ := 880.0
+const BELL_LEN := 0.2
+const BELL := 0.022
 ## THE JET ([method _jet]): its speed (m/s), how near it comes (m), the speed of sound (m/s), its turbine's whine (Hz) and
 ## its loudness at its nearest; the far air's darkening.
 const JET_SPEED := 95.0
@@ -319,6 +324,11 @@ func _run(out: PackedVector2Array, i: int, m: int, t0: float) -> void:
 					var s := _ringback(u)
 					l += s * 0.35
 					r += s * 0.94
+				"bell":
+					var s := _bell(u)
+					var e: Vector2 = d.get("ears", Vector2(0.7071, 0.7071))
+					l += s * e.x
+					r += s * e.y
 				"buzz":
 					var s := _buzz(d, u)
 					var e: Vector2 = d.get("ears", Vector2(0.7071, 0.7071))
@@ -419,6 +429,15 @@ func _begin(d: Dictionary) -> void:
 			_burst(6000.0, 0.9, 0.04, 0.004, ears)
 		"click":
 			_burst(3000.0, 1.0, 0.004, 0.02, ears)
+		"detent":
+			# the gain knob turned a step: its detent's small click
+			_burst(3800.0, 0.9, 0.0025, 0.016, ears)
+			_sine(1700.0, 0.012, 0.004, ears)
+		"lamp":
+			# the lamp's switch: its snap, and the switch's body under it
+			_burst(2600.0, 0.8, 0.005, 0.034, ears)
+			_burst(900.0, 0.9, 0.012, 0.012, ears)
+			_sine(1500.0, 0.02, 0.004, ears)
 		"tear":
 			# the printer's paper drawn on, torn a little at its fold
 			_burst(2600.0, 1.4, 0.15, 0.01, ears)
@@ -482,6 +501,14 @@ func _ringback(u: float) -> float:
 	if not on:
 		return 0.0
 	return (sin(_ph[0]) + sin(_ph[1])) * 0.5 * RINGBACK_LEVEL
+
+
+## THE TERMINAL'S BELL [param u] seconds into it: a near-square tone, a few milliseconds on and off at either end so it
+## never clicks; its phase from [param u] itself.
+func _bell(u: float) -> float:
+	var edge := clampf(u / 0.004, 0.0, 1.0) * clampf((BELL_LEN - u) / 0.01, 0.0, 1.0)
+	var ph := TAU * BELL_HZ * u
+	return (sin(ph) + sin(ph * 3.0) / 3.0 + sin(ph * 5.0) / 5.0) * BELL * edge
 
 
 ## A PHONE BUZZING on the wood [param u] seconds into its ring (or its one text's buzz): the motor's hum while it is on, and

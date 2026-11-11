@@ -5,7 +5,7 @@ class_name DispatchScreens
 ## text on black (asleep, dark), the radar's sweep and its blip with the place written
 ## beside it, the oscilloscope's trace, a phone's two little screens, the printer's paper as it feeds; and, drawn once,
 ## the names on the phones' tape in marker, GOOD and BAD on the switch's, the chart of the council's hours, the handbook's
-## spine, the receiver's dial at 20.1.
+## spine, the receiver's dial at 20.1, the radar's gain scale.
 ##
 ## EACH A VIEWPORT OF ITS OWN, drawn only as what it shows changes ([method DeskMedium]'s rule: "the desk is drawn only
 ## as it changes") - the radar's sweep and the scope's trace move every frame, the terminal only as a key is struck. The
@@ -22,6 +22,7 @@ const PHONE_SIZE := Vector2i(300, 368)
 ## A PHONE'S KEYPAD, drawn once for every phone: its size (px).
 const KEYPAD_SIZE := Vector2i(262, 400)
 const PAPER_SIZE := Vector2i(768, 3072)
+const GAIN_SIZE := Vector2i(256, 256)
 const TAPE_CELL := Vector2i(256, 96)
 const TAPE_COLS := 4
 ## How many phone screens can be lit at once (the one in hand, the ones on the desk, one ringing or texting).
@@ -46,6 +47,7 @@ var tape: SubViewport
 var chart: SubViewport
 var spine: SubViewport
 var dial: SubViewport
+var gain: SubViewport
 var faces: Array = []             # the phone screens' viewports
 var _words := {}                  # a word on tape -> its viewport
 var _term: Face
@@ -90,6 +92,9 @@ func build(labels: PackedStringArray) -> void:
 		spine.add_child(Face.new(self, "spine"))
 		dial = _vp(Vector2i(512, 256), false)
 		dial.add_child(Face.new(self, "dial"))
+		gain = _vp(GAIN_SIZE, false)
+		gain.transparent_bg = true
+		gain.add_child(Face.new(self, "gain"))
 		keypad = _vp(KEYPAD_SIZE, false)
 		keypad.add_child(Face.new(self, "keypad"))
 	word("GOOD")
@@ -103,11 +108,11 @@ func build(labels: PackedStringArray) -> void:
 	tape.add_child(tf)
 
 
-## WHAT THE DESK'S BUILD IS HANDED of these ([method DispatchSet.build]): the tape, the chart, the spine, the dial and the
-## switch's words, by name - taken here on the main thread, so the build may run on a worker.
+## WHAT THE DESK'S BUILD IS HANDED of these ([method DispatchSet.build]): the tape, the chart, the spine, the dial, the gain
+## scale and the switch's words, by name - taken here on the main thread, so the build may run on a worker.
 func textures() -> Dictionary:
 	return {"tape": tape.get_texture(), "chart": chart.get_texture(), "spine": spine.get_texture(), "dial": dial.get_texture(),
-		"keypad": keypad.get_texture(),
+		"keypad": keypad.get_texture(), "gain": gain.get_texture(),
 		"GOOD": word("GOOD"), "BAD": word("BAD")}
 
 
@@ -169,7 +174,7 @@ func _advance(text: String) -> float:
 
 
 ## THE RADAR: `{t (the sweep's clock), blip: {at: Vector2, label, since}, trail: [{at, age}], ping (seconds into the last
-## ping, or -1), planes: [{at, heading}]}`.
+## ping, or -1), planes: [{at, heading}], clutter: [{at, fade}]}`.
 func show_radar(st: Dictionary) -> void:
 	_show(radar, _radar, st)
 
@@ -222,6 +227,7 @@ class Face extends Node2D:
 			"chart": screens._draw_chart(self)
 			"spine": screens._draw_spine(self)
 			"dial": screens._draw_dial(self)
+			"gain": screens._draw_gain(self)
 			"keypad": screens._draw_keypad(self)
 
 
@@ -248,8 +254,8 @@ func _draw_terminal(c: CanvasItem, st: Dictionary) -> void:
 
 ## THE RADAR: dark green glass, its range rings and cross, the sweep going round with its glow fading behind it, the desk
 ## at its middle; the target's blip, lit as the sweep passes and fading after, its place written small beside it; the
-## places before it fading out; a ping's ring opening out from the blip; and an aircraft's small mark drifting across now
-## and then.
+## places before it fading out; a ping's ring opening out from the blip; an aircraft's small mark drifting across now
+## and then; and with the gain turned up, the clutter round him - smaller and dimmer than he is, and with no name.
 func _draw_radar(c: CanvasItem, st: Dictionary) -> void:
 	var size := Vector2(RADAR_SIZE)
 	var mid := size * 0.5
@@ -282,6 +288,10 @@ func _draw_radar(c: CanvasItem, st: Dictionary) -> void:
 		var lit := _lit(at - mid, sweep)
 		c.draw_colored_polygon(PackedVector2Array([at + hd * 7.0, at - hd * 5.0 + hd.orthogonal() * 4.5, at - hd * 2.5, at - hd * 5.0 - hd.orthogonal() * 4.5]),
 			Color(RADAR_GREEN, 0.35 + 0.6 * lit))
+	for cl in st.get("clutter", []):
+		var cd: Dictionary = cl
+		var at := mid + (cd["at"] as Vector2) * rad
+		c.draw_circle(at, 3.3, Color(RADAR_GREEN, float(cd["fade"]) * (0.18 + 0.5 * _lit(at - mid, sweep))))
 	for tr in st.get("trail", []):
 		var td: Dictionary = tr
 		var at := mid + (td["at"] as Vector2) * rad
@@ -605,6 +615,22 @@ func _draw_spine(c: CanvasItem) -> void:
 	c.draw_rect(Rect2(Vector2(80, 30), Vector2(352, 80)), Color(0.93, 0.92, 0.87))
 	var w := _mono.get_string_size("HANDBOOK", HORIZONTAL_ALIGNMENT_LEFT, -1, 54).x
 	c.draw_string(_mono, Vector2((size.x - w) * 0.5, 90), "HANDBOOK", HORIZONTAL_ALIGNMENT_LEFT, -1, 54, Color(0.08, 0.08, 0.1))
+
+
+## THE RADAR'S GAIN SCALE, printed round its knob: a tick and a number for each step, one to ten, from the lower left round
+## over the top to the lower right ([method DispatchSet.gain_angle]); clear between, so the face shows through.
+func _draw_gain(c: CanvasItem) -> void:
+	var size := Vector2(GAIN_SIZE)
+	var mid := size * 0.5
+	var ink := Color(0.86, 0.84, 0.74)
+	var knob := DispatchSet.GAIN_KNOB_R * size.x / DispatchSet.GAIN_FACE
+	for n in range(DispatchScript.GAIN_LEAST, DispatchScript.GAIN_MOST + 1):
+		var a := DispatchSet.gain_angle(float(n))
+		var d := Vector2(-sin(a), -cos(a))
+		c.draw_line(mid + d * (knob + 4.0), mid + d * (knob + 12.0), ink, 3.0, true)
+		var label := "%d" % n
+		var w := _mono.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 24)
+		c.draw_string(_mono, mid + d * (knob + 30.0) + Vector2(-w.x * 0.5, w.y * 0.3), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 24, ink)
 
 
 ## THE RECEIVER'S DIAL: a lit face with the bands' numbers along it and the cursor at 20.1.

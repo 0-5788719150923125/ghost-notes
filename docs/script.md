@@ -11,7 +11,7 @@ AN ENTRY DOES NOT IMPLEMENT ITS MARK. The parsers of record stay where they are 
 
 A CARDS BRIEF IS NOT A SCRIPT, AND HAS MARKS OF ITS OWN (2026-10-12, the user: "why are all of the supported macros and features missing from 'cards' editor mode? I would expect that most if not all of the features from generative mode should also work here"). The palette was empty there because no entry named the mode: a show's document is the BRIEF its agents work from, never read aloud, so a mark in it does something only where the code reads it out of the brief or an agent is told to honor it. Those are offered ("table" in `modes`), each saying what it does THERE (`blurbs`): a speaker cue gives the show another voice, a `## Cards` section is its deck, a macro reads as its default and a note to self is taken out before any agent sees the brief (`TablePrompts.brief`), and a hesitation, a delivery or a stressed word stands in a line the brief gives the host word for word (rules/table/reader.yaml, `spoken`). The marks of a page or a tablet (pictures, scene lines, web pages) and the inline pronunciation are not: the table is the only medium there, its pictures are the painter's, and a reader's passage keeps no bracket (`TableProducer.clean_spoken`).
 
-Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/script_marks.gd) (68 entries). Each one is proven against the parser that reads it by `tests/notes/script_marks_check.gd`.
+Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/script_marks.gd) (71 entries). Each one is proven against the parser that reads it by `tests/notes/script_marks_check.gd`.
 
 ## Voices
 
@@ -119,10 +119,13 @@ Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/scr
 | Static | `<!-- static: 5 -->` | Generative | Dispatch desk: the receiver opens up for that many seconds, its needle swinging and the scope's trace jumping - Jupiter's crackle; static: 5, surf is its sea. The voice waits. |
 | Print | `<!-- print -->` | Generative | Dispatch desk: the printer prints what was typed since it last printed, with its screech, the paper feeding off the desk to the heap. The voice waits. |
 | Screen saver | `<!-- sleep -->` | Generative | Dispatch desk: the terminal's screen goes dark. A typed, shown or session block wakes it. |
+| Bell | `<!-- bell -->` | Generative | Dispatch desk: the terminal's bell, one short beep, as an old terminal gives for an alert or a refused entry - it sounds as the block after it goes up, and the voice waits half a beat. |
 | Screen off | `<!-- off: tv -->` | Generative | Dispatch desk: that screen goes dark - tv, feed or satellite. |
 | Look | `<!-- look: radar -->` | Generative | Dispatch desk: the camera turns to that thing on the desk - phones, terminal, radar, receiver, printer, chart, handbook, switch, mug, feed, satellite, tv, or home - and stays until something else is active. |
+| Gain | `<!-- gain: 9 -->` | Generative | Dispatch desk: the radar's gain knob is turned to that number, one to ten, a click a step (it starts at three, where only the target is painted). Above three the scope paints clutter - the people round him as faint blips with no name, more the higher it goes, most of them still; turned back down, they fade over a sweep or two. The camera stays on the radar, and the voice waits a beat. |
 | Lift | `<!-- lift: mug -->` | Generative | Dispatch desk: a thing on the desk (the mug) is lifted toward the chair, held a moment, and set back down where it stood. |
 | Switch | `<!-- switch: BAD -->` | Generative | Dispatch desk: the switch box's toggle is thrown to that side, GOOD (up) or BAD (down). |
+| Lamp | `<!-- lamp: off -->` | Generative | Dispatch desk: the gooseneck lamp is switched off (or on), with a click, and the desk is left to the light of its screens. The camera takes in the whole desk. |
 | Live picture | `<!-- live: tv -->` | Generative | Dispatch desk: that screen shows this desk, live, seen from just behind the empty chair - whatever lies on it. Words after a comma say so for whoever reads the note. |
 | Picture on a screen | `<!-- image (feed): what the picture shows -->` | Generative | Dispatch desk: a picture on one of the desk's screens - feed, satellite or tv - until the next picture there or off. Painted by the Illustrations library from its words. |
 | Typed | ````type

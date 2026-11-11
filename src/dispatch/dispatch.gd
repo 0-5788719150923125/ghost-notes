@@ -20,7 +20,8 @@ class_name DispatchMedium
 ##
 ## THE CAMERA SITS IN THE CHAIR AND TURNS TO WHAT IS ACTIVE ([method _attention], [constant SPOTS]): a phone ringing, the
 ## terminal while it types or shows something, the radar on a ping, the receiver while it plays static, a picture landing
-## on a screen, the printer printing; `look:` turns it on purpose and it stays. It leans toward what it looks at and its
+## on a screen, the printer printing, the terminal's bell, the lamp switched (the whole desk, to see it go dark); `look:`
+## turns it on purpose and it stays, as the gain knob turned holds it on the radar. It leans toward what it looks at and its
 ## lens closes in on the small things (the terminal's text is read on it), on critically damped springs
 ## ([constant SPRING_TAU]) - nothing jumps, nothing whips; with nothing new for a while it eases back to the whole desk; a
 ## slow breath of wander under it. WHAT IT TURNS TO IS SEEN: every look holds long enough to settle ([constant LOOK_LEAST]),
@@ -84,6 +85,22 @@ const STEP_OFF := 0.04
 const TURN_MOST := 0.7
 const TRACK_EDGE := 0.82
 const LEG_MOST := 14.0
+## THE RADAR'S CLUTTER ([method clutter_at]; the author's revision, 2026-11-10: "At three, he's alone in that building. At
+## nine, he's surrounded ... Clutter doesn't get up and go to the bathroom"): the most blips the scope ever paints (at
+## gain 10), how sharply their number grows with the knob, the building they stand in round him (on the scope, its edge
+## 1), how near him the nearest may be, how far the few who move drift (one in [constant CLUTTER_MOVING]), and how long a
+## blip the gain no longer reaches takes to fade (seconds: a sweep or two). Each blip is painted by the sweep as the target
+## is, dimmer and with no name, and a little off where it was each round.
+const CLUTTER_MOST := 40
+const CLUTTER_CURVE := 1.25
+const CLUTTER_BUILDING := Vector2(0.40, 0.18)
+const CLUTTER_NEAR := 0.022
+const CLUTTER_MOVING := 4
+const CLUTTER_DRIFT := 0.012
+const CLUTTER_FADE := 4.0
+const CLUTTER_JITTER := 0.004
+## THE LAMP going out: the filament's glow dies over this long (seconds), and comes up over the first part of it.
+const LAMP_FADE := 0.18
 ## THE CAMERA ON THE RADAR as the target sets off (seconds, at least: it stays while he walks, to the ping where he arrives -
 ## [constant MOVING_HOLD_MOST] at most, so a drive is a glance, never a stare).
 const MOVING_LOOK := 3.0
@@ -163,6 +180,7 @@ var _chars := {}                        # a typed block's action -> each of its 
 var _phone_moves: Array = []            # {label, from, to, t0, dur, slot, how}
 var _attn: Array = []                   # {t0, t1, spot: Dictionary, sticky}
 var _legs: Array = []                   # the target's track: {i, place, from, to, t0 (he leaves), t1 (he arrives)}
+var _clutter: Array = []                # where the radar's clutter stands round him, nearest first ([method clutter_of])
 var _leg_known := {}                    # a bare ping's action -> the show time a plan first placed it
 var _sound_plan: Array = []
 var _sound_rev := 0
@@ -509,8 +527,26 @@ func advance(_features, delta: float, _bookend: float) -> void:
 	_sounds.tick(_now, self)
 
 
+## THE OUTRO, after the desk is done: once the voice has said its last word and the desk has done what follows it (the lamp
+## switched off, a last line on the terminal, its sleep - rests the voice holds after its last word), the desk fades to black
+## a beat later, black as the outro runs out. (Timed from the last word alone, the revised night's ending - lamp, last line,
+## sleep, eleven seconds - was mostly played into the dark.)
 func _end_fade() -> float:
-	return ShowOpening.end_fade(_now, _follower, _spoken_n, feed.tail())
+	return ShowOpening.end_fade(_now - _after_last(), _follower, _spoken_n, feed.tail())
+
+
+## How long the desk goes on after the voice's last word: the end of the rests it holds there (0 for none, or before the last
+## word is heard).
+func _after_last() -> float:
+	var last := _word_t1(_spoken_n - 1)
+	if last == INF:
+		return 0.0
+	var out := 0.0
+	for i in _actions.size():
+		var a: Dictionary = _actions[i]
+		if int(a["after"]) >= _spoken_n and _t0[i] < INF:
+			out = maxf(out, _t0[i] + float(a["rest"]) / _sp[i] + float(a["back"]) - last)
+	return out
 
 
 ## THE SHOW OPENS ON THE DESK AT REST: the title and the blur clear a settle ([method Openings.settle]) before its first word
@@ -551,6 +587,7 @@ func load_note(source: String, dispatch: Dictionary, start := PackedStringArray(
 	if seed <= 0:
 		seed = 1 + absi(source.hash()) % 99999
 	_seed = seed
+	_clutter = clutter_of(seed)
 	_parsed = DispatchScript.parse(source)
 	_actions = _parsed["actions"]
 	_spans = _parsed["spans"]
@@ -950,6 +987,14 @@ func _build_attention() -> void:
 				_attn.append({"t0": t, "t1": e, "spot": _spot("home")})
 			"switch":
 				_attn.append({"t0": t, "t1": e + 1.6, "spot": _spot("switch")})
+			"gain":
+				# the knob turned and the scope watched, as a look holds it, until something else is active
+				_attn.append({"t0": t, "t1": INF, "spot": _spot("radar"), "sticky": true})
+			"bell":
+				_attn.append({"t0": t, "t1": _bell_at(i) + 1.5, "spot": _spot("terminal")})
+			"lamp":
+				# the whole desk, to see it go dark (or lit)
+				_attn.append({"t0": t, "t1": e + 2.5, "spot": _spot("home")})
 		if _attn.size() > n0:
 			(_attn.back() as Dictionary)["kind"] = String(a["kind"])
 	_attn = _settled(_attn)
@@ -1145,6 +1190,20 @@ func _build_sound() -> void:
 			"lift":
 				out.append({"t": t + 0.1, "what": "lift", "at": _set.desk_at("mug")})
 				out.append({"t": e - 0.05, "what": "thud", "at": _set.desk_at("mug")})
+			"gain":
+				# a click each step the knob is turned through
+				var from := int(a["from"])
+				var to := int(a["to"])
+				var step := signi(to - from)
+				var d := from
+				while d != to:
+					d += step
+					out.append({"t": _step_at(i, d), "what": "detent", "at": radar_at})
+			"bell":
+				var rung := _bell_at(i)
+				out.append({"t": rung, "t1": rung + DispatchSounds.BELL_LEN, "kind": "bell", "ears": DispatchSounds.ears_of(term_at)})
+			"lamp":
+				out.append({"t": t + DispatchScript.LAMP_AT / _sp[i], "what": "lamp", "at": _set.desk_at("lamp")})
 			"type":
 				var times: PackedFloat32Array = _chars.get(i, PackedFloat32Array())
 				var text := String(a["text"])
@@ -1192,6 +1251,11 @@ func _pose(t: float) -> void:
 	_pose_screens(t)
 	_pose_switch(t)
 	_pose_mug(t)
+	if _set.gain_knob != null:
+		_set.gain_knob.rotation.z = DispatchSet.gain_angle(gain_at(t))
+	var lit := lamp_at(t)
+	_set.lamp.light_energy = DispatchSet.LAMP_ENERGY * lit
+	_set.lamp.visible = lit > 0.0
 	_roots.grow(t)
 	var blink := fposmod(t, 2.4) < 0.25
 	_set.tracker_led.visible = blink
@@ -1531,7 +1595,8 @@ func passes(t0: float, t1: float) -> PackedFloat32Array:
 
 ## THE RADAR AT [param t]: the sweep's clock; THE TARGET AS THE SWEEP PAINTS HIM - where he was as it last passed, the paints
 ## before it fading behind, a step apart where he is moving - with the place he last came to written beside him and its
-## ping's ring; and the aircraft drifting across it - and the jet, over the middle, while it is heard.
+## ping's ring; and the aircraft drifting across it - and the jet, over the middle, while it is heard; with the gain past
+## three, the clutter round him ([method clutter_at]).
 func radar_at(t: float) -> Dictionary:
 	var jet := -1.0
 	var jet_len := 1.0
@@ -1585,8 +1650,149 @@ func radar_at(t: float) -> Dictionary:
 		var u := jet / jet_len
 		planes.append({"at": Vector2(lerpf(-1.0, 1.0, u), 0.06), "heading": 0.0})
 	st["planes"] = planes
+	var clutter := clutter_at(t)
+	if not clutter.is_empty():
+		st["clutter"] = clutter
 	st["t"] = snappedf(t, 1.0 / 30.0)
 	return st
+
+
+## THE RADAR'S GAIN KNOB AT [param t]: where it stands (1 to 10, [constant DispatchScript.GAIN_REST] when the night
+## begins), turned steadily from step to step while a `gain:` turns it.
+func gain_at(t: float) -> float:
+	var level := float(DispatchScript.GAIN_REST)
+	for i in _actions.size():
+		var a: Dictionary = _actions[i]
+		if String(a["kind"]) != "gain" or _t0[i] > t or _t0[i] == INF:
+			continue
+		var start := _t0[i] + DispatchScript.GAIN_REACH / _sp[i]
+		var turn := DispatchScript.gain_turn(int(a["from"]), int(a["to"])) / _sp[i]
+		level = lerpf(float(a["from"]), float(a["to"]), clampf((t - start) / maxf(turn, 0.001), 0.0, 1.0))
+	return level
+
+
+## When gain action [param i] turns the knob onto step [param d]: its click.
+func _step_at(i: int, d: int) -> float:
+	var a: Dictionary = _actions[i]
+	var from := int(a["from"])
+	var to := int(a["to"])
+	var start := _t0[i] + DispatchScript.GAIN_REACH / _sp[i]
+	if to == from:
+		return start
+	return start + DispatchScript.gain_turn(from, to) / _sp[i] * float(d - from) / float(to - from)
+
+
+## HOW MANY CLUTTER BLIPS the scope paints with its gain at [param level]: none at the handbook's three or under, all
+## [constant CLUTTER_MOST] at ten.
+static func clutter_n(level: int) -> int:
+	var u := clampf(float(level - DispatchScript.GAIN_REST) / float(DispatchScript.GAIN_MOST - DispatchScript.GAIN_REST), 0.0, 1.0)
+	return roundi(float(CLUTTER_MOST) * pow(u, CLUTTER_CURVE))
+
+
+## WHERE THE CLUTTER STANDS ROUND HIM on desk number [param seed]: offsets on the scope, nearest him first - the rooms of
+## one building turned its own way, with him in it off its middle - so each step the knob is turned up paints the next
+## nearest ("One in the next room. Two in the hall."). The same every time.
+static func clutter_of(seed: int) -> Array:
+	var turn := DispatchSounds.hash01(seed + 51, 0) * PI
+	var off := (Vector2(DispatchSounds.hash01(seed + 53, 0), DispatchSounds.hash01(seed + 53, 1)) - Vector2(0.5, 0.5)) * CLUTTER_BUILDING * 0.6
+	var out: Array = []
+	for k in CLUTTER_MOST:
+		var p := (Vector2(DispatchSounds.hash01(seed + 55, k), DispatchSounds.hash01(seed + 57, k)) - Vector2(0.5, 0.5)) * CLUTTER_BUILDING
+		var at := (p + off).rotated(turn)
+		if at.length() < CLUTTER_NEAR:
+			at = (at if at.length() > 1e-4 else Vector2.RIGHT).normalized() * CLUTTER_NEAR
+		out.append(at)
+	out.sort_custom(func(x: Vector2, y: Vector2) -> bool: return x.length() < y.length())
+	return out
+
+
+## THE CLUTTER ON THE SCOPE AT [param t]: `[{at, fade}]` - each blip the gain reaches, round where the target was when the
+## knob was turned up past three, painted once the sweep has passed it since the knob reached it and a little off where it
+## was each round (the few who move drifting); a blip the knob no longer reaches fades over a sweep or two and is never
+## painted again.
+func clutter_at(t: float) -> Array:
+	var on := {}                         # a blip -> when the knob reached it
+	var off := {}                        # ...and when it no longer did
+	var mid := Vector2.ZERO
+	var n := 0
+	for i in _actions.size():
+		var a: Dictionary = _actions[i]
+		if String(a["kind"]) != "gain" or _t0[i] > t or _t0[i] == INF:
+			continue
+		var from := int(a["from"])
+		var to := int(a["to"])
+		if n == 0 and clutter_n(to) > 0:
+			var here := target_at(_t0[i])
+			mid = here if here.x < INF else Vector2.ZERO
+		var d := from
+		while d != to:
+			d += signi(to - from)
+			var at := _step_at(i, d)
+			if at > t:
+				break
+			var m := clutter_n(d)
+			for k in range(n, m):
+				on[k] = at
+				off.erase(k)
+			for k in range(m, n):
+				off[k] = at
+			n = m
+	var out: Array = []
+	var sweep := fposmod(t / SWEEP, 1.0) * TAU - PI * 0.5
+	for key in on:
+		var k := int(key)
+		var fade := 1.0 - clampf((t - float(off[k])) / CLUTTER_FADE, 0.0, 1.0) if off.has(k) else 1.0
+		if fade <= 0.0:
+			continue
+		var at: Vector2 = mid + (_clutter[k] as Vector2)
+		if k % CLUTTER_MOVING == 1:
+			var w := TAU / lerpf(50.0, 110.0, DispatchSounds.hash01(_seed + 63, k))
+			at += Vector2(sin(t * w + DispatchSounds.hash01(_seed + 65, k) * TAU), sin(t * w * 0.7 + DispatchSounds.hash01(_seed + 67, k) * TAU)) * CLUTTER_DRIFT
+		var swept := t - fposmod(sweep - at.angle(), TAU) / TAU * SWEEP
+		if swept < float(on[k]):
+			continue
+		var rnd := int(floor(swept / SWEEP)) * CLUTTER_MOST + k
+		at += (Vector2(DispatchSounds.hash01(_seed + 69, rnd), DispatchSounds.hash01(_seed + 71, rnd)) - Vector2(0.5, 0.5)) * 2.0 * CLUTTER_JITTER
+		out.append({"at": at, "fade": fade})
+	return out
+
+
+## WHEN BELL [param i] SOUNDS: as the block after it goes up, when one follows in the same silence - a shown block as its
+## first line is drawn, a session as it first prompts or prints, a typed one at its first key; else in its own half beat.
+func _bell_at(i: int) -> float:
+	var own := _t0[i] + DispatchScript.BELL * 0.5 / _sp[i]
+	var k := i + 1
+	if k >= _actions.size() or _t0[k] == INF or int((_actions[k] as Dictionary)["after"]) != int((_actions[i] as Dictionary)["after"]):
+		return own
+	var b: Dictionary = _actions[k]
+	match String(b["kind"]):
+		"screen":
+			return _t0[k]
+		"session":
+			var first: Dictionary = (b["plan"]["steps"] as Array)[0]
+			var lines: PackedFloat32Array = first["lines"]
+			var at := float(first["prompt"]) if float(first["prompt"]) >= 0.0 else (lines[0] if not lines.is_empty() else 0.0)
+			return _t0[k] + at / _sp[k]
+		"type":
+			var keys: PackedFloat32Array = _chars.get(k, PackedFloat32Array())
+			return keys[0] if not keys.is_empty() and keys[0] < INF else _t0[k]
+	return own
+
+
+## THE LAMP AT [param t]: how lit (0 to 1) - on until a `lamp: off`, its filament's glow dying fast from the click and gone
+## in [constant LAMP_FADE]; a `lamp: on` brings it up as quickly.
+func lamp_at(t: float) -> float:
+	var lit := 1.0
+	for i in _actions.size():
+		var a: Dictionary = _actions[i]
+		if String(a["kind"]) != "lamp" or _t0[i] == INF:
+			continue
+		var at := _t0[i] + DispatchScript.LAMP_AT / _sp[i]
+		if at > t:
+			continue
+		var u := clampf((t - at) / LAMP_FADE, 0.0, 1.0)
+		lit = lerpf(lit, 1.0 if bool(a["on"]) else 0.0, 1.0 - (1.0 - u) * (1.0 - u))
+	return lit
 
 
 ## WHAT THIS MEDIUM SHOWS AS PICTURES ([method Medium.pictures_of], the note's Pictures card): every picture the script

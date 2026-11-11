@@ -43,6 +43,10 @@ class_name DispatchScript
 ##     <!-- image (full): words --> ... <!-- /image -->   the letter's: a picture over the whole screen for the passage,
 ##                                     one straight after another dissolving into it.
 ##     <!-- strike -->                 after a typed block: the writer stops to decide, then backspaces it off the screen.
+##     <!-- gain: 9 -->                the radar's gain knob is turned to that number (1 to 10; it starts at 3), a click a
+##                                     step. Above 3 the scope paints clutter round the target, more the higher it is.
+##     <!-- bell -->                   the terminal's bell, one short beep as the block after it goes up.
+##     <!-- lamp: off -->, <!-- lamp: on -->   the gooseneck lamp is switched off (or on), with a click.
 ##
 ## And the terminal's text, as fenced blocks:
 ##
@@ -83,7 +87,7 @@ class_name DispatchScript
 ## cashier, in Aisle's room), `far`. Worked out here from the calls, so the author never writes it.
 
 ## Own-line desk marks: group 1 the verb, 2 its argument.
-const MARK := "^\\s*<!--\\s*(call|/\\s*call|ring|text|reply|ping|moving|sound|static|print|sleep|off|look|lift|switch|live|strike|/\\s*image)\\s*(?::\\s*([\\s\\S]*?))?\\s*-->\\s*$"
+const MARK := "^\\s*<!--\\s*(call|/\\s*call|ring|text|reply|ping|moving|sound|static|print|sleep|off|look|lift|switch|live|strike|gain|bell|lamp|/\\s*image)\\s*(?::\\s*([\\s\\S]*?))?\\s*-->\\s*$"
 ## A picture: group 1 where (full, feed, satellite, tv; none is full), 2 its words.
 const IMAGE := "^\\s*<!--\\s*image\\s*(?:\\(\\s*([a-z]+)\\s*\\))?\\s*:\\s*([\\s\\S]*?)\\s*-->\\s*$"
 const FENCE_OPEN := "^\\s*```\\s*(type|screen|terminal)\\s*$"
@@ -218,6 +222,20 @@ const SWITCH_AT := 0.65
 const PICTURE := 1.6
 ## THE LETTER'S PICTURES over the whole screen: the fade (seconds), every one; the voice rests for the last to clear.
 const IMAGE_FADE := 2.5
+## THE RADAR'S GAIN KNOB (the author's revision, 2026-11-10: "The handbook says the scope stays at three. Turn it any
+## higher, and it starts painting things that aren't him"): its least and most, where it stands when the night begins; the
+## hand reaching it, each step turned (a click), and the beat the voice waits after, as the sweep comes round.
+const GAIN_LEAST := 1
+const GAIN_MOST := 10
+const GAIN_REST := 3
+const GAIN_REACH := 0.25
+const GAIN_STEP := 0.14
+const GAIN_BEAT := 0.6
+## THE TERMINAL'S BELL: the half beat the voice waits for it.
+const BELL := 0.35
+## THE LAMP: the hand reaching its switch (the click), and the voice's rest.
+const LAMP_AT := 0.3
+const LAMP := 0.8
 ## A sound with no row of its own: a rest this long, and nothing heard.
 const SOUND_BARE := 3.0
 ## A hesitation that names no length, as the voice's Hesitate dial has it by default ([constant
@@ -537,6 +555,17 @@ static func static_of(arg: String) -> Dictionary:
 	return {"secs": secs, "kind": kind}
 
 
+## WHERE A `gain:` MARK TURNS THE KNOB: its number, held to [constant GAIN_LEAST]-[constant GAIN_MOST]; -1 for no number.
+static func gain_of(arg: String) -> int:
+	var a := arg.strip_edges()
+	return clampi(roundi(float(a)), GAIN_LEAST, GAIN_MOST) if a.is_valid_float() else -1
+
+
+## How long the gain knob takes to turn from [param from] to [param to]: [constant GAIN_STEP] a step.
+static func gain_turn(from: int, to: int) -> float:
+	return GAIN_STEP * float(absi(to - from))
+
+
 ## WHICH SOUND a `sound:` mark's words name: its first part if that is a key of [constant DispatchSounds.SOUNDS], else
 ## the first key the words say; "" for none.
 static func sound_of(arg: String) -> String:
@@ -585,6 +614,7 @@ static func parse(body: String) -> Dictionary:
 	var open_image := -1                  # the picture over the whole screen still up (an index into spans)
 	var last_text := ""                   # the phone that texted last
 	var reply_to := ""                    # the phone the room's next words are typed into
+	var gain := GAIN_REST                 # where the radar's gain knob stands
 	# THE DESK IS SEEN FIRST: the voice opens on the desk at rest
 	gap.append([OPENING, -1])
 	pending.append("<!-- action-hold: %s -->" % String.num(OPENING, 2))
@@ -803,6 +833,22 @@ static func parse(body: String) -> Dictionary:
 						var back := minf(float(String(a["text"]).length()) / BACKSPACE, BACKSPACE_MOST)
 						_act(actions, gap, pending, at, {"kind": "strike", "block": last_typed, "decide": wait}, wait + back, wait + back)
 						last_typed = -1
+					"gain":
+						var to := gain_of(arg)
+						if to < 0:
+							warnings.append("gain: %s is no number from %d to %d" % [arg, GAIN_LEAST, GAIN_MOST])
+							continue
+						var turned := GAIN_REACH + gain_turn(gain, to)
+						_act(actions, gap, pending, at, {"kind": "gain", "from": gain, "to": to}, turned + GAIN_BEAT, turned + GAIN_BEAT)
+						gain = to
+					"bell":
+						_act(actions, gap, pending, at, {"kind": "bell"}, BELL, BELL)
+					"lamp":
+						var said := arg.strip_edges().to_lower()
+						if not said in ["on", "off"]:
+							warnings.append("lamp: %s - the lamp is on or off" % said)
+							continue
+						_act(actions, gap, pending, at, {"kind": "lamp", "on": said == "on"}, LAMP, LAMP)
 					"/image":
 						if open_image >= 0:
 							(spans[open_image] as Dictionary)["to"] = at

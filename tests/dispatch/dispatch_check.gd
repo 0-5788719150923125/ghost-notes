@@ -31,6 +31,11 @@ extends SceneTree
 ##   beside the keyboard), the camera turning to where each thing is; the old coffee ring a thin opaque rim, never a clear disc;
 ##   THE KEYBOARD a standard layout (every row fifteen units), every key on its case (THE CONTROL: the old ones stood off it);
 ## - THE MUG IS DRUNK FROM: upright all the way, brought to the mouth and out of the picture for the sip, in its ring before;
+## - THE GAIN: the knob turned from three to nine a click a step, the camera on the radar; at three nothing on the scope but
+##   him (THE CONTROL), at nine the clutter round him, unnamed, each blip painted only once the sweep has passed it since the
+##   knob reached it (the control: just turned, not yet all); turned back to three they fade, and are gone in a sweep or two;
+## - THE BELL rings as the block after it goes up; THE LAMP goes out at its click, dark in a moment (the control: lit before),
+##   the camera on the whole desk;
 ## - BUILT ON A WORKER, as the app builds it (half a second, on the main thread a hitch): the show held until it lands.
 ##
 ## Run: godot --headless --path . --script tests/dispatch/dispatch_check.gd
@@ -215,7 +220,7 @@ func _run() -> void:
 			continue
 		var from := ""
 		for i in actions.size():
-			if absf(t0[i] - float(wd["t0"])) < 0.01 and String(actions[i]["kind"]) in ["ping", "moving", "sound", "look"]:
+			if absf(t0[i] - float(wd["t0"])) < 0.01 and String(actions[i]["kind"]) in ["ping", "moving", "sound", "look", "gain"]:
 				from = String(actions[i]["kind"])
 		var into_next := false
 		for v in md._attn:
@@ -328,6 +333,7 @@ func _run() -> void:
 	_ok(not dial_mv.is_empty() and md.phone_at(String(dial_mv["label"]), pressed_t) == "read" and dialed_one == 1
 		and md.phone_at(String(dial_mv["label"]), float(dial_mv["dialed"]) + DispatchScript.DIAL + 0.2) == "ear",
 		"a call is speed-dialed: up before the eye, 1 held, then to the ear for the rings (%s)" % str(dial_mv.get("label")))
+	_gain_bell_lamp(md, actions, t0, plan_r, screen_i)
 	# THE CAPTIONS
 	md._follower.extend(words)
 	_ok(not md._captioned(mid, mid, 0.0) and md._captioned(hello, hello, 0.0), "a typed word is captioned, or a spoken one is not")
@@ -384,6 +390,74 @@ func _run() -> void:
 		for f in _fails:
 			print("dispatch_check: FAIL  " + f)
 		quit(1)
+
+
+## THE GAIN, THE BELL AND THE LAMP, on the fixture's night.
+func _gain_bell_lamp(md: DispatchMedium, actions: Array, t0: PackedFloat32Array, heard: Array, screen_i: int) -> void:
+	var up := _first(actions, "gain")
+	var down := -1
+	for i in range(up + 1, actions.size()):
+		if String(actions[i]["kind"]) == "gain":
+			down = i
+	var turned := md._step_at(up, 9)
+	var mid_turn := (md._step_at(up, 4) + turned) * 0.5
+	md._pose(turned + 0.2)
+	var knob_at := md._set.gain_knob.rotation.z
+	md._pose(t0[up] - 0.2)
+	var knob_was := md._set.gain_knob.rotation.z
+	_ok(is_equal_approx(md.gain_at(t0[up] - 0.1), 3.0) and is_equal_approx(md.gain_at(turned + 0.05), 9.0)
+		and md.gain_at(mid_turn) > 4.0 and md.gain_at(mid_turn) < 9.0
+		and is_equal_approx(knob_at, DispatchSet.gain_angle(9.0)) and is_equal_approx(knob_was, DispatchSet.gain_angle(3.0)) and knob_at < knob_was,
+		"the gain knob stands at three, and is turned steadily to nine, clockwise (%.1f, %.1f)" % [md.gain_at(mid_turn), rad_to_deg(knob_at)])
+	var clicks := heard.filter(func(x: Dictionary) -> bool: return String(x.get("what", "")) == "detent" and float(x["t"]) >= t0[up] and float(x["t"]) <= turned + 0.01).size()
+	_ok(clicks == 6 and md.looking_at(turned + 0.5) == "radar", "a click a step as it turns, the camera on the radar (%d clicks, %s)" % [clicks, md.looking_at(turned + 0.5)])
+	var before: Dictionary = md.radar_at(t0[up] - 0.1)
+	var full := md.clutter_at(turned + DispatchMedium.SWEEP * 1.05)
+	var early := md.clutter_at(turned + 0.01)
+	var him := md.target_at(turned)
+	var near := true
+	for c in full:
+		if ((c as Dictionary)["at"] as Vector2).distance_to(him) > DispatchMedium.CLUTTER_BUILDING.length() + DispatchMedium.CLUTTER_DRIFT + 0.01 \
+				or (c as Dictionary).has("label"):
+			near = false
+	_ok(not before.has("clutter") and full.size() == DispatchMedium.clutter_n(9) and full.size() >= 20 and near,
+		"at three nothing on the scope but him (the control); at nine the clutter round him, unnamed (%d blips)" % full.size())
+	_ok(early.size() < full.size(), "each blip is painted only once the sweep has passed it since the knob reached it (the control: just turned, %d of %d)" % [early.size(), full.size()])
+	var lowered := md._step_at(down, 3)
+	var fading := md.clutter_at(lowered + 0.5)
+	var faded := true
+	for c in fading:
+		if float((c as Dictionary)["fade"]) >= 1.0:
+			faded = false
+	_ok(not fading.is_empty() and faded and md.clutter_at(lowered + DispatchMedium.CLUTTER_FADE + 0.1).is_empty(),
+		"turned back to three, the clutter fades, and is gone in a sweep or two (%d fading)" % fading.size())
+	# THE BELL, as the block after it goes up
+	var rung := heard.filter(func(x: Dictionary) -> bool: return String(x.get("kind", "")) == "bell")
+	_ok(rung.size() == 1 and absf(float(rung[0]["t"]) - t0[screen_i]) < 0.01 and float(rung[0]["t1"]) > float(rung[0]["t"]),
+		"the bell rings as the block after it goes up (%s)" % str(rung))
+	# THE LAMP
+	var lamp_i := _first(actions, "lamp")
+	var click := t0[lamp_i] + DispatchScript.LAMP_AT / md._sp[lamp_i]
+	md._pose(click - 0.05)
+	var lit_before := md._set.lamp.light_energy
+	md._pose(click + DispatchMedium.LAMP_FADE + 0.05)
+	var dark := md._set.lamp.light_energy == 0.0 and not md._set.lamp.visible
+	var clicked := heard.filter(func(x: Dictionary) -> bool: return String(x.get("what", "")) == "lamp" and absf(float(x["t"]) - click) < 0.01).size()
+	_ok(is_equal_approx(lit_before, DispatchSet.LAMP_ENERGY) and md.lamp_at(click + DispatchMedium.LAMP_FADE * 0.3) < 1.0 and dark and clicked == 1
+		and md.looking_at(click + 0.5) == "home",
+		"the lamp goes out at its click, dark in a moment, the camera on the whole desk (the control: lit before - %.2f, %s, %d, %s)" % [lit_before, dark, clicked, md.looking_at(click + 0.5)])
+	# THE OUTRO WAITS FOR THE DESK: what it does after the last word (the lamp, a hesitation, the sleep) is seen before the
+	# fade - black as the outro runs out after its rests (THE CONTROL: timed from the last word alone, already fading)
+	var last := md._word_t1(md._spoken_n - 1)
+	var after := md._after_last()
+	var outro := md.feed.tail()
+	md._now = last + 2.0
+	var seen := md._end_fade()
+	md._now = last + after + outro + 0.1
+	var black := md._end_fade()
+	var by_word := ShowOpening.end_fade(last + 2.0, md._follower, md._spoken_n, outro)
+	_ok(outro > 2.0 and after > 3.0 and is_equal_approx(seen, 1.0) and black < 0.001 and by_word < 1.0,
+		"the outro waits for what the desk does after the last word, black as it runs out (the control: from the last word, %.2f at 2 s; %.1f s of desk)" % [by_word, after])
 
 
 static func _first(actions: Array, kind: String) -> int:

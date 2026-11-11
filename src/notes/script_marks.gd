@@ -520,6 +520,14 @@ const REGISTRY := {
 		"modes": ["generative"],
 		"pattern": "<!--\\s*sleep\\s*-->",
 	},
+	"bell": {
+		"label": "Bell",
+		"group": "dispatch",
+		"blurb": "Dispatch desk: the terminal's bell, one short beep, as an old terminal gives for an alert or a refused entry - it sounds as the block after it goes up, and the voice waits half a beat.",
+		"before": "<!-- bell -->", "fill": "", "after": "", "line": "own",
+		"modes": ["generative"],
+		"pattern": "<!--\\s*bell\\s*-->",
+	},
 	"screen_off": {
 		"label": "Screen off",
 		"group": "dispatch",
@@ -536,6 +544,14 @@ const REGISTRY := {
 		"modes": ["generative"],
 		"pattern": "<!--\\s*look\\s*:[^>]*-->",
 	},
+	"gain": {
+		"label": "Gain",
+		"group": "dispatch",
+		"blurb": "Dispatch desk: the radar's gain knob is turned to that number, one to ten, a click a step (it starts at three, where only the target is painted). Above three the scope paints clutter - the people round him as faint blips with no name, more the higher it goes, most of them still; turned back down, they fade over a sweep or two. The camera stays on the radar, and the voice waits a beat.",
+		"before": "<!-- gain: ", "fill": "9", "after": " -->", "line": "own",
+		"modes": ["generative"],
+		"pattern": "<!--\\s*gain\\s*:[^>]*-->",
+	},
 	"lift": {
 		"label": "Lift",
 		"group": "dispatch",
@@ -551,6 +567,14 @@ const REGISTRY := {
 		"before": "<!-- switch: ", "fill": "BAD", "after": " -->", "line": "own",
 		"modes": ["generative"],
 		"pattern": "<!--\\s*switch\\s*:[^>]*-->",
+	},
+	"lamp": {
+		"label": "Lamp",
+		"group": "dispatch",
+		"blurb": "Dispatch desk: the gooseneck lamp is switched off (or on), with a click, and the desk is left to the light of its screens. The camera takes in the whole desk.",
+		"before": "<!-- lamp: ", "fill": "off", "after": " -->", "line": "own",
+		"modes": ["generative"],
+		"pattern": "<!--\\s*lamp\\s*:[^>]*-->",
 	},
 	"live": {
 		"label": "Live picture",

@@ -23,6 +23,9 @@ extends SceneTree
 ##   (never as written, never the mark), each character one, and drawn back with their columns; a session types them a key
 ##   each; a redacted run wraps whole (THE CONTROL: the same words plain wrap between them); in a typed block they are
 ##   warned of and neither shown nor said;
+## - THE GAIN, THE BELL, THE LAMP: the knob turned from three to its number and back, the voice waiting while it turns and a
+##   beat; the bell rung before the block after it, a half beat; the lamp switched off - none of them said (THE CONTROLS: a
+##   gain with no number and a lamp neither on nor off are each said, and do nothing);
 ## - THE CONTROLS: a call to a phone not on the desk, a phone voice with no phone open, and a call left open are each said.
 ##
 ## Run: godot --headless --path . --script tests/dispatch/dispatch_script_check.gd
@@ -199,6 +202,26 @@ func _init() -> void:
 	var said_hid := DispatchScript.parse("<!-- speaker: Control -->\n\nHi.\n\n```type\nLOGGED <!-- redact: JANE DOE -->.\n```\n")
 	_ok(String(said_hid["warnings"][0]).begins_with("redact:") and not (said_hid["spoken"] as PackedStringArray).has("jane")
 		and not String(said_hid["actions"][0]["text"]).contains("JANE"), "a typed block's redacted words are warned of, never shown or said")
+	# THE GAIN, THE BELL, THE LAMP
+	var gains: Array = actions.filter(func(a: Dictionary) -> bool: return String(a["kind"]) == "gain")
+	var turn := DispatchScript.GAIN_REACH + DispatchScript.GAIN_STEP * 6.0 + DispatchScript.GAIN_BEAT
+	_ok(gains.size() == 2 and int(gains[0]["from"]) == 3 and int(gains[0]["to"]) == 9 and int(gains[1]["from"]) == 9 and int(gains[1]["to"]) == 3
+		and is_equal_approx(float(gains[0]["rest"]), turn) and is_equal_approx(float(gains[1]["rest"]), turn),
+		"the gain knob is turned from three to nine and back, the voice waiting while it turns and a beat (%s)" % str(gains.map(func(a: Dictionary) -> String: return "%d-%d" % [a["from"], a["to"]])))
+	var bell_i := -1
+	for i in actions.size():
+		if String((actions[i] as Dictionary)["kind"]) == "bell":
+			bell_i = i
+	_ok(bell_i >= 0 and bell_i + 1 < actions.size() and String(actions[bell_i + 1]["kind"]) == "screen"
+		and int(actions[bell_i + 1]["after"]) == int(actions[bell_i]["after"]) and is_equal_approx(float(actions[bell_i]["rest"]), DispatchScript.BELL),
+		"the bell is rung in the silence before the block after it, the voice waiting half a beat")
+	var lamps: Array = actions.filter(func(a: Dictionary) -> bool: return String(a["kind"]) == "lamp")
+	_ok(lamps.size() == 1 and not bool(lamps[0]["on"]), "the lamp is switched off")
+	_ok(not sp.contains("gain") and not sp.contains("bell") and not sp.contains("lamp") and not spoken.has("nine"),
+		"a gain, a bell or a lamp reaches the voice")
+	var odd := DispatchScript.parse("<!-- speaker: Control -->\n\nHi.\n\n<!-- gain: loud -->\n\n<!-- lamp: dim -->\n\nThere.\n")
+	_ok((odd["actions"] as Array).is_empty() and str(odd["warnings"]).contains("gain: loud") and str(odd["warnings"]).contains("lamp: dim"),
+		"the controls: a gain with no number and a lamp neither on nor off are each said, and do nothing (%s)" % str(odd["warnings"]))
 	# PICTURES
 	var full: Array = d["spans"]
 	_ok(full.size() == 1 and int(full[0]["to"]) > int(full[0]["from"]), "a picture over the whole screen spans its passage")

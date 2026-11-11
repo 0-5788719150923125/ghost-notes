@@ -37,6 +37,8 @@ SEARCH BY NAME, PLATE OR KEYWORD
 > open 1
 ```
 
+<!-- bell -->
+
 ```screen
 NAME ........ SUBJECT
 STATUS ...... CONTAINED
@@ -157,6 +159,16 @@ The man before me had a candle.
 
 <!-- look: radar -->
 
+<!-- gain: 9 -->
+
 Keep an eye on him.
+
+<!-- gain: 3 -->
+
+It was clutter.
+
+<!-- lamp: off -->
+
+<!-- hesitation: 2 -->
 
 <!-- sleep -->

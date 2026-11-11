@@ -65,7 +65,8 @@ word; the desk is described in the note's own top-level `desk:` block (the autho
 As `MEDIUM.md` has them, with the changes above: `call:`, `/call`, `/call: X`, `ring:`, `text: X | words`, `ping:`,
 `sound:`, `static:`, `print`, `sleep`, `off:`, `look:`, `lift:`, `switch:`, `live:`, `image (feed|satellite|tv|full)`,
 `/image`, fenced ` ```type `, ` ```screen ` and ` ```terminal ` blocks, `strike` after a typed block, `<!-- redact: words -->`
-inside a shown block or a session, and the voice's own (`speaker`, `hesitation`, `delivery`). `act:` stays a note.
+inside a shown block or a session, `gain: N`, `bell` and `lamp: off|on` (the revised script's, 2026-11-10, below), and the
+voice's own (`speaker`, `hesitation`, `delivery`). `act:` stays a note.
 
 ## Files (`src/dispatch/`, a folder after `letter`)
 
@@ -75,7 +76,7 @@ inside a shown block or a session, and the voice's own (`speaker`, `hesitation`,
 | `dispatch.gd` | `DispatchMedium`: the world, the schedule (a [ReadingFollower]), the state of every thing at a moment, the camera, the opening, the pictures, the captions |
 | `dispatch_set.gd` | `DispatchSet`: the desk and everything on it, built - terminal, keyboard, phones, radar, receiver and scope, printer and its heap, the three screens, the switch, the chart, the handbook, the things, the chair, the room |
 | `dispatch_roots.gd` | `DispatchRoots`: the roots grown and meshed |
-| `dispatch_screens.gd` | the 2D faces drawn into the screens: the terminal (its redacted words as written, and where they lie), the radar, the scope, a phone's two screens, the receiver's dial |
+| `dispatch_screens.gd` | the 2D faces drawn into the screens: the terminal (its redacted words as written, and where they lie), the radar and its clutter, the scope, a phone's two screens, the receiver's dial, the gain knob's scale |
 | `dispatch_censor.gd` | `DispatchCensor`: redacted words hidden over the finished frame - a tracked box cracked into flat shards (`shaders/dispatch_redact.gdshader`) |
 | `dispatch_sounds.gd` | `DispatchSounds`: every sound of the desk, a function of show time |
 | `dispatch_format.gd`, `dispatch_walk.gd` | its own rows on the Medium card (the desk's number) and what they hand the reading; the pictures are the note's Pictures card's (next/pictures.md), `DispatchMedium.pictures_in` saying which marks they are |
@@ -301,3 +302,30 @@ The terminal draws its cursor again as before; it is under the box while a name 
 
 Looked at: the censor in the gate's render (`tests/run_quiet.sh -- tests/dispatch/dispatch_redact_check.gd --png`).
 Open: the author's eye on it in the episode - the box's size and waver, the shards' size, how dark they read.
+
+### The revised night's marks: the gain, the bell, the lamp (2026-11-10)
+
+The author's revision of the script (rift's `MEDIUM.md`, "Proposed 2026-11-10") asked for three marks, now built:
+
+- **`<!-- gain: N -->`**: the radar's left knob is the gain (`DispatchSet.gain_knob`), its pointer at 3 when the night
+  begins and its scale, one to ten, printed round it (`DispatchScreens` `gain` face). The mark turns it a step at a time,
+  a click each, and the voice waits while it turns and a beat (`DispatchScript.GAIN_*`). Above 3 the scope paints clutter
+  (`DispatchMedium.clutter_at`): up to 40 dim, unnamed blips round where the target was when it went up, laid as the
+  rooms of one building turned its own way with him off its middle, nearest first, so each step paints the next nearest
+  ("One in the next room. Two in the hall."); 33 at nine. Each is painted only once the sweep passes it after the knob
+  reached it, a little off each round; one in four drifts. Turned back down, they fade over a sweep or two and are not
+  painted again. The camera stays on the radar after the turn, as a `look:` holds it.
+- **`<!-- bell -->`**: one short near-square beep (880 Hz, 0.2 s) as the block after it goes up; the voice waits half a
+  beat. It turns the camera to the terminal.
+- **`<!-- lamp: off -->`** (or `on`): the lamp's click, its light dying over 0.18 s; the desk is left to its screens. It
+  turns the camera to the whole desk (in the episode, rehearsed, it gets there) - unless that would turn away from the
+  terminal and straight back (`_looks_taken`), when the light goes out around the terminal instead.
+- **The outro waits for the desk** (`DispatchMedium._after_last`): the end fade is timed from the end of the rests the voice
+  holds after its last word, not the word itself. The revised ending (lamp, a last line, sleep) is eleven seconds past
+  "Keep an eye on him", and timed from the word it was mostly played into the dark.
+
+Looked at (the look probe on a note cut from the episode's three passages, seed 57234): the scope at three and at nine,
+the clutter fading and gone, the knob at three and at nine, INVALID OPTION after its bell, the lamp's light gone from
+beside the terminal, the last line printed in full light. On the episode itself (rehearsed): both bells sound as their
+screens go up, nine paints 33 blips, the lamp clicks after the last word. Open: the author's eye and ear on all three.
+

@@ -6,8 +6,9 @@ extends SceneTree
 ##   at the speed of sound, falling all the way through - and it is loudest as it passes overhead;
 ## - THE STORMS DIFFER: Io-B's pops are spiky (their peak far over their level), Io-A's surf is smooth swells - and both are
 ##   heard over the receiver's own hiss;
-## - SUBDUED: a phone flipped and snapped, keys, the ping, the toggle, the mug set down, the ring in the earpiece - none
-##   louder than the desk's most;
+## - SUBDUED: a phone flipped and snapped, keys, the ping, the toggle, the mug set down, the gain knob's click, the lamp's
+##   switch, the ring in the earpiece, the terminal's bell - none louder than the desk's most;
+## - THE BELL is one short beep: heard over the hiss while it sounds, and gone when it ends;
 ## - A PURE FUNCTION OF THE SCHEDULE: the same plan made twice is the same sound, sample for sample;
 ## - THE CONTROL: with nothing planned there is only the hiss, and it is faint.
 ##
@@ -59,13 +60,20 @@ func _init() -> void:
 	# THE ONE-SHOTS AND THE PHONE
 	var desk: Array = []
 	var k := 0.2
-	for what in ["flip", "snap", "lay", "key", "space", "ping", "echo", "toggle", "thud", "crt", "click"]:
+	for what in ["flip", "snap", "lay", "key", "space", "ping", "echo", "toggle", "thud", "crt", "click", "detent", "lamp"]:
 		desk.append({"t": k, "what": what, "at": Vector3(0.3, 0.76, 0.0)})
 		k += 0.35
 	desk.append({"t": k, "t1": k + 2.6, "kind": "ringback"})
 	desk.append({"t": k + 3.0, "t1": k + 5.8, "kind": "buzz", "pattern": "ring", "ears": Vector2(0.8, 0.6)})
 	desk.append({"t": k + 6.0, "t1": k + 8.5, "kind": "print", "lines": 4, "ears": Vector2(0.9, 0.4)})
+	desk.append({"t": k + 8.6, "t1": k + 8.6 + DispatchSounds.BELL_LEN, "kind": "bell", "ears": Vector2(0.7071, 0.7071)})
 	var heard := _render(desk, k + 9.0)
+	# THE BELL, alone
+	var bell := _render([{"t": 0.5, "t1": 0.5 + DispatchSounds.BELL_LEN, "kind": "bell", "ears": Vector2(0.7071, 0.7071)}], 1.5)
+	var ringing := _rms(bell, 0.52, 0.5 + DispatchSounds.BELL_LEN - 0.02)
+	var after_bell := _rms(bell, 0.5 + DispatchSounds.BELL_LEN + 0.02, 1.4)
+	_ok(ringing > _rms(quiet, 0.5, 4.5) * 5.0 and after_bell < ringing * 0.2 and _peak(bell) < DispatchSounds.PEAK_MOST,
+		"the bell is one short beep, heard over the hiss and gone when it ends (%.4f, then %.4f)" % [ringing, after_bell])
 	_ok(_peak(heard) < DispatchSounds.PEAK_MOST * 1.6 and _rms(heard, 0.1, k + 9.0) > _rms(quiet, 0.5, 4.5) * 1.5,
 		"the desk's sounds are heard, and subdued (peak %.3f)" % _peak(heard))
 	# A PURE FUNCTION OF THE SCHEDULE

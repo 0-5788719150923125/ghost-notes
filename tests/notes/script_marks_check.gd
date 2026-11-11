@@ -286,7 +286,7 @@ func _parsers_agree() -> void:
 			"thought", "strike", "struck", "color", "unspoken", "sketch_timed", "point", "tap", "image_end", "still", "new_page":
 				_letter_mark(k, ex)
 			"call", "hang_up", "ring", "text_msg", "ping", "desk_sound", "static", "print", "sleep", "screen_off", "look", "lift", \
-					"switch", "live", "image_screen", "typed", "shown", "session", "moving", "reply", "redact":
+					"switch", "live", "image_screen", "typed", "shown", "session", "moving", "reply", "redact", "gain", "bell", "lamp":
 				_dispatch_mark(k, ex)
 			_:
 				_ok(false, "%s has no check in script_marks_check - prove it before shipping it" % k)
@@ -537,6 +537,19 @@ func _dispatch_mark(k: String, ex: String) -> void:
 			_ok(String(a["kind"]) == "session" and steps.size() == 2 and String(steps[0]["typed"]) == "search ryan brooks"
 				and (steps[0]["out"] as PackedStringArray) == PackedStringArray(["1 MATCH"]) and not (d["spoken"] as PackedStringArray).has("brooks")
 				and float(a["rest"]) > 2.0, "a session's commands are not typed and answered in order, silent, the voice waiting")
+		"gain":
+			var d := DispatchScript.parse(head + ex + tail)
+			var a: Dictionary = d["actions"][0]
+			_ok(String(a["kind"]) == "gain" and int(a["from"]) == DispatchScript.GAIN_REST and int(a["to"]) == 9 and float(a["rest"]) > DispatchScript.GAIN_BEAT
+				and not (d["spoken"] as PackedStringArray).has("gain"), "a gain does not turn the knob from three to its number (%s)" % str(a))
+		"bell":
+			var d := DispatchScript.parse(head + ex + "\n\n```screen\nINVALID OPTION\n```" + tail)
+			var kinds: Array = (d["actions"] as Array).map(func(x: Dictionary) -> String: return String(x["kind"]))
+			_ok(kinds == ["bell", "screen"] and is_equal_approx(float(d["actions"][0]["rest"]), DispatchScript.BELL)
+				and not String(d["speakable"]).contains("bell"), "a bell is not rung before the block after it, or is said (%s)" % str(kinds))
+		"lamp":
+			var a: Dictionary = DispatchScript.parse(head + ex + tail)["actions"][0]
+			_ok(String(a["kind"]) == "lamp" and not bool(a["on"]), "a lamp mark does not switch the lamp off (%s)" % str(a))
 		"redact":
 			var d := DispatchScript.parse(head + "```screen\nNAME ........ " + ex + "\n```" + tail)
 			var line := String(String(d["actions"][0]["text"]).split("\n")[0])

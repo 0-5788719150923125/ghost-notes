@@ -63,6 +63,13 @@ const KEY_PROFILE := [Vector2(0.0118, 0.0098), Vector2(0.0104, 0.0092), Vector2(
 ## THE RADAR, THE RECEIVER, THE PRINTER, THE SCREENS, THE SWITCH, THE MUG: where each stands (x, z) on the desk.
 const RADAR_AT := Vector2(0.50, 0.02)
 const RADAR_R := 0.115
+## THE RADAR'S GAIN KNOB: its radius at its base (m), the printed scale round it (a square this wide, [DispatchScreens]'s
+## `gain` face), and how far its pointer turns from one to ten (degrees, over the top).
+const GAIN_KNOB_R := 0.012
+const GAIN_FACE := 0.044
+const GAIN_SWING := 270.0
+## THE LAMP lit.
+const LAMP_ENERGY := 2.6
 const RECEIVER_AT := Vector2(1.02, -0.33)
 const PRINTER_AT := Vector2(-0.93, -0.36)
 const FEED_AT := Vector2(-0.50, -0.40)
@@ -104,6 +111,7 @@ var terminal_screen: MeshInstance3D
 var terminal_glow: OmniLight3D
 var radar_screen: MeshInstance3D
 var radar_glow: OmniLight3D
+var gain_knob: Node3D             # the radar's gain knob, turned about its axis ([method gain_angle])
 var scope_screen: MeshInstance3D
 var needle: Node3D
 var dial: MeshInstance3D
@@ -798,7 +806,8 @@ func _keypad_mat() -> Material:
 # --- the radar --------------------------------------------------------------------------------------------------------
 
 ## THE RADAR: a squat olive housing, its round scope tipped back toward the chair, a hood round the glass and two knobs
-## under it. The glass ([member radar_screen]) is the medium's.
+## under it - the left the gain ([member gain_knob], the medium's to turn), its white pointer at three and the scale one to
+## ten printed round it. The glass ([member radar_screen]) is the medium's.
 func _radar() -> void:
 	var t := Node3D.new()
 	t.name = "Radar"
@@ -823,8 +832,20 @@ func _radar() -> void:
 	put(face, hood, _mats["black"], Vector3(0, 0.01, 0.026), Vector3(90, 0, 0))
 	radar_screen = put(face, quad(Vector2(RADAR_R * 2.0, RADAR_R * 2.0)), null, Vector3(0, 0.01, 0.0215))
 	radar_screen.name = "Scope"
-	for k in 2:
-		put(face, cyl(0.011, 0.012, 0.02, 16), _mats["black"], Vector3(-0.07 + float(k) * 0.14, -0.118, 0.028), Vector3(90, 0, 0))
+	put(face, cyl(GAIN_KNOB_R - 0.001, GAIN_KNOB_R, 0.02, 16), _mats["black"], Vector3(0.07, -0.118, 0.028), Vector3(90, 0, 0))
+	gain_knob = Node3D.new()
+	gain_knob.name = "Gain"
+	gain_knob.position = Vector3(-0.07, -0.118, 0.028)
+	gain_knob.rotation.z = gain_angle(DispatchScript.GAIN_REST)
+	face.add_child(gain_knob)
+	put(gain_knob, cyl(GAIN_KNOB_R - 0.001, GAIN_KNOB_R, 0.02, 16), _mats["black"], Vector3.ZERO, Vector3(90, 0, 0))
+	put(gain_knob, box(Vector3(0.0016, 0.0085, 0.001)), _mats["paper"], Vector3(0, 0.0058, 0.0103))
+	if _tex.has("gain"):
+		var scale := StandardMaterial3D.new()
+		scale.albedo_texture = _tex["gain"]
+		scale.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		scale.roughness = 0.8
+		put(face, quad(Vector2(GAIN_FACE, GAIN_FACE)), scale, Vector3(-0.07, -0.118, 0.0206))
 	radar_glow = OmniLight3D.new()
 	radar_glow.light_color = Color(0.55, 1.0, 0.62)
 	radar_glow.light_energy = 0.06
@@ -832,6 +853,13 @@ func _radar() -> void:
 	radar_glow.position = Vector3(0, 0.14, 0.32)
 	t.add_child(radar_glow)
 	_foot(at_of("radar"), Vector2(0.32, 0.34))
+
+
+## HOW FAR THE GAIN KNOB IS TURNED at [param level] (radians about its axis, counter-clockwise as the chair sees it, its
+## pointer straight up at 0): one at the lower left, round over the top, ten at the lower right.
+static func gain_angle(level: float) -> float:
+	var u := (level - float(DispatchScript.GAIN_LEAST)) / float(DispatchScript.GAIN_MOST - DispatchScript.GAIN_LEAST)
+	return deg_to_rad(GAIN_SWING * (0.5 - u))
 
 
 # --- the receiver -----------------------------------------------------------------------------------------------------
@@ -1117,7 +1145,7 @@ func _things_back() -> void:
 	shade.name = "Shade"
 	lamp = SpotLight3D.new()
 	lamp.light_color = Color(1.0, 0.82, 0.58)
-	lamp.light_energy = 2.6
+	lamp.light_energy = LAMP_ENERGY
 	lamp.spot_range = 2.8
 	lamp.spot_angle = 66.0
 	lamp.spot_angle_attenuation = 1.8
