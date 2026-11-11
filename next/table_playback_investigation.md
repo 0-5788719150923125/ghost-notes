@@ -109,3 +109,73 @@ For future fixes, keep three boundaries explicit: the authored action and its du
 and constraints, and the frame being presented. Test the independent case alongside the supported/attached case,
 and replay real word timings alongside small solver fixtures. A new heuristic should not silently change another
 boundary to make its own test pass.
+
+## Why a table plays in hitches (2026-11-10, corrected 2026-11-11; Joker Motivation 732687)
+
+The user: "complex scenes like Joker Motivation episodes ... tend to run at probably 3-5 FPS on my machine. At least,
+that's what it feels like, because there is near-constant hitching in the playback."
+
+**THIS SECTION FIRST SAID IT WAS PIXELS, AND THAT WAS WRONG.** It had the stage drawn at the window's 3840 x 2160 and
+costing the graphics card 18.5 ms. Two mistakes, both found 2026-11-11:
+
+- **The live stage is 1920 x 1080 at any window.** The window stretches its canvas (`canvas_items`, 1080 units high),
+  and the stage is the frame in those units (`main._frame_rect`, measured at four window sizes; `perf_probe`'s header
+  said so all along). A 4K window scales that picture up; it never drew four times the pixels.
+- **The figures were taken beside other work on the card:** a training run (the user: "The GPU was being used by
+  Praxis"), then a probe of this note's own that outlived its timeout, and a virtual window so large it copied five
+  frames a second. `tests/table/table_render_probe.gd` now says what uses the card as it starts, and shrinks its window.
+
+**What a table frame costs, measured clean** (that probe; take `take_352946`, a still frame at 150 s, the author's
+graphics rows, nothing else on the card):
+
+| The stage at | Graphics card, a frame |
+|---|---|
+| 1280 x 720 | 3.5 ms |
+| 1920 x 1080 (what the viewer draws) | 6.2 ms |
+| 2560 x 1440 | 9.8 ms |
+| 3840 x 2160 | 20.1 ms |
+
+At 1920 x 1080 with one thing out: no multisampling (it is 4x) 5.0; no shadows 4.7; no glow 5.6; no bounce light 5.8;
+no ambient occlusion 5.9; no volumetric fog 6.0; all of those out together 2.0. The paint's two canvases (750 x 1050,
+redrawn every frame) add 1.1 ms; a 4K window's own pass with the note's Look, 0.5 ms. Playing: 6.0 ms of card, 0.8 ms of
+the renderer's processor, 5.2 ms of our script (2.7 by the thread's own clock, `episode_bake_probe --live`, the worst
+frame 22 ms). So about 8 ms of card and 6 of the app's thread: two refreshes of a 160 Hz display, 80 frames a second.
+It is not the table's code, its geometry (70 draw calls, 141,408 triangles seen, 501,635 in shadows) or its pixels.
+
+**What the app's own log has** (2026-11-10, a table up): frames 24 to 29 ms apart whenever the stage was drawn every
+frame, and 6 to 14 ms once it was drawn every other. A frame that is slow drawn every time and quick drawn every other
+time is not slow on the app's thread, which would cost the same either way: something was waited for.
+
+**What was waited for is not established.** The candidates: the card shared with a training run or with an export (40
+of one session's 88 changes of level fall while an export rendered beside the viewer), and the processor shared with
+the live voice (Kokoro on all but one core, beside the app's thread and the bake's; the probes play a take and run no
+voice). The app now says it when it happens (below), with the stage's time on the card beside it.
+
+**The governor made hitching of it, and that is certain.** It read the whole frame's time (`delta`) and took 25 ms for a
+heavy scene; drawn every other frame the stage's frames read 6 to 14 ms; it let go, met the same 25 ms and throttled
+again. 185 changes of level in one session, each a change in how often the picture moved.
+
+**The 52 ms above was the virtual display.** A probe under `xvfb` presents through it: 40 ms a frame of wall for a stage
+that takes the card 3.5. Only the card's own time and the app's own log say what the app does.
+
+Done 2026-11-11 (the user: "a better version of the same governor - I'd say go for it"; "an option for various
+resolutions in the Graphics menu ... default to 1080p"):
+
+- **The governor reads the app's thread alone** (`StageGovernor`, `src/render/stage_governor.gd`: from a frame's first
+  `_process` to the moment the renderer takes it). A scene heavy in script is spaced out as before - in the real loop
+  `terrain_city` climbs to one frame in six, `snowfall` to one in three - and a frame slow for the card's sake is left
+  alone. `tests/render/stage_governor_check.gd`; its control is the old reading, which hunts 46 times a minute.
+- **It says what it will not throttle for**, once a scene: `ghost: frames are N ms apart and this thread spends M ms of
+  that ...`, with the stage's size and its time on the card.
+- **Resolution, on the Graphics menu** (`Graphics.stage_size`): 720p, 1080p (as it always drew), 1440p, 4K - the
+  viewer's alone; an export is drawn at its own size.
+
+Open:
+
+- **What the frames waited for.** The next session with a table up says it in the log. If the card is free and the line
+  still appears, the voice is next: measure a live reading's frame.
+- Lesser, each measured above: the paint's canvases drawn only as paint is laid (1.1 ms), multisampling 2x (0.5 ms).
+- A scene costing the thread 14 to 24 ms stays at whatever level a build's long frame put it at until the next cut
+  (`starfield`: 16 ms, held at one frame in two). It did before, too.
+- `tests/run_boot_probe.sh` under `GHOST_PROBE_GPU` leaves its `godot` and `Xvfb` running when the timeout ends it
+  (`timeout --foreground` reaches `xvfb-run` alone). A probe that never quits then stays on the card.

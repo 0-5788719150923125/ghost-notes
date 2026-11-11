@@ -26,7 +26,7 @@ extends Node
 ##   panel must be inside the panel's own rectangle. That is what fails on the build this
 ##   replaces - there was no scroll at all - and it is what a height cap alone would not give.
 ##
-## AND ITS TITLE ROW STAYS: pinned over the body, "‹ Notes", "⋯" and "–" are in view scrolled to the bottom,
+## AND ITS TITLE ROW STAYS: pinned over the body, "‹", "⋯" and "–" are in view scrolled to the bottom,
 ## where the body's own first row is not.
 ##
 ## Plus the property that makes it safe to apply everywhere: A PANEL THAT FITS IS UNCHANGED.

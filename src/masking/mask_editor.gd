@@ -2759,7 +2759,7 @@ func _update_face_model(src: Image) -> void:
 func _build_panel() -> void:
 	# THE FRAMEWORK'S PANEL (2026-10-06, the user: Masking "doesn't inherit the panel UI or styling...
 	# we need to work on bringing it into the framework, proper"): a [SidePanel] like every other
-	# note's, with "‹ Notes", the note's title and its "⋯" on top, a chip per card, and three cards -
+	# note's, with "‹", the note's title and its "⋯" on top, a chip per card, and three cards -
 	# the Clip, the Effect (the marker's key color, effect and options: ONE flat, sortable list, never
 	# titled groups - feedback 0011) and the Markers, PINNED under the rest as the ramp/damp list always was,
 	# so the whole manage-markers workflow stays in view however far the options are scrolled.

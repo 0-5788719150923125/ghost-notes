@@ -19,6 +19,15 @@ class_name Graphics
 ## brightness and its highlights were unchanged by either (a mean of 90.2 against 90.4). Both are chosen on the row's panel ([GraphicsPanel]) and kept in `[graphics]`
 ## as `live_<key>` and `export_<key>`; an export render reads ghost.cfg as every render does, and writes nothing.
 ##
+## RESOLUTION IS THE LIVE VIEWER'S ALONE (`only`; the user, 2026-11-11: "an option for various resolutions ... default to 1080p,
+## but at least allow users to go to 4k if their systems can support it, or 720p if their system is a potato"). THE LIVE STAGE WAS
+## ALWAYS 1920 x 1080, at any window: the window stretches its canvas (`canvas_items`, 1080 units high), and the stage is the frame
+## in those units, scaled to the window's pixels as it is shown. The row is how many lines that is ([method stage_size], asked by
+## whoever sizes the stage and again when the row changes, [method bind_stage]'s `refit`); 1080p is the picture as it was, and
+## an export is drawn at the size it is exported at whatever the row says. Measured on the painted table (joker-motivation
+## 732687 at 150 s, the author's rows, nothing else on the card, `tests/table/table_render_probe.gd`), the stage's GPU time a
+## frame: 720p 3.5 ms, 1080p 6.2, 1440p 9.8, 4K 20.1 - about 2.4 ms a million pixels and 1.4 ms that do not grow with them.
+##
 ## WHERE IT REACHES: the stage's own viewport ([method bind_stage]: supersampling, texture filtering) and the
 ## renderer's globals (ambient occlusion and bounce light's quality, subsurface scattering, shadow filtering, the fog's
 ## grid) - one process has one stage, so its globals are the stage's. A medium hands its environment to [method dress],
@@ -40,8 +49,13 @@ const SECTION := "graphics"
 const TIERS := ["live", "export"]
 
 ## THE ROWS. `options`: [value, what a person reads], in order; `live` and `export`: each column's default - or
-## `shared` and `default` for a row that is one choice for both.
+## `shared` and `default` for a row that is one choice for both, or `only` the one column that has it and `other`,
+## what the other column's cell says.
 const SETTINGS := {
+	"resolution": {"label": "Resolution",
+		"blurb": "How many lines the show is drawn at in the viewer, then scaled to the window whatever its size: 1080p is what it always drew. 4K is sharper on a 4K screen and four times the pixels - about three times the graphics card's work on a table; 720p is a little over half of it. An export is drawn at the size it is exported at, whatever is chosen here.",
+		"options": [[720, "720p"], [1080, "1080p"], [1440, "1440p"], [2160, "4K"]], "only": "live", "live": 1080,
+		"other": "its own size"},
 	"supersample": {"label": "Supersampling",
 		"blurb": "Draws the 3D larger and scales it down, so every pixel is the mean of several: glints on metal and glass, brush hairs, chains and thin lines stop shimmering, which multisampling (only the edges of shapes) cannot do. The cost grows with the square - 2x is four times the shading.",
 		"options": [[1.0, "Off"], [1.5, "1.5x"], [2.0, "2x"]], "live": 1.0, "export": 1.5},
@@ -70,6 +84,10 @@ const SETTINGS := {
 ## grow with the pixels, on a card a voice's training may share.
 const SUPERSAMPLE_MOST := 5760 * 3240
 
+## THE LINES THE LIVE STAGE WAS DRAWN AT BEFORE THE RESOLUTION ROW: a pixel to a unit of the window's canvas, which is
+## 1080 units high at any window (`display/window/stretch` in project.godot).
+const LINES_AS_DRAWN := 1080
+
 ## BOUNCE LIGHT AT A TABLE'S SCALE: Godot's own reach is 5 m, a room's; things on a table are a few centimeters to a
 ## few tens apart, and light from across the cloth reaches them.
 const BOUNCE_REACH := 0.35
@@ -81,6 +99,8 @@ static var tier_override := ""
 static var overrides := {}
 
 static var _stage: WeakRef = null
+static var _refit := Callable()      # what sizes the stage again when its resolution changes ([method bind_stage])
+static var _measuring := {}          # who has asked for the stage's drawing time ([method measure]): a name -> true
 static var _envs: Array = []         # WeakRefs of the environments the mediums handed in
 ## WHAT THIS PROCESS'S MAIN THREAD LAST READ of each row (its key in [constant SECTION]), for what is built on a worker: the settings'
 ## owner is a node of the tree, and a worker may not ask the tree for it (a table built away - [code]TablePreview._stand[/code] - handing
@@ -108,7 +128,13 @@ static func key_of(key: String, t: String) -> String:
 	return key if bool(Registry.field(SETTINGS, key, "shared", false)) else "%s_%s" % [t, key]
 
 
-## [param key]'s default for [param t].
+## Whether [param key] is a choice at tier [param t]: a row `only` one column has is none in the other.
+static func has_tier(key: String, t: String) -> bool:
+	var only := String(Registry.field(SETTINGS, key, "only", ""))
+	return only.is_empty() or only == t
+
+
+## [param key]'s default for [param t] (null where the tier has no such choice).
 static func default_of(key: String, t: String) -> Variant:
 	var row := Registry.row(SETTINGS, key)
 	return row.get("default") if bool(row.get("shared", false)) else row.get(t)
@@ -123,12 +149,14 @@ static func values_of(key: String) -> Array:
 
 
 ## [param key]'s choice for [param t] (this process's tier when empty): a probe's override, else what is kept, else
-## the default - and a kept value no option has any more is the default too.
+## the default - and a kept value no option has any more is the default too. Null where the tier has no such choice.
 static func value(key: String, t := "") -> Variant:
 	if overrides.has(key):
 		return overrides[key]
 	if t.is_empty():
 		t = tier()
+	if not has_tier(key, t):
+		return null
 	var dflt: Variant = default_of(key, t)
 	var k := key_of(key, t)
 	var v: Variant = dflt
@@ -152,12 +180,17 @@ static func _settings() -> Node:
 
 
 ## THE STAGE, handed by whoever builds it ([code]main._stage_host[/code], a probe): dressed now and whenever it is
-## resized (the supersampling's cap is by its size), and everything else applied with it.
-static func bind_stage(stage: SubViewport) -> void:
+## resized (the supersampling's cap is by its size), and everything else applied with it. [param refit] is what sizes
+## it ([method stage_size]): called whenever a row is applied after, never from here - its owner sizes it once it has
+## built what shows it.
+static func bind_stage(stage: SubViewport, refit := Callable()) -> void:
 	_stage = weakref(stage)
 	if not stage.size_changed.is_connected(_dress_stage):
 		stage.size_changed.connect(_dress_stage)
+	_refit = Callable()
 	apply()
+	_refit = refit
+	RenderingServer.viewport_set_measure_render_time(stage.get_viewport_rid(), not _measuring.is_empty())
 
 
 static func stage() -> SubViewport:
@@ -183,6 +216,8 @@ static func apply() -> void:
 	RenderingServer.environment_set_volumetric_fog_volume_size(fog, fog)
 	_set_shadows(int(value("shadows")))
 	_dress_stage()
+	if _refit.is_valid():
+		_refit.call()
 	_lock.lock()
 	var envs := _envs.duplicate()
 	_lock.unlock()
@@ -234,6 +269,16 @@ static func _dress_stage() -> void:
 	st.anisotropic_filtering_level = int(value("anisotropy")) as Viewport.AnisotropicFiltering
 
 
+## HOW MANY PIXELS THE STAGE IS DRAWN AT where its frame is [param shown] units of the window's canvas large: that many
+## in the live viewer unless its Resolution says otherwise (1080p is a pixel a unit), its shape kept; in an export the
+## frame's own, always - the window is the frame there.
+static func stage_size(shown: Vector2) -> Vector2i:
+	var k := 1.0
+	if has_tier("resolution", tier()):
+		k = float(int(value("resolution"))) / float(LINES_AS_DRAWN)
+	return Vector2i(maxi(1, roundi(shown.x * k)), maxi(1, roundi(shown.y * k)))
+
+
 ## The supersampling a stage of [param size] takes when [param want] is chosen: never past [constant SUPERSAMPLE_MOST]
 ## pixels, never under 1.
 static func supersample_for(size: Vector2i, want: float) -> float:
@@ -255,12 +300,17 @@ static func _set_shadows(q: int) -> void:
 			(n as Light3D).shadow_blur *= k
 
 
-## THE STAGE'S DRAWING TIME, for the panel: turned on while it is shown ([param on]), read as the last frame's GPU
-## milliseconds - what these rows cost - or -1 with no stage.
-static func measure(on: bool) -> void:
+## THE STAGE'S DRAWING TIME, for the panel while it is shown and for the governor while frames are slow ([param who]
+## asks, [param on] or off; measured while anyone does), read as the last frame's GPU milliseconds - what these rows
+## cost - or -1 with no stage.
+static func measure(on: bool, who := "panel") -> void:
+	if on:
+		_measuring[who] = true
+	else:
+		_measuring.erase(who)
 	var st := stage()
 	if st != null:
-		RenderingServer.viewport_set_measure_render_time(st.get_viewport_rid(), on)
+		RenderingServer.viewport_set_measure_render_time(st.get_viewport_rid(), not _measuring.is_empty())
 
 
 static func stage_ms() -> float:

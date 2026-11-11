@@ -13,6 +13,11 @@ extends Node
 ## ultra; in the live viewer, none of that. SUPERSAMPLING IS HELD UNDER ITS CAP: told 2x, a 1080p export's
 ## 2880 x 1620 takes the whole of it, a 4K stage 1.5x.
 ##
+## THE VIEWER'S RESOLUTION IS ITS OWN (2026-11-11): unchosen, the stage is drawn as it always was, a pixel to a unit of the
+## window's canvas (1920 x 1080 at any window); chosen, at that many lines, its shape kept; and an export at the size it is
+## handed whatever is chosen. The control: the live viewer, with 4K chosen, is not. Whoever sizes the stage is asked to
+## again when a row is applied, and never while the stage is being bound.
+##
 ## A SHADOW KEEPS ITS WIDTH AS THE FILTER'S QUALITY CHANGES: a light on the stage, softened by [ShadowFilter] at one
 ## quality, has the same blur times radius at the other. The control: the same light off the stage is not rescaled,
 ## and its width changes - so the rescale is what holds it.
@@ -23,11 +28,12 @@ extends Node
 ## (2026-11-07: "The caller thread can't call the function `get_node_or_null()`"): there it is as the main thread last read
 ## it, and follows the row after. The control: what the main thread read forgotten, a worker reads the default.
 ##
-## THE PANEL: a cell per row and tier, a shared row one control in both; a live choice applies at once, an export
-## choice leaves the live stage as it is; "defaults" puts every row back. (A probe's Settings never reach the disk;
+## THE PANEL: a cell per row and tier, a shared row one control in both, a row only one column has none in the other; a
+## live choice applies at once, an export choice leaves the live stage as it is; "defaults" puts every row back. (A probe's Settings never reach the disk;
 ## what it writes is put back in memory at the end.)
 
 var _fails: Array = []
+var _refits := 0                 # how often the stage's owner was asked to size it again
 
 
 func _ready() -> void:
@@ -41,6 +47,7 @@ func _run() -> void:
 	_shadows()
 	_kept_values()
 	_bounce()
+	_resolution()
 	await _panel()
 	_restore(keep)
 	Graphics.tier_override = ""
@@ -86,6 +93,13 @@ func _defaults() -> void:
 			"'%s' has a label, a blurb and choices" % key)
 		if bool(row.get("shared", false)):
 			_ok(values.has(row["default"]) and row["default"] == false, "'%s' is shared and off" % key)
+			continue
+		if not String(row.get("only", "")).is_empty():
+			var t := String(row["only"])
+			_ok(Graphics.TIERS.has(t) and values.has(row.get(t)) and not String(row.get("other", "")).is_empty(),
+				"'%s' is the %s column's alone: its default among its choices, the other cell worded" % [key, t])
+			_ok(key == "resolution" and row["live"] == Graphics.LINES_AS_DRAWN,
+				"'%s' live default %s is what the stage always drew at" % [key, str(row.get("live"))])
 			continue
 		_ok(values.has(row["live"]) and values.has(row["export"]), "'%s' defaults are among its choices" % key)
 		_ok(was.has(key) and row["live"] == was[key],
@@ -214,6 +228,39 @@ func _bounce() -> void:
 	Graphics.apply()
 
 
+func _resolution() -> void:
+	print("-- the viewer's resolution")
+	var authors: Variant = Settings.read(Graphics.SECTION, "live_resolution", Graphics.LINES_AS_DRAWN)
+	Graphics.tier_override = "live"
+	var frame := Vector2(1920, 1080)
+	Settings.write(Graphics.SECTION, "live_resolution", Graphics.LINES_AS_DRAWN)
+	_ok(Graphics.stage_size(frame) == Vector2i(1920, 1080) and Graphics.stage_size(Vector2(1344, 756)) == Vector2i(1344, 756),
+		"unchosen, the stage is a pixel to a unit of the window's canvas, as it always was")
+	var sizes := {720: Vector2i(1280, 720), 1440: Vector2i(2560, 1440), 2160: Vector2i(3840, 2160)}
+	for lines in sizes:
+		Settings.write(Graphics.SECTION, "live_resolution", lines)
+		_ok(Graphics.stage_size(frame) == sizes[lines], "at %d lines a whole frame is %s (%s)" % [lines, str(sizes[lines]), str(Graphics.stage_size(frame))])
+	_ok(Graphics.stage_size(Vector2(608, 1080)) == Vector2i(1216, 2160) and Graphics.stage_size(Vector2(0.2, 0.2)) == Vector2i(1, 1),
+		"a portrait frame keeps its shape, and no frame is less than a pixel")
+	Graphics.tier_override = "export"
+	_ok(Graphics.stage_size(Vector2(2880, 1620)) == Vector2i(2880, 1620) and Graphics.value("resolution") == null
+		and not Graphics.has_tier("resolution", "export") and Graphics.default_of("resolution", "export") == null,
+		"an export is drawn at the size it is handed, whatever the viewer chose")
+	Graphics.tier_override = "live"
+	_ok(Graphics.stage_size(Vector2(2880, 1620)) == Vector2i(5760, 3240), "CONTROL: the live viewer, with 4K chosen, is not")
+	Settings.write(Graphics.SECTION, "live_resolution", 999)
+	_ok(Graphics.stage_size(frame) == Vector2i(1920, 1080), "a kept value no option offers is 1080p")
+	# WHOEVER SIZES THE STAGE IS ASKED AGAIN when a row is applied - and not while it is bound, before what shows it is built
+	Settings.write(Graphics.SECTION, "live_resolution", Graphics.LINES_AS_DRAWN)
+	_refits = 0
+	Graphics.bind_stage(Graphics.stage(), func() -> void: _refits += 1)
+	_ok(_refits == 0, "binding the stage does not ask for it to be sized")
+	Graphics.apply()
+	_ok(_refits == 1, "a row applied does")
+	Settings.write(Graphics.SECTION, "live_resolution", authors)
+	Graphics.tier_override = ""
+
+
 func _panel() -> void:
 	print("-- the panel")
 	var p := GraphicsPanel.new()
@@ -223,8 +270,17 @@ func _panel() -> void:
 	for key in Graphics.SETTINGS:
 		for t in Graphics.TIERS:
 			var o := p.choice(key, t)
-			all = all and o != null and o.item_count == Graphics.values_of(key).size()
-	_ok(all, "a cell per row and tier, each with the row's choices")
+			if Graphics.has_tier(key, t):
+				all = all and o != null and o.item_count == Graphics.values_of(key).size()
+			else:
+				all = all and o == null
+	_ok(all, "a cell per row and tier, each with the row's choices - and none where a row is one column's alone")
+	var res := p.choice("resolution", "live")
+	_refits = 0
+	res.select(0)
+	res.item_selected.emit(0)
+	_ok(Settings.read(Graphics.SECTION, "live_resolution", -1) == 720 and _refits == 1 and Graphics.stage_size(Vector2(1920, 1080)) == Vector2i(1280, 720),
+		"a resolution chosen is kept, and the stage's owner is asked to size it again (%d)" % _refits)
 	_ok(p.choice("bounce", "live") == p.choice("bounce", "export"), "a shared row is one control in both columns")
 	var st := Graphics.stage()
 	var ex := p.choice("supersample", "export")
@@ -240,8 +296,15 @@ func _panel() -> void:
 		"a live choice is kept and applied at once (%.2f on a %dx%d stage)" % [st.scaling_3d_scale, st.size.x, st.size.y])
 	p.reset_all()
 	_ok(Settings.read(Graphics.SECTION, "live_supersample", -1.0) == 1.0 and Settings.read(Graphics.SECTION, "export_supersample", -1.0) == 1.5
-		and is_equal_approx(st.scaling_3d_scale, 1.0) and p.choice("supersample", "export").selected == 1,
+		and is_equal_approx(st.scaling_3d_scale, 1.0) and p.choice("supersample", "export").selected == 1
+		and Settings.read(Graphics.SECTION, "live_resolution", -1) == Graphics.LINES_AS_DRAWN and res.selected == 1,
 		"defaults puts every row back, kept, shown and applied")
+	# WHO ASKS FOR THE STAGE'S TIME: measured while anyone does, the panel closing never ending the governor's asking
+	Graphics.measure(true, "governor")
+	Graphics.measure(false)
+	_ok(Graphics._measuring.has("governor") and not Graphics._measuring.has("panel"), "the panel's asking ends its own, never another's")
+	Graphics.measure(false, "governor")
+	_ok(Graphics._measuring.is_empty(), "and with nobody asking, nothing is measured")
 	p.visible = false
 	await _frames(1)
 	p.visible = true

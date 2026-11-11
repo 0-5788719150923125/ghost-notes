@@ -27,7 +27,7 @@ class_name SidePanel
 ##
 ## Add rows to [member body], never to the panel: the panel's own child is the scroll view.
 ##
-## A HEADER IS PINNED over the scrolling body ([method pin_header]): the panel's title row - "‹ Notes", its
+## A HEADER IS PINNED over the scrolling body ([method pin_header]): the panel's title row - "‹", its
 ## "⋯" and its "–" - stays in view however far the body is scrolled (asked 2026-10-07: "I have to keep
 ## scrolling to the top, to click those buttons"), and goes with the panel when it is hidden. A note's
 ## panel names no mode there ([method pin_title_row]).
@@ -275,12 +275,14 @@ func pin_header(row: Control) -> void:
 	_fit()
 
 
-## THE TITLE ROW OF A NOTE'S PANEL, pinned ([method pin_header]): "‹ Notes" at its left, "⋯" and - where
+## THE TITLE ROW OF A NOTE'S PANEL, pinned ([method pin_header]): "‹" at its left, "⋯" and - where
 ## [param hides] - "–" at its right, and NO NAME BETWEEN THEM (2026-10-29, the user of "Table" or "Generative" there:
 ## "a legacy thing, which no longer belongs in modern versions of Ghost Notes, which use a compositional model and try
 ## to discourage discrete modes"). Hidden, the panel leaves a small "‹" before its "›" ("a smaller "<" back button
-## will be a better look") - the two one style, chevrons as "‹ Notes" is ("The < and > buttons each have a different
-## style. Pick a lane, please" - the "›" had been a solid "▸"). [param owner] is the panel's mode, which [Shell] is asked through.
+## will be a better look") - the two one style ("The < and > buttons each have a different style. Pick a lane, please" -
+## the "›" had been a solid "▸"). THE "‹" IS THE SAME BUTTON SHOWN OR HIDDEN ([method Shell.back_button]; 2026-11-11, the
+## row's had been "‹ Notes": "the marker alone tells the user enough"). [param owner] is the panel's mode, which [Shell]
+## is asked through.
 func pin_title_row(owner: Node, hides := true) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
@@ -298,9 +300,6 @@ func pin_title_row(owner: Node, hides := true) -> HBoxContainer:
 		hide.pressed.connect(func() -> void: visible = false)
 		row.add_child(hide)
 	var home := Shell.back_button(owner)
-	home.text = "‹"
-	home.flat = false
-	home.custom_minimum_size = Vector2(28, 28)
 	_corner().add_child(home)
 	_corner().move_child(home, 0)
 	pin_header(row)

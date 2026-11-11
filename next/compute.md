@@ -167,7 +167,12 @@ net, its weights shuffled) that must fail.
 
 ### 1. Measure the split
 
-Status: not started.
+Status: the scenes measured 2026-11-10 ([csharp.md](csharp.md): `tests/scenes/scene_cost_probe.gd`, every catalog scene's
+script a frame - 13 of 55 over a 60 fps frame, four over 100 ms, all four `Terrain`; and a playing table 2 ms of script).
+The table's renderer measured the same day ([table_playback_investigation.md](table_playback_investigation.md):
+`tests/table/table_render_probe.gd` - 6.2 ms of graphics card at the viewer's 1920 x 1080 and 20.1 at 3840 x 2160, 0.7 ms
+of the renderer's processor; the probe's 52 ms was the virtual display's presentation, and its first figures were taken
+with other work on the card). The export's split: not started.
 
 An export, per frame, on a pinned span: our GDScript, the render's CPU side, the GPU, readback, MJPEG, Xvfb, x264
 (`WorkClock`, `viewport_get_measured_render_time_cpu/gpu`, the medium frame-cost method in the debugging notes). The
@@ -195,7 +200,8 @@ In Jacobi form, drawn straight from the buffer it writes, its record made once a
 
 ### 5. Compiled code for the one hottest loop
 
-Status: not started. A choice for the user (a toolchain and a dependency).
+Status: not started. A choice for the user (a toolchain and a dependency). Priced for C# on 2026-11-10 in
+[csharp.md](csharp.md): one scene's loop compiled ran about 107 times faster here; what the toolchain costs is listed there.
 
 ### 6. One tiny-network experiment
 

@@ -5,7 +5,7 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 618 references inside a folder, 1080 down the stack, 0 up it.
+Between scripts today: 618 references inside a folder, 1081 down the stack, 0 up it.
 
 ## The stack, top first
 
@@ -34,7 +34,7 @@ Between scripts today: 618 references inside a folder, 1080 down the stack, 0 up
 | `scene_kit/` | Scene substrate | 8 | `geometry`, `motion`, `render`, `audio`, `data` |
 | `geometry/` | Generative form | 12 | `motion`, `render` |
 | `motion/` | Motion & simulation | 13 | `render`, `audio` |
-| `render/` | Drawing | 11 | `data` |
+| `render/` | Drawing | 12 | `data` |
 | `audio/` | Audio & analysis | 7 | `platform` |
 | `platform/` | The machine | 11 | `data` |
 | `data/` | Plain data | 7 | nothing |
@@ -63,7 +63,7 @@ From a song file to the typed per-frame `AudioFeatures` every scene consumes - l
 
 How things get drawn and how a heavy scene stays interactive: thousands of shapes in one draw call, geometry built off the main thread, the lens, planes and meshes of the software 3D path, color, and how soft a light's shadow is.
 
-[`frame_forge`](../src/render/frame_forge.gd), [`graphics`](../src/render/graphics.gd), [`lens3d`](../src/render/lens3d.gd), [`mesh3d`](../src/render/mesh3d.gd), [`palette`](../src/render/palette.gd), [`plane3d`](../src/render/plane3d.gd), [`scheme`](../src/render/scheme.gd), [`shadow_casters`](../src/render/shadow_casters.gd), [`shadow_filter`](../src/render/shadow_filter.gd), [`tonemaps`](../src/render/tonemaps.gd), [`tri_batch`](../src/render/tri_batch.gd)
+[`frame_forge`](../src/render/frame_forge.gd), [`graphics`](../src/render/graphics.gd), [`lens3d`](../src/render/lens3d.gd), [`mesh3d`](../src/render/mesh3d.gd), [`palette`](../src/render/palette.gd), [`plane3d`](../src/render/plane3d.gd), [`scheme`](../src/render/scheme.gd), [`shadow_casters`](../src/render/shadow_casters.gd), [`shadow_filter`](../src/render/shadow_filter.gd), [`stage_governor`](../src/render/stage_governor.gd), [`tonemaps`](../src/render/tonemaps.gd), [`tri_batch`](../src/render/tri_batch.gd)
 
 ### `motion/` - Motion & simulation
 

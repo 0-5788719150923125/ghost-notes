@@ -133,6 +133,7 @@ How things get drawn and how a heavy scene stays interactive: thousands of shape
 - [`scheme.gd`](../src/render/scheme.gd) **Scheme** - a scene's color identity, drawn from a named mood.
 - [`shadow_casters.gd`](../src/render/shadow_casters.gd) **ShadowCasters** - WHAT CASTS A CANDLE'S SHADOW, CUT FINE ENOUGH TO BE DRAWN IN A PARABOLOID.
 - [`shadow_filter.gd`](../src/render/shadow_filter.gd) **ShadowFilter** - a positional light's shadow, softened by a filter of a set width and never by the light's size.
+- [`stage_governor.gd`](../src/render/stage_governor.gd) **StageGovernor** - how often the stage is drawn while a scene is heavy ON THE APP'S OWN THREAD: the scene's rate is given up, never the UI's.
 - [`tonemaps.gd`](../src/render/tonemaps.gd) **Tonemaps** - how a 3D set's light is brought down to what a screen can show: Filmic, AgX or ACES, each with a preset of its own and three adjustments kept for each (the Look card's Tonemapper rows).
 - [`tri_batch.gd`](../src/render/tri_batch.gd) **TriBatch** - one canvas draw call for thousands of shapes.
 

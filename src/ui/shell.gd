@@ -44,7 +44,7 @@ var _row_buttons := {}           # who -> Button
 ## THE WAY HOME (next/notes.md step 6): every mode can be left and entered again. Main hands the shell
 ## the two halves only it knows ([method set_home]): how to leave, and why the mode up now cannot
 ## be left this moment - an export making its take from the mode, which would be stranded. The ⌂ is
-## grayed with that reason while it holds. Step 8's "‹ Notes" takes its job.
+## grayed with that reason while it holds. Step 8's "‹" at the top of a panel takes its job.
 var _home_button: Button
 var _home_leave := Callable()     # () -> String: "" once it has left, else why not
 var _home_blocker := Callable()   # () -> String: why the mode cannot be left now, "" when it can
@@ -315,7 +315,7 @@ func set_home(leave: Callable, blocker := Callable()) -> void:
 	_paint_home()
 
 
-## Back to the notes - the ⌂, and every panel's "‹ Notes" ([method back_button]).
+## Back to the notes - the ⌂, and every panel's "‹" ([method back_button]).
 func go_home() -> void:
 	if not _home_leave.is_valid():
 		return
@@ -328,14 +328,16 @@ func _go_home() -> void:
 	go_home()
 
 
-## "‹ NOTES" FOR A PANEL'S HEADER (next/notes.md step 8: "Opening a note turns the panel into that
+## "‹" FOR A PANEL'S HEADER (next/notes.md step 8: "Opening a note turns the panel into that
 ## note's cards, with '‹ Notes' at the top to go back"): the same way out as the row's ⌂, at the top
-## of the panel where a person looks for it. A panel built without a Chrome (a probe) gets one that
-## does nothing.
+## of the panel where a person looks for it. ONE MARKER, NO WORD (2026-11-11, the user: "The 'Notes'
+## text is not needed, the marker alone tells the user enough"): the same boxed "‹" the hidden panel
+## leaves in its corner ([method SidePanel.pin_title_row]). A panel built without a Chrome (a probe)
+## gets one that does nothing.
 static func back_button(owner: Node) -> Button:
 	var b := Button.new()
-	b.text = "‹ Notes"
-	b.flat = true
+	b.text = "‹"
+	b.custom_minimum_size = Vector2(28, 28)
 	b.focus_mode = Control.FOCUS_NONE
 	b.tooltip_text = "Back to the notes. This note's settings and its file are kept as they are."
 	b.pressed.connect(func() -> void:

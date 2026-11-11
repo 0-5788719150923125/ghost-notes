@@ -7,7 +7,8 @@ class_name GraphicsPanel
 ## It renders [Graphics]' rows and adds nothing of its own: a line per row, a column per tier, each choice bound to its setting
 ## ([method Settings.bind], kept by its value, never its place in the list), and a change to the column this process
 ## draws at applied at once ([method Graphics.apply]) - a choice in the Export column waits for the next export, which
-## reads it. A shared row (bounce light, which changes the look) is one choice across both columns.
+## reads it. A shared row (bounce light, which changes the look) is one choice across both columns, and a row only one
+## column has (the viewer's resolution) says in the other what that column goes by.
 ##
 ## WHAT IT COSTS IS SHOWN: while the panel is open the stage's drawing time is measured on the graphics card and said
 ## at its foot, a few times a second - so whether there is room for more is read off the machine, not guessed.
@@ -110,18 +111,15 @@ func _build_ui() -> void:
 		if bool(Registry.field(Graphics.SETTINGS, key, "shared", false)):
 			# ONE CHOICE FOR BOTH: in the live column, the export's cell saying it follows
 			grid.add_child(_choice(key, "live"))
-			var same := Label.new()
-			same.text = "same"
-			same.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			same.tooltip_text = "It changes the look, so an export is drawn as the viewer is."
-			same.mouse_filter = Control.MOUSE_FILTER_PASS
-			same.add_theme_font_size_override("font_size", 11)
-			same.add_theme_color_override("font_color", COL_IDLE)
-			grid.add_child(same)
+			grid.add_child(_note("same", "It changes the look, so an export is drawn as the viewer is."))
 			_choices["export/" + key] = _choices["live/" + key]
 		else:
 			for t in Graphics.TIERS:
-				grid.add_child(_choice(key, t))
+				if Graphics.has_tier(key, t):
+					grid.add_child(_choice(key, t))
+				else:
+					# ONE COLUMN'S ALONE: the other's cell says what it goes by instead
+					grid.add_child(_note(String(Registry.field(Graphics.SETTINGS, key, "other", "")), Registry.blurb(Graphics.SETTINGS, key)))
 
 	col.add_child(HSeparator.new())
 	_cost = Label.new()
@@ -129,6 +127,18 @@ func _build_ui() -> void:
 	_cost.add_theme_color_override("font_color", COL_DIM)
 	col.add_child(_cost)
 	_say_cost()
+
+
+## A cell with no choice in it: [param text], dim, [param tip] over it.
+func _note(text: String, tip: String) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.tooltip_text = tip
+	l.mouse_filter = Control.MOUSE_FILTER_PASS
+	l.add_theme_font_size_override("font_size", 11)
+	l.add_theme_color_override("font_color", COL_IDLE)
+	return l
 
 
 ## One cell: [param key]'s choices for tier [param t], bound to where they are kept.
@@ -193,4 +203,5 @@ func _say_cost() -> void:
 	elif ms <= 0.0:
 		_cost.text = "The stage is drawn only as it changes: play the note to see what a frame costs."
 	else:
-		_cost.text = "The stage's last frame: %.1f ms on the graphics card (the card alone could draw %d a second)." % [ms, int(1000.0 / ms)]
+		var px := Graphics.stage().size
+		_cost.text = "The stage's last frame, %d x %d: %.1f ms on the graphics card (the card alone could draw %d a second)." % [px.x, px.y, ms, int(1000.0 / ms)]

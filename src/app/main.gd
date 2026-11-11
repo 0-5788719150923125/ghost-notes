@@ -29,11 +29,13 @@ var _status_t := 0.0     # throttle for writing render progress (export mode)
 
 # THE STAGE (2026-07-27): scenes no longer render in the root viewport. They
 # live inside a SubViewport presented through a TextureRect UNDER the UI, so
-# a heavy scene's cost can be governed independently: when the frame rate
-# sags, the governor renders the STAGE every 2nd/3rd frame (and at reduced
-# resolution) while the UI keeps compositing at full rate. The scenes get
-# slower; the instrument stays playable. Export mode bypasses the governor
-# entirely - renders are always full-rate, full-resolution.
+# a heavy scene's cost can be governed independently: while a scene is heavy
+# on this thread the governor runs the STAGE every 2nd, 3rd or 6th frame and
+# the UI keeps compositing at full rate. The scenes get slower; the
+# instrument stays playable. Export mode bypasses the governor entirely.
+# HOW MANY PIXELS IT HAS is the Graphics menu's (its Resolution row, see
+# _sync_stage_size): the frame in the window's canvas units unless chosen,
+# 1920 x 1080 at any window, since the window stretches its canvas.
 var _stage: SubViewport = null
 var _stage_view: TextureRect = null
 # WHAT THE SHOW IS CARRIED ON (see medium.gd). Built with the stage and mounted inside
@@ -43,31 +45,15 @@ var _stage_view: TextureRect = null
 # render targets) per take would throw away the comic on every settings change - and goes
 # with the note (_clear_stage), so the next one starts on an empty stage.
 var _medium: Medium = null
-# The governor's metric is the cost of STAGE-ACTIVE frames ONLY. The blended
-# frame rate is a LIE while throttling: the skipped frames are cheap, the
-# average looks healthy, the governor de-escalates straight back into the
-# wall (measured: 7 fps -> level 2 -> "86 fps" -> level 0 -> 7 fps, forever).
-# Active-frame cost keeps reading the scene's true weight at any level.
-var _stage_cost := 0.0               # ms EMA of frames where the stage ran
-var _stage_good_t := 0.0             # seconds the cost has stayed comfortable
-var _stage_change_t := 0.0           # cooldown between level changes
-var _stage_was_active := true
-var _stage_level := 0
-var _stage_frame := 0
-# Capped at slow-motion (period 6): a deeper freeze-frame level was tried
-# and read as a broken scene - one engine tick per refresh advances the
-# SIMULATION 16 ms per 1.5 s, so the picture repainted but nothing moved.
-# 1/6 rate is visibly alive; the scene-side optimization work is what
-# raises the ceiling for real.
-# NO dynamic resolution: per-level render-target scaling was tried and
-# every level change REALLOCATED the SubViewport target while the backdrop
-# sampled it - black triangular chunks, split/stretched banding, and
-# uninitialized-VRAM color noise on every heavy scene ENTRY (the cut
-# resets the level, then the escalation ladder resizes repeatedly). The
-# scenes are CPU-bound anyway; resolution bought little and cost all that.
-const STAGE_PERIODS := [1, 2, 3, 6]
-const STAGE_HEAVY_MS := 24.0         # active frame over this -> escalate
-const STAGE_GOOD_MS := 14.0          # under this, sustained -> de-escalate
+# THE GOVERNOR (stage_governor.gd has the why, and what was tried). What it reads is THIS
+# THREAD'S OWN TIME on a frame the stage ran in - from the frame's first `_process`
+# (_frame_begins) to the moment it is handed to the renderer (_frame_handed) - never the
+# whole frame's, which is also the graphics card's and the display's.
+var _governor := StageGovernor.new()
+var _frame_began := 0                # ticks (usec) as this frame's processing began
+var _frame_own_ms := 0.0             # what the last frame cost this thread, until the renderer took it
+var _slow_said := false              # slow frames this thread is not behind: said once a scene
+var _slow_t := -1.0                  # seconds the stage's time on the card has been measured for that, -1 when not
 
 # Export render mode: this instance was relaunched by the exporter in Movie Maker
 # mode (--export). It runs the session clean (no overlays) and quits when the song
@@ -699,7 +685,7 @@ func _stage_host() -> Node:
 	add_child(_stage)
 	# HOW FINELY IT IS DRAWN (see graphics.gd), the live viewer's choice or an export's - before a medium is mounted
 	# on it, since a light made then takes its shadow's width from the filter's quality
-	Graphics.bind_stage(_stage)
+	Graphics.bind_stage(_stage, _sync_stage_size)
 	_stage_view = TextureRect.new()
 	_stage_view.texture = _stage.get_texture()
 	_stage_view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -721,17 +707,25 @@ func _stage_host() -> Node:
 	# follows a heavy one stays imprisoned at the old level for the ~15 s the
 	# sparse active samples need to forgive (measured, and it read as broken)
 	Director.scene_cut.connect(func():
-		_stage_cost = 0.0
-		_stage_good_t = 0.0
-		if _stage_level > 0:
-			_stage_level = 0
-			_stage_change_t = 0.0
-			_sync_stage_size()
+		_slow_said = false
+		if _governor.cut():
 			_stage.process_mode = Node.PROCESS_MODE_INHERIT
 			_stage.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 			print("ghost: stage governor -> level 0 (scene cut)"))
+	# what a frame costs this thread, for the governor: stamped as its processing begins and as the renderer takes it
+	get_tree().process_frame.connect(_frame_begins)
+	RenderingServer.frame_pre_draw.connect(_frame_handed)
 	_sync_stage_size()
 	return _stage
+
+
+func _frame_begins() -> void:
+	_frame_began = Time.get_ticks_usec()
+
+
+## Every `_process` and `_draw` of this frame has run, and nothing has been waited for yet.
+func _frame_handed() -> void:
+	_frame_own_ms = float(Time.get_ticks_usec() - _frame_began) / 1000.0
 
 
 ## Hand the Director's look to the stage view. Called when a filter changes, when the frame
@@ -793,6 +787,7 @@ func _sync_medium() -> void:
 		_medium.queue_free()
 	_medium = Medium.make(want)
 	_medium.mount(_stage)
+	_slow_said = false
 	print("ghost: medium '%s'" % _medium.key)
 
 
@@ -800,14 +795,17 @@ func _sync_stage_size() -> void:
 	if _stage == null:
 		return
 	var r := _frame_rect()
-	_stage.size = Vector2i(r.size.round())
+	# HOW MANY PIXELS IT IS DRAWN AT is the Graphics menu's (its Resolution row): the frame's own canvas units unless
+	# chosen - 1920 x 1080 at any window, as it always drew - and the view scales that to the frame. What is on the
+	# stage is told the stage's size, what lies over it the frame's.
+	_stage.size = Graphics.stage_size(r.size)
 	_stage_view.position = r.position
 	_stage_view.size = r.size
 	# The dot lattice and the grain are sized in pixels, so the look has to be told when the
 	# frame changes size - otherwise a resized window renders a different picture.
 	_sync_filters()
 	if _medium != null and is_instance_valid(_medium):
-		_medium.on_stage_resized(r.size)
+		_medium.on_stage_resized(Vector2(_stage.size))
 	if _subtitles != null and is_instance_valid(_subtitles):
 		_subtitles.frame_rect = r
 
@@ -862,59 +860,53 @@ func _process(delta: float) -> void:
 				Bake.write_progress(Spectrum.current.time / length)
 		return
 	# ---- the stage governor: sacrifice SCENE rate, never UI rate ----------
-	# A heavy scene's active frame blocks the whole main loop for its full
-	# cost - Godot cannot paint UI mid-frame - so the only lever short of
-	# rewriting the scene is SPACING those frames out: the UI runs fluid
-	# between hitches, and at the freeze-frame level the backdrop becomes a
-	# slideshow while the instrument stays fully playable. The metric is the
-	# active-frame cost (see the var block: the blended fps is a lie here).
-	# Escalation is fast; de-escalation needs the ACTIVE frames themselves
-	# to have been cheap for a sustained stretch - a still-heavy scene keeps
-	# measuring heavy at any level, so the loop cannot oscillate.
+	# A heavy scene's frame blocks the whole main loop for its full cost - Godot cannot
+	# paint UI mid-frame - so the only lever short of rewriting the scene is SPACING those
+	# frames out (stage_governor.gd). What it is handed is what the frame before cost THIS
+	# THREAD: a frame that is slow for the graphics card's sake is not spaced out, and is said.
 	# NOT WHILE MOVIE MAKER RECORDS: every frame is one fixed step of show time however long it
-	# took to draw, so a slow frame costs nothing in the film - and the governor, reading that
-	# fixed delta as a heavy frame, would skip stage frames the film then holds as stills
+	# took to draw, so a slow frame costs nothing in the film, and a skipped stage frame the
+	# film would hold as a still
 	if _stage == null or not Engine.get_write_movie_path().is_empty():
 		return
-	var ms := delta * 1000.0
-	if _stage_was_active:
-		if _stage_cost <= 0.0:
-			_stage_cost = ms
-		else:
-			# asymmetric EMA: quick to forgive (a scene cut should release
-			# the throttle in a few active samples), steady to accuse
-			_stage_cost = lerpf(_stage_cost, ms, 0.35 if ms < _stage_cost else 0.12)
-	_stage_change_t += delta
-	var want := _stage_level
-	if _stage_cost > STAGE_HEAVY_MS:
-		_stage_good_t = 0.0
-		if _stage_level < STAGE_PERIODS.size() - 1:
-			want = _stage_level + 1
-	elif _stage_cost < STAGE_GOOD_MS:
-		_stage_good_t += delta
-		if _stage_good_t > 2.0 and _stage_level > 0:
-			want = _stage_level - 1
-			_stage_good_t = 0.0
-	else:
-		_stage_good_t = 0.0
-	if want != _stage_level and _stage_change_t > 0.4:
-		_stage_level = want
-		_stage_change_t = 0.0
-		_sync_stage_size()
-		print("ghost: stage governor -> level %d (active frame %.0f ms)" % [want, _stage_cost])
-		if want == 0:
+	if _governor.step(_frame_own_ms, delta):
+		print("ghost: stage governor -> level %d (a stage frame costs this thread %.0f ms)" % [_governor.level, _governor.cost])
+		if _governor.level == 0:
 			_stage.process_mode = Node.PROCESS_MODE_INHERIT
 			_stage.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	_stage_frame += 1
-	var active: bool = _stage_level == 0 \
-		or _stage_frame % int(STAGE_PERIODS[_stage_level]) == 0
-	if _stage_level > 0:
-		if active:
+	if _governor.level > 0:
+		if _governor.active:
 			_stage.process_mode = Node.PROCESS_MODE_INHERIT
 			_stage.render_target_update_mode = SubViewport.UPDATE_ONCE
 		else:
 			_stage.process_mode = Node.PROCESS_MODE_DISABLED
-	_stage_was_active = active
+	_say_slow_frames(delta)
+
+
+## SAID ONCE A SCENE: frames are slow and this thread is not why, so the governor spaces nothing out - with what the
+## stage took of the graphics card's time, measured for a second first. (A table's frames were 25 ms apart with this
+## thread busy for 5 of them, 2026-11-10; the governor throttled it on and off for a whole session, and nothing in the
+## log said what the frames waited for.)
+func _say_slow_frames(delta: float) -> void:
+	if _slow_said:
+		return
+	if not _governor.slow_elsewhere:
+		if _slow_t >= 0.0:
+			_slow_t = -1.0
+			Graphics.measure(false, "governor")
+		return
+	if _slow_t < 0.0:
+		_slow_t = 0.0
+		Graphics.measure(true, "governor")
+		return
+	_slow_t += delta
+	if _slow_t < 1.0:
+		return
+	_slow_said = true
+	_slow_t = -1.0
+	print("ghost: frames are %.0f ms apart and this thread spends %.0f ms of that: the rest is waited for - the graphics card (the stage, %d x %d, takes %.1f ms of its time a frame; something else may be using it) or the display. The stage is not held back for it."
+		% [_governor.whole, _governor.cost, _stage.size.x, _stage.size.y, Graphics.stage_ms()])
+	Graphics.measure(false, "governor")
 
 
 func _notification(what: int) -> void:

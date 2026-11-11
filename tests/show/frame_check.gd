@@ -19,7 +19,8 @@ extends Node
 ## (16:9, or 9:16 in portrait), as large as the window holds it, centered, black beside it; the filters
 ## are sized to the stage; the subtitles told the frame. Measured against the window as it is - a 16:9
 ## window holds a landscape stage whole, and headless Godot's window is 64x64, so its view is square
-## and the landscape stage sits between bars above and below.
+## and the landscape stage sits between bars above and below. HOW MANY PIXELS THE STAGE HAS is the Graphics menu's
+## (its Resolution): a pixel to a unit of the window's canvas at 1080p, twice the lines at 4K, and only the stage changes.
 ##
 ## THE SUBTITLES' SAFE AREA: a portrait frame's last line sits above its bottom 35% and its lines
 ## keep off the right 17.8% (Google's safe zones for 1080x1920), type sized off the short side; a
@@ -148,7 +149,18 @@ func _stage() -> void:
 	await get_tree().process_frame
 	var port := _fit(vis, Vector2(9, 16))
 	_ok(_near(sv.get_rect(), port), "portrait: the stage is 9:16, centered, black beside it (%s, want %s)" % [sv.get_rect(), port])
+	# HOW MANY PIXELS IT HAS IS THE GRAPHICS MENU'S (2026-11-11). From 1080p, whatever the author chose: a pixel to a unit of the
+	# window's canvas. At another resolution the stage alone changes - the view, the frame and the subtitles stay where they were
+	var authors: Variant = Settings.read(Graphics.SECTION, "live_resolution", Graphics.LINES_AS_DRAWN)
+	Settings.write(Graphics.SECTION, "live_resolution", Graphics.LINES_AS_DRAWN)
+	Graphics.apply()
 	_ok(Vector2(main._stage.size).is_equal_approx(sv.size), "the stage renders at the frame's size, not the window's")
+	Settings.write(Graphics.SECTION, "live_resolution", 2160)
+	Graphics.apply()
+	_ok(Vector2(main._stage.size).is_equal_approx(sv.size * 2.0) and _near(sv.get_rect(), port) and subs.frame_rect == sv.get_rect(),
+		"at 4K the stage has twice the lines and is shown where it was (%s px in %s)" % [main._stage.size, sv.get_rect()])
+	Settings.write(Graphics.SECTION, "live_resolution", authors)
+	Graphics.apply()
 	_ok(subs != null and is_instance_valid(subs) and subs.frame_rect == sv.get_rect(),
 		"...and told again when it turns")
 	Director.set_medium("auto")
